@@ -1,0 +1,253 @@
+# Inferenza bayesiana {#sec-bayes-inference}
+
+::: callout-important
+## In questo capitolo approfondirai i seguenti concetti fondamentali:  
+
+- distribuzione marginale;
+- approccio analitico e numerico per determinare la distribuzione a posteriori;
+- linguaggi di programmazione probabilistici;
+- inferenza predittiva.
+::: 
+
+::: callout-tip
+## Prerequisiti
+
+- Leggere il capitolo *Bayes' Rule* del testo di @Johnson2022bayesrules.
+- Leggere *Navigating the Bayes maze: The psychologist's guide to Bayesian statistics, a hands-on tutorial with R code* [@alter2025navigating].
+- Leggere *Ten quick tips to get you started with Bayesian statistics* [@gimenez2025ten].
+:::
+
+::: callout-caution
+## Preparazione del Notebook
+
+```{r}
+here::here("code", "_common.R") |> 
+  source()
+```
+:::
+
+
+## Introduzione {.unnumbered .unlisted} 
+
+Negli ultimi vent’anni l’inferenza bayesiana è passata da “curiosità matematica” a strumento di lavoro quotidiano in campi che vanno dalla biologia all’economia, dalla medicina alle scienze cognitive. In psicologia la sua popolarità è legata a due vantaggi pratici: la possibilità di integrare conoscenze pregresse (per esempio risultati di studi precedenti o expertise clinica) all’interno dell’analisi, e la capacità di gestire al meglio campioni piccoli o rumorosi, frequenti nei contesti sperimentali e clinici.
+
+Per uno studente di psicologia la curva di apprendimento può sembrare ripida. In realtà non lo è: i concetti chiave si acquisiscono gradualmente e si ripagano in fretta. In questo capitolo iniziamo ad esplorarli.
+
+
+## Dove si colloca l’inferenza nel processo di ricerca?
+  
+Richiamiamo il diagramma di modellizzazione e analisi introdotto in @fig-modeling-analysis. L’inferenza occupa la parte centrale: partendo dai dati osservati vogliamo trarre conclusioni sul modello e sui suoi parametri $\boldsymbol\theta$. Esistono due cornici teoriche principali:  
+
+|                                                                 | Statistica Bayesiana                            | Statistica Frequentista                     |
+|-----------------------------------------------------------------|-------------------------------------------------|--------------------------------------------|
+| **Natura di $\boldsymbol\theta$**                               | variabile aleatoria con distribuzione _a priori_ | valore fisso ma ignoto                      |
+| **Uso di informazioni pregresse**                               | sì (explicita nella prior)                      | no (basata solo sui dati)                   |
+| **Obiettivi tipici**                                            | posteriore, previsione, decisione               | stima, test d’ipotesi                       |
+| **Fondamento concettuale**                                      | probabilità come grado di credenza soggettivo   | probabilità come frequenza a lungo termine  |
+  
+Nel prosieguo ci concentreremo sul paradigma bayesiano, rimandando più avanti al confronto con l’approccio frequentista.
+
+
+## Il teorema di Bayes come regola di aggiornamento 
+
+L’idea centrale è semplice: si parte da una distribuzione _a priori_ sui parametri, si osservano i dati, si ottiene una distribuzione _a posteriori_:
+
+$$
+p(\boldsymbol\theta\mid\mathbf{x})=\frac{p(\mathbf{x}\mid\boldsymbol\theta)\,p(\boldsymbol\theta)}{p(\mathbf{x})}.
+$$
+
+Qui $p(\mathbf{x}\mid\boldsymbol\theta)$ è la verosimiglianza, cioè il modello generativo dei dati; $p(\boldsymbol\theta)$ rappresenta ciò che sapevamo prima, la nostra conoscenza iniziale; $p(\mathbf{x})$ è la probabilità dei dati, una costante di normalizzazione.  
+
+Il risultato è un meccanismo di apprendimento cumulativo: ogni nuova evidenza aggiorna coerentemente le nostre credenze. In psicologia ciò è particolarmente naturale, perché gli studi spesso si accumulano su temi simili: pensiamo ad esempio agli effetti di un trattamento cognitivo-comportamentale, che vengono valutati e raffinati attraverso molte ricerche successive.  
+
+
+## Un esempio intuitivo: la moneta sbilanciata
+  
+Immaginiamo di lanciare una moneta dieci volte e ottenere otto teste. Vogliamo stimare la probabilità $\theta$ di ottenere “testa”. Possiamo rappresentare il numero di successi con una distribuzione binomiale:
+
+$$
+y \sim \text{Binomiale}(N, \theta).
+$$
+
+Per la prior possiamo scegliere una distribuzione uniforme su [0,1], che non favorisce nessun valore, oppure una distribuzione Beta(2,2) se riteniamo più plausibile che le monete siano quasi eque.  
+
+Combinando la prior con la verosimiglianza binomiale, otteniamo una distribuzione a posteriori ancora di tipo Beta:  
+
+$$
+\theta \mid y \sim \text{Beta}(\alpha+y, \; \beta+N-y).
+$$
+
+Con i nostri dati, la media della posteriore è circa 0.73: ci aspettiamo che la moneta cada su “testa” nel 73% dei casi. Possiamo anche calcolare la probabilità che $\theta > 0.5$, che risulta circa 0.97. In altre parole, i dati ci danno forte evidenza che la moneta sia sbilanciata.  
+
+Questo procedimento è facilmente automatizzabile in software come R (pacchetto `brms`), Stan o PyMC: basta definire il modello e la prior, e il programma calcola per noi la distribuzione a posteriori.
+
+
+## Perché usare le probabilità come gradi di credenza? 
+
+Le probabilità non sono solo strumenti matematici: rappresentano il modo più razionale per esprimere l’incertezza. Se le nostre valutazioni violano le regole della probabilità diventiamo vulnerabili a incoerenze logiche e decisioni subottimali, mentre rispettando gli assiomi della probabilità possiamo aggiornare in modo coerente le nostre convinzioni.  
+
+L’approccio bayesiano sfrutta proprio questo vantaggio: ogni nuova informazione modifica le nostre credenze in modo rigoroso, senza contraddizioni. In psicologia clinica, ad esempio, un terapeuta non decide sulla base di una singola osservazione, ma integra ciò che ha visto in seduta con la propria esperienza e con la letteratura scientifica. L’aggiornamento bayesiano formalizza esattamente questo processo.
+
+
+## Il paradigma bayesiano nell'inferenza statistica
+
+L'inferenza bayesiana si fonda su tre elementi: credenze iniziali (a priori), dati osservati e credenze aggiornate (a posteriori).  
+
+Il modello generativo rappresenta il cuore matematico del processo: specifica come i parametri non osservabili generano i dati empirici. Nel caso della moneta, la distribuzione binomiale funge da modello generativo e $\theta$ (la probabilità di testa) è il parametro chiave da stimare.  
+
+Il paradigma bayesiano si distingue dall’approccio frequentista perché tratta i parametri come variabili casuali. La distribuzione a posteriori non fornisce soltanto una stima puntuale, ma descrive l’intera gamma di valori plausibili per i parametri. Da qui possiamo calcolare intervalli credibili, probabilità di eventi complessi e prendere decisioni basate sull’intero spettro delle possibilità.  
+
+Questa caratteristica è particolarmente utile in psicologia, dove i fenomeni sono incerti e complessi. La possibilità di integrare conoscenze pregresse e di quantificare rigorosamente l’incertezza rende il bayesiano uno strumento prezioso sia per la ricerca di base che per la pratica clinica.  
+
+
+## La distribuzione a priori nell'inferenza bayesiana
+
+Una peculiarità del bayesiano è l’uso esplicito delle distribuzioni a priori. Esse formalizzano matematicamente le nostre conoscenze o ipotesi prima di osservare i dati. Quando non sappiamo nulla possiamo usare prior non informative, che assegnano la stessa probabilità a un ampio intervallo di valori. In altri casi è utile adottare prior debolmente informative, che escludono scenari poco plausibili ma non forzano troppo l’inferenza. Infine, se abbiamo conoscenze consolidate (per esempio da meta-analisi o da lunga esperienza clinica) possiamo usare prior informative, che incorporano in modo esplicito tali evidenze.  
+
+Un caso speciale sono i cosiddetti *priori coniugati*, che hanno la proprietà di produrre una posterior appartenente alla stessa famiglia della prior. Questo semplifica molto i calcoli e rende più trasparente il processo di aggiornamento. Il classico esempio è proprio quello visto con moneta e distribuzione Beta-Binomiale.  
+
+Per valutare se una prior sia ragionevole si usano i cosiddetti *prior predictive check*: si simulano dati ipotetici dalla distribuzione a priori e si controlla che i valori generati siano psicologicamente plausibili. Se, ad esempio, una prior assegna alta probabilità a tempi di reazione negativi, sappiamo che va modificata.  
+
+
+## Metodi computazionali per l'inferenza bayesiana
+
+### La sfida computazionale nel teorema di Bayes
+
+Il teorema di Bayes nasconde una difficoltà pratica: la costante di normalizzazione, cioè la probabilità dei dati. Nei modelli semplici la possiamo calcolare, ma quando la complessità aumenta diventa impraticabile. Da qui nasce l’uso di metodi numerici per approssimare la distribuzione a posteriori.
+
+
+### L’idea degli algoritmi MCMC
+
+Il metodo più diffuso è quello delle catene di Markov Monte Carlo, o MCMC. Invece di calcolare la distribuzione a posteriori in modo esplicito, si costruisce una catena di valori che, col tempo, visita lo spazio dei parametri nello stesso modo in cui essi sono distribuiti secondo la posteriori. È come avere un esploratore che si muove nello spazio dei parametri: all’inizio vaga a caso, ma dopo un po’ inizia a frequentare le zone più probabili.  
+
+Due versioni classiche sono l’algoritmo di Metropolis-Hastings, che propone un nuovo valore del parametro e decide se accettarlo o meno, e il Gibbs sampling, che aggiorna i parametri uno alla volta estraendoli dalle distribuzioni condizionali.
+
+
+### Come usare bene l’MCMC
+
+Perché l’MCMC funzioni è necessario qualche accorgimento. Le prime iterazioni, dette *warm-up*, non rappresentano bene la distribuzione e vengono scartate. Poi occorre monitorare la catena con strumenti diagnostici, osservando i tracciati o misurando l’autocorrelazione. In alcuni casi si mantiene solo un campione ogni certo numero di passi, per ridurre la dipendenza tra osservazioni consecutive.  
+
+
+### Alternative computazionali
+
+L’MCMC non è l’unica strada. Il **Variational Bayes** trasforma il problema in un’ottimizzazione, cercando una distribuzione semplice che approssimi la posterior: è veloce, ma tende a sottostimare l’incertezza. L’**approssimazione di Laplace**, invece, usa uno sviluppo matematico attorno alla moda della distribuzione per ottenere una forma gaussiana: funziona bene se la posterior è quasi normale, ma può diventare fuorviante in casi complessi.  
+
+La scelta dipende dal problema: MCMC per modelli complessi e quando serve precisione, VB per dataset enormi, Laplace per distribuzioni ben comportate. Negli ultimi anni, librerie come Stan, PyMC o TensorFlow Probability hanno reso queste tecniche accessibili anche a chi non è specialista di algoritmi numerici.
+
+
+## Linguaggi di programmazione probabilistica (PPL)
+
+Per facilitare l’uso di questi metodi sono stati sviluppati i *linguaggi di programmazione probabilistica* (PPL). Essi permettono di scrivere il modello in una forma molto vicina alla notazione matematica, lasciando al software il compito di occuparsi dei calcoli.  
+
+Tra i più diffusi troviamo Stan, apprezzato in ambito accademico per la sua efficienza e flessibilità; PyMC, che si integra con l’ecosistema Python e offre un’interfaccia accessibile; e TensorFlow Probability, che unisce modellizzazione probabilistica e apprendimento automatico.  
+
+Un esempio semplice di notazione è il seguente:  
+
+$$
+y \sim \mathrm{normal}(\mu, \sigma), \quad
+\mu \sim \mathrm{normal}(0, 10), \quad
+\sigma \sim \mathrm{normal}^+(0, 1).
+$$
+
+Qui $y$ rappresenta i dati, $\mu$ e $\sigma$ i parametri, e il simbolo $\sim$ si legge come “è distribuito secondo”. La stessa idea può essere scritta con le funzioni di probabilità:  
+
+$$
+p(y \mid \mu, \sigma) = \mathrm{normal}(y \mid \mu, \sigma), \quad
+p(\mu) = \mathrm{normal}(\mu \mid 0, 10), \quad
+p(\sigma) = \mathrm{normal}^+(\sigma \mid 0, 1).
+$$
+
+I PPL traducono queste specifiche in codice, applicano gli algoritmi più adatti (MCMC, VB, Laplace) e restituiscono la distribuzione a posteriori.  
+
+
+## Riflessioni conclusive {.unnumbered .unlisted}  
+
+L’inferenza bayesiana ci permette di rispondere a una domanda centrale nella scienza: *qual è la probabilità di un’ipotesi, dati i dati osservati?* A differenza dell’approccio frequentista, che si concentra sulla probabilità dei dati sotto un’ipotesi, il bayesiano mette al centro le ipotesi stesse.  
+
+Questo approccio integra in modo naturale conoscenze pregresse, quantifica l’incertezza in modo rigoroso e rende possibili analisi anche con campioni piccoli o rumorosi. Non è solo una tecnica statistica, ma un modo di ragionare che rispecchia il processo stesso con cui le persone apprendono dall’esperienza: accumulando informazioni, correggendo errori, aggiornando progressivamente le proprie convinzioni.  
+
+Per questo motivo il paradigma bayesiano non è solo uno strumento tecnico, ma un elemento sempre più essenziale della pratica scientifica in psicologia e nelle scienze della mente.
+
+
+## Esercizi {.unnumbered .unlisted} 
+
+::: {.callout-important title="Problemi" collapse="true"}
+
+1. Qual è la differenza principale tra l'approccio bayesiano e l'approccio frequentista all'inferenza statistica?
+
+2. Cosa rappresenta la distribuzione *a priori* in inferenza bayesiana e quale ruolo svolge nel processo inferenziale?  
+
+3. Come si calcola la distribuzione *a posteriori* in inferenza bayesiana e quali sono i suoi elementi principali?  
+
+4. Qual è il significato della funzione di verosimiglianza nel teorema di Bayes?  
+
+5. Come viene interpretata la probabilità nell’approccio bayesiano rispetto a quello frequentista?  
+
+6. Quali sono i vantaggi principali dell’inferenza bayesiana rispetto all’inferenza frequentista?  
+
+7. Cos'è una distribuzione *a priori* coniugata e quali vantaggi offre nel calcolo della distribuzione *a posteriori*?  
+
+8. Quali sono i principali metodi numerici utilizzati per approssimare la distribuzione *a posteriori* quando i calcoli analitici non sono possibili?  
+
+9. Cosa sono i modelli generativi dei dati e quale ruolo svolgono nell’inferenza bayesiana?  
+
+10. Quali sono le tre principali giustificazioni teoriche per l'uso delle probabilità come misura di credenza nell'inferenza bayesiana?  
+
+**Consegna:** Rispondi con parole tue e carica il file .qmd, convertito in PDF su Moodle.
+:::
+
+::: {.callout-tip title="Soluzioni" collapse="true"}
+
+1. La differenza principale tra l'approccio bayesiano e quello frequentista riguarda l'interpretazione del parametro $\theta$. Nell’approccio bayesiano, il parametro è considerato una variabile aleatoria con una distribuzione *a priori*, mentre nell’approccio frequentista il parametro è una quantità fissa e sconosciuta. Inoltre, l'inferenza bayesiana aggiorna le credenze attraverso il teorema di Bayes, mentre l’inferenza frequentista basa le proprie conclusioni solo sui dati osservati.  
+
+2. La distribuzione *a priori* rappresenta le credenze iniziali riguardo al parametro $\theta$ prima di osservare i dati. Essa consente di integrare informazioni pregresse o conoscenze esterne nel processo inferenziale, influenzando la distribuzione *a posteriori* e permettendo di aggiornare le credenze alla luce di nuove evidenze.  
+
+3. La distribuzione *a posteriori* si calcola applicando il teorema di Bayes: 
+
+   $$
+   f(\theta \mid x) = \frac{f(x \mid \theta) f(\theta)}{f(x)}
+   $$  
+   
+   I suoi elementi principali sono: 
+   
+   - La **funzione di verosimiglianza** $f(x \mid \theta)$, che esprime la probabilità di osservare i dati dato un valore del parametro.  
+   - La **distribuzione *a priori*** $f(\theta)$, che rappresenta le credenze iniziali sul parametro.  
+   - La **costante di normalizzazione** $f(x)$, che garantisce che la distribuzione *a posteriori* sia una distribuzione di probabilità valida.  
+
+4. La funzione di verosimiglianza, $f(x \mid \theta)$, rappresenta la probabilità di osservare i dati dati i valori del parametro $\theta$. Essa è fondamentale nel teorema di Bayes perché determina quanto bene un certo valore di $\theta$ spiega i dati osservati, contribuendo alla determinazione della distribuzione *a posteriori*.  
+
+5. Nell’approccio bayesiano, la probabilità è interpretata come un grado di credenza soggettivo su un evento o un parametro incerto. Nell’approccio frequentista, invece, la probabilità è definita come il limite della frequenza relativa di un evento dopo un numero infinito di ripetizioni. Questo porta a differenze metodologiche nel modo in cui vengono effettuate le inferenze.  
+
+6. I principali vantaggi dell’inferenza bayesiana sono: 
+
+   - **Integrazione di informazioni pregresse**: Permette di combinare dati osservati con conoscenze precedenti.  
+   - **Quantificazione dell’incertezza**: Fornisce una distribuzione completa dei parametri, anziché un singolo valore stimato.  
+   - **Flessibilità**: Può essere applicata a modelli complessi e a problemi con pochi dati.  
+   - **Interpretazione intuitiva**: Le probabilità risultanti rappresentano direttamente il grado di credenza sui parametri.  
+
+7. Una distribuzione *a priori* coniugata è una scelta specifica di distribuzione *a priori* che, quando combinata con una verosimiglianza di una certa famiglia, produce una distribuzione *a posteriori* della stessa famiglia. Ad esempio, una distribuzione Beta come prior per un parametro binomiale produce una distribuzione Beta come *a posteriori*. Questo semplifica enormemente i calcoli, poiché la distribuzione *a posteriori* può essere determinata in modo analitico senza necessità di metodi numerici complessi.  
+
+8. Quando non è possibile calcolare la distribuzione *a posteriori* in modo analitico, si utilizzano metodi numerici come:  
+
+   - **Markov Chain Monte Carlo (MCMC)**: Un insieme di algoritmi di campionamento (ad esempio, Metropolis-Hastings e Gibbs Sampling) che permette di stimare la distribuzione *a posteriori* generando campioni iterativi.  
+   - **Inferenza Variazionale**: Un metodo di approssimazione che ottimizza una distribuzione più semplice per avvicinarsi alla distribuzione *a posteriori*.  
+   - **Approssimazione di Laplace**: Un’approssimazione basata sulla normalizzazione locale intorno al massimo *a posteriori* (MAP).  
+
+9. Un modello generativo dei dati è una rappresentazione matematica del processo che ha generato i dati osservati. Esso definisce la relazione tra il parametro sconosciuto $\theta$ e i dati $\mathbf{x}$ attraverso una distribuzione di probabilità. Nell'inferenza bayesiana, il modello generativo aiuta a formulare la funzione di verosimiglianza e a inferire i parametri che meglio spiegano i dati.  
+
+10. Le tre principali giustificazioni per l’uso delle probabilità come misura di credenza nell’inferenza bayesiana sono:
+
+   - **Argomento della scommessa olandese (Dutch Book)**: Se i gradi di credenza non rispettano le regole della probabilità, si possono costruire scommesse che garantiscono una perdita certa, dimostrando che è irrazionale non seguire le leggi della probabilità.  
+   - **Argomento decisionistico**: Per massimizzare l’utilità attesa nelle scelte razionali, i gradi di credenza devono seguire le regole della probabilità. Se non lo fanno, si possono prendere decisioni incoerenti o subottimali.  
+   - **Argomento epistemico**: Le funzioni di probabilità minimizzano l’errore epistemico rispetto alla verità oggettiva, rendendole la struttura più razionale per rappresentare le credenze in condizioni di incertezza. 
+:::
+
+
+## Informazioni sull'ambiente di sviluppo {.unnumbered .unlisted} 
+
+```{r}
+sessionInfo()
+```
+
+## Bibliografia {.unnumbered .unlisted} 
+

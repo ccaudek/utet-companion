@@ -1,0 +1,186 @@
+# ANOVA ad due vie {#sec-anova2vie}
+
+::: callout-important
+## In questo capitolo imparerai a
+
+- fare inferenza sulla media di un campione;
+- trovare le distribuzioni a posteriori usando `brms`;
+- verificare il modello usando i pp-check plots.
+:::
+
+::: callout-tip
+## Prerequisiti
+
+- Leggere il capitolo *Extending the Normal Regression Model* del testo di @Johnson2022bayesrules.
+:::
+
+::: callout-caution
+## Preparazione del Notebook
+
+```{r}
+here::here("code", "_common.R") |> 
+  source()
+
+# Load packages
+if (!requireNamespace("pacman")) install.packages("pacman")
+pacman::p_load(
+  cmdstanr, posterior, bayestestR, brms, emmeans, loo, bridgesampling, 
+  conflicted
+)
+conflicts_prefer(loo::loo)
+```
+:::
+
+
+## Introduzione {.unnumbered .unlisted} 
+
+::: {.lead}
+L'ANOVA a due vie estende il modello dell'ANOVA a una via alla situazione in cui la variabile dipendente è influenzata da *due fattori* distinti, ciascuno con due o più livelli. Questa estensione consente di analizzare non solo gli *effetti principali* di ciascun fattore, ma anche l'*interazione* tra i due.
+:::
+
+### Medie di popolazione in una classificazione a due vie
+
+Supponiamo di conoscere le medie di popolazione per ciascuna combinazione dei livelli dei due fattori. La struttura può essere rappresentata in una tabella come la seguente:
+
+|               | $C_1$   | $C_2$   | $\dots$ | $C_c$   | *Media riga*          |
+|---------------|-------------|-------------|-------------|-------------|----------------------|
+| $R_1$     | $\mu_{11}$ | $\mu_{12}$ | $\dots$  | $\mu_{1c}$ | $\mu_{1\cdot}$   |
+| $R_2$     | $\mu_{21}$ | $\mu_{22}$ | $\dots$  | $\mu_{2c}$ | $\mu_{2\cdot}$   |
+| $\vdots$  | $\vdots$   | $\vdots$   | $\ddots$ | $\vdots$   | $\vdots$         |
+| $R_r$     | $\mu_{r1}$ | $\mu_{r2}$ | $\dots$  | $\mu_{rc}$ | $\mu_{r\cdot}$   |
+| **Media colonna** | $\mu_{\cdot 1}$ | $\mu_{\cdot 2}$ | $\dots$  | $\mu_{\cdot c}$ | $\mu_{\cdot\cdot}$ |
+
+dove:
+
+* $µ_{jk}$ è la media della cella per il livello $j$ del fattore R e $k$ del fattore C.
+* $µ_{j:}$ è la media marginale per la riga $j$.
+* $µ_{:k}$ è la media marginale per la colonna $k$.
+* $µ_{::}$ è la media complessiva.
+
+
+### Effetti principali e interazione
+
+Se *non c'è interazione* tra i due fattori, la *differenza tra livelli di un fattore è costante* a prescindere dal livello dell'altro fattore. In altre parole, le differenze tra medie di cella si riflettono esattamente nelle differenze tra le medie marginali.
+
+Ad esempio, se il fattore R non interagisce con il fattore C, allora:
+
+$$
+µ_{j1} - µ_{j'1} = µ_{j2} - µ_{j'2} = ... = µ_{j:} - µ_{j':}
+$$
+
+Quando i profili delle medie sono *paralleli*, l'assenza di interazione è facilmente visibile. L'*interazione* si manifesta quando le differenze tra livelli di un fattore *variano* al variare dell'altro fattore.
+
+L'interazione è *simmetrica*: se R interagisce con C, allora C interagisce con R. Se invece non vi è interazione, gli *effetti principali* dei fattori corrispondono alle differenze tra le rispettive medie marginali.
+
+<!-- Un esempio visivo chiarisce meglio i concetti di effetto principale e interazione. -->
+
+<!-- ![Pattern di effetti principali e interazione](pattern_effetti.png) -->
+
+
+## Simulazione
+
+Simuliamo ora un dataset che rispecchi una struttura a due vie. Consideriamo:
+
+* fattore 1: `condizione` (controllo, psicoterapia1, psicoterapia2)
+* fattore 2: `gravita` (molto\_gravi, poco\_gravi)
+
+Impostiamo le medie di cella in modo che riflettano sia effetti principali sia un'interazione.
+
+```{r}
+set.seed(123)
+n <- 30
+condizione <- c("controllo", "psicoterapia1", "psicoterapia2")
+gravita <- c("molto_gravi", "poco_gravi")
+sd_value <- 5
+
+mean_table <- matrix(
+  c(30, 25, 20,
+    25, 20, 15),
+  nrow = 2, byrow = TRUE
+)
+
+df <- data.frame()
+
+for (i in seq_along(gravita)) {
+  for (j in seq_along(condizione)) {
+    media <- mean_table[i, j]
+    dati <- rnorm(n, mean = media, sd = sd_value)
+    df <- rbind(df, data.frame(
+      gravita = gravita[i],
+      condizione = condizione[j],
+      punteggio = dati
+    ))
+  }
+}
+```
+
+Visualizziamo i dati:
+
+```{r}
+ggplot(df, aes(x = condizione, y = punteggio, fill = gravita)) +
+  geom_boxplot(position = position_dodge()) +
+  labs(title = "Distribuzione dei punteggi per gravita e condizione")
+```
+
+
+## Modellazione bayesiana
+
+Adattiamo ai dati un modello che includa interazione:
+
+```{r}
+#| message: false
+#| warning: false
+#| output: false
+#| 
+mod <- brm(punteggio ~ gravita * condizione, data = df, backend = "cmdstanr")
+```
+
+Esploriamo gli effetti condizionati:
+
+```{r}
+conditional_effects(mod, "condizione:gravita")
+```
+
+## Confronto tra Modelli
+
+Confrontiamo due modelli:
+
+* `mod`: con interazione
+* `mod1`: solo con effetti principali
+
+```{r}
+#| message: false
+#| warning: false
+#| output: false
+#| 
+mod1 <- brm(punteggio ~ gravita + condizione, data = df, backend = "cmdstanr")
+```
+
+
+### LOO (Leave-One-Out Cross Validation)
+
+```{r}
+loo_mod  <- loo(mod)
+loo_mod1 <- loo(mod1)
+loo_compare(loo_mod, loo_mod1)
+```
+
+Interpretazione:
+
+* se `elpd_diff` è piccolo rispetto a `se_diff`, la differenza non è sostanziale;
+* il modello più semplice è preferibile se non vi è evidenza chiara a favore dell'interazione.
+
+
+## Riflessioni conclusive {.unnumbered .unlisted} 
+
+L'ANOVA a due vie permette di esaminare sia gli effetti separati di due fattori sia la loro interazione. La modellazione bayesiana, combinata con il confronto tramite LOO, offre un approccio potente per valutare quale struttura descrive meglio i dati. Se l'interazione non migliora la predizione in modo credibile, è preferibile adottare il modello più parsimonioso.
+
+
+## Informazioni sull'ambiente di sviluppo {.unnumbered .unlisted} 
+
+```{r}
+sessionInfo()
+```
+
+## Bibliografia {.unnumbered}
+
