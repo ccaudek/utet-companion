@@ -271,9 +271,17 @@ theme_manuscript <- function(
 }
 
 # Applica il tema globalmente
-theme_set(theme_manuscript())
+# theme_set(theme_manuscript())
+# theme_set(theme_manuscript(base_family = renaissance_serif))
 
-theme_set(theme_manuscript(base_family = renaissance_serif))
+ggplot2::theme_set(bayesplot::theme_default(
+  base_family = renaissance_serif,
+  base_size = 14.0
+))
+bayesplot::bayesplot_theme_set(bayesplot::theme_default(
+  base_family = renaissance_serif,
+  base_size = 14.0
+))
 
 # Forza il family di default del testo in ggplot (utile per geoms testuali)
 theme_update(text = element_text(family = renaissance_serif))
