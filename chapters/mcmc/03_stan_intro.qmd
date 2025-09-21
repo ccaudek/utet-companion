@@ -12,7 +12,6 @@ Per la ricerca psicologica, Stan ha un vantaggio particolare. Molti dei modelli 
 
 Nei prossimi capitoli vedremo come iniziare a scrivere modelli in Stan, partendo da esempi elementari per arrivare a strutture più articolate. L’obiettivo non è soltanto imparare un nuovo linguaggio, ma acquisire la capacità di formalizzare i modelli psicologici come processi generativi, traducendoli in analisi statistiche riproducibili e trasparenti.
 
-
 ### Panoramica del capitolo {.unnumbered .unlisted}
 
 - I blocchi del codice Stan.  
@@ -27,18 +26,23 @@ Nei prossimi capitoli vedremo come iniziare a scrivere modelli in Stan, partendo
 
 here::here("code", "_common.R") |> 
   source()
-
-# Load packages
 if (!requireNamespace("pacman")) install.packages("pacman")
 pacman::p_load(cmdstanr, posterior, insight)
 ```
 :::
 
-
 ## Programmazione probabilistica con Stan
 
-Ogni programma Stan è organizzato in blocchi distinti, che corrispondono a funzioni precise [@nicenboim2025introduction]. Nel blocco `data` dichiariamo le variabili osservate che passiamo dall’esterno; in `parameters` indichiamo le quantità ignote che vogliamo stimare; nel blocco `model` specifichiamo le assunzioni probabilistiche — cioè le distribuzioni a priori e la verosimiglianza; infine, in `generated quantities` possiamo calcolare misure derivate, come predizioni o log-likelihood, che non influiscono sulla stima ma sono utili per l’analisi successiva. Questa architettura modulare rende Stan intuitivo e adattabile a un'ampia gamma di applicazioni statistiche.
+Ogni programma Stan è organizzato in blocchi distinti, che corrispondono a funzioni precise [@nicenboim2025introduction]. 
 
+- Nel blocco `data` dichiariamo le variabili osservate che passiamo dall’esterno; 
+- in `parameters` indichiamo le quantità ignote che vogliamo stimare; 
+- nel blocco `model` specifichiamo le assunzioni probabilistiche — cioè le distribuzioni a priori e la verosimiglianza; 
+- in `generated quantities` possiamo calcolare misure derivate, come predizioni o log-likelihood, che non influiscono sulla stima ma sono utili per l’analisi successiva. 
+
+Possiamo pensare a un programma Stan come a una “ricetta”. Nel blocco `data` mettiamo gli ingredienti che già conosciamo (i dati osservati), in `parameters` dichiariamo gli ingredienti mancanti (i parametri da stimare), in `model` scriviamo le regole della preparazione (le distribuzioni a priori e la verosimiglianza) e in `generated quantities` prepariamo i contorni (diagnostiche, predizioni) che non cambiano la ricetta principale, ma la rendono più completa.
+
+Questa architettura modulare rende Stan intuitivo e adattabile a un'ampia gamma di applicazioni statistiche.
 
 ### Lavorare con Stan in R
 
@@ -46,16 +50,13 @@ L'interfaccia `cmdstanr` per R segue un workflow ben definito:
 
 1. scrittura del modello in un file `.stan`,  
 2. compilazione del modello,  
-3. passaggio dei dati come lista R , 
+3. passaggio dei dati come lista R, 
 4. esecuzione del campionamento con `sample()`,  
-5. analisi dei risultati mediante pacchetti specializzati (`posterior`, `bayesplot`).  
-
-Possiamo pensare a un programma Stan come a una “ricetta”. Nel blocco `data` mettiamo gli ingredienti che già conosciamo (i dati osservati), in `parameters` dichiariamo gli ingredienti mancanti (i parametri da stimare), in `model` scriviamo le regole della preparazione (le distribuzioni a priori e la verosimiglianza) e in `generated quantities` prepariamo i contorni (diagnostiche, predizioni) che non cambiano la ricetta principale, ma la rendono più completa.
+5. analisi dei risultati mediante pacchetti specializzati (`posterior`, `bayesplot`).
 
 In pratica, lavorare con Stan da R segue sempre lo stesso schema. Prima si scrive il modello in un file `.stan`; poi lo si compila, cioè lo si traduce in un eseguibile; quindi si preparano i dati in una lista R con gli stessi nomi dichiarati nel modello; infine si lancia il campionamento con la funzione `sample()`. Una volta ottenuti i campioni a posteriori, possiamo analizzarli con pacchetti come `posterior` o `bayesplot`, che facilitano sia i riassunti numerici sia le visualizzazioni.
 
 Stan utilizza un sistema di tipizzazione statica: tutte le variabili devono essere dichiarate con tipi specifici (`int` per interi, `real` per valori reali, `vector` per vettori) e possono includere vincoli (es. `lower=0` per valori positivi). Questo approccio aumenta la robustezza del codice e previene errori comuni nella specificazione dei modelli.
-
 
 ## Modello Beta–Binomiale
 
@@ -73,18 +74,17 @@ y <- as.integer(dice_df$res == 6)    # 1 se esce “6”, 0 altrimenti
 mean(y)                              # frequenza relativa di “6”
 ```
 
-Il modello statistico che sottende a questa situazione è molto semplice:
+Il modello statistico che proponiamo per rappresentare questa situazione è molto semplice:
 
 * ogni osservazione segue una distribuzione Bernoulliana, $y_i \sim \text{Bernoulli}(\theta)$ per $i = 1, \dots, N$;
-* equivalendo a dire che il numero totale di successi $k = \sum_i y_i$ segue una distribuzione Binomiale, $k \sim \text{Binomiale}(N,\theta)$;
-* come prior adottiamo una distribuzione uniforme su $[0,1]$, cioè $\theta \sim \text{Beta}(1,1)$.
+* ciò è equivalente a dire che il numero totale di successi $k = \sum_i y_i$ segue una distribuzione Binomiale, $k \sim \text{Binomiale}(N,\theta)$;
+* come prior adottiamo una distribuzione uniforme su $[0,1]$, cioè $\theta \sim \text{Beta}(1,1)$[^prior_implicito].
 
-Vale la pena notare che, se in Stan dichiariamo un parametro vincolato all’intervallo $[0,1]$ ma non specifichiamo alcun prior, il linguaggio assegna automaticamente proprio questa distribuzione uniforme, che corrisponde a una Beta(1,1).
-
+[^prior_implicito]: Vale la pena notare che, se in Stan dichiariamo un parametro vincolato all’intervallo $[0,1]$ ma non specifichiamo alcun prior, il linguaggio assegna automaticamente proprio questa distribuzione uniforme, che corrisponde a una Beta(1,1).
 
 ### Prima versione: modello Bernoulliano vettoriale
 
-Il modo più diretto di tradurre il modello in Stan è scrivere la verosimiglianza come sequenza di esiti Bernoulliani. Questo approccio ha anche un valore didattico, perché mostra chiaramente la corrispondenza tra dati osservati e modello probabilistico. Stan, inoltre, vettorializza automaticamente le operazioni sugli array, rendendo il codice conciso:
+Il modo più diretto di tradurre il modello in Stan è scrivere la verosimiglianza come sequenza di esiti Bernoulliani. Questo approccio ha anche un valore didattico, perché mostra chiaramente la corrispondenza tra i dati osservati e il modello probabilistico. Stan, inoltre, vettorializza automaticamente le operazioni sugli array, rendendo il codice conciso:
 
 ```{r}
 stancode <- "
@@ -102,23 +102,29 @@ model {
 "
 ```
 
-Il funzionamento dei blocchi è intuitivo: nel blocco `data` dichiariamo le variabili osservate (`N` e il vettore binario `y`); nel blocco `parameters` indichiamo il parametro da stimare, $\theta$; infine, nel blocco `model` specifichiamo sia la distribuzione a priori sia la verosimiglianza.
+Nel blocco `data` dichiariamo le variabili osservate (`N` e il vettore binario `y`); nel blocco `parameters` indichiamo il parametro da stimare, $\theta$; infine, nel blocco `model` specifichiamo sia la distribuzione a priori sia la verosimiglianza.[^target]
 
-Dal punto di vista interno, ogni riga del tipo `x ~ distribuzione(...)` aggiunge la log-densità (o log-massa) alla quantità interna `target`, che rappresenta la log-posterior. Se vogliamo essere più espliciti, possiamo scrivere il codice in forma equivalente:
-
+[^target]: Dal punto di vista interno, ogni riga del tipo `x ~ distribuzione(...)` aggiunge la log-densità (o log-massa) alla quantità interna `target`, che rappresenta la log-posterior. Se vogliamo essere più espliciti, possiamo scrivere il codice in forma equivalente:
 ```stan
 target += beta_lpdf(theta | 1, 1);
 target += bernoulli_lpmf(y | theta);
 ```
-
 Questa seconda scrittura, sebbene meno compatta, è particolarmente utile quando vogliamo costruire verosimiglianze personalizzate o introdurre modifiche non standard.
 
+#### Perché `array` e non `vector`?
+
+* In Stan, *`vector` è usato solo per numeri reali* (variabili continue a virgola mobile).
+* Nel nostro caso gli esiti $y\_i$ sono *variabili discrete* che assumono solo i valori 0 o 1. Per questo dobbiamo dichiararli come *interi (`int`)*, e la struttura che raccoglie più interi in Stan è un *`array` di interi*.
+* La sintassi `array[N] int y;` significa quindi “crea un array di lunghezza N, i cui elementi sono interi”.
+* Non potremmo scrivere `vector[N] y;` perché un `vector` in Stan può contenere solo `real`, e non accetterebbe valori binari discreti come `0` o `1`.
+
+In altre parole, usiamo `array` ogni volta che i dati osservati sono *categorici o interi* (conteggi, esiti Bernoulli, ecc.), mentre `vector` è riservato a quantità *continue* come parametri, covariate normalizzate o variabili latenti.
 
 ### Seconda versione: modello binomiale sui successi totali
 
 L’approccio Bernoulliano visto in precedenza ha il pregio della chiarezza, ma può risultare ridondante: stiamo in realtà scrivendo la stessa formula mille volte, una per ciascun lancio del dado. In termini statistici, però, sappiamo che non è necessario conservare l’intera sequenza di zeri e uno: ai fini della stima di $\theta$ conta solo il numero totale di successi osservati. Questa proprietà prende il nome di *sufficienza* della statistica $k = \sum_i y_i$ per la distribuzione binomiale.
 
-Se dunque nei mille lanci abbiamo osservato, ad esempio, 170 “6”, tutta l’informazione rilevante per stimare $\theta$ è contenuta in quel singolo numero, non nella sequenza dettagliata dei lanci. La distribuzione binomiale ci permette di formalizzare questa idea in modo compatto, portando a una specificazione del modello più efficiente, ma del tutto equivalente sul piano inferenziale.
+Se dunque nei mille lanci abbiamo osservato, ad esempio, 164 “6”, tutta l’informazione rilevante per stimare $\theta$ è contenuta in quel singolo numero, non nella sequenza dettagliata dei lanci. La distribuzione binomiale ci permette di formalizzare questa idea in modo compatto, portando a una specificazione del modello più efficiente, ma del tutto equivalente sul piano inferenziale.
 
 Ecco la traduzione in Stan:
 
@@ -126,7 +132,7 @@ Ecco la traduzione in Stan:
 stancode <- "
 data {
   int<lower=1> N;                      // numero di prove
-  array[N] int<lower=0, upper=1> y;    // esiti (0/1)
+  array[N] int<lower=0, upper=1> y;    // sequenza di esiti (usata solo per calcolare k)
 }
 transformed data {
   int<lower=0, upper=N> k = sum(y);    // numero totale di successi
@@ -178,7 +184,8 @@ Le stime via Stan (campioni MCMC della `theta`) devono coincidere (entro il rumo
 Una volta scritto il modello, il passo successivo è la *compilazione*. Stan traduce il codice in linguaggio C++ e lo trasforma in un piccolo eseguibile che potrà essere richiamato ogni volta che lanceremo le stime. Questo passaggio richiede qualche secondo solo la prima volta; in seguito, il modello compilato può essere riutilizzato con dataset diversi senza dover ricompilare da capo, con un notevole risparmio di tempo.
 
 ```{r}
-stanmod <- cmdstanr::cmdstan_model(
+#| output: false
+mod <- cmdstan_model(
   write_stan_file(stancode),
   compile = TRUE
 )
@@ -187,34 +194,33 @@ stanmod <- cmdstanr::cmdstan_model(
 Preparato l’eseguibile, dobbiamo passare a Stan i dati necessari. In questo caso servono due elementi: il numero totale di prove e il vettore con gli esiti dei lanci. È importante che i nomi e i tipi corrispondano esattamente a quanto dichiarato nel blocco `data` del modello Stan, altrimenti il programma restituirà un errore.
 
 ```{r}
-data_list <- list(
+stan_data <- list(
   N = length(y),
   y = y
 )
-str(data_list)
+str(stan_data)
 ```
 
-A questo punto siamo pronti per il *campionamento MCMC*. Nella chiamata a `sample()` specifichiamo quante iterazioni dedicare alla fase di warmup (che serve per adattare l’algoritmo), quante iterazioni utilizzare effettivamente per l’inferenza, e quante catene indipendenti far partire in parallelo. Due parametri aggiuntivi – `adapt_delta` e `max_treedepth` – aiutano a rendere più stabili e accurati i passi dell’algoritmo NUTS, soprattutto in modelli più complessi.
+A questo punto siamo pronti per il *campionamento MCMC*. Nella chiamata a `sample()` specifichiamo quante iterazioni dedicare alla fase di warmup (che serve per adattare l’algoritmo), quante iterazioni utilizzare effettivamente per l’inferenza, e quante catene indipendenti far partire in parallelo.[^param_aggiuntivi]
+
+[^param_aggiuntivi]: La funzione `sample()` ha anche altri parametri importanti per ottimizzare il campionamento. Tra questi, `adapt_delta` aumenta la precisione dell'algoritmo di campionamento, riducendo gli errori di divergenza, mentre `max_treedepth` controlla la profondità massima dell'albero di campionamento. Utilizzarli è fondamentale per ottenere risultati stabili e affidabili, specialmente quando si lavora con modelli complessi o con dati problematici.
 
 ```{r}
-#| output: false
-fit1 <- stanmod$sample(
-  data = data_list,
+fit1 <- mod$sample(
+  data = stan_data,
   iter_warmup = 1000,
-  iter_sampling = 4000,
+  iter_sampling = 2000,
   chains = 4,
   parallel_chains = 4,
   seed = 4790,
-  refresh = 0,                 # meno output a schermo
-  adapt_delta = 0.9,           # maggiore prudenza nel passo HMC
-  max_treedepth = 12           # profondità massima dell’albero NUTS
+  refresh = 0
 )
 ```
 
-Con il modello stimato, possiamo guardare un *riepilogo sintetico* delle stime. La funzione `summary()` di Stan mostra media, deviazione standard, quantili e diagnostiche come $\hat R$ ed ESS.
+Con il modello stimato, possiamo generare un *riepilogo sintetico* delle stime a posteriori. La funzione `summary()` di Stan mostra media, deviazione standard, quantili e diagnostiche come $\hat R$ ed ESS.
 
 ```{r}
-print(fit1$summary(variables = "theta"), n = Inf)
+fit1$summary(variables = "theta")
 ```
 
 In alternativa, il pacchetto *posterior* permette di estrarre i campioni e calcolare con maggiore flessibilità le statistiche che ci interessano:
@@ -235,14 +241,9 @@ Oltre alle statistiche numeriche, le *diagnostiche grafiche* aiutano a valutare 
 bayesplot::mcmc_trace(fit1$draws("theta"), n_warmup = 1000)
 ```
 
-```{r}
-bayesplot::mcmc_dens_overlay(fit1$draws("theta"))
-```
-
 Nel traceplot, le catene dovrebbero mescolarsi bene senza mostrare trend persistenti; nel grafico delle densità, le distribuzioni delle diverse catene dovrebbero risultare sovrapposte.
 
 In sintesi: la media a posteriori di $\theta$ fornisce una stima puntuale della probabilità di ottenere un “6”, l’intervallo di credibilità quantifica l’incertezza residua, e le diagnostiche (R-hat vicino a 1, ESS alto, catene ben mescolate) garantiscono che i campioni siano affidabili per trarre conclusioni.
-
 
 ::: callout-note
 **Confronto con la frequenza relativa**
@@ -250,78 +251,96 @@ In sintesi: la media a posteriori di $\theta$ fornisce una stima puntuale della 
 La frequenza `mean(y)` è *solo una stima puntuale*. L’analisi bayesiana restituisce *un’intera distribuzione* per $\theta$, utile per *propagare l’incertezza* in previsioni e decisioni.
 :::
 
-
 ### Distribuzione predittiva posteriore
 
-Stimare $\theta$ non basta: spesso ciò che ci interessa davvero è capire quali conseguenze pratiche derivano dai risultati. In altre parole, vogliamo sapere cosa il modello ci dice su dati futuri. Per esempio: se rilanciassimo il dado altre mille volte, quanti “6” potremmo aspettarci?
+Stimare $\theta$ non è sufficiente: ciò che spesso ci interessa davvero è capire quali *conseguenze pratiche* derivano dai risultati. In altre parole, vogliamo sapere cosa il modello predice su *dati futuri*. Ad esempio: se rilanciassimo il dado altre 1000 volte, quanti “6” potremmo attenderci?
 
-La risposta si ottiene con la *distribuzione predittiva posteriore*. Condizionatamente a un valore di $\theta$, il numero di successi nei nuovi lanci segue una distribuzione binomiale:
+La risposta si ottiene tramite la *distribuzione predittiva posteriore*. Condizionatamente a un valore fissato di $\theta$, il numero di successi nei nuovi lanci segue una distribuzione binomiale:
 
 $$
 y_{\text{rep}} \mid \theta \sim \text{Binomiale}(n_{\text{new}}, \theta).
 $$
 
-Ma noi non conosciamo $\theta$ con certezza: ne abbiamo solo una distribuzione a posteriori. Per questo motivo, la distribuzione predittiva si ottiene integrando la probabilità condizionata $p(y_{\text{rep}} \mid \theta)$ rispetto alla distribuzione a posteriori di $\theta$:
+Poiché non conosciamo $\theta$ con certezza, ma solo la sua distribuzione a posteriori, la distribuzione predittiva si ottiene integrando la probabilità condizionata $p(y\_{\text{rep}} \mid \theta)$ rispetto a $p(\theta \mid y)$:
 
 $$
-p(y_{\text{rep}} \mid y) = \int p(y_{\text{rep}} \mid \theta)\, p(\theta \mid y)\, d\theta.
+p(y_{\text{rep}} \mid y) \;=\; \int p(y_{\text{rep}} \mid \theta)\, p(\theta \mid y)\, d\theta.
 $$
 
-Dal punto di vista operativo, il procedimento è semplice: estraiamo valori di $\theta$ dalla posterior e, per ciascuno di essi, simuliamo un nuovo conteggio $y_{\text{rep}}$. L’insieme di queste simulazioni costituisce la distribuzione predittiva.
+#### Procedura operativa
+
+Il procedimento pratico è semplice e si articola in due passaggi:
+
+1. **Estrarre un valore da $p(\theta \mid y)$**.
+   Supponiamo di ottenere $\theta = 0.15$.
+2. **Simulare un dato replicato**.
+   Con quel valore generiamo un nuovo conteggio $y\_{\text{rep}}$ da una binomiale, ad esempio con $n\_{\text{new}}=1000$:
+
+   ```{r}
+   rbinom(n = 1, size = 1000, prob = 0.15)
+   ```
+
+Ripetendo il processo per molti valori di $\theta$ estratti dalla distribuzione a posteriori, otteniamo un campione dalla distribuzione predittiva posteriore.
+
+#### Codice R
 
 ```{r}
-# Numero di futuri lanci da simulare
+# Numero di futuri lanci
 n_new <- 1000
 
-# Estrazione dei campioni di theta (vettore numerico)
-theta_draws <- as.numeric(draws[, "theta"])
-
-# Simulazione predittiva
-yrep_count <- rbinom(n = length(theta_draws), size = n_new, prob = theta_draws)
-
-# Riassunti predittivi
-mean(yrep_count)                           # valore atteso di "6" su n_new lanci
-quantile(yrep_count, c(0.025, 0.5, 0.975)) # intervallo predittivo 95%
+# Campioni da p(theta | y)
+posterior_theta <- as.numeric(fit1$draws("theta", format = "matrix"))
+posterior_theta[1:20]
 ```
 
-Per visualizzare i risultati, rappresentiamo la distribuzione dei conteggi simulati con un istogramma, segnando con una linea verticale tratteggiata il numero di successi realmente osservati.
+```{r}
+# Simulazione della distribuzione predittiva
+yrep_count <- rbinom(
+  n    = length(posterior_theta), 
+  size = n_new, 
+  prob = posterior_theta
+)
+```
 
 ```{r}
+# Dimensioni e prime osservazioni
+length(yrep_count)
+head(yrep_count)
+```
+
+```{r}
+# Riassunti predittivi
+mean_pred <- mean(yrep_count)  
+ci_pred   <- quantile(yrep_count, c(0.025, 0.5, 0.975))
+
+mean_pred
+ci_pred
+```
+
+#### Visualizzazione
+
+```{r}
+p025 <- ci_pred[1]; p50 <- ci_pred[2]; p975 <- ci_pred[3]
+
 tibble(count = yrep_count) |>
   ggplot(aes(x = count)) +
-  geom_histogram(bins = 30, color = "white") +
-  geom_vline(xintercept = sum(y), linetype = "dashed") +
+  geom_histogram(bins = 30) +
+  geom_vline(xintercept = mean_pred, linetype = "dashed") +
+  geom_vline(xintercept = c(p025, p975), linetype = "dotted") +
   labs(
-    x = "Numero di '6' osservati",
-    y = "Frequenza"
+    x = "Numero di successi su n_new prove",
+    y = "Frequenza",
+    title = "Distribuzione predittiva posteriore",
+    subtitle = "Linea tratteggiata = media predittiva; puntinate = intervallo al 95%"
   )
 ```
 
-**Come leggere il grafico.**
-L’istogramma mostra la variabilità attesa del numero di “6” su mille lanci futuri. La distribuzione è centrata intorno al valore atteso $n_{\text{new}} \cdot \mathbb{E}[\theta \mid y]$, cioè il numero medio di successi secondo la stima a posteriori. Se il dado fosse perfettamente equilibrato ($\theta = 1/6$), ci aspetteremmo circa 167 successi su 1000, con un intervallo predittivo di circa 150–185. Se i dati simulati si discostano molto da questo scenario, il modello ci sta suggerendo che il dado potrebbe non essere equo.
+#### Interpretazione
 
-> Come controllo aggiuntivo, possiamo sfruttare la formula chiusa della distribuzione Beta–Binomiale: con prior $\text{Beta}(1,1)$ e $k$ successi osservati, la predittiva per $n_{\text{new}}$ prove segue una distribuzione $\text{Beta–Binomiale}(n_{\text{new}}, 1+k, 1+N-k)$. I suoi quantili dovrebbero essere coerenti con quelli ottenuti tramite simulazione.
+L’istogramma mostra la variabilità attesa del numero di “6” su mille lanci futuri.
+La distribuzione è centrata intorno al valore atteso $n\_{\text{new}} \cdot \mathbb{E}[\theta \mid y]$, cioè il numero medio di successi secondo la stima a posteriori.
 
-
-### Mini check analitico
-
-Un ulteriore modo per verificare i risultati è confrontare le stime prodotte da Stan con quelle ottenute direttamente dalla forma analitica della distribuzione a posteriori. In questo caso, con prior uniforme e verosimiglianza binomiale, sappiamo che la distribuzione a posteriori di $\theta$ è ancora una Beta. Possiamo quindi calcolare media e intervallo di credibilità in chiuso e confrontarli con i valori ricavati dal campionamento MCMC:
-
-```{r}
-k <- sum(y); N <- length(y)
-a <- 1; b <- 1
-
-# Posterior di theta (soluzione analitica)
-post_mean_closed <- (a + k) / (a + b + N)
-post_ci95_closed <- qbeta(c(0.025, 0.975), a + k, b + N - k)
-
-c(post_mean_closed = post_mean_closed)
-post_ci95_closed
-```
-
-Le differenze rispetto ai risultati di Stan dovrebbero essere minime e spiegabili unicamente con il normale rumore Monte Carlo. Questo confronto fornisce quindi una garanzia ulteriore che il modello sia stato implementato e stimato correttamente.
-
-
+Se il dado fosse perfettamente equo ($\theta = 1/6$), ci aspetteremmo circa 167 successi su 1000, con un intervallo predittivo attorno a 133–198. Un forte scostamento da questo scenario indicherebbe che il modello suggerisce un dado non equilibrato.
 
 ## Dati continui: stima della media con varianza nota
 
@@ -374,7 +393,7 @@ model {
 Prepariamo i dati in R in modo che siano coerenti con quanto richiesto dal blocco `data` del modello:
 
 ```{r}
-data_list2 <- list(
+stan_data2 <- list(
   N     = length(y_cont),
   y     = y_cont,
   sigma = sigma,
@@ -387,15 +406,15 @@ Compiliamo il modello:
 
 ```{r}
 #| output: false
-stanmod2 <- cmdstanr::cmdstan_model(write_stan_file(stancode_norm), compile = TRUE)
+mod2 <- cmdstanr::cmdstan_model(write_stan_file(stancode_norm), compile = TRUE)
 ```
 
 E infine lanciamo il campionamento MCMC:
 
 ```{r}
 #| output: false
-fit2 <- stanmod2$sample(
-  data = data_list2,
+fit2 <- mod2$sample(
+  data = stan_data2,
   iter_warmup     = 1000,
   iter_sampling   = 4000,
   chains          = 4,
@@ -405,13 +424,13 @@ fit2 <- stanmod2$sample(
 )
 ```
 
-I risultati possono essere riepilogati in forma sintetica:
+I risultati possono essere riepilogati in forma sintetica con `$summary()`:
 
 ```{r}
 print(fit2$summary(variables = "mu"), n = Inf)
 ```
 
-Oppure, con il pacchetto *posterior*, possiamo estrarre i campioni e calcolare statistiche più flessibili, come medie, quantili e diagnostiche:
+oppure, usando il pacchetto `posterior`:
 
 ```{r}
 draws2 <- fit2$draws(variables = "mu", format = "draws_matrix")
@@ -427,7 +446,6 @@ L’interpretazione è immediata:
 * l’*intervallo di credibilità* (ad esempio al 95%) quantifica l’incertezza residua su $\mu$.
 
 In questo modo otteniamo non solo una stima centrale, ma un quadro completo della plausibilità dei valori possibili per la media di popolazione, dato quanto osservato.
-
 
 ### Controllo analitico della coniugatezza
 
@@ -470,7 +488,6 @@ quantile(mu_draws, c(0.025, 0.5, 0.975))
 
 Le due soluzioni dovrebbero concordare molto bene: la formula chiusa ci dà il risultato “esatto”, mentre l’MCMC lo approssima tramite simulazione. Le piccole discrepanze sono attribuibili al normale *rumore Monte Carlo*, che diminuisce all’aumentare del numero di campioni.
 
-
 ### Visualizzazione
 
 Una volta stimato il modello, è molto utile osservare graficamente i campioni MCMC per verificare sia la qualità del campionamento sia la forma della distribuzione a posteriori. Il pacchetto `bayesplot` fornisce strumenti immediati per questo scopo.
@@ -499,11 +516,9 @@ bayesplot::mcmc_dens_overlay(fit2$draws("mu"))
 
 Se le curve si sovrappongono bene, abbiamo un’ulteriore conferma che le catene hanno raggiunto la stessa distribuzione stazionaria.
 
-
 In sintesi, questo esempio rappresenta una sorta di *“test bayesiano della media”* con deviazione standard nota e un prior normale ampio su $\mu$. A differenza dell’approccio frequentista, non otteniamo soltanto una stima puntuale o un intervallo, ma un’intera *distribuzione a posteriori* della media. Questo è un vantaggio importante: l’incertezza stimata può essere comunicata in modo trasparente e, soprattutto, può essere *propagata* nelle fasi successive dell’analisi, ad esempio in previsioni o decisioni basate sul modello.
 
 > Una nota pratica su Stan: se omettessimo la prior su $\mu$, il software assumerebbe implicitamente una prior impropria piatta su $\mathbb{R}$. Sebbene ciò possa funzionare in casi semplici, didatticamente preferiamo specificare in modo esplicito un prior normale (anche molto ampio). In questo modo le assunzioni sono sempre chiare e il modello rimane ben definito.
-
 
 ### Intervalli di credibilità
 

@@ -130,7 +130,7 @@ ggplot2::theme_set(bayesplot::theme_default(
 
 bayesplot::bayesplot_theme_set(bayesplot::theme_default(
   base_family = modern_sans,
-  base_size = 14
+  base_size = 15
 ))
 
 # Schema colori bayesplot moderno
