@@ -824,8 +824,9 @@ window.Quarto = {
 <li><a href="#programmazione-probabilistica-con-stan" id="toc-programmazione-probabilistica-con-stan" class="nav-link active" data-scroll-target="#programmazione-probabilistica-con-stan"><span class="header-section-number">14.1</span> Programmazione probabilistica con Stan</a></li>
   <li><a href="#modello-betabinomiale" id="toc-modello-betabinomiale" class="nav-link" data-scroll-target="#modello-betabinomiale"><span class="header-section-number">14.2</span> Modello Beta–Binomiale</a></li>
   <li><a href="#dati-continui-stima-della-media-con-varianza-nota" id="toc-dati-continui-stima-della-media-con-varianza-nota" class="nav-link" data-scroll-target="#dati-continui-stima-della-media-con-varianza-nota"><span class="header-section-number">14.3</span> Dati continui: stima della media con varianza nota</a></li>
-  <li><a href="#test-di-ipotesi-bayesiane" id="toc-test-di-ipotesi-bayesiane" class="nav-link" data-scroll-target="#test-di-ipotesi-bayesiane"><span class="header-section-number">14.4</span> Test di ipotesi bayesiane</a></li>
-  <li><a href="#prior-e-posterior-predictive-check" id="toc-prior-e-posterior-predictive-check" class="nav-link" data-scroll-target="#prior-e-posterior-predictive-check"><span class="header-section-number">14.5</span> Prior e Posterior Predictive Check</a></li>
+  <li><a href="#test-di-ipotesi-in-prospettiva-bayesiana" id="toc-test-di-ipotesi-in-prospettiva-bayesiana" class="nav-link" data-scroll-target="#test-di-ipotesi-in-prospettiva-bayesiana"><span class="header-section-number">14.4</span> Test di ipotesi in prospettiva bayesiana</a></li>
+  <li><a href="#diagnostiche-di-campionamento" id="toc-diagnostiche-di-campionamento" class="nav-link" data-scroll-target="#diagnostiche-di-campionamento"><span class="header-section-number">14.5</span> Diagnostiche di campionamento</a></li>
+  <li><a href="#prior-e-posterior-predictive-check" id="toc-prior-e-posterior-predictive-check" class="nav-link" data-scroll-target="#prior-e-posterior-predictive-check"><span class="header-section-number">14.6</span> Prior e Posterior Predictive Check</a></li>
   </ul><div class="toc-actions"><ul class="collapse"><li><a href="https://github.com/ccaudek/utet-companion/blob/main/chapters/mcmc/03_stan_intro.qmd" class="toc-action"><i class="bi bi-github"></i>Mostra il codice</a></li><li><a href="https://github.com/ccaudek/utet-companion/issues/new" class="toc-action"><i class="bi empty"></i>Segnala un problema</a></li></ul></div></nav>
     </div>
 <!-- main -->
@@ -1050,7 +1051,7 @@ window.Quarto = {
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; All 4 chains finished successfully.</span></span>
 <span><span class="co">#&gt; Mean chain execution time: 0.0 seconds.</span></span>
-<span><span class="co">#&gt; Total execution time: 0.3 seconds.</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
+<span><span class="co">#&gt; Total execution time: 0.2 seconds.</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <p>Con il modello stimato, possiamo generare un <em>riepilogo sintetico</em> delle stime a posteriori. La funzione <code><a href="https://rdrr.io/r/base/summary.html">summary()</a></code> di Stan mostra media, deviazione standard, quantili e diagnostiche come <span class="math inline">\(\hat R\)</span> ed ESS.</p>
 <div class="cell" data-layout-align="center">
@@ -1188,9 +1189,8 @@ p(y_{\text{rep}} \mid y) \;=\; \int p(y_{\text{rep}} \mid \theta)\, p(\theta \mi
 <p>Se il dado fosse perfettamente equo (<span class="math inline">\(\theta = 1/6\)</span>), ci aspetteremmo circa 167 successi su 1000, con un intervallo predittivo attorno a 133–198. Un forte scostamento da questo scenario indicherebbe che il modello suggerisce un dado non equilibrato.</p>
 </section></section></section><section id="dati-continui-stima-della-media-con-varianza-nota" class="level2" data-number="14.3"><h2 data-number="14.3" class="anchored" data-anchor-id="dati-continui-stima-della-media-con-varianza-nota">
 <span class="header-section-number">14.3</span> Dati continui: stima della media con varianza nota</h2>
-<p>Passiamo ora a un caso molto comune nelle scienze psicologiche: la stima della <em>media di popolazione</em> di una variabile continua. Pensiamo, ad esempio, ai punteggi ottenuti in un test di intelligenza (QI).</p>
-<p>Per semplicità ipotizziamo che la deviazione standard <span class="math inline">\(\sigma\)</span> sia nota. È un’ipotesi forte, certo, ma ci permette di concentrare l’attenzione su un solo parametro incognito: la media <span class="math inline">\(\mu\)</span>. Questa assunzione semplifica il modello e rende più chiaro il passaggio dall’impostazione classica a quella bayesiana.</p>
-<p>Molti dati psicologici possono essere approssimati da una distribuzione normale: è il caso dei punteggi standardizzati come il QI, che hanno distribuzioni simili a una gaussiana in popolazione. Immaginiamo quindi di raccogliere i punteggi di <span class="math inline">\(n=30\)</span> persone, supponendo che la deviazione standard sia <span class="math inline">\(\sigma = 15\)</span> e che la media reale sia 105.</p>
+<p>Un problema molto comune nelle scienze psicologiche è la stima della <em>media di popolazione</em> di una variabile continua. Pensiamo, ad esempio, ai punteggi ottenuti a un test di intelligenza (QI). Per semplificare l’esposizione assumiamo che la deviazione standard della popolazione sia nota e pari a <span class="math inline">\(\sigma = 15\)</span>. Nella pratica questa informazione non è quasi mai disponibile, ma l’ipotesi ci permette di concentrare l’attenzione su un unico parametro incognito: la media <span class="math inline">\(\mu\)</span>. Ciò rende il modello più semplice e facilita il confronto tra l’impostazione classica e quella bayesiana.</p>
+<p>Immaginiamo quindi di raccogliere i punteggi di <span class="math inline">\(n = 30\)</span> persone, ipotizzando che la vera media sia 105:</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb19"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html">set.seed</a></span><span class="op">(</span><span class="fl">123</span><span class="op">)</span></span>
 <span><span class="va">n</span>     <span class="op">&lt;-</span> <span class="fl">30</span></span>
@@ -1208,34 +1208,35 @@ p(y_{\text{rep}} \mid y) \;=\; \int p(y_{\text{rep}} \mid \theta)\, p(\theta \mi
 </div>
 </div>
 </div>
-<p>In questo scenario, il modello statistico si scrive così:</p>
-<ul>
-<li>
-<em>Verosimiglianza</em>: <span class="math inline">\(y_i \sim \mathcal{N}(\mu, \sigma)\)</span>, con <span class="math inline">\(\sigma\)</span> noto.</li>
-<li>
-<em>Prior su <span class="math inline">\(\mu\)</span></em>: <span class="math inline">\(\mu \sim \mathcal{N}(\mu_0, \tau)\)</span>, con <span class="math inline">\(\mu_0 = 100\)</span> come media attesa a priori e <span class="math inline">\(\tau = 30\)</span> come deviazione standard del prior, scelta piuttosto ampia per riflettere un’incertezza elevata.</li>
-</ul>
-<p>Da notare che <span class="math inline">\(\mu\)</span> può assumere qualsiasi valore reale: per questo il prior corretto è una distribuzione normale definita su tutto <span class="math inline">\(\mathbb{R}\)</span>.</p>
-<p>Ecco la traduzione del modello in Stan:</p>
+<p>Il modello statistico che adottiamo ha due componenti fondamentali. La <em>verosimiglianza</em> descrive come si generano i dati: ogni osservazione <span class="math inline">\(y_i\)</span> è distribuita secondo una Normale con media incognita <span class="math inline">\(\mu\)</span> e deviazione standard nota <span class="math inline">\(\sigma\)</span>:</p>
+<p><span class="math display">\[
+y_i \sim \mathcal{N}(\mu, \sigma).
+\]</span></p>
+<p>A questo si affianca il <em>prior</em> su <span class="math inline">\(\mu\)</span>, che formalizza le conoscenze disponibili prima di raccogliere i dati. Supponiamo che <span class="math inline">\(\mu\)</span> sia distribuita normalmente attorno a <span class="math inline">\(\mu_0 = 100\)</span>, con deviazione standard <span class="math inline">\(\tau = 30\)</span>. Un prior così ampio riflette un’incertezza iniziale elevata, lasciando spazio ai dati per aggiornare in modo sostanziale le nostre convinzioni:</p>
+<p><span class="math display">\[
+\mu \sim \mathcal{N}(\mu_0, \tau).
+\]</span></p>
+<p>Il modello combina dunque le informazioni fornite dai dati con quelle incorporate nel prior, producendo una distribuzione a posteriori per <span class="math inline">\(\mu\)</span> che sintetizza entrambe le fonti di conoscenza.</p>
+<p>La traduzione in Stan è la seguente:</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb20"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">stancode_norm</span> <span class="op">&lt;-</span> <span class="st">"</span></span>
 <span><span class="st">data {</span></span>
 <span><span class="st">  int&lt;lower=1&gt; N;</span></span>
-<span><span class="st">  vector[N] y;             // dati continui</span></span>
-<span><span class="st">  real&lt;lower=0&gt; sigma;     // sd nota</span></span>
+<span><span class="st">  vector[N] y;             // dati osservati</span></span>
+<span><span class="st">  real&lt;lower=0&gt; sigma;     // deviazione standard nota</span></span>
 <span><span class="st">  real mu0;                // media del prior su mu</span></span>
 <span><span class="st">  real&lt;lower=0&gt; tau;       // sd del prior su mu</span></span>
 <span><span class="st">}</span></span>
 <span><span class="st">parameters {</span></span>
-<span><span class="st">  real mu;                 // media: parametro reale non vincolato</span></span>
+<span><span class="st">  real mu;                 // media: parametro da stimare</span></span>
 <span><span class="st">}</span></span>
 <span><span class="st">model {</span></span>
-<span><span class="st">  mu ~ normal(mu0, tau);   // prior corretto su mu</span></span>
-<span><span class="st">  y  ~ normal(mu, sigma);  // likelihood</span></span>
+<span><span class="st">  mu ~ normal(mu0, tau);   // prior su mu</span></span>
+<span><span class="st">  y  ~ normal(mu, sigma);  // verosimiglianza</span></span>
 <span><span class="st">}</span></span>
 <span><span class="st">"</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>Prepariamo i dati in R in modo che siano coerenti con quanto richiesto dal blocco <code>data</code> del modello:</p>
+<p>I dati devono essere preparati in R in un oggetto coerente con quanto richiesto dal blocco <code>data</code>:</p>
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb21"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">stan_data2</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html">list</a></span><span class="op">(</span></span>
 <span>  N     <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html">length</a></span><span class="op">(</span><span class="va">y_cont</span><span class="op">)</span>,</span>
@@ -1245,13 +1246,11 @@ p(y_{\text{rep}} \mid y) \;=\; \int p(y_{\text{rep}} \mid \theta)\, p(\theta \mi
 <span>  tau   <span class="op">=</span> <span class="fl">30</span></span>
 <span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>Compiliamo il modello:</p>
+<p>Dopo aver compilato il modello, si può avviare il campionamento MCMC:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb22"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">mod2</span> <span class="op">&lt;-</span> <span class="fu">cmdstanr</span><span class="fu">::</span><span class="fu"><a href="https://mc-stan.org/cmdstanr/reference/cmdstan_model.html">cmdstan_model</a></span><span class="op">(</span><span class="fu">write_stan_file</span><span class="op">(</span><span class="va">stancode_norm</span><span class="op">)</span>, compile <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-<p>E infine lanciamo il campionamento MCMC:</p>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb23"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">fit2</span> <span class="op">&lt;-</span> <span class="va">mod2</span><span class="op">$</span><span class="fu">sample</span><span class="op">(</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb22"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">mod2</span> <span class="op">&lt;-</span> <span class="fu">cmdstanr</span><span class="fu">::</span><span class="fu"><a href="https://mc-stan.org/cmdstanr/reference/cmdstan_model.html">cmdstan_model</a></span><span class="op">(</span><span class="fu">write_stan_file</span><span class="op">(</span><span class="va">stancode_norm</span><span class="op">)</span>, compile <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">fit2</span> <span class="op">&lt;-</span> <span class="va">mod2</span><span class="op">$</span><span class="fu">sample</span><span class="op">(</span></span>
 <span>  data <span class="op">=</span> <span class="va">stan_data2</span>,</span>
 <span>  iter_warmup     <span class="op">=</span> <span class="fl">1000</span>,</span>
 <span>  iter_sampling   <span class="op">=</span> <span class="fl">4000</span>,</span>
@@ -1261,17 +1260,17 @@ p(y_{\text{rep}} \mid y) \;=\; \int p(y_{\text{rep}} \mid \theta)\, p(\theta \mi
 <span>  refresh         <span class="op">=</span> <span class="fl">0</span></span>
 <span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>I risultati possono essere riepilogati in forma sintetica con <code>$summary()</code>:</p>
+<p>I risultati possono essere riassunti in forma compatta:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb24"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/print.html">print</a></span><span class="op">(</span><span class="va">fit2</span><span class="op">$</span><span class="fu">summary</span><span class="op">(</span>variables <span class="op">=</span> <span class="st">"mu"</span><span class="op">)</span>, n <span class="op">=</span> <span class="cn">Inf</span><span class="op">)</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb23"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/print.html">print</a></span><span class="op">(</span><span class="va">fit2</span><span class="op">$</span><span class="fu">summary</span><span class="op">(</span>variables <span class="op">=</span> <span class="st">"mu"</span><span class="op">)</span>, n <span class="op">=</span> <span class="cn">Inf</span><span class="op">)</span></span>
 <span><span class="co">#&gt; # A tibble: 1 × 10</span></span>
 <span><span class="co">#&gt;   variable    mean  median    sd   mad     q5     q95  rhat ess_bulk ess_tail</span></span>
 <span><span class="co">#&gt;   &lt;chr&gt;      &lt;dbl&gt;   &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;  &lt;dbl&gt;   &lt;dbl&gt; &lt;dbl&gt;    &lt;dbl&gt;    &lt;dbl&gt;</span></span>
 <span><span class="co">#&gt; 1 mu       104.240 104.236 2.721 2.740 99.751 108.710 1.001 5499.842 7540.041</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>oppure, usando il pacchetto <code>posterior</code>:</p>
+<p>oppure, con il pacchetto <code>posterior</code>:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb25"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">draws2</span> <span class="op">&lt;-</span> <span class="va">fit2</span><span class="op">$</span><span class="fu">draws</span><span class="op">(</span>variables <span class="op">=</span> <span class="st">"mu"</span>, format <span class="op">=</span> <span class="st">"draws_matrix"</span><span class="op">)</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb24"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">draws2</span> <span class="op">&lt;-</span> <span class="va">fit2</span><span class="op">$</span><span class="fu">draws</span><span class="op">(</span>variables <span class="op">=</span> <span class="st">"mu"</span>, format <span class="op">=</span> <span class="st">"draws_matrix"</span><span class="op">)</span></span>
 <span><span class="fu">posterior</span><span class="fu">::</span><span class="fu"><a href="https://mc-stan.org/posterior/reference/draws_summary.html">summarise_draws</a></span><span class="op">(</span></span>
 <span>  <span class="va">draws2</span>, <span class="va">mean</span>, <span class="va">sd</span>, <span class="op">~</span><span class="fu"><a href="https://rdrr.io/r/stats/quantile.html">quantile</a></span><span class="op">(</span><span class="va">.x</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fl">0.025</span>, <span class="fl">0.5</span>, <span class="fl">0.975</span><span class="op">)</span><span class="op">)</span>, <span class="va">rhat</span>, <span class="va">ess_bulk</span>, <span class="va">ess_tail</span></span>
 <span><span class="op">)</span></span>
@@ -1280,17 +1279,11 @@ p(y_{\text{rep}} \mid y) \;=\; \int p(y_{\text{rep}} \mid \theta)\, p(\theta \mi
 <span><span class="co">#&gt;   &lt;chr&gt;      &lt;dbl&gt; &lt;dbl&gt;  &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt; &lt;dbl&gt;    &lt;dbl&gt;    &lt;dbl&gt;</span></span>
 <span><span class="co">#&gt; 1 mu       104.240 2.721 98.916 104.236 109.627 1.001 5499.842 7540.041</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>L’interpretazione è immediata:</p>
-<ul>
-<li>valori di <span class="math inline">\(\hat R\)</span> vicini a 1 e <em>effective sample size</em> elevato ci dicono che le catene sono ben miscelate e la stima è affidabile;</li>
-<li>la <em>media a posteriori</em> di <span class="math inline">\(\mu\)</span> rappresenta la nostra miglior stima puntuale della media di popolazione;</li>
-<li>l’<em>intervallo di credibilità</em> (ad esempio al 95%) quantifica l’incertezza residua su <span class="math inline">\(\mu\)</span>.</li>
-</ul>
-<p>In questo modo otteniamo non solo una stima centrale, ma un quadro completo della plausibilità dei valori possibili per la media di popolazione, dato quanto osservato.</p>
+<p>L’interpretazione è diretta. Valori di <span class="math inline">\(\hat R\)</span> vicini a 1 e un <em>effective sample size</em> elevato indicano che le catene sono ben miscelate e le stime affidabili. La <em>media a posteriori</em> di <span class="math inline">\(\mu\)</span> rappresenta la miglior stima puntuale della media di popolazione. L’<em>intervallo di credibilità</em> quantifica l’incertezza residua: nel nostro caso esso risulta piuttosto ampio, e ciò riflette la limitata numerosità campionaria (<span class="math inline">\(n = 30\)</span>). Con un campione più grande l’intervallo si restringerebbe, perché disporremmo di maggiore informazione empirica.</p>
+<p>In conclusione, l’analisi bayesiana non fornisce soltanto una stima centrale, ma restituisce l’intera distribuzione di plausibilità dei valori possibili per la media della popolazione, offrendo così un quadro completo dell’incertezza associata ai dati raccolti.</p>
 <section id="controllo-analitico-della-coniugatezza" class="level3" data-number="14.3.1"><h3 data-number="14.3.1" class="anchored" data-anchor-id="controllo-analitico-della-coniugatezza">
 <span class="header-section-number">14.3.1</span> Controllo analitico della coniugatezza</h3>
-<p>Il modello che abbiamo specificato ha una proprietà molto comoda: la <em>coniugatezza</em>. Quando usiamo un prior normale per la media <span class="math inline">\(\mu\)</span> e assumiamo nota la varianza <span class="math inline">\(\sigma^2\)</span>, anche la distribuzione <em>a posteriori</em> di <span class="math inline">\(\mu\)</span> rimane normale. Questo ci permette di calcolare media e varianza della posterior in forma chiusa, senza bisogno di simulazioni MCMC.</p>
-<p>In particolare, la varianza e la media della distribuzione a posteriori si ottengono come:</p>
+<p>Il modello che abbiamo specificato ha una proprietà molto comoda: la <em>coniugatezza</em>. Quando usiamo un prior normale per la media <span class="math inline">\(\mu\)</span> e assumiamo nota la varianza <span class="math inline">\(\sigma^2\)</span>, anche la distribuzione <em>a posteriori</em> di <span class="math inline">\(\mu\)</span> rimane normale. Questo ci permette di calcolare media e varianza della posterior in forma chiusa, senza bisogno di simulazioni MCMC. In particolare, la varianza e la media della distribuzione a posteriori si ottengono come:</p>
 <p><span class="math display">\[
 \text{Var}(\mu \mid y) \;=\; \left(\frac{n}{\sigma^2} + \frac{1}{\tau^2}\right)^{-1},
 \quad
@@ -1298,7 +1291,7 @@ p(y_{\text{rep}} \mid y) \;=\; \int p(y_{\text{rep}} \mid \theta)\, p(\theta \mi
 \]</span></p>
 <p>Con i nostri dati possiamo calcolare questi valori direttamente:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb26"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">ybar</span>    <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html">mean</a></span><span class="op">(</span><span class="va">y_cont</span><span class="op">)</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb25"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">ybar</span>    <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html">mean</a></span><span class="op">(</span><span class="va">y_cont</span><span class="op">)</span></span>
 <span><span class="va">tau2</span>    <span class="op">&lt;-</span> <span class="fl">30</span><span class="op">^</span><span class="fl">2</span></span>
 <span><span class="va">sigma2</span>  <span class="op">&lt;-</span> <span class="va">sigma</span><span class="op">^</span><span class="fl">2</span></span>
 <span><span class="va">post_var</span>  <span class="op">&lt;-</span> <span class="fl">1</span> <span class="op">/</span> <span class="op">(</span><span class="va">n</span> <span class="op">/</span> <span class="va">sigma2</span> <span class="op">+</span> <span class="fl">1</span> <span class="op">/</span> <span class="va">tau2</span><span class="op">)</span></span>
@@ -1311,94 +1304,40 @@ p(y_{\text{rep}} \mid y) \;=\; \int p(y_{\text{rep}} \mid \theta)\, p(\theta \mi
 </div>
 <p>Ora possiamo confrontare questi risultati analitici con quanto ottenuto tramite campionamento MCMC:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb27"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">mu_draws</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html">as.numeric</a></span><span class="op">(</span><span class="va">draws2</span><span class="op">[</span>, <span class="st">"mu"</span><span class="op">]</span><span class="op">)</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb26"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">mu_draws</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html">as.numeric</a></span><span class="op">(</span><span class="va">draws2</span><span class="op">[</span>, <span class="st">"mu"</span><span class="op">]</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span>mean_mcmc <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html">mean</a></span><span class="op">(</span><span class="va">mu_draws</span><span class="op">)</span>, sd_mcmc <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/sd.html">sd</a></span><span class="op">(</span><span class="va">mu_draws</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co">#&gt; mean_mcmc   sd_mcmc </span></span>
 <span><span class="co">#&gt;    104.24      2.72</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>E per completezza, guardiamo anche i quantili della distribuzione campionata:</p>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb28"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/quantile.html">quantile</a></span><span class="op">(</span><span class="va">mu_draws</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fl">0.025</span>, <span class="fl">0.5</span>, <span class="fl">0.975</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt;  2.5%   50% 97.5% </span></span>
-<span><span class="co">#&gt;  98.9 104.2 109.6</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
 <p>Le due soluzioni dovrebbero concordare molto bene: la formula chiusa ci dà il risultato “esatto”, mentre l’MCMC lo approssima tramite simulazione. Le piccole discrepanze sono attribuibili al normale <em>rumore Monte Carlo</em>, che diminuisce all’aumentare del numero di campioni.</p>
 </section><section id="visualizzazione-1" class="level3" data-number="14.3.2"><h3 data-number="14.3.2" class="anchored" data-anchor-id="visualizzazione-1">
 <span class="header-section-number">14.3.2</span> Visualizzazione</h3>
-<p>Una volta stimato il modello, è molto utile osservare graficamente i campioni MCMC per verificare sia la qualità del campionamento sia la forma della distribuzione a posteriori. Il pacchetto <code>bayesplot</code> fornisce strumenti immediati per questo scopo.</p>
-<p>Un primo passo è guardare l’<em>istogramma dei campioni</em>:</p>
+<p>Una volta stimato il modello, è utile osservare graficamente i campioni MCMC per verificare sia la qualità del campionamento sia la forma della distribuzione a posteriori. Il pacchetto <code>bayesplot</code> fornisce strumenti immediati per questo scopo. Un primo passo è guardare l’<em>istogramma dei campioni</em>:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb29"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu">bayesplot</span><span class="fu">::</span><span class="fu"><a href="https://mc-stan.org/bayesplot/reference/MCMC-distributions.html">mcmc_hist</a></span><span class="op">(</span><span class="va">fit2</span><span class="op">$</span><span class="fu">draws</span><span class="op">(</span><span class="st">"mu"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb27"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu">bayesplot</span><span class="fu">::</span><span class="fu"><a href="https://mc-stan.org/bayesplot/reference/MCMC-distributions.html">mcmc_hist</a></span><span class="op">(</span><span class="va">fit2</span><span class="op">$</span><span class="fu">draws</span><span class="op">(</span><span class="st">"mu"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
-<figure class="figure"><p><img src="03_stan_intro_files/figure-html/unnamed-chunk-28-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:85.0%"></p>
+<figure class="figure"><p><img src="03_stan_intro_files/figure-html/unnamed-chunk-26-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:85.0%"></p>
 </figure>
 </div>
 </div>
 </div>
 <p>Questo grafico mostra la distribuzione stimata della media <span class="math inline">\(\mu\)</span>: non un singolo numero, ma un ventaglio di valori plausibili con le loro frequenze relative.</p>
-<p>Possiamo poi controllare l’andamento delle catene con un <em>traceplot</em>:</p>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb30"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu">bayesplot</span><span class="fu">::</span><span class="fu"><a href="https://mc-stan.org/bayesplot/reference/MCMC-traces.html">mcmc_trace</a></span><span class="op">(</span><span class="va">fit2</span><span class="op">$</span><span class="fu">draws</span><span class="op">(</span><span class="st">"mu"</span><span class="op">)</span>, n_warmup <span class="op">=</span> <span class="fl">1000</span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output-display">
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure"><p><img src="03_stan_intro_files/figure-html/unnamed-chunk-29-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:85.0%"></p>
-</figure>
-</div>
-</div>
-</div>
-<p>Qui l’idea è semplice: le linee delle catene devono sembrare “ben mescolate”, senza trend evidenti o zone piatte. È un indicatore visivo della corretta esplorazione dello spazio dei parametri.</p>
-<p>Infine, è utile sovrapporre le distribuzioni stimate dalle diverse catene per verificarne la concordanza:</p>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb31"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu">bayesplot</span><span class="fu">::</span><span class="fu"><a href="https://mc-stan.org/bayesplot/reference/MCMC-distributions.html">mcmc_dens_overlay</a></span><span class="op">(</span><span class="va">fit2</span><span class="op">$</span><span class="fu">draws</span><span class="op">(</span><span class="st">"mu"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output-display">
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure"><p><img src="03_stan_intro_files/figure-html/unnamed-chunk-30-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:85.0%"></p>
-</figure>
-</div>
-</div>
-</div>
-<p>Se le curve si sovrappongono bene, abbiamo un’ulteriore conferma che le catene hanno raggiunto la stessa distribuzione stazionaria.</p>
 <p>In sintesi, questo esempio rappresenta una sorta di <em>“test bayesiano della media”</em> con deviazione standard nota e un prior normale ampio su <span class="math inline">\(\mu\)</span>. A differenza dell’approccio frequentista, non otteniamo soltanto una stima puntuale o un intervallo, ma un’intera <em>distribuzione a posteriori</em> della media. Questo è un vantaggio importante: l’incertezza stimata può essere comunicata in modo trasparente e, soprattutto, può essere <em>propagata</em> nelle fasi successive dell’analisi, ad esempio in previsioni o decisioni basate sul modello.</p>
-<blockquote class="blockquote">
-<p>Una nota pratica su Stan: se omettessimo la prior su <span class="math inline">\(\mu\)</span>, il software assumerebbe implicitamente una prior impropria piatta su <span class="math inline">\(\mathbb{R}\)</span>. Sebbene ciò possa funzionare in casi semplici, didatticamente preferiamo specificare in modo esplicito un prior normale (anche molto ampio). In questo modo le assunzioni sono sempre chiare e il modello rimane ben definito.</p>
-</blockquote>
 </section><section id="intervalli-di-credibilità" class="level3" data-number="14.3.3"><h3 data-number="14.3.3" class="anchored" data-anchor-id="intervalli-di-credibilità">
 <span class="header-section-number">14.3.3</span> Intervalli di credibilità</h3>
-<p>In un’analisi bayesiana non otteniamo una singola stima del parametro, ma una distribuzione a posteriori che descrive tutta l’incertezza residua. Gli <em>intervalli di credibilità</em> servono a riassumere questa distribuzione in modo intuitivo:</p>
-<blockquote class="blockquote">
-<p><em>Dato il modello e i dati osservati, c’è una probabilità prefissata (ad esempio 94%) che il parametro cada all’interno dell’intervallo.</em></p>
-</blockquote>
-<p>È un’interpretazione semplice e diretta, molto più naturale rispetto a quella degli intervalli di confidenza frequentisti.</p>
-<section id="due-definizioni-principali" class="level4" data-number="14.3.3.1"><h4 data-number="14.3.3.1" class="anchored" data-anchor-id="due-definizioni-principali">
-<span class="header-section-number">14.3.3.1</span> Due definizioni principali</h4>
-<ul>
-<li>
-<p><strong>ETI (Equal-Tailed Interval)</strong>: l’intervallo “a code uguali”. Lascia la stessa probabilità nelle due code della distribuzione (es. 3% a sinistra e 3% a destra in un intervallo al 94%).</p>
-<ul>
-<li>Vantaggio: è <em>invariante</em> a trasformazioni monotone (se trasformo il parametro, trasformo anche i quantili).</li>
-<li>Svantaggio: se la posterior è molto asimmetrica, l’intervallo può risultare poco compatto.</li>
-</ul>
-</li>
-<li>
-<p><strong>HDI (Highest Density Interval)</strong>: l’intervallo “a massima densità”. È il più stretto possibile che contiene la probabilità fissata.</p>
-<ul>
-<li>Vantaggio: rimane compatto anche con distribuzioni asimmetriche.</li>
-<li>Svantaggio: non è invariante a trasformazioni monotone; in presenza di distribuzioni multimodali può perfino risultare “spezzato” in più sotto-intervalli.</li>
-</ul>
-</li>
-</ul>
-<p>Se la distribuzione a posteriori è simmetrica e unimodale (per esempio una Normale), <em>ETI e HDI coincidono</em>.</p>
-</section><section id="esempio-con-i-campioni-di-mu" class="level4" data-number="14.3.3.2"><h4 data-number="14.3.3.2" class="anchored" data-anchor-id="esempio-con-i-campioni-di-mu">
-<span class="header-section-number">14.3.3.2</span> Esempio con i campioni di <span class="math inline">\(\mu\)</span>
+<p>Nell’inferenza bayesiana non otteniamo un singolo numero come stima del parametro, ma un’intera <em>distribuzione a posteriori</em> che descrive l’incertezza residua. Per riassumere questa distribuzione in modo interpretabile si ricorre agli <em>intervalli di credibilità</em>, che indicano con quale probabilità il parametro cade in un certo intervallo dato il modello e i dati osservati. Dire che l’intervallo di credibilità al 94% per <span class="math inline">\(\mu\)</span> va, ad esempio, da 101 a 110 significa che, condizionatamente alle assunzioni del modello e ai dati raccolti, c’è una probabilità del 94% che la media si trovi in quell’intervallo. Questa interpretazione è immediata e naturale, molto diversa da quella degli intervalli di confidenza frequentisti, che si riferiscono invece alla frequenza di copertura in ipotetiche ripetizioni del campione.</p>
+<p>Gli intervalli di credibilità possono essere definiti in modi diversi. L’<em>Equal-Tailed Interval (ETI)</em> corrisponde all’intervallo che lascia la stessa probabilità nelle due code della distribuzione: ad esempio, in un intervallo al 94%, il 3% delle probabilità rimane sotto il limite inferiore e il 3% sopra quello superiore. Questo intervallo ha il pregio di essere stabile rispetto a trasformazioni monotone del parametro, ma può risultare inefficiente se la distribuzione è fortemente asimmetrica, perché finisce per includere regioni a bassa densità. L’<em>Highest Density Interval (HDI)</em>, invece, è definito come l’intervallo più corto che contiene la probabilità prefissata. L’HDI si adatta meglio a distribuzioni asimmetriche, perché si concentra nelle zone di maggiore densità, ma ha lo svantaggio di non essere invariante a trasformazioni monotone e, in distribuzioni multimodali, può addirittura frammentarsi in più sotto-intervalli. Nei casi più semplici, quando la distribuzione a posteriori è simmetrica e unimodale, come per una Normale, ETI e HDI coincidono.</p>
+<section id="esempio-pratico-con-i-campioni-di-mu" class="level4" data-number="14.3.3.1"><h4 data-number="14.3.3.1" class="anchored" data-anchor-id="esempio-pratico-con-i-campioni-di-mu">
+<span class="header-section-number">14.3.3.1</span> Esempio pratico con i campioni di <span class="math inline">\(\mu\)</span>
 </h4>
-<p>Partiamo dai campioni MCMC della media <span class="math inline">\(\mu\)</span>:</p>
+<p>Per chiarire l’uso di questi strumenti possiamo considerare i campioni MCMC della media <span class="math inline">\(\mu\)</span> ottenuti dal modello normale con varianza nota. Calcolando sia l’ETI sia l’HDI al 94% si osserva che i due intervalli risultano praticamente identici, perché la distribuzione è simmetrica.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb32"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">mu_draws</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html">as.numeric</a></span><span class="op">(</span><span class="va">fit2</span><span class="op">$</span><span class="fu">draws</span><span class="op">(</span><span class="st">"mu"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb28"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">mu_draws</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html">as.numeric</a></span><span class="op">(</span><span class="va">fit2</span><span class="op">$</span><span class="fu">draws</span><span class="op">(</span><span class="st">"mu"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>Calcoliamo sia ETI che HDI al 94% con il pacchetto <strong>bayestestR</strong>:</p>
+<p>Calcoliamo sia ETI che HDI al 94% con il pacchetto <code>bayestestR</code>:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb33"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">eti94</span> <span class="op">&lt;-</span> <span class="fu">bayestestR</span><span class="fu">::</span><span class="fu"><a href="https://easystats.github.io/bayestestR/reference/eti.html">eti</a></span><span class="op">(</span><span class="va">mu_draws</span>, ci <span class="op">=</span> <span class="fl">0.94</span><span class="op">)</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb29"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">eti94</span> <span class="op">&lt;-</span> <span class="fu">bayestestR</span><span class="fu">::</span><span class="fu"><a href="https://easystats.github.io/bayestestR/reference/eti.html">eti</a></span><span class="op">(</span><span class="va">mu_draws</span>, ci <span class="op">=</span> <span class="fl">0.94</span><span class="op">)</span></span>
 <span><span class="va">hdi94</span> <span class="op">&lt;-</span> <span class="fu">bayestestR</span><span class="fu">::</span><span class="fu"><a href="https://easystats.github.io/bayestestR/reference/hdi.html">hdi</a></span><span class="op">(</span><span class="va">mu_draws</span>, ci <span class="op">=</span> <span class="fl">0.94</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">eti94</span></span>
@@ -1406,11 +1345,11 @@ p(y_{\text{rep}} \mid y) \;=\; \int p(y_{\text{rep}} \mid \theta)\, p(\theta \mi
 <span><span class="va">hdi94</span></span>
 <span><span class="co">#&gt; 94% HDI: [99.22, 109.48]</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-</section><section id="visualizzazione-2" class="level4" data-number="14.3.3.3"><h4 data-number="14.3.3.3" class="anchored" data-anchor-id="visualizzazione-2">
-<span class="header-section-number">14.3.3.3</span> Visualizzazione</h4>
+</section><section id="visualizzazione-2" class="level4" data-number="14.3.3.2"><h4 data-number="14.3.3.2" class="anchored" data-anchor-id="visualizzazione-2">
+<span class="header-section-number">14.3.3.2</span> Visualizzazione</h4>
 <p>Con <code><a href="https://mc-stan.org/bayesplot/reference/MCMC-intervals.html">bayesplot::mcmc_areas()</a></code> possiamo visualizzare gli intervalli centrali (ETI) e aggiungere i limiti HDI come linee verticali:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb34"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">p</span> <span class="op">&lt;-</span> <span class="fu">bayesplot</span><span class="fu">::</span><span class="fu"><a href="https://mc-stan.org/bayesplot/reference/MCMC-intervals.html">mcmc_areas</a></span><span class="op">(</span><span class="va">fit2</span><span class="op">$</span><span class="fu">draws</span><span class="op">(</span><span class="st">"mu"</span><span class="op">)</span>, prob <span class="op">=</span> <span class="fl">0.94</span><span class="op">)</span> <span class="op">+</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb30"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">p</span> <span class="op">&lt;-</span> <span class="fu">bayesplot</span><span class="fu">::</span><span class="fu"><a href="https://mc-stan.org/bayesplot/reference/MCMC-intervals.html">mcmc_areas</a></span><span class="op">(</span><span class="va">fit2</span><span class="op">$</span><span class="fu">draws</span><span class="op">(</span><span class="st">"mu"</span><span class="op">)</span>, prob <span class="op">=</span> <span class="fl">0.94</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">xlab</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/expression.html">expression</a></span><span class="op">(</span><span class="va">mu</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span> <span class="fu">ylab</span><span class="op">(</span><span class="st">"Densità"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">p</span> <span class="op">+</span> </span>
@@ -1418,16 +1357,16 @@ p(y_{\text{rep}} \mid y) \;=\; \int p(y_{\text{rep}} \mid \theta)\, p(\theta \mi
 <span>  <span class="fu">geom_vline</span><span class="op">(</span>xintercept <span class="op">=</span> <span class="va">hdi94</span><span class="op">$</span><span class="va">CI_high</span>, linetype <span class="op">=</span> <span class="st">"dashed"</span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
-<figure class="figure"><p><img src="03_stan_intro_files/figure-html/unnamed-chunk-33-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:85.0%"></p>
+<figure class="figure"><p><img src="03_stan_intro_files/figure-html/unnamed-chunk-29-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:85.0%"></p>
 </figure>
 </div>
 </div>
 </div>
-</section><section id="posterior-asimmetrica-esempio-beta" class="level4" data-number="14.3.3.4"><h4 data-number="14.3.3.4" class="anchored" data-anchor-id="posterior-asimmetrica-esempio-beta">
-<span class="header-section-number">14.3.3.4</span> Posterior asimmetrica: esempio Beta</h4>
-<p>Per apprezzare meglio la differenza, consideriamo una distribuzione asimmetrica, come una Beta(6,2):</p>
+</section><section id="posterior-asimmetrica-esempio-beta" class="level4" data-number="14.3.3.3"><h4 data-number="14.3.3.3" class="anchored" data-anchor-id="posterior-asimmetrica-esempio-beta">
+<span class="header-section-number">14.3.3.3</span> Posterior asimmetrica: esempio Beta</h4>
+<p>In distribuzioni asimmetriche, invece, le differenze emergono chiaramente. Un esempio utile è la distribuzione Beta(6,2), che mostra una coda a sinistra: in questo caso l’HDI risulta più corto e aderente alla parte densa della distribuzione, mentre l’ETI si estende ulteriormente verso la coda meno informativa.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb35"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html">set.seed</a></span><span class="op">(</span><span class="fl">123</span><span class="op">)</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb31"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html">set.seed</a></span><span class="op">(</span><span class="fl">123</span><span class="op">)</span></span>
 <span><span class="va">theta_draws</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/Beta.html">rbeta</a></span><span class="op">(</span><span class="fl">5000</span>, shape1 <span class="op">=</span> <span class="fl">6</span>, shape2 <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">eti_beta</span> <span class="op">&lt;-</span> <span class="fu">bayestestR</span><span class="fu">::</span><span class="fu"><a href="https://easystats.github.io/bayestestR/reference/eti.html">eti</a></span><span class="op">(</span><span class="va">theta_draws</span>, ci <span class="op">=</span> <span class="fl">0.94</span><span class="op">)</span></span>
@@ -1439,7 +1378,7 @@ p(y_{\text{rep}} \mid y) \;=\; \int p(y_{\text{rep}} \mid \theta)\, p(\theta \mi
 <span><span class="co">#&gt; 94% HDI: [0.49, 0.98]</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb36"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu">ggplot</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html">data.frame</a></span><span class="op">(</span>theta <span class="op">=</span> <span class="va">theta_draws</span><span class="op">)</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">theta</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb32"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu">ggplot</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html">data.frame</a></span><span class="op">(</span>theta <span class="op">=</span> <span class="va">theta_draws</span><span class="op">)</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">theta</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">geom_density</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">geom_vline</span><span class="op">(</span>xintercept <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="va">eti_beta</span><span class="op">$</span><span class="va">CI_low</span>, <span class="va">eti_beta</span><span class="op">$</span><span class="va">CI_high</span><span class="op">)</span>, linewidth <span class="op">=</span> <span class="fl">0.7</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">geom_vline</span><span class="op">(</span>xintercept <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="va">hdi_beta</span><span class="op">$</span><span class="va">CI_low</span>, <span class="va">hdi_beta</span><span class="op">$</span><span class="va">CI_high</span><span class="op">)</span>, </span>
@@ -1447,126 +1386,72 @@ p(y_{\text{rep}} \mid y) \;=\; \int p(y_{\text{rep}} \mid \theta)\, p(\theta \mi
 <span>  <span class="fu">labs</span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/expression.html">expression</a></span><span class="op">(</span><span class="va">theta</span><span class="op">)</span>, y <span class="op">=</span> <span class="st">"Densità"</span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
-<figure class="figure"><p><img src="03_stan_intro_files/figure-html/unnamed-chunk-35-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:85.0%"></p>
+<figure class="figure"><p><img src="03_stan_intro_files/figure-html/unnamed-chunk-31-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:85.0%"></p>
 </figure>
 </div>
 </div>
 </div>
-<p>Qui si vede bene che l’<em>HDI è più corto</em>, perché concentra l’intervallo nelle zone di massima densità, evitando code poco informative.</p>
-</section><section id="quale-livello-usare-89-94-o-95" class="level4" data-number="14.3.3.5"><h4 data-number="14.3.3.5" class="anchored" data-anchor-id="quale-livello-usare-89-94-o-95">
-<span class="header-section-number">14.3.3.5</span> Quale livello usare? 89%, 94% o 95%?</h4>
-<ul>
-<li>
-<strong>95%</strong>: è la scelta più familiare (ereditata dal frequentismo).</li>
-<li>
-<strong>94%</strong>: molto usata in manuali bayesiani (es. <em>McElreath, 2018</em>).</li>
-<li>
-<strong>89%</strong>: proposta da Kruschke come compromesso più stabile con campioni limitati.</li>
-</ul>
-<p>La regola pratica è semplice: scegli un livello <em>coerente con il resto dell’analisi</em> e specifica sempre il metodo (ETI o HDI). Se la posterior è asimmetrica, riportare entrambi può essere molto utile.</p>
-</section><section id="riassunto-operativo" class="level4" data-number="14.3.3.6"><h4 data-number="14.3.3.6" class="anchored" data-anchor-id="riassunto-operativo">
-<span class="header-section-number">14.3.3.6</span> Riassunto operativo</h4>
-<div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb37"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># Campioni da Stan</span></span>
-<span><span class="va">mu_draws</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html">as.numeric</a></span><span class="op">(</span><span class="va">fit2</span><span class="op">$</span><span class="fu">draws</span><span class="op">(</span><span class="st">"mu"</span><span class="op">)</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Intervalli a 94%</span></span>
-<span><span class="va">eti94</span> <span class="op">&lt;-</span> <span class="fu">bayestestR</span><span class="fu">::</span><span class="fu"><a href="https://easystats.github.io/bayestestR/reference/eti.html">eti</a></span><span class="op">(</span><span class="va">mu_draws</span>, ci <span class="op">=</span> <span class="fl">0.94</span><span class="op">)</span></span>
-<span><span class="va">hdi94</span> <span class="op">&lt;-</span> <span class="fu">bayestestR</span><span class="fu">::</span><span class="fu"><a href="https://easystats.github.io/bayestestR/reference/hdi.html">hdi</a></span><span class="op">(</span><span class="va">mu_draws</span>, ci <span class="op">=</span> <span class="fl">0.94</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Riassunti</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/list.html">list</a></span><span class="op">(</span></span>
-<span>  mean   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html">mean</a></span><span class="op">(</span><span class="va">mu_draws</span><span class="op">)</span>,</span>
-<span>  median <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/median.html">median</a></span><span class="op">(</span><span class="va">mu_draws</span><span class="op">)</span>,</span>
-<span>  ETI94  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span>low <span class="op">=</span> <span class="va">eti94</span><span class="op">$</span><span class="va">CI_low</span>, high <span class="op">=</span> <span class="va">eti94</span><span class="op">$</span><span class="va">CI_high</span><span class="op">)</span>,</span>
-<span>  HDI94  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span>low <span class="op">=</span> <span class="va">hdi94</span><span class="op">$</span><span class="va">CI_low</span>, high <span class="op">=</span> <span class="va">hdi94</span><span class="op">$</span><span class="va">CI_high</span><span class="op">)</span></span>
-<span><span class="op">)</span></span>
-<span><span class="co">#&gt; $mean</span></span>
-<span><span class="co">#&gt; [1] 104</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; $median</span></span>
-<span><span class="co">#&gt; [1] 104</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; $ETI94</span></span>
-<span><span class="co">#&gt;   low  high </span></span>
-<span><span class="co">#&gt;  99.1 109.4 </span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; $HDI94</span></span>
-<span><span class="co">#&gt;   low  high </span></span>
-<span><span class="co">#&gt;  99.2 109.5</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
-</div>
-<p>In sintesi:</p>
-<ul>
-<li>con distribuzioni simmetriche ETI e HDI sono equivalenti,</li>
-<li>con distribuzioni asimmetriche l’HDI è di solito più informativo perché si concentra nelle regioni più probabili,</li>
-<li>riportare entrambi può aiutare a comunicare chiaramente le assunzioni e i risultati.</li>
-</ul>
-<p>Un esempio di frase per un report potrebbe essere:</p>
+</section><section id="quale-livello-utilizzare-89-94-o-95" class="level4" data-number="14.3.3.4"><h4 data-number="14.3.3.4" class="anchored" data-anchor-id="quale-livello-utilizzare-89-94-o-95">
+<span class="header-section-number">14.3.3.4</span> Quale livello utilizzare? 89%, 94% o 95%?</h4>
+<p>Rimane infine la questione di quale livello di probabilità utilizzare. La tradizione frequentista ha reso familiare il 95%, e molti analisti continuano a preferirlo per ragioni di continuità. Altri autori, come McElreath, suggeriscono il 94%, mentre Kruschke propone l’89% come scelta più stabile con campioni ridotti. In realtà non esiste una soglia “corretta” in senso assoluto: ciò che conta è la coerenza interna dell’analisi e la chiarezza nel riportare sia il livello scelto sia la definizione di intervallo adottata. In presenza di distribuzioni asimmetriche può essere particolarmente istruttivo mostrare sia l’ETI sia l’HDI, perché offrono prospettive complementari sulla distribuzione a posteriori del parametro.</p>
+</section></section></section><section id="test-di-ipotesi-in-prospettiva-bayesiana" class="level2" data-number="14.4"><h2 data-number="14.4" class="anchored" data-anchor-id="test-di-ipotesi-in-prospettiva-bayesiana">
+<span class="header-section-number">14.4</span> Test di ipotesi in prospettiva bayesiana</h2>
+<p>L’approccio bayesiano consente di formulare domande in termini diretti e intuitivi, ad esempio:</p>
 <blockquote class="blockquote">
-<p>“Con un intervallo di credibilità al 94%, possiamo dire che la media del QI nella popolazione ha il 94% di probabilità di trovarsi tra 102 e 107.”</p>
+<p><em>“Qual è la probabilità che la media superi una determinata soglia?”</em></p>
 </blockquote>
-</section></section></section><section id="test-di-ipotesi-bayesiane" class="level2" data-number="14.4"><h2 data-number="14.4" class="anchored" data-anchor-id="test-di-ipotesi-bayesiane">
-<span class="header-section-number">14.4</span> Test di ipotesi bayesiane</h2>
-<p>L’approccio bayesiano permette di formulare domande <em>dirette</em> del tipo:</p>
-<blockquote class="blockquote">
-<p>“Qual è la probabilità che la media superi una certa soglia?”</p>
-</blockquote>
-<p>A differenza dei test frequentisti, non ci costringe a una risposta secca sì/no, ma restituisce una <em>misura graduata di plausibilità</em>. Inoltre, se abbiamo un margine di tolleranza <em>pratico</em> attorno alla soglia, possiamo definire una <em>ROPE</em> (<em>Region Of Practical Equivalence</em>) e distinguere tre scenari: il parametro stimato è <em>verosimilmente sotto</em>, <em>dentro</em> oppure <em>sopra</em> la zona di equivalenza.</p>
+<p>Questa impostazione si discosta da quella frequentista, che restituisce soltanto un esito dicotomico di rifiuto o non rifiuto dell’ipotesi nulla. In ambito bayesiano, al contrario, si ottiene una misura continua della plausibilità di ciascuna ipotesi, che rende l’incertezza più trasparente e consente di esprimere giudizi graduati.</p>
 <section id="probabilità-a-posteriori-sopra-una-soglia" class="level3" data-number="14.4.1"><h3 data-number="14.4.1" class="anchored" data-anchor-id="probabilità-a-posteriori-sopra-una-soglia">
 <span class="header-section-number">14.4.1</span> Probabilità a posteriori sopra una soglia</h3>
-<p>Riprendiamo l’esempio del QI con modello Normale e <span class="math inline">\(\sigma\)</span> noto. Una domanda semplice è:</p>
+<p>Riprendiamo l’esempio dei punteggi QI con modello normale a varianza nota. Una prima domanda semplice è calcolare</p>
 <p><span class="math display">\[
 P(\mu &gt; 110 \mid y),
 \]</span></p>
-<p>cioè la probabilità che la media della popolazione superi il valore 110.</p>
-<p><strong>Calcolo dai campioni MCMC:</strong></p>
+<p>cioè la probabilità che la media di popolazione superi il valore 110.</p>
+<p>Questa quantità si ricava facilmente dai campioni MCMC della distribuzione a posteriori di <span class="math inline">\(\mu\)</span>:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb38"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">mu_draws</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html">as.numeric</a></span><span class="op">(</span><span class="va">fit2</span><span class="op">$</span><span class="fu">draws</span><span class="op">(</span><span class="st">"mu"</span><span class="op">)</span><span class="op">)</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb33"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># Estraiamo i campioni MCMC per mu</span></span>
+<span><span class="va">mu_draws</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html">as.numeric</a></span><span class="op">(</span><span class="va">fit2</span><span class="op">$</span><span class="fu">draws</span><span class="op">(</span><span class="st">"mu"</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Calcoliamo la probabilità che mu superi la soglia 110</span></span>
 <span><span class="va">p_gt_110</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html">mean</a></span><span class="op">(</span><span class="va">mu_draws</span> <span class="op">&gt;</span> <span class="fl">110</span><span class="op">)</span></span>
 <span><span class="va">p_gt_110</span></span>
 <span><span class="co">#&gt; [1] 0.0193</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<blockquote class="blockquote">
-<p>Interpretazione: dato <em>modello + dati</em>, la probabilità che <span class="math inline">\(\mu\)</span> superi 110 è <code>p_gt_110</code>. Non un “sì/no”, ma una misura graduata della plausibilità dell’affermazione.</p>
-</blockquote>
-<p><strong>Controllo analitico (conjugate Normal-Normal):</strong></p>
+<p>Il risultato rappresenta la probabilità, condizionatamente a modello e dati, che <span class="math inline">\(\mu\)</span> sia superiore a 110. Non si tratta dunque di un’affermazione sì/no, ma di una misura graduata della plausibilità.</p>
+<p>Il valore può essere verificato anche in forma analitica, sfruttando la coniugatezza del modello normale-normale:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb39"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">p_gt_110_closed</span> <span class="op">&lt;-</span> <span class="fl">1</span> <span class="op">-</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html">pnorm</a></span><span class="op">(</span><span class="fl">110</span>, mean <span class="op">=</span> <span class="va">post_mean</span>, sd <span class="op">=</span> <span class="va">post_sd</span><span class="op">)</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb34"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># Calcolo analitico con distribuzione normale coniugata</span></span>
+<span><span class="va">p_gt_110_closed</span> <span class="op">&lt;-</span> <span class="fl">1</span> <span class="op">-</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html">pnorm</a></span><span class="op">(</span><span class="fl">110</span>, mean <span class="op">=</span> <span class="va">post_mean</span>, sd <span class="op">=</span> <span class="va">post_sd</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span>MCMC <span class="op">=</span> <span class="va">p_gt_110</span>, ClosedForm <span class="op">=</span> <span class="va">p_gt_110_closed</span><span class="op">)</span></span>
 <span><span class="co">#&gt;       MCMC ClosedForm </span></span>
 <span><span class="co">#&gt;     0.0193     0.0176</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>I due valori devono concordare (differenze minime = rumore Monte Carlo).</p>
-</section><section id="decisione-pratica" class="level3" data-number="14.4.2"><h3 data-number="14.4.2" class="anchored" data-anchor-id="decisione-pratica">
-<span class="header-section-number">14.4.2</span> Decisione pratica</h3>
-<p>Se occorre <em>prendere una decisione</em>, possiamo introdurre una regola:</p>
-<ul>
-<li>
-<em>agire come se</em> <span class="math inline">\(\mu&gt;110\)</span> se <span class="math inline">\(P(\mu&gt;110\mid y)\ge p^*\)</span> (es. <span class="math inline">\(p^*=0.9\)</span>),</li>
-<li>altrimenti, non agire (o raccogliere più dati).</li>
-</ul>
-<p>Il valore soglia <span class="math inline">\(p^\*\)</span> dipende dal rapporto <em>costi/benefici</em> degli errori (falsa allerta vs.&nbsp;falsa rassicurazione). L’approccio bayesiano rende esplicita questa scelta.</p>
-</section><section id="rope-equivalenza-pratica" class="level3" data-number="14.4.3"><h3 data-number="14.4.3" class="anchored" data-anchor-id="rope-equivalenza-pratica">
-<span class="header-section-number">14.4.3</span> ROPE: equivalenza pratica</h3>
-<p>Nella realtà spesso non interessa se <span class="math inline">\(\mu\)</span> sia esattamente 110, ma se sia <em>praticamente equivalente</em> a 110 entro una tolleranza accettabile. Definiamo allora una ROPE:</p>
+<p>I due risultati dovrebbero coincidere, salvo piccole discrepanze dovute al rumore Monte Carlo.</p>
+</section><section id="decisione-pratica-e-rope" class="level3" data-number="14.4.2"><h3 data-number="14.4.2" class="anchored" data-anchor-id="decisione-pratica-e-rope">
+<span class="header-section-number">14.4.2</span> Decisione pratica e ROPE</h3>
+<p>La valutazione delle ipotesi acquista senso compiuto solo quando si traduce in una decisione. Una regola semplice consiste nell’agire come se <span class="math inline">\(\mu &gt; 110\)</span> qualora la probabilità a posteriori superi una soglia prefissata <span class="math inline">\(p^\*\)</span>, scelta in base al bilancio tra costi e benefici. Ad esempio, con <span class="math inline">\(p^\* = 0.90\)</span> si decide di agire solo se <span class="math inline">\(P(\mu &gt; 110 \mid y) \geq 0.90\)</span>, altrimenti si rinvia o si raccolgono nuovi dati. La soglia <span class="math inline">\(p^\*\)</span> non è arbitraria: un valore troppo basso aumenta il rischio di un’azione ingiustificata, mentre un valore troppo alto espone al rischio di trascurare un’azione necessaria. L’approccio bayesiano ha il merito di rendere esplicito questo nesso tra evidenza statistica e conseguenze pratiche, permettendo di calibrare la decisione sulla base delle priorità del contesto.</p>
+<p>Spesso, tuttavia, l’interesse non è stabilire se la media sia <em>esattamente</em> pari a un certo valore, ma se possa essere considerata <em>praticamente equivalente</em> a esso entro un margine di tolleranza ritenuto accettabile. Per questo si introduce la <em>ROPE</em> (<em>Region of Practical Equivalence</em>), che definisce un intervallo attorno al valore soglia. Nel nostro esempio poniamo:</p>
 <p><span class="math display">\[
-\text{ROPE} = [108,\,112] .
-\]</span></p>
-<p>Le tre probabilità mutuamente esclusive sono:</p>
+\text{ROPE} = [108,\,112].
+\]</span> L’idea non è più chiedersi se <span class="math inline">\(\mu = 110\)</span>, ma se <span class="math inline">\(\mu\)</span> appartenga a un intervallo che, per il problema in esame, può essere considerato equivalente a 110.</p>
+</section><section id="calcolo-e-interpretazione" class="level3" data-number="14.4.3"><h3 data-number="14.4.3" class="anchored" data-anchor-id="calcolo-e-interpretazione">
+<span class="header-section-number">14.4.3</span> Calcolo e interpretazione</h3>
+<p>A partire dai campioni MCMC possiamo stimare la probabilità che <span class="math inline">\(\mu\)</span> cada al di sotto, all’interno o al di sopra della ROPE:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb40"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">rope</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fl">108</span>, <span class="fl">112</span><span class="op">)</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb35"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">rope</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fl">108</span>, <span class="fl">112</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">P_below</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html">mean</a></span><span class="op">(</span><span class="va">mu_draws</span> <span class="op">&lt;</span>  <span class="va">rope</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span><span class="op">)</span></span>
-<span><span class="va">P_in</span>    <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html">mean</a></span><span class="op">(</span><span class="va">mu_draws</span> <span class="op">&gt;=</span> <span class="va">rope</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span> <span class="op">&amp;</span> <span class="va">mu_draws</span> <span class="op">&lt;=</span> <span class="va">rope</span><span class="op">[</span><span class="fl">2</span><span class="op">]</span><span class="op">)</span></span>
-<span><span class="va">P_above</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html">mean</a></span><span class="op">(</span><span class="va">mu_draws</span> <span class="op">&gt;</span>  <span class="va">rope</span><span class="op">[</span><span class="fl">2</span><span class="op">]</span><span class="op">)</span></span>
+<span><span class="va">P_below</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html">mean</a></span><span class="op">(</span><span class="va">mu_draws</span> <span class="op">&lt;</span>  <span class="va">rope</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span><span class="op">)</span>                       <span class="co"># Probabilità sotto ROPE</span></span>
+<span><span class="va">P_in</span>    <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html">mean</a></span><span class="op">(</span><span class="va">mu_draws</span> <span class="op">&gt;=</span> <span class="va">rope</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span> <span class="op">&amp;</span> <span class="va">mu_draws</span> <span class="op">&lt;=</span> <span class="va">rope</span><span class="op">[</span><span class="fl">2</span><span class="op">]</span><span class="op">)</span> <span class="co"># Probabilità dentro ROPE</span></span>
+<span><span class="va">P_above</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html">mean</a></span><span class="op">(</span><span class="va">mu_draws</span> <span class="op">&gt;</span>  <span class="va">rope</span><span class="op">[</span><span class="fl">2</span><span class="op">]</span><span class="op">)</span>                       <span class="co"># Probabilità sopra ROPE</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span>P_below <span class="op">=</span> <span class="va">P_below</span>, P_in <span class="op">=</span> <span class="va">P_in</span>, P_above <span class="op">=</span> <span class="va">P_above</span><span class="op">)</span></span>
 <span><span class="co">#&gt; P_below    P_in P_above </span></span>
 <span><span class="co">#&gt; 0.91463 0.08250 0.00287</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>Con la posterior Normale si può calcolare anche in forma chiusa:</p>
+<p>Se la distribuzione a posteriori è ben approssimata da una Normale, gli stessi valori possono essere calcolati anche in forma chiusa:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb41"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">P_below_cf</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html">pnorm</a></span><span class="op">(</span><span class="va">rope</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span>, mean <span class="op">=</span> <span class="va">post_mean</span>, sd <span class="op">=</span> <span class="va">post_sd</span><span class="op">)</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb36"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">P_below_cf</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html">pnorm</a></span><span class="op">(</span><span class="va">rope</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span>, mean <span class="op">=</span> <span class="va">post_mean</span>, sd <span class="op">=</span> <span class="va">post_sd</span><span class="op">)</span></span>
 <span><span class="va">P_in_cf</span>    <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html">pnorm</a></span><span class="op">(</span><span class="va">rope</span><span class="op">[</span><span class="fl">2</span><span class="op">]</span>, mean <span class="op">=</span> <span class="va">post_mean</span>, sd <span class="op">=</span> <span class="va">post_sd</span><span class="op">)</span> <span class="op">-</span></span>
 <span>              <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html">pnorm</a></span><span class="op">(</span><span class="va">rope</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span>, mean <span class="op">=</span> <span class="va">post_mean</span>, sd <span class="op">=</span> <span class="va">post_sd</span><span class="op">)</span></span>
 <span><span class="va">P_above_cf</span> <span class="op">&lt;-</span> <span class="fl">1</span> <span class="op">-</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html">pnorm</a></span><span class="op">(</span><span class="va">rope</span><span class="op">[</span><span class="fl">2</span><span class="op">]</span>, mean <span class="op">=</span> <span class="va">post_mean</span>, sd <span class="op">=</span> <span class="va">post_sd</span><span class="op">)</span></span>
@@ -1575,70 +1460,80 @@ P(\mu &gt; 110 \mid y),
 <span><span class="co">#&gt; P_below_cf    P_in_cf P_above_cf </span></span>
 <span><span class="co">#&gt;    0.91498    0.08275    0.00226</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-</section><section id="interpretazione-1" class="level3" data-number="14.4.4"><h3 data-number="14.4.4" class="anchored" data-anchor-id="interpretazione-1">
-<span class="header-section-number">14.4.4</span> Interpretazione</h3>
-<ul>
-<li>Se <span class="math inline">\(P(\mu\in \text{ROPE})\)</span> è alta → <span class="math inline">\(\mu\)</span> è <em>praticamente equivalente</em> alla soglia.</li>
-<li>Se <span class="math inline">\(P(\mu&gt;\text{ROPE})\)</span> è alta → <span class="math inline">\(\mu\)</span> è <em>sopra la soglia</em> in modo rilevante.</li>
-<li>Se <span class="math inline">\(P(\mu&lt;\text{ROPE})\)</span> è alta → <span class="math inline">\(\mu\)</span> è <em>sotto la soglia</em> in modo rilevante.</li>
-<li>Se le tre probabilità sono simili → il messaggio è <em>incertezza</em> → utile raccogliere più dati o rivedere la tolleranza.</li>
-</ul></section><section id="esempio-di-frase-per-un-report" class="level3" data-number="14.4.5"><h3 data-number="14.4.5" class="anchored" data-anchor-id="esempio-di-frase-per-un-report">
-<span class="header-section-number">14.4.5</span> Esempio di frase per un report</h3>
+<p>Se la probabilità che <span class="math inline">\(\mu\)</span> cada all’interno della ROPE è elevata, si conclude che la media è praticamente equivalente al valore soglia. Se invece la probabilità si concentra al di sopra o al di sotto dell’intervallo, si parla rispettivamente di un’evidenza che <span class="math inline">\(\mu\)</span> sia superiore o inferiore in senso rilevante. Nel caso in cui nessuna delle tre categorie prevalga nettamente, l’esito è quello di incertezza: in tale situazione è opportuno raccogliere ulteriori dati o riconsiderare l’ampiezza della ROPE adottata.</p>
+</section><section id="esempio-di-report" class="level3" data-number="14.4.4"><h3 data-number="14.4.4" class="anchored" data-anchor-id="esempio-di-report">
+<span class="header-section-number">14.4.4</span> Esempio di report</h3>
 <blockquote class="blockquote">
-<p>Con ROPE = <span class="math inline">\(\[108,112]\)</span>, la probabilità che <span class="math inline">\(\mu\)</span> sia sotto-ROPE è <span class="math inline">\(P(\mu&lt;108)=0.92\)</span>, dentro-ROPE <span class="math inline">\(P(108\le \mu\le112)=0.08\)</span>, sopra-ROPE <span class="math inline">\(P(\mu&gt;112)=0.003\)</span>. Questi risultati indicano che <span class="math inline">\(\mu\)</span> è verosimilmente <strong>inferiore</strong> a 110 nel senso <em>pratico</em> definito dalla ROPE.</p>
+<p>Con ROPE = <span class="math inline">\([108,112]\)</span>, si ottiene: <span class="math inline">\(P(\mu &lt; 108) = 0.92\)</span>, <span class="math inline">\(P(108 \leq \mu \leq 112) = 0.08\)</span>, <span class="math inline">\(P(\mu &gt; 112) = 0.003\)</span>. Questi risultati indicano che la media <span class="math inline">\(\mu\)</span> è con alta probabilità <em>inferiore</em> a 110, nel senso pratico definito dalla ROPE.</p>
 </blockquote>
-</section><section id="diagnostiche-di-campionamento" class="level3" data-number="14.4.6"><h3 data-number="14.4.6" class="anchored" data-anchor-id="diagnostiche-di-campionamento">
-<span class="header-section-number">14.4.6</span> Diagnostiche di campionamento</h3>
-<p>Dopo aver ottenuto i campioni dalla distribuzione a posteriori, il passo successivo è verificare se questi siano di buona qualità. Un modello ben specificato e un campionamento MCMC efficace producono catene che esplorano lo spazio dei parametri in modo completo e bilanciato. Per questo motivo, nel riepilogo fornito da Stan e dai pacchetti associati compaiono alcune statistiche fondamentali, che meritano di essere interpretate con attenzione (la quantità <code>lp__</code> è un parametro speciale usato per le diagnostiche).</p>
+</section></section><section id="diagnostiche-di-campionamento" class="level2" data-number="14.5"><h2 data-number="14.5" class="anchored" data-anchor-id="diagnostiche-di-campionamento">
+<span class="header-section-number">14.5</span> Diagnostiche di campionamento</h2>
+<p>Dopo aver ottenuto i campioni dalla distribuzione a posteriori, il passo successivo è verificare la loro qualità. Un modello ben specificato e un campionamento MCMC efficiente producono catene che esplorano in modo completo e bilanciato lo spazio dei parametri. Per questo, nei riepiloghi forniti da Stan e dai pacchetti associati compaiono alcune statistiche diagnostiche fondamentali, che meritano attenzione. La quantità <code>lp__</code> compare in ogni output: non è un parametro del modello, ma la log-densità a posteriori, utile come strumento di controllo.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb42"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">fit2</span><span class="op">$</span><span class="fu">summary</span><span class="op">(</span>variables <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"mu"</span>,<span class="st">"lp__"</span><span class="op">)</span><span class="op">)</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb37"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">fit2</span><span class="op">$</span><span class="fu">summary</span><span class="op">(</span>variables <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"mu"</span>,<span class="st">"lp__"</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co">#&gt; # A tibble: 2 × 10</span></span>
 <span><span class="co">#&gt;   variable    mean  median    sd   mad      q5     q95  rhat ess_bulk ess_tail</span></span>
 <span><span class="co">#&gt;   &lt;chr&gt;      &lt;dbl&gt;   &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt; &lt;dbl&gt;    &lt;dbl&gt;    &lt;dbl&gt;</span></span>
 <span><span class="co">#&gt; 1 mu       104.240 104.236 2.721 2.740  99.751 108.710 1.001 5499.842 7540.041</span></span>
 <span><span class="co">#&gt; 2 lp__     -14.463 -14.195 0.705 0.313 -15.896 -13.967 1.001 7356.664 9175.822</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>Un primo indicatore è la statistica di convergenza <span class="math inline">\(\hat{R}\)</span> (o R-hat). Quando le catene sono indipendenti e hanno raggiunto lo stesso equilibrio, i loro valori oscillano intorno alle stesse regioni della distribuzione. In questo caso <span class="math inline">\(\hat{R}\)</span> assume valori molto vicini a 1. Nel nostro esempio, per i parametri <code>mu</code> e <code>lp__</code> si ottengono rispettivamente 1.002 e 1.001. Questi valori sono praticamente indistinguibili da 1 e segnalano che le catene hanno raggiunto una buona mescolanza. In termini pratici, valori inferiori a 1.01 sono generalmente considerati ottimali, mentre valori superiori a 1.05 suggeriscono possibili problemi di convergenza.</p>
-<p>Un secondo insieme di statistiche riguarda la dimensione del campione effettivo (ESS, <em>effective sample size</em>). A differenza di un campionamento indipendente, l’MCMC produce campioni correlati tra loro. L’ESS quantifica quanti campioni indipendenti “equivalenti” abbiamo realmente a disposizione. Nel nostro modello, i valori per <code>mu</code> sono di 2768 (bulk) e 3798 (tail), mentre per <code>lp__</code> superano i 3600. Si tratta di valori molto elevati, che garantiscono stime stabili anche per i quantili delle code della distribuzione. Più l’ESS è alto, più le nostre stime risultano precise. A titolo di esempio, l’errore Monte Carlo sulla media di <code>mu</code>, calcolato come <span class="math inline">\(\text{sd}/\sqrt{\text{ESS}}\)</span>, risulta circa 0.05: un valore trascurabile rispetto alla deviazione standard della distribuzione a posteriori, pari a 2.68. Questo significa che l’incertezza introdotta dal metodo numerico è minima.</p>
-<p>Oltre agli indici di convergenza e di efficienza, vale la pena soffermarsi sulla forma della distribuzione stimata. Nel riepilogo vediamo che la media e la mediana di <code>mu</code> (104.22 e 104.24) coincidono quasi perfettamente, segnalando una distribuzione sostanzialmente simmetrica. La deviazione standard (2.68) e la MAD (2.65) confermano che la variabilità è ben catturata e non emergono anomalie nelle code. I quantili dal 5° al 95° indicano un intervallo credibile al 90% compreso tra circa 99.8 e 108.6. È interessante osservare che il valore 110 si colloca al di sopra di questo intervallo, fatto che si traduce in una probabilità molto bassa che <span class="math inline">\(\mu\)</span> superi quella soglia.</p>
-<p>Infine, il parametro <code>lp__</code>, che rappresenta la log-densità a posteriori, non va interpretato come un parametro di interesse ma come strumento diagnostico. Anch’esso mostra valori di <span class="math inline">\(\hat{R}\)</span> e di ESS ottimi, confermando che l’esplorazione dello spazio dei parametri è avvenuta senza difficoltà.</p>
-<p>In sintesi, tutte le evidenze diagnostiche — <span class="math inline">\(\hat{R}\)</span> prossimo a 1, valori elevati di ESS, concordanza tra media, mediana e misure di dispersione — ci permettono di concludere che il campionamento MCMC è stato stabile ed efficiente. Questo garantisce che i risultati ottenuti rappresentano fedelmente la distribuzione a posteriori specificata dal nostro modello.</p>
-</section></section><section id="prior-e-posterior-predictive-check" class="level2" data-number="14.5"><h2 data-number="14.5" class="anchored" data-anchor-id="prior-e-posterior-predictive-check">
-<span class="header-section-number">14.5</span> Prior e Posterior Predictive Check</h2>
-<p>Prima guardiamo se il prior che abbiamo scelto genera valori plausibili anche senza dati: questo è il prior predictive check. Se il prior produce punteggi di QI completamente inverosimili, dobbiamo correggerlo. Poi, dopo aver aggiornato il modello con i dati, passiamo al posterior predictive check. In questo caso le simulazioni devono assomigliare ai dati reali: se non ci riescono, significa che il modello non descrive bene il fenomeno.</p>
-<section id="prior-predictive-check" class="level3" data-number="14.5.1"><h3 data-number="14.5.1" class="anchored" data-anchor-id="prior-predictive-check">
-<span class="header-section-number">14.5.1</span> Prior Predictive Check</h3>
-<p><em>Obiettivo.</em> Prima di guardare i dati, vogliamo chiederci: le nostre assunzioni a priori su <span class="math inline">\(\mu\)</span> sono plausibili? In altre parole, il prior scelto produce valori di <span class="math inline">\(y\)</span> che hanno senso rispetto al dominio del problema (qui: punteggi QI)?</p>
-<p>Il nostro modello è:</p>
+<p>Un primo indicatore chiave è la statistica di convergenza <span class="math inline">\(\hat{R}\)</span> (o <em>R-hat</em>). Essa confronta la variabilità <em>intra-catena</em> con quella <em>inter-catena</em>: quando le catene hanno raggiunto lo stesso equilibrio, oscillano nelle stesse regioni della distribuzione e <span class="math inline">\(\hat{R}\)</span> tende a 1. Nel nostro esempio, i valori sono 1.001 per <code>mu</code> e 1.001 per <code>lp__</code>, praticamente indistinguibili da 1. In generale, valori inferiori a 1.01 sono considerati ottimali, mentre valori superiori a 1.05 segnalano possibili problemi di convergenza.</p>
+<p>Un secondo gruppo di statistiche riguarda la dimensione del campione effettivo (ESS, <em>effective sample size</em>). Poiché i campioni MCMC sono correlati, l’ESS misura a quanti campioni indipendenti essi siano “equivalenti”. Nel nostro caso, per <code>mu</code> l’ESS è pari a 5500 (bulk) e 7540 (tail), mentre per <code>lp__</code> è rispettivamente 7357 e 9176. Si tratta di valori elevati, che assicurano stime stabili anche per i quantili estremi. A titolo illustrativo, l’errore Monte Carlo sulla media di <code>mu</code>, calcolato come <span class="math inline">\(\text{sd}/\sqrt{\text{ESS}}\)</span>, è circa 0.04: un valore trascurabile rispetto alla deviazione standard della posterior, pari a 2.72.</p>
+<p>Oltre agli indici numerici, è utile considerare la forma della distribuzione stimata. Nel riepilogo, la media (104.24) e la mediana (104.24) coincidono quasi perfettamente, segnalando una distribuzione sostanzialmente simmetrica. La deviazione standard (2.72) e la MAD (2.74) risultano molto vicine, confermando che la variabilità è ben catturata. I quantili dal 5° al 95° definiscono un intervallo credibile al 90% compreso tra circa e : ne consegue che la soglia 110 si colloca al di sopra di questo intervallo, con bassa probabilità di essere superata.</p>
+<p>Per un riscontro visivo della dinamica delle catene, il <em>traceplot</em> deve mostrare linee ben mescolate, senza trend o stazionamenti anomali:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb38"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu">bayesplot</span><span class="fu">::</span><span class="fu"><a href="https://mc-stan.org/bayesplot/reference/MCMC-traces.html">mcmc_trace</a></span><span class="op">(</span><span class="va">fit2</span><span class="op">$</span><span class="fu">draws</span><span class="op">(</span><span class="st">"mu"</span><span class="op">)</span>, n_warmup <span class="op">=</span> <span class="fl">1000</span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure"><p><img src="03_stan_intro_files/figure-html/unnamed-chunk-38-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:85.0%"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Un’ulteriore verifica consiste nel confronto delle densità tra catene:</p>
+<div class="cell" data-layout-align="center">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb39"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu">bayesplot</span><span class="fu">::</span><span class="fu"><a href="https://mc-stan.org/bayesplot/reference/MCMC-distributions.html">mcmc_dens_overlay</a></span><span class="op">(</span><span class="va">fit2</span><span class="op">$</span><span class="fu">draws</span><span class="op">(</span><span class="st">"mu"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure"><p><img src="03_stan_intro_files/figure-html/unnamed-chunk-39-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:85.0%"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>La buona sovrapposizione delle curve indica che le catene hanno raggiunto la stessa distribuzione stazionaria.</p>
+<p>Infine, <code>lp__</code> — la log-densità a posteriori — non è un parametro di interesse sostantivo ma uno strumento diagnostico: anche per <code>lp__</code> gli indici <span class="math inline">\(\hat{R}\)</span> e ESS risultano eccellenti (1.001, 7357/9176), confermando un’esplorazione regolare dello spazio dei parametri.</p>
+<p>In sintesi, tutti gli indici diagnostici — <span class="math inline">\(\hat{R}\)</span> prossimo a 1, ESS elevati, coerenza tra media, mediana e misure di dispersione, oltre a traceplot e densità sovrapposte — convergono verso la stessa conclusione: il campionamento MCMC è stato stabile ed efficiente. Possiamo quindi considerare le stime ottenute come una rappresentazione affidabile della distribuzione a posteriori prevista dal nostro modello.</p>
+</section><section id="prior-e-posterior-predictive-check" class="level2" data-number="14.6"><h2 data-number="14.6" class="anchored" data-anchor-id="prior-e-posterior-predictive-check">
+<span class="header-section-number">14.6</span> Prior e Posterior Predictive Check</h2>
+<p>Un passaggio cruciale nell’analisi bayesiana consiste nel verificare la capacità del modello di generare dati plausibili. Questo controllo può avvenire in due momenti distinti.</p>
+<p>Prima dell’osservazione dei dati si esegue il <em>prior predictive check</em>, che serve a valutare se il prior scelto sia compatibile con valori ragionevoli. Se, ad esempio, i priors producono simulazioni di punteggi di QI del tutto inverosimili, è segno che occorre rivederne la specificazione.</p>
+<p>Dopo l’aggiornamento con i dati osservati, si procede al <em>posterior predictive check</em>. In questa fase l’attenzione si sposta sulla capacità del modello stimato di riprodurre l’evidenza empirica: i dati simulati a posteriori dovrebbero assomigliare ai dati reali, sia nelle tendenze centrali sia nella variabilità. Se emergono scostamenti sistematici, ciò indica che il modello non riesce a catturare adeguatamente il fenomeno e richiede un perfezionamento.</p>
+<p>Questi concetti sono già stati introdotti in precedenza; qui ci concentreremo sulla loro implementazione pratica utilizzando l’ecosistema di Stan.</p>
+<section id="prior-predictive-check" class="level3" data-number="14.6.1"><h3 data-number="14.6.1" class="anchored" data-anchor-id="prior-predictive-check">
+<span class="header-section-number">14.6.1</span> Prior Predictive Check</h3>
+<p>Il primo passo, prima ancora di osservare i dati, è verificare se le nostre assunzioni a priori producono valori plausibili. In termini concreti: il prior scelto per <span class="math inline">\(\mu\)</span> genera punteggi di QI che hanno senso rispetto al dominio del problema?</p>
+<p>Il modello è definito come</p>
 <p><span class="math display">\[
-y_i \mid \mu \sim \mathcal{N}(\mu,\; \sigma),
+y_i \mid \mu \sim \mathcal{N}(\mu, \sigma),
 \qquad
-\mu \sim \mathcal{N}(\mu_0,\; \tau).
+\mu \sim \mathcal{N}(\mu_0, \tau).
 \]</span></p>
-<p>Combinando likelihood e prior, la <em>distribuzione predittiva a priori</em> di una singola osservazione è:</p>
+<p>Combinando la verosimiglianza con il prior, otteniamo la <em>distribuzione predittiva a priori</em> per una singola osservazione:</p>
 <p><span class="math display">\[
 y_i \sim \mathcal{N}\!\Big(\mu_0,\; \sqrt{\sigma^2 + \tau^2}\Big).
-\]</span></p>
-<p>Questa distribuzione descrive quali valori ci aspettiamo <em>prima di osservare alcun dato</em>.</p>
-<ul>
-<li>Se produce valori estremi o inverosimili (ad es. QI &lt; 40 o &gt; 160), il prior è troppo <em>largo</em> o <em>spostato</em>.</li>
-<li>Se invece produce valori troppo concentrati in un intervallo ristretto, il prior è <em>eccessivamente informativo</em>, lasciando poco spazio ai dati.</li>
-</ul>
-<p>Per implementare un <em>prior predictive check</em> possiamo usare lo stesso file Stan dell’inferenza, con una piccola modifica:</p>
-<ol type="1">
-<li>aggiungiamo una variabile booleana <code>compute_likelihood</code>, che ci permette di decidere se includere o meno la riga <code>y ~ normal(mu, sigma);</code>,</li>
-<li>generiamo repliche <span class="math inline">\(y_{\text{rep}}\)</span> in un blocco <code>generated quantities</code>.</li>
-</ol>
-<p>Ecco il codice Stan:</p>
+\]</span> Questa distribuzione descrive quali valori ci aspetteremmo <em>prima di osservare alcun dato</em>. Se produce valori estremamente inverosimili (ad esempio QI &lt; 40 o &gt; 160), significa che il prior è troppo <em>ampio</em> o mal centrato. Se invece concentra quasi tutta la massa in un intervallo ristretto, rischia di essere <em>eccessivamente informativo</em>, lasciando poco spazio ai dati.</p>
+<section id="implementazione-in-stan" class="level4" data-number="14.6.1.1"><h4 data-number="14.6.1.1" class="anchored" data-anchor-id="implementazione-in-stan">
+<span class="header-section-number">14.6.1.1</span> Implementazione in Stan</h4>
+<p>Per eseguire un <em>prior predictive check</em> possiamo utilizzare lo stesso modello Stan destinato all’inferenza, con una piccola modifica. Introduciamo una variabile booleana <code>compute_likelihood</code> che decide se attivare o meno la riga <code>y ~ normal(mu, sigma);</code>. In questo modo possiamo “spegnere” la verosimiglianza e simulare esclusivamente dal prior. Inoltre, nel blocco <code>generated quantities</code> generiamo delle repliche <span class="math inline">\(y_{\text{rep}}\)</span> da confrontare con i dati osservati.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb43"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">stancode_norm_ppc</span> <span class="op">&lt;-</span> <span class="st">"</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb40"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">stancode_norm_ppc</span> <span class="op">&lt;-</span> <span class="st">"</span></span>
 <span><span class="st">data {</span></span>
 <span><span class="st">  int&lt;lower=0&gt; N;</span></span>
 <span><span class="st">  vector[N] y;                 // usato solo se compute_likelihood=1</span></span>
 <span><span class="st">  real&lt;lower=0&gt; sigma;         // sd nota</span></span>
 <span><span class="st">  real mu0;                    // media del prior su mu</span></span>
 <span><span class="st">  real&lt;lower=0&gt; mu_prior_sd;   // sd del prior</span></span>
-<span><span class="st">  int&lt;lower=0, upper=1&gt; compute_likelihood; // 1 = usa y ~ normal(..), 0 = disattiva</span></span>
+<span><span class="st">  int&lt;lower=0, upper=1&gt; compute_likelihood; // 1 = attiva likelihood</span></span>
 <span><span class="st">}</span></span>
 <span><span class="st">parameters {</span></span>
 <span><span class="st">  real mu;</span></span>
@@ -1654,20 +1549,20 @@ y_i \sim \mathcal{N}\!\Big(\mu_0,\; \sqrt{\sigma^2 + \tau^2}\Big).
 <span><span class="st">  vector[N] log_lik; </span></span>
 <span><span class="st"></span></span>
 <span><span class="st">  for (n in 1:N) {</span></span>
-<span><span class="st">    y_rep[n] = normal_rng(mu, sigma); // repliche prior/posterior predictive</span></span>
+<span><span class="st">    y_rep[n] = normal_rng(mu, sigma); </span></span>
 <span><span class="st">    log_lik[n] = normal_lpdf(y[n] | mu, sigma); </span></span>
 <span><span class="st">  }</span></span>
 <span><span class="st">}</span></span>
 <span><span class="st">"</span></span>
 <span><span class="va">stanmod_ppc</span> <span class="op">&lt;-</span> <span class="fu">cmdstan_model</span><span class="op">(</span><span class="fu">write_stan_file</span><span class="op">(</span><span class="va">stancode_norm_ppc</span><span class="op">)</span>, compile <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>Per un controllo <em>puro</em> del prior disattiviamo la likelihood (<code>compute_likelihood = 0</code>). In questo modo, Stan genera valori <span class="math inline">\(y_{\text{rep}}\)</span> esclusivamente a partire dalle assunzioni a priori.</p>
+<p>Per un controllo <em>puro</em> del prior impostiamo <code>compute_likelihood = 0</code>:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb44"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">N_ppc</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html">length</a></span><span class="op">(</span><span class="va">y_cont</span><span class="op">)</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb41"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">N_ppc</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html">length</a></span><span class="op">(</span><span class="va">y_cont</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">stan_data_prior</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html">list</a></span><span class="op">(</span></span>
 <span>  N <span class="op">=</span> <span class="va">N_ppc</span>,</span>
-<span>  y <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html">rep</a></span><span class="op">(</span><span class="fl">0</span>, <span class="va">N_ppc</span><span class="op">)</span>,   <span class="co"># placeholder, non usato quando compute_likelihood = 0</span></span>
+<span>  y <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html">rep</a></span><span class="op">(</span><span class="fl">0</span>, <span class="va">N_ppc</span><span class="op">)</span>,   <span class="co"># placeholder, ignorato se compute_likelihood=0</span></span>
 <span>  sigma <span class="op">=</span> <span class="va">sigma</span>,</span>
 <span>  mu0 <span class="op">=</span> <span class="fl">100</span>,</span>
 <span>  mu_prior_sd <span class="op">=</span> <span class="fl">30</span>,</span>
@@ -1684,18 +1579,19 @@ y_i \sim \mathcal{N}\!\Big(\mu_0,\; \sqrt{\sigma^2 + \tau^2}\Big).
 <span>  refresh <span class="op">=</span> <span class="fl">500</span></span>
 <span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>Dopo il campionamento, estraiamo le repliche <span class="math inline">\(y_{\text{rep}}\)</span>:</p>
+<p>Dopo il campionamento estraiamo le repliche <span class="math inline">\(y_{\text{rep}}\)</span>:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb45"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># Estrazione dei dati simulati</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb42"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># Estrazione delle repliche</span></span>
 <span><span class="va">yrep_mat_prior</span> <span class="op">&lt;-</span> <span class="fu">posterior</span><span class="fu">::</span><span class="fu"><a href="https://mc-stan.org/posterior/reference/draws_matrix.html">as_draws_matrix</a></span><span class="op">(</span><span class="va">fit_prior</span><span class="op">$</span><span class="fu">draws</span><span class="op">(</span><span class="st">"y_rep"</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Selezione solo delle colonne y_rep[1],...,y_rep[N]</span></span>
-<span><span class="va">N_ppc</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html">length</a></span><span class="op">(</span><span class="va">y_cont</span><span class="op">)</span></span>
-<span><span class="va">yrep_mat_prior</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html">as.matrix</a></span><span class="op">(</span><span class="va">yrep_mat_prior</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/paste.html">paste0</a></span><span class="op">(</span><span class="st">"y_rep["</span>, <span class="fl">1</span><span class="op">:</span><span class="va">N_ppc</span>, <span class="st">"]"</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
+<span><span class="co"># Selezione delle colonne y_rep[1],...,y_rep[N]</span></span>
+<span><span class="va">yrep_mat_prior</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html">as.matrix</a></span><span class="op">(</span></span>
+<span>  <span class="va">yrep_mat_prior</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/paste.html">paste0</a></span><span class="op">(</span><span class="st">"y_rep["</span>, <span class="fl">1</span><span class="op">:</span><span class="va">N_ppc</span>, <span class="st">"]"</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>Confrontiamo i dati osservati con alcune repliche generate dal prior:</p>
+<p>Possiamo ora confrontare i dati osservati con alcune repliche simulate:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb46"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">idx</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sample.html">sample</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html">seq_len</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html">nrow</a></span><span class="op">(</span><span class="va">yrep_mat_prior</span><span class="op">)</span><span class="op">)</span>, <span class="fl">100</span><span class="op">)</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb43"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">idx</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sample.html">sample</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html">seq_len</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html">nrow</a></span><span class="op">(</span><span class="va">yrep_mat_prior</span><span class="op">)</span><span class="op">)</span>, <span class="fl">100</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">bayesplot</span><span class="fu">::</span><span class="fu"><a href="https://mc-stan.org/bayesplot/reference/PPC-distributions.html">ppc_dens_overlay</a></span><span class="op">(</span></span>
 <span>  y <span class="op">=</span> <span class="va">y_cont</span>,</span>
@@ -1703,26 +1599,23 @@ y_i \sim \mathcal{N}\!\Big(\mu_0,\; \sqrt{\sigma^2 + \tau^2}\Big).
 <span><span class="op">)</span> </span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
-<figure class="figure"><p><img src="03_stan_intro_files/figure-html/unnamed-chunk-45-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:85.0%"></p>
+<figure class="figure"><p><img src="03_stan_intro_files/figure-html/unnamed-chunk-43-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:85.0%"></p>
 </figure>
 </div>
 </div>
 </div>
-<p>Interpretazione:</p>
-<ul>
-<li>Se le distribuzioni simulate coprono bene la variabilità dei dati reali, il prior è plausibile.</li>
-<li>Se le simulazioni sono sistematicamente troppo larghe o troppo strette, il prior va ripensato (riducendo o ampliando <code>mu_prior_sd</code>).</li>
-</ul></section><section id="posterior-predictive-check" class="level3" data-number="14.5.2"><h3 data-number="14.5.2" class="anchored" data-anchor-id="posterior-predictive-check">
-<span class="header-section-number">14.5.2</span> Posterior predictive check</h3>
-<p>Dopo aver verificato che il <em>prior</em> sia ragionevole, possiamo passare alla fase successiva: confrontare il modello <em>dopo aver visto i dati</em>.</p>
-<p>Per farlo, riattiviamo la verosimiglianza (<code>compute_likelihood = 1</code>) e stimiamo la distribuzione a posteriori di <span class="math inline">\(\mu\)</span>. Nel blocco <code>generated quantities</code>, Stan genera anche delle <em>repliche posterior predictive</em> <span class="math inline">\(y_{\text{rep}}\)</span>, cioè nuovi dataset simulati sotto l’ipotesi che il modello e i parametri stimati siano corretti.</p>
-<p>In altre parole:</p>
-<ul>
-<li>il <em>prior predictive check</em> serve a testare le assunzioni <em>prima</em> dei dati,</li>
-<li>il <em>posterior predictive check</em> serve a valutare se il modello <em>dopo i dati</em> è in grado di riprodurre l’evidenza osservata.</li>
-</ul>
+</section><section id="interpretazione-1" class="level4" data-number="14.6.1.2"><h4 data-number="14.6.1.2" class="anchored" data-anchor-id="interpretazione-1">
+<span class="header-section-number">14.6.1.2</span> Interpretazione</h4>
+<p>Se le distribuzioni simulate dal prior coprono la gamma dei dati reali, le nostre assunzioni iniziali sono plausibili. Se invece risultano troppo ampie o troppo strette, occorre ripensare la scelta di <code>mu_prior_sd</code> o la posizione del prior. In questo senso, il <em>prior predictive check</em> rappresenta un primo banco di prova fondamentale: ci permette di verificare se il modello, ancora prima di vedere i dati, è coerente con le conoscenze di base sul fenomeno studiato.</p>
+<p>Nel grafico vediamo la distribuzione osservata dei punteggi (linea scura) confrontata con un insieme di repliche simulate dal prior (linee chiare). L’insieme delle simulazioni copre bene la variabilità dei dati reali: i punteggi osservati cadono in una regione ampiamente compatibile con quanto previsto a priori. Questo indica che il prior scelto è sufficientemente ampio da includere valori plausibili, senza però generare in prevalenza esiti palesemente irrealistici.</p>
+<p>L’esercizio conferma quindi che le assunzioni iniziali sul parametro <span class="math inline">\(\mu\)</span> non introducono vincoli eccessivi né distorsioni forti. Il modello, ancora prima di essere aggiornato con i dati, è coerente con la conoscenza di base sul fenomeno considerato (i punteggi di QI), e può essere usato come punto di partenza per l’inferenza bayesiana.</p>
+</section></section><section id="posterior-predictive-check" class="level3" data-number="14.6.2"><h3 data-number="14.6.2" class="anchored" data-anchor-id="posterior-predictive-check">
+<span class="header-section-number">14.6.2</span> Posterior Predictive Check</h3>
+<p>Dopo aver verificato la plausibilità del <em>prior</em>, il passo successivo è valutare se il modello, una volta aggiornato con i dati, riesca a riprodurre in modo realistico l’evidenza empirica. Questo è lo scopo del <em>posterior predictive check</em>. Abbiamo già incontrato questo strumento nel caso del modello beta-binomiale; qui lo applichiamo al modello normale con prior normale, sfruttando le funzioni di Stan.</p>
+<p>Per procedere, riattiviamo la verosimiglianza (<code>compute_likelihood = 1</code>) e stimiamo la distribuzione a posteriori di <span class="math inline">\(\mu\)</span>. Nel blocco <code>generated quantities</code> Stan genera repliche <span class="math inline">\(y_{\text{rep}}\)</span>, ossia nuovi dataset simulati sotto l’ipotesi che il modello e i parametri stimati siano corretti. Il confronto fra i dati osservati e queste repliche permette di valutare direttamente la capacità predittiva del modello.</p>
+<p>Il principio è semplice: il <em>prior predictive check</em> serve a valutare le assunzioni prima di vedere i dati, mentre il <em>posterior predictive check</em> indaga se, dopo l’aggiornamento, il modello sia effettivamente in grado di riprodurre il fenomeno osservato.</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb47"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">stan_data_post</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html">list</a></span><span class="op">(</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb44"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">stan_data_post</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html">list</a></span><span class="op">(</span></span>
 <span>  N <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html">length</a></span><span class="op">(</span><span class="va">y_cont</span><span class="op">)</span>,</span>
 <span>  y <span class="op">=</span> <span class="va">y_cont</span>,</span>
 <span>  sigma <span class="op">=</span> <span class="va">sigma</span>,</span>
@@ -1731,9 +1624,9 @@ y_i \sim \mathcal{N}\!\Big(\mu_0,\; \sqrt{\sigma^2 + \tau^2}\Big).
 <span>  compute_likelihood <span class="op">=</span> <span class="fl">1</span></span>
 <span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>Lancio del campionamento:</p>
+<p>Il campionamento da Stan:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb48"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">fit_post</span> <span class="op">&lt;-</span> <span class="va">stanmod_ppc</span><span class="op">$</span><span class="fu">sample</span><span class="op">(</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb45"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">fit_post</span> <span class="op">&lt;-</span> <span class="va">stanmod_ppc</span><span class="op">$</span><span class="fu">sample</span><span class="op">(</span></span>
 <span>  data <span class="op">=</span> <span class="va">stan_data_post</span>,</span>
 <span>  iter_warmup <span class="op">=</span> <span class="fl">1000</span>,</span>
 <span>  iter_sampling <span class="op">=</span> <span class="fl">10000</span>,</span>
@@ -1743,40 +1636,26 @@ y_i \sim \mathcal{N}\!\Big(\mu_0,\; \sqrt{\sigma^2 + \tau^2}\Big).
 <span>  refresh <span class="op">=</span> <span class="fl">1000</span></span>
 <span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>Estrazione e confronto con i dati reali:</p>
+<p>Una volta estratte le repliche, possiamo confrontarle con i dati reali:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb49"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">y_rep</span> <span class="op">&lt;-</span> <span class="va">fit_post</span><span class="op">$</span><span class="fu">draws</span><span class="op">(</span><span class="st">"y_rep"</span>, format <span class="op">=</span> <span class="st">"matrix"</span><span class="op">)</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb46"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">y_rep</span> <span class="op">&lt;-</span> <span class="va">fit_post</span><span class="op">$</span><span class="fu">draws</span><span class="op">(</span><span class="st">"y_rep"</span>, format <span class="op">=</span> <span class="st">"matrix"</span><span class="op">)</span></span>
 <span><span class="fu">ppc_dens_overlay</span><span class="op">(</span>y <span class="op">=</span> <span class="va">stan_data_post</span><span class="op">$</span><span class="va">y</span>, yrep <span class="op">=</span> <span class="va">y_rep</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">100</span>, <span class="op">]</span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
-<figure class="figure"><p><img src="03_stan_intro_files/figure-html/unnamed-chunk-48-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:85.0%"></p>
+<figure class="figure"><p><img src="03_stan_intro_files/figure-html/unnamed-chunk-46-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:85.0%"></p>
 </figure>
 </div>
 </div>
 </div>
-<p>Interpretazione:</p>
-<ul>
-<li>se la distribuzione delle repliche <span class="math inline">\(y_{\text{rep}}\)</span> <em>copre bene</em> la distribuzione osservata <span class="math inline">\(y\)</span>, significa che il modello è in grado di spiegare i dati;</li>
-<li>se invece ci sono <em>scostamenti sistematici</em> (ad es. le repliche hanno media troppo bassa, o varianza troppo alta rispetto ai dati reali), il modello non descrive adeguatamente il fenomeno e potrebbe essere rivisto.</li>
-</ul>
-<p><strong>Collegamento con la verifica dei prior.</strong></p>
-<ul>
-<li>Un <em>prior troppo largo</em> può portare a simulazioni estreme e poco plausibili <em>prima dei dati</em>.</li>
-<li>Un <em>prior troppo stretto</em> rischia di imporre eccessiva rigidità al modello, lasciando poca flessibilità ai dati.</li>
-<li>Nel <em>posterior predictive check</em>, quello che conta è verificare che, dopo aver aggiornato il modello con i dati, le simulazioni riflettano in modo realistico il comportamento osservato.</li>
-</ul>
-<p><strong>Metafora.</strong> È come provare una ricetta: prima assaggiamo l’impasto crudo per capire se gli ingredienti sono dosati bene; poi, una volta cotto, assaggiamo il piatto finito per verificare che il risultato sia quello che ci aspettavamo.</p>
-</section><section id="nota-didattica" class="level3" data-number="14.5.3"><h3 data-number="14.5.3" class="anchored" data-anchor-id="nota-didattica">
-<span class="header-section-number">14.5.3</span> Nota didattica</h3>
-<p>Con <span class="math inline">\(\sigma\)</span> noto e <span class="math inline">\(\mu \sim \mathcal{N}(\mu_0, \tau)\)</span>, la distribuzione predittiva <em>a priori</em> della media campionaria <span class="math inline">\(\bar{y}\)</span> è:</p>
-<p><span class="math display">\[
-\bar{y} \sim \mathcal{N}\!\big(\mu_0,\; \sqrt{\tau^2 + \tfrac{\sigma^2}{N}}\big).
-\]</span></p>
-<p>Questa formula fornisce un controllo rapido per tarare il prior rispetto alla precisione attesa del campione. Dopo l’aggiornamento con i dati, la distribuzione <em>a posteriori</em> restringe l’incertezza, e le repliche posterior predictive permettono di verificarne la coerenza empirica.</p>
+<p>Se le distribuzioni simulate coprono bene quella dei dati osservati, il modello descrive adeguatamente il fenomeno. Al contrario, scostamenti sistematici — ad esempio repliche con media troppo bassa o varianza troppo elevata — segnalano che il modello non cattura pienamente la realtà e dovrebbe essere rivisto.</p>
+<p>Il collegamento con la fase di verifica dei <em>prior</em> è immediato: un prior troppo vago può generare simulazioni poco credibili già in fase predittiva a priori, mentre un prior troppo rigido rischia di imporre vincoli eccessivi. Nel <em>posterior predictive check</em>, tuttavia, ciò che conta è il risultato finale: dopo l’aggiornamento con i dati, le simulazioni devono riflettere con realismo l’evidenza empirica.</p>
+<p>Nel grafico osserviamo la distribuzione empirica dei punteggi (linea scura) affiancata a un insieme di repliche simulate dalla distribuzione a posteriori (linee chiare). A differenza del controllo sul <em>prior</em>, qui il modello è stato aggiornato con i dati, e le simulazioni riflettono sia le assunzioni iniziali sia l’informazione empirica raccolta.</p>
+<p>Il confronto mostra una buona corrispondenza: le repliche coprono con realismo la forma della distribuzione osservata, senza evidenziare scostamenti sistematici. In particolare, la media delle repliche si allinea bene a quella dei dati reali, e la variabilità simulata risulta compatibile con quella empirica. Questo conferma quanto già emerso dall’analisi numerica: la stima a posteriori della media <span class="math inline">\(\mu\)</span> (circa 104) è coerente con il campione osservato e attribuisce bassa probabilità all’ipotesi che <span class="math inline">\(\mu\)</span> superi la soglia di 110.</p>
+<p>Nel complesso, il <em>posterior predictive check</em> suggerisce che il modello normale con prior scelto descrive adeguatamente il fenomeno considerato (i punteggi QI in questo esempio). Si tratta quindi di una base affidabile per trarre conclusioni inferenziali e, se necessario, collegare i risultati a decisioni pratiche.</p>
 </section></section><section id="riflessioni-conclusive" class="level2 unnumbered unlisted"><h2 class="unnumbered unlisted anchored" data-anchor-id="riflessioni-conclusive">Riflessioni conclusive</h2>
-<p>Stan rappresenta il punto di arrivo naturale del percorso che abbiamo seguito fin qui. Dopo aver compreso la logica generale dell’inferenza bayesiana con Metropolis e aver visto come i linguaggi probabilistici abbiano reso praticabile questa logica, Stan ci offre ora uno strumento concreto per applicare questi principi a modelli reali e complessi.</p>
-<p>Il suo valore non sta soltanto nella potenza computazionale, ma soprattutto nella possibilità di <em>spostare l’attenzione dal calcolo all’idea scientifica</em>. Con Stan possiamo tradurre ipotesi psicologiche in modelli formali, esplicitarne le assunzioni e ottenere inferenze riproducibili senza perdere di vista la sostanza teorica.</p>
-<p>In questo senso, Stan non è solo un software: è un ambiente che incoraggia la trasparenza, la chiarezza e la cumulatività della ricerca. Nei prossimi capitoli vedremo come utilizzarlo a partire da esempi semplici, per poi affrontare modelli più ricchi. L’obiettivo è acquisire familiarità non solo con la sintassi, ma soprattutto con il modo di pensare che rende la modellazione bayesiana uno strumento essenziale per la psicologia scientifica contemporanea.</p>
+<p>Stan rappresenta il punto di approdo naturale del percorso seguito fin qui. Dopo aver introdotto la logica dell’inferenza bayesiana con algoritmi semplici come Metropolis e aver visto come i linguaggi probabilistici abbiano reso più accessibile questa logica, Stan ci mette ora a disposizione uno strumento maturo, capace di tradurre queste idee in pratica su modelli reali e complessi.</p>
+<p>Il suo valore non risiede soltanto nella potenza computazionale, ma soprattutto nella possibilità di <em>spostare l’attenzione dal calcolo all’idea scientifica</em>. Con Stan possiamo formulare ipotesi psicologiche in termini formali, esplicitarne le assunzioni e sottoporle a verifica empirica in modo trasparente e riproducibile. Il ricercatore non è più costretto a concentrarsi sui dettagli algoritmici, ma può dedicarsi a ciò che conta davvero: la sostanza teorica del modello e la sua capacità di descrivere i dati.</p>
+<p>In questo senso, Stan non è semplicemente un software, ma un vero e proprio ambiente di ricerca che promuove chiarezza, rigore e cumulatività. Nei capitoli che seguono impareremo a utilizzarlo prima con esempi semplici, per poi estendere gradualmente l’analisi a modelli più articolati. L’obiettivo non è solo acquisire familiarità con la sintassi, ma soprattutto interiorizzare un <em>modo di pensare</em>: quello che fa della modellazione bayesiana uno strumento essenziale della psicologia scientifica contemporanea.</p>
 <div class="callout callout-style-simple callout-note no-icon callout-titled" title="Informazioni sull'ambiente di sviluppo">
 <div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-3-contents" aria-controls="callout-3" aria-expanded="false" aria-label="Toggle callout">
 <div class="callout-icon-container">
@@ -1790,7 +1669,7 @@ y_i \sim \mathcal{N}\!\Big(\mu_0,\; \sqrt{\sigma^2 + \tau^2}\Big).
 <div id="callout-3" class="callout-3-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb50"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html">sessionInfo</a></span><span class="op">(</span><span class="op">)</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb47"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html">sessionInfo</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="co">#&gt; R version 4.5.1 (2025-06-13)</span></span>
 <span><span class="co">#&gt; Platform: aarch64-apple-darwin20</span></span>
 <span><span class="co">#&gt; Running under: macOS Tahoe 26.0</span></span>
