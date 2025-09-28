@@ -1,14 +1,14 @@
-# Confronto tra modelli bayesiani: dal Bayes Factor al LOO/ELPD {#sec-entropy-bf}
+# Valutare e confrontare i modelli bayesiani: dal Bayes Factor alla LOO/ELPD {#sec-entropy-bf}
 
 ## Introduzione {.unnumbered .unlisted}
 
-Confrontare modelli è un passaggio cruciale di ogni analisi scientifica: significa chiedersi quale, tra ipotesi concorrenti, descriva meglio i dati disponibili e, soprattutto, quale offra previsioni più accurate per nuove osservazioni. Nei capitoli precedenti abbiamo introdotto la procedura del *ΔELPD* come strumento per quantificare la differenza di accuratezza predittiva tra modelli. Questo approccio, fondato sulla *Leave-One-Out Cross Validation (LOO-CV)* e sull’*Expected Log Predictive Density (ELPD)*, ci ha permesso di valutare i modelli in termini di capacità predittiva fuori campione, ponendo l’accento su un criterio pragmatico e interpretabile.
+Confrontare modelli è un passaggio cruciale di ogni analisi scientifica: significa chiedersi quale, tra ipotesi concorrenti, descriva meglio i dati disponibili e, soprattutto, quale offra previsioni più accurate per nuove osservazioni. Nei capitoli precedenti abbiamo introdotto la procedura del *ΔELPD* come strumento per quantificare la differenza di accuratezza predittiva tra modelli. Questo approccio, basato sulla *Leave-One-Out Cross Validation (LOO-CV)* e sull’*Expected Log Predictive Density (ELPD)*, ci ha permesso di valutare i modelli in termini di capacità predittiva fuori campione, ponendo l’accento su un criterio pragmatico e interpretabile.
 
-In questo capitolo mettiamo il ΔELPD a confronto con un metodo alternativo e tradizionalmente molto diffuso nella statistica bayesiana: il *Bayes Factor (BF)*. Il BF si basa sulla comparazione delle *marginal likelihoods* dei modelli, ossia sulla probabilità complessiva che ciascun modello assegna ai dati osservati, integrata rispetto alla distribuzione a priori dei parametri.
+In questo capitolo mettiamo a confronto il ΔELPD con un metodo alternativo e tradizionalmente molto diffuso nella statistica bayesiana: il *Bayes Factor (BF)*. Il BF si basa sul confronto delle *marginal likelihoods* dei modelli, ossia sulla probabilità complessiva che ciascun modello assegna ai dati osservati, integrata rispetto alla distribuzione a priori dei parametri.
 
-Attraverso due esempi simulati illustreremo i punti di forza e i limiti di questi due approcci. Nel primo scenario mostreremo come LOO/ΔELPD identifichi correttamente il modello più complesso quando l’effetto da stimare è effettivamente presente. Nel secondo scenario, in cui l’effetto è nullo, vedremo invece come LOO/ΔELPD restituisca un verdetto stabile, mentre il Bayes Factor risenta in misura considerevole della scelta delle prior, fino a produrre conclusioni opposte a seconda della loro specificazione.
+Attraverso due esempi simulati illustreremo i punti di forza e i limiti di questi due approcci. Nel primo scenario mostreremo come LOO/ΔELPD identifichi correttamente il modello più complesso quando l’effetto da stimare è effettivamente presente. Nel secondo scenario, in cui l’effetto è nullo, vedremo invece come LOO/ΔELPD restituisca un verdetto stabile, mentre il Bayes Factor risenta in misura considerevole della scelta delle prior, arrivando a produrre conclusioni opposte a seconda della loro specificazione.
 
-L’obiettivo del capitolo è dunque duplice: da un lato chiarire le differenze concettuali tra Bayes Factor e ΔELPD, dall’altro motivare, sul piano metodologico, perché nella pratica della ricerca psicologica sia preferibile adottare criteri predittivi come LOO/ΔELPD per il confronto tra modelli.
+L’obiettivo del capitolo è dunque duplice: da un lato chiarire le differenze concettuali tra Bayes Factor e ΔELPD, dall’altro motivare, dal punto di vista metodologico, perché nella pratica della ricerca psicologica sia preferibile adottare criteri predittivi come LOO/ΔELPD per il confronto tra modelli.
 
 ### Panoramica del capitolo {.unnumbered .unlisted}
 
@@ -18,8 +18,7 @@ L’obiettivo del capitolo è dunque duplice: da un lato chiarire le differenze 
 
 ::: {.callout-tip collapse=true}
 ## Prerequisiti
-* Nozioni di base su Bernoulli/Binomiale, odds e odds ratio.
-* Concetto di prior e posteriore.
+* Nozioni di base su $\Delta$ ELPD e LOO.
 :::
 
 ::: {.callout-caution collapse=true title="Preparazione del Notebook"}
@@ -52,10 +51,50 @@ conflicts_prefer(bayesplot::theme_default)
 ```
 :::
 
+## Interpretare la metrica del Bayes Factor
+
+Il Bayes Factor (BF) esprime il rapporto tra le evidenze marginali di due modelli:
+
+$$
+BF_{10} = \frac{p(\text{dati} \mid M_1)}{p(\text{dati} \mid M_0)}.
+$$
+In altre parole, indica quante volte i dati sono più probabili sotto il modello ($M_1$) rispetto al modello ($M_0$).
+
+### Significato dei valori
+
+* **BF = 1** → Nessuna preferenza: i dati supportano in egual misura entrambi i modelli.
+* **BF > 1** → Evidenza a favore di ($M_1$).
+* **BF < 1** → Evidenza a favore di ($M_0$).
+
+Per tradizione si usa la scala di @jeffreys1998theory, sebbene vada intesa solo come guida qualitativa [si veda anche @lee2014bayesian]:
+
+| BF (o 1/BF) | Interpretazione      |
+| ----------- | -------------------- |
+| 1 – 3       | Evidenza debole      |
+| 3 – 10      | Evidenza moderata    |
+| 10 – 30     | Evidenza forte       |
+| > 30        | Evidenza molto forte |
+
+In forma reciproca (ad esempio 1/BF), la stessa logica vale per l’altro modello.
+
+### Buone pratiche
+
+1. **Analisi di sensibilità**: il BF dipende fortemente dalle *prior*, quindi è essenziale mostrare come le conclusioni cambiano variando le specificazioni ragionevoli.
+2. **Evitare soglie rigide**: le categorie “debole/moderata/forte” sono euristiche, non regole assolute.
+3. **Contestualizzare**: l’interpretazione del BF deve sempre tener conto del disegno sperimentale, della qualità dei dati e delle ipotesi in gioco.
+
+### Perché usare il logaritmo
+
+Il Bayes Factor può assumere valori estremamente grandi o molto vicini a zero. Per rendere le differenze più leggibili e stabili numericamente, si utilizza spesso il logaritmo:
+
+* **log(BF)** in base naturale: interpretabile come differenza di *log marginal likelihood*.
+* **log10(BF)** in base 10: indica gli “ordini di grandezza” a favore di un modello (es. log10(BF) = 2 significa 100 a 1).
+
+Il logaritmo consente anche di rappresentare graficamente le evidenze in maniera più intuitiva, evitando scale distorte.
 
 ## Scenario A — L’interazione tra ansia di tratto e periodo d’esame
 
-Immaginiamo uno studio sul livello di *affetto negativo* (NA) di un gruppo di studenti. Ogni studente viene misurato più volte prima e dopo un esame, e per ciascuno conosciamo anche il punteggio di ansia di tratto (`trait_z`, standardizzato). L’ipotesi è che gli studenti con ansia-tratto elevata mostrino un aumento maggiore di NA durante il periodo dell’esame: in altre parole, ci aspettiamo un’interazione tra `post` (pre/post esame) e `trait_z`.
+Immaginiamo di voler studiare il livello di *affetto negativo* (NA) di un gruppo di studenti. Ogni studente viene misurato più volte prima e dopo un esame, e per ciascuno di essi conosciamo anche il punteggio di ansia di tratto (`trait_z`, standardizzato). L'ipotesi è che gli studenti con un'elevata ansia di tratto mostrino un aumento maggiore di NA durante il periodo dell'esame: in altre parole, ci si aspetta un'interazione tra `post` (pre/post esame) e `trait_z`.
 
 ### Simulazione dei dati
 
@@ -102,7 +141,7 @@ Abbiamo quindi un dataset con più osservazioni per ciascuno studente, dove l’
 
 ### Due modelli a confronto
 
-Il primo modello (M0) include solo gli effetti principali di `post` e `trait_z` e un intercetta casuale per studente. Il secondo modello (M1) aggiunge l’interazione Post × Trait e permette un effetto random sulle slopes per la variable `post`.
+Il primo modello (M0) include solo gli effetti principali di `post` e `trait_z` e un'intercetta casuale per studente. Il secondo modello (M1) aggiunge l’interazione Post × Trait e consente un effetto casuale sulle pendenze per la variabile `post`.
 
 ```{r}
 #| output: false
@@ -141,11 +180,11 @@ loo_M1 <- loo(fit_M1)
 loo_compare(loo_M1, loo_M0)
 ```
 
-Il risultato mostra che M1 ha un ELPD più alto, con differenza superiore all’incertezza: segno che predice meglio nuovi dati. Questo è ciò che ci aspettiamo, dato che l’interazione è reale.
+Il risultato mostra che M1 ha un ELPD più alto con una differenza superiore all'incertezza, il che significa che predice meglio i nuovi dati. Ciò è in linea con le nostre aspettative, dato che l’interazione è reale.
 
 ### Visualizzare le differenze punto per punto
 
-Possiamo guardare **dove** M1 vince su M0.
+Possiamo guardare *dove* M1 vince su M0.
 
 ```{r}
 elpd_diff <- loo_M1$pointwise[,"elpd_loo"] - loo_M0$pointwise[,"elpd_loo"]
@@ -165,11 +204,11 @@ ggplot(df_elpd, aes(x = trait_z, y = diff, color = postF)) +
        title = "M1 migliora la predizione") 
 ```
 
-Il grafico mostra chiaramente che M1 ha un vantaggio rispetto a M0: la differenza ELPD (M1 - M0) tende ad essere positiva per la maggioranza delle osservazioni.
+Il grafico mostra chiaramente che M1 ha un vantaggio rispetto a M0: la differenza ELPD (M1 - M0) tende a essere positiva per la maggior parte delle osservazioni.
 
 ## Scenario B — Un predittore inutile
 
-Per capire i limiti del Bayes Factor, consideriamo ora uno scenario in cui non c’è alcun effetto reale. Immaginiamo di misurare l’affetto negativo `NA_score` come variabile casuale standard normale, e di registrare un predittore X (ad esempio “ore di studio ieri”) che in realtà non ha alcuna relazione con `NA_score`.
+Per comprendere i limiti del Bayes Factor, consideriamo ora uno scenario in cui non esiste alcun effetto reale. Supponiamo di misurare l’effetto negativo `NA_score` come variabile casuale standard normale, e di registrare un predittore X (per esempio “ore di studio ieri”) che in realtà non ha alcuna relazione con `NA_score`.
 
 ```{r}
 set.seed(2025)
@@ -230,8 +269,7 @@ loo_M1_wide   <- loo(fit_M1_wide)
 loo_compare(loo_M0, loo_M1_tight, loo_M1_medium, loo_M1_wide)
 ```
 
-Il risultato mostra differenze minime e non robuste: nessun modello ha un vantaggio predittivo. In altre parole, includere X non migliora la predizione, indipendentemente dalla prior.
-
+I risultati mostrano differenze minime e non robuste: nessun modello offre un vantaggio predittivo. In altre parole, includere X non migliora la previsione, a prescindere dalla *prior*.
 
 ### Confronto con Bayes Factor
 
@@ -253,17 +291,37 @@ BF_wide   <- bayes_factor(bs_M1_wide,   bs_M0)$bf
 c(BF_tight = BF_tight, BF_medium = BF_medium, BF_wide = BF_wide)
 ```
 
-I risultati cambiano molto:
+### Confronto con Bayes Factor
 
-- Con prior stretta, BF vicino a 1 → nessuna preferenza.
-- Con prior media, BF già a favore di M0.
-- Con prior larghissima, BF crolla a fortissimo favore di M0.
+```{r}
+#| output: false
+set.seed(123)
 
-Questa dipendenza è un effetto della cosiddetta *Occam penalty*: la *marginal likelihood* penalizza fortemente modelli con prior larghe, anche se la capacità predittiva è identica.
+bs_M0        <- bridge_sampler(fit_M0, silent = TRUE)
+bs_M1_tight  <- bridge_sampler(fit_M1_tight, silent = TRUE)
+bs_M1_medium <- bridge_sampler(fit_M1_medium, silent = TRUE)
+bs_M1_wide   <- bridge_sampler(fit_M1_wide, silent = TRUE)
+
+BF_tight  <- bayes_factor(bs_M1_tight,  bs_M0)$bf
+BF_medium <- bayes_factor(bs_M1_medium, bs_M0)$bf
+BF_wide   <- bayes_factor(bs_M1_wide,   bs_M0)$bf
+```
+
+```{r}
+c(BF_tight = BF_tight, BF_medium = BF_medium, BF_wide = BF_wide)
+```
+
+I risultati evidenziano una *forte sensibilità del Bayes Factor alla varianza della distribuzione a priori* scelta per il coefficiente di `X`. In particolare:
+
+* ** on prior molto strette (informative)** il BF risulta vicino a 1, il che significa che i dati non forniscono un'evidenza sostanziale a favore di nessuno dei due modelli;
+* **Con prior di ampiezza intermedia** il BF tende già a favorire M0, suggerendo l'assenza dell'effetto di `X`;
+* **con prior larghissime (debolmente informative)** il BF diventa estremo a favore di M0, segnalando un supporto “decisivo” per il modello nullo, pur in assenza di un reale miglioramento predittivo.
+
+Questa progressione riflette direttamente il *principio del rasoio di Occam*, implementato nel Bayes Factor attraverso la cosiddetta *Occam penalty*. La *marginal likelihood* infatti penalizza i modelli che, a causa di prior molto ampie, allocano massa di probabilità su regioni dello spazio dei parametri non supportate dai dati. In questi casi il verdetto del BF è influenzato maggiormente dalla scelta della *prior* che dall'evidenza empirica, anche quando la capacità predittiva dei modelli a confronto rimane sostanzialmente identica.
 
 ### Visualizzazione
 
-Per prima cosa possiamo esaminare i valori di ELPD ottenuti per il modello M1 con tre diverse scelte di prior sul coefficiente della variabile *X*:
+Per prima cosa, esaminiamo i valori di ELPD ottenuti per il modello M1 con tre diverse scelte di *prior* sul coefficiente della variabile *X*:
 
 ```{r}
 df_plot <- tibble(
@@ -277,11 +335,12 @@ df_plot <- tibble(
 df_plot
 ```
 
-Come si vede, i valori di ELPD rimangono pressoché invariati indipendentemente dall’ampiezza della prior. Ciò conferma che la valutazione predittiva tramite LOO/ELPD è robusta rispetto a questa scelta, restituendo un criterio stabile e direttamente interpretabile in termini di accuratezza predittiva fuori campione.
-
+Come si può notare, i valori di ELPD rimangono pressoché invariati a prescindere dall'ampiezza della prior. Ciò conferma che la valutazione predittiva tramite LOO/ELPD è robusta rispetto a questa scelta e restituisce un criterio stabile e direttamente interpretabile in termini di accuratezza predittiva fuori campione.
 Passiamo ora al Bayes Factor.
 
 ```{r}
+#| out-width: 100%
+#| fig-cap: "Valori del Bayes Factor (in scala logaritmica, log10) a confronto tra il modello M1 e il modello nullo M0, al variare della varianza della distribuzione a priori sul coefficiente di X. Con una prior stretta il log10(BF) resta vicino a zero, indicando assenza di preferenza tra i modelli. Con una prior intermedia il log10(BF) diventa negativo, segnalando evidenza crescente a favore di M0. Con una prior larghissima il log10(BF) raggiunge valori estremi, interpretati come supporto “decisivo” per M0. La figura illustra chiaramente l’elevata sensibilità del Bayes Factor alle assunzioni a priori e il ruolo della Occam penalty nell’evidenziare questa dipendenza."
 p2 <- ggplot(df_plot, aes(prior, log10(bf), group = 1)) +
   geom_point(size = 3) + geom_line() +
   labs(x = "Prior su β_X", y = "log10 BF (M1 vs M0)",
@@ -291,7 +350,7 @@ p2
 
 Il grafico mostra invece l’elevata sensibilità del Bayes Factor alla specificazione della distribuzione a priori. Basta modificare l’ampiezza della prior sul coefficiente di *X* per ottenere conclusioni radicalmente diverse:
 
-* **Prior informativa (stretta).** Con una distribuzione concentrata attorno a valori ridotti, il log10(BF) rimane vicino a zero. Questo corrisponde a un Bayes Factor ≈ 1, cioè a un verdetto di indifferenza: i due modelli risultano sostanzialmente equivalenti rispetto ai dati.
+* **Prior informativa (stretta).** Con una distribuzione concentrata attorno a valori ridotti, il log10(BF) rimane vicino a zero. Ciò corrisponde a un Bayes Factor ≈ 1, ovvero a un verdetto di indifferenza: i due modelli sono sostanzialmente equivalenti rispetto ai dati.
 
 * **Prior intermedia (media).** Con una prior di ampiezza moderata, il Bayes Factor stimato è:
 
@@ -300,7 +359,7 @@ Il grafico mostra invece l’elevata sensibilità del Bayes Factor alla specific
   bf_medium
   ```
 
-  In questo caso il log10(BF) è negativo, indicando che l’evidenza si sposta verso M0, ma in misura meno estrema rispetto alla prior larga.
+  In questo caso il log10(BF) è negativo, il che indica che l'evidenza si sposta verso M0, ma in misura meno estrema rispetto alla prior larga.
 
 * **Prior vaga (larga).** Con una distribuzione molto diffusa, che assegna probabilità non trascurabili anche a effetti di grande entità, il Bayes Factor stimato è:
 
@@ -314,11 +373,11 @@ Il grafico mostra invece l’elevata sensibilità del Bayes Factor alla specific
   * il logaritmo in base 10 (`log10(bf_wide)`) fornisce il valore mostrato nel grafico;
   * il reciproco (`1 / bf_wide`) indica quante volte M0 è considerato più plausibile di M1.
 
-  In questo caso, il reciproco restituisce `r round(1 / bf_wide, 1)`, il che significa che, pur avendo capacità predittiva sostanzialmente equivalente a M0, il modello M1 viene considerato circa `r round(1 / bf_wide, 1)` *volte meno plausibile*.
+  In questo caso, il reciproco restituisce `r round(1 / bf_wide, 1)`, il che significa che, pur avendo una capacità predittiva sostanzialmente equivalente a M0, il modello M1 viene considerato circa `r round(1 / bf_wide, 1)` *volte meno plausibile*.
 
-Questa analisi mette in evidenza un aspetto cruciale: il Bayes Factor non è un indicatore oggettivo, ma dipende in modo sostanziale dalle specificazioni a priori. La conclusione non deriva esclusivamente dai dati, bensì è co-determinata dalla scelta della prior: una prior stretta porta a un giudizio di equivalenza, mentre una prior larga può generare una forte evidenza a favore del modello nullo.
+Questa analisi evidenzia un aspetto cruciale: il Bayes Factor non è un indicatore oggettivo, ma dipende in modo sostanziale dalle ipotesi a priori. La conclusione non deriva esclusivamente dai dati, ma è co-determinata dalla scelta della *prior*: una *prior* stretta porta a un giudizio di equivalenza, mentre una *prior* larga può generare una forte evidenza a favore del modello nullo.
 
-Ne consegue una raccomandazione metodologica fondamentale: ogni analisi basata sul Bayes Factor dovrebbe essere accompagnata da un’accurata *analisi di sensitività*, volta a verificare come le conclusioni cambino al variare di prior ragionevoli. In assenza di questa verifica, si rischia di confondere un artefatto dovuto alle assunzioni a priori con un’evidenza empirica.
+Ne consegue una raccomandazione metodologica fondamentale: ogni analisi basata sul Bayes Factor dovrebbe essere accompagnata da un'accurata analisi di sensibilità, volta a verificare come le conclusioni cambino al variare di *prior* ragionevoli. In assenza di questa verifica, si rischia di scambiare un artefatto dovuto alle assunzioni a priori per un'evidenza empirica.
 
 ## Riflessioni conclusive
 
@@ -329,10 +388,9 @@ Gli esempi discussi ci hanno permesso di considerare due scenari opposti e compl
 
 Da questa analisi emergono alcuni messaggi chiave di natura metodologica:
 
-* Il *Bayes Factor* rappresenta uno strumento con un’importanza storica indiscutibile, ma la sua elevata sensibilità alle scelte a priori e la sua instabilità nei modelli complessi ne limitano l’affidabilità pratica.
-* L’*ELPD stimato tramite LOO* offre un criterio alternativo, fondato sulla capacità predittiva fuori campione. Si tratta di una misura intuitiva, interpretabile e robusta, che negli ultimi anni si è affermata come standard nella pratica bayesiana.
+* Il *Bayes Factor* rappresenta uno strumento di importanza storica indiscutibile, ma la sua elevata sensibilità alle scelte a priori e l'instabilità nei modelli complessi ne limitano l'affidabilità pratica.
+* L’*ELPD stimato tramite LOO* offre un criterio alternativo, basato sulla capacità predittiva fuori campione. Si tratta di una misura intuitiva, interpretabile e robusta, che negli ultimi anni si è affermata come standard nella pratica bayesiana.
 * In ambito psicologico, caratterizzato da dati intrinsecamente rumorosi e da modelli spesso gerarchici o complessi, l’adozione sistematica del *LOO/ELPD come strumento principale di confronto tra modelli* appare la scelta metodologicamente più solida e raccomandabile [@kruschke2018newstatistics].
-
 
 ::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
 ```{r}
@@ -341,5 +399,4 @@ sessionInfo()
 :::
 
 ## Bibliografia {.unnumbered .unlisted}
-
 
