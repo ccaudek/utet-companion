@@ -6,8 +6,6 @@
 > -- **Andrew Gelman, Xiao-Li Meng & Hal Stern**, Posterior predictive assessment of model fitness via realized discrepancies (Statistica Sinica, 1996, p. 733)
 :::
 
-
-
 ## Introduzione {.unnumbered .unlisted}
 
 Nei capitoli precedenti abbiamo visto due aspetti fondamentali dell’inferenza bayesiana: da un lato, la costruzione delle distribuzioni a posteriori per i parametri di interesse; dall’altro, l’importanza di verificare i priori attraverso i controlli predittivi, per assicurarci che le nostre assunzioni iniziali siano coerenti con la realtà psicologica che vogliamo studiare.
@@ -17,7 +15,6 @@ Ora compiamo un passo ulteriore: invece di chiederci se i nostri priori siano ra
 La logica è semplice e potente: se un modello è una rappresentazione credibile del processo che ha generato i dati, allora dovrebbe essere in grado non solo di adattarsi ai dati raccolti, ma anche di simulare dati nuovi con caratteristiche simili. In questo senso, le distribuzioni predittive a posteriori diventano uno strumento centrale per la valutazione dei modelli: collegano direttamente i parametri stimati ai dati futuri che ci aspettiamo di osservare.
 
 In questo capitolo vedremo come costruire la distribuzione predittiva a posteriori, come interpretarla e come utilizzarla per verificare la coerenza del modello con l’evidenza empirica. Questo approccio ci permetterà di mettere alla prova in modo pratico la capacità del modello di spiegare e prevedere i fenomeni psicologici che ci interessano.
-
 
 ### Panoramica del capitolo {.unnumbered .unlisted}
 
@@ -39,7 +36,6 @@ here::here("code", "_common.R") |>
   source()
 ```
 :::
-
 
 ## Definizione formale
 
@@ -85,6 +81,50 @@ $$ {#eq-post-pred-distr}
 
 La distribuzione predittiva a posteriori $p(\tilde{y} \mid y)$ rappresenta la migliore previsione probabilistica per dati futuri, incorporando tanto l'incertezza sui parametri del modello quanto la variabilità intrinseca del processo generativo dei dati.
 
+## Intuizione
+
+Un modo utile per *comprendere in un modo intuitivo* l’@eq-post-pred-distr è pensare alla distribuzione predittiva a posteriori come a una *media ponderata di previsioni*.
+
+**Esperimento mentale (beta–binomiale).**
+Immagina una griglia di possibili valori di $\theta$: ad es. 0, 0.01, 0.02, …, 0.99, 1. Per *ogni* valore $\theta'$ della griglia:
+
+1. costruisci l’*istogramma predittivo condizionale* di $\tilde y$ (le barre da 0 a $n_{\text{new}})$ usando la Binomiale con parametro $\theta'$:
+   $$
+   p(\tilde y \mid \theta')=\binom{n_{\text{new}}}{\tilde y},(\theta')^{\tilde y}(1-\theta')^{,n_{\text{new}}-\tilde y}.
+   $$
+
+2. attribuisci a quell’istogramma un *peso* pari alla plausibilità di $\theta'$ secondo la *distribuzione a posteriori* $p(\theta\mid y)$.
+   Se la distribuzione a posteriori assegna molta massa a $\theta'\approx 0.7$, ad esempio, quell’istogramma “vale” di più; se assegna poca massa a $\theta'\approx 0.1$, quell’istogramma “vale” di meno.
+
+3. *Sovrapponi e somma* (in base ai pesi dati dalla distribuzione a posteriori) tutte le barre corrispondenti allo stesso valore di $\tilde y$.
+   La *barretta finale* per $\tilde y=k$ è la media ponderata delle barrette per $\tilde y=k$ prodotte da tutti i $\theta'$ della griglia.
+
+Il risultato di questa somma pesata *è* la distribuzione predittiva a posteriori $p(\tilde y\mid y)$. In altre parole:
+
+> Ogni $\theta$ “prova a prevedere” $\tilde y$; la distribuzione a posteriori decide *quanto ascoltare* ciascuna previsione.
+
+**Cosa cambia rispetto a fissare $\theta$.**
+
+* Se la distribuzione a posteriori è *concentrata* (es. $\theta\approx 0.70\pm 0.03$), la media ponderata è quasi identica alla Binomiale con $p\simeq 0.70$: la distribuzione predittiva è *stretta* e centrata dove ti aspetti.
+* Se la distribuzione a posteriori è *diffusa* (es. $\theta$ plausibile tanto vicino a 0.4 quanto a 0.8), stai mediando istogrammi molto diversi tra loro: la distribuzione predittiva a posteriori diventa *più larga* e con *code più pesanti*.
+
+Questa dilatazione riflette due fonti di incertezza:
+
+* **la casualità** del processo ($\tilde y\mid \theta$),
+* **l'incertezza epistemica** sui parametri ($\theta\mid y$).
+  Un modo sintetico per ricordarlo è la decomposizione della varianza:
+  $$
+  \mathrm{Var}(\tilde y\mid y)=\underbrace{\mathbb E_{p(\theta\mid y)}[\mathrm{Var}(\tilde y\mid \theta)]}*{\text{rumore del processo}}
+  +\underbrace{\mathrm{Var}*{p(\theta\mid y)}[\mathbb E(\tilde y\mid \theta)]}_{\text{incertezza sul parametro}}.
+  $$
+
+**Piccolo esempio numerico $n(_\text{new})=10$.**
+
+* Posterior concentrata attorno a (0.7): la massa predittiva è su 6–8 successi; 0/10 o 10/10 sono rarissimi.
+* Posterior ampia tra 0.4 e 0.8: la massa si stende da ~4 a ~9 successi; aumentano sensibilmente le probabilità in coda.
+
+**Messaggio chiave.**
+La distribuzione predittiva a posteriori *non è l’istogramma di un singolo $\theta$*, ma la *media ponderata* (dalla distribuzione a posteriori) di *tutte* le predizioni condizionali. Se sappiamo poco del parametro, le nostre previsioni sui dati futuri devono essere *più caute* (più larghe). Se sappiamo molto, possono essere *più concentrate*.
 
 ## Il modello Beta-Binomiale
 

@@ -14,6 +14,16 @@ Per superare questo limite introduciamo la versione *gerarchica (multilevel)*: i
 
 Infine, consideriamo il caso dei *gruppi noti* (es. *approach* vs *avoidance*), stimando iper-parametri separati per ciascuna condizione. Questo permette di quantificare differenze sistematiche *a livello di popolazione* tra condizioni sperimentali, oltre alle differenze tra individui. Valuteremo i modelli con criteri *predittivi* (ELPD tramite *LOO-CV*), così da bilanciare in modo esplicito *complessità* e *capacità di generalizzazione*.
 
+### Obiettivi di apprendimento {.unnumbered .unlisted}
+
+Al termine del capitolo saprai:
+
+- modellare l’eterogeneità con tre granulosità (sample-level, person-level, gerarchico);
+- stimare e interpretare $(\alpha_i, \beta_i)$ e gli iper-parametri di popolazione;
+- valutare i modelli con ELPD/LOO e diagnosticare problemi (Pareto-k, divergenze);
+- tradurre risultati in implicazioni psicologiche (apprendimento vs drift) evitando conclusioni iperboliche;
+- costruire figure che mostrano shrinkage e differenze tra condizioni.
+
 ### Panoramica del capitolo {.unnumbered .unlisted}
 
 * *Modello a livello individuale*: stima di $\alpha_i$ e $\beta_i$ per ogni soggetto.
@@ -21,6 +31,15 @@ Infine, consideriamo il caso dei *gruppi noti* (es. *approach* vs *avoidance*), 
 * *Gruppi noti*: iper-parametri specifici per condizione (*approach* vs *avoidance*).
 * *Confronto predittivo*: ELPD e *LOO-CV* per scegliere il modello.
 * *Implicazioni psicologiche*: quando e perché la gerarchia migliora l’inferenza.
+
+::: {.callout-note title="Mappa concettuale"}
+**Granulosità del modello** → **Che cosa aggiunge** → **Quando usarlo**
+
+1) Sample-level → Parsimonia, ma ignora eterogeneità → Dati omogenei o teaser introduttivo
+2) Person-level → Parametri per soggetto → Profilazione individuale, dataset medi
+3) Gerarchico → Condivisione informazione + iper-parametri → Dati scarsi/rumorosi per soggetto; inferenze di popolazione
+4) Gerarchico con gruppi → Stima differenze di condizione → Ipotesi sperimentali tra condizioni
+:::
 
 ::: {.callout-caution collapse=true title="Preparazione del Notebook"}
 
@@ -43,24 +62,19 @@ conflicts_prefer(dplyr::count)
 ```
 :::
 
+## Modello a livello individuale 
 
-### Modello a livello individuale 
+::: {.callout-tip title="Perché non basta un unico parametro per tutti?"}
+Il modello *sample-level* produce una media “ecumenica” che *appiattisce le differenze*: va bene per un teaser, ma è rischioso per le inferenze psicologiche. Il modello  *person-level* rende visibili (i) la sensibilità al feedback ($\alpha$) e (ii) la deriva motivazionale ($\beta$) *idiosincratiche*.
+:::
 
-Il modello *sample-level* stima un unico insieme di parametri $(\alpha, \beta)$ per l'intero campione, ignorando le differenze individuali. Per cogliere questa eterogeneità, è possibile introdurre il *modello a livello individuale* (*person-level*), che stima parametri distinti $(\alpha_i, \beta_i)$ per ogni partecipante $i$.
+A differenza del modello *sample-level*, analizzato in precedenza, che stima un unico insieme di parametri ($(\alpha, \beta)$) per l'intero campione, risultando così cieco rispetto alle differenze individuali, il modello a livello individuale (o *person-level*) introduce un importante avanzamento concettuale e metodologico. Questo approccio stima parametri distinti, $\alpha_i$ e $\beta_i$, per ogni singolo partecipante, riconoscendo esplicitamente l'eterogeneità presente nella popolazione.
 
-In questa formulazione:
+Nella sua formulazione, il modello assegna a ogni individuo un tasso di apprendimento $\alpha_i$ e una deriva motivazionale $\beta_i$ personalizzati. Questi parametri catturano, rispettivamente, la sensibilità specifica di un soggetto al feedback ricevuto e la sua inclinazione motivazionale intrinseca. Al contrario, il parametro $\sigma$, che rappresenta la variabilità residua o il rumore decisionale, è solitamente considerato comune a tutti i partecipanti, in quanto misura un errore di processo ritenuto fondamentalmente simile tra gli individui.
 
-- ogni individuo possiede il proprio tasso di apprendimento $\alpha_i$ e la propria deriva motivazionale $\beta_i$;
-- il parametro $\sigma$, che cattura la variabilità residua (rumore decisionale), rimane comune a tutti i soggetti.
+L'adozione di un modello a livello individuale offre diversi vantaggi analitici. In primo luogo, consente di mappare con precisione la variabilità interindividuale nei processi cognitivi sottostanti l'aggiornamento degli obiettivi. In secondo luogo, consente di identificare profili comportamentali distinti, come, ad esempio, soggetti altamente reattivi al feedback contrapposti ad altri che mostrano un adattamento più contenuto. Infine, questo modello evita l'assunzione, spesso irrealistica, che tutti i partecipanti rispondano agli stimoli ambientali in modo identico e uniforme.
 
-Questo approccio consente di:
-
-- mappare la variabilità interindividuale nei processi di aggiornamento degli obiettivi;
-- identificare profili comportamentali distinti (es. soggetti molto reattivi al feedback vs. poco adattivi);
-- evitare l'assunzione – spesso irrealistica – che tutti i partecipanti rispondano allo stesso modo.
-
-Tuttavia, il modello a livello individuale non incorpora alcun meccanismo di "condivisione dell'informazione" tra i soggettii, ma ogni partecipante viene modellato in modo indipendente dagli altri. Questa caratteristica lo distingue dal modello gerarchico (o multilevel), in cui i parametri individuali sono considerati provenienti da una distribuzione di gruppo, il che migliora la robustezza delle stime, soprattutto quando i dati sono limitati o rumorosi.
-
+Tuttavia, è necessario notare che il modello a livello individuale, nella sua forma pura, non incorpora alcun meccanismo di "condivisione delle informazioni" tra i soggetti. Ogni partecipante viene modellato in modo completamente indipendente dagli altri. È proprio questa caratteristica a distinguerlo dal modello gerarchico (o *multilevel*), nel quale i parametri individuali sono concettualizzati come provenienti da una distribuzione di gruppo sovraordinata. Questa struttura gerarchica, che verrà esaminata in seguito, migliora notevolmente la robustezza e l'affidabilità delle stime, soprattutto quando si lavora con serie di dati limitate o particolarmente rumorose.
 
 ### Preparazione dei dati
 
@@ -79,6 +93,12 @@ str(dat)
 ```{r}
 table(dat$subject)  # restituisce il numero di trial per soggetto
 ```
+
+::: {.callout-caution title="Standardizzazione: cosa implica"}
+- Z-score su *goal* e *performance* allinea le scale ai **prior** (Normal(0,1)).
+- Interpretazione: $\beta$ ≈ spostamento medio per trial in unità di SD; $\alpha$ ≈ frazione di “errore” corretta per trial.
+- Non mischiare scaling per sottogruppi se poi confronti condizioni: usa **un’unica scala globale**.
+:::
 
 ```{r}
 # 1) Ordina per soggetto e trial
@@ -107,7 +127,6 @@ stan_data <- list(
 
 str(stan_data)
 ```
-
 
 ### Definizione del modello Stan
 
@@ -166,6 +185,8 @@ generated quantities {
 }
 "
 ```
+
+**Intuizione**: a ogni trial, il soggetto confronta la propria prestazione con l'obiettivo corrente. Il parametro $\alpha_i$ regola l'entità della correzione verso la prestazione, mentre $\beta_i$ spinge l'obiettivo verso l'alto o verso il basso, indipendentemente dall'errore. Se $\alpha_i$ è prossimo a 0, il soggetto è inerte; se è prossimo a 1, il soggetto è aggressivo; se $\beta_i$ è maggiore di 0, il soggetto è ambizioso; se è minore di 0, il soggetto è in fase di de-escalation.
 
 Questo modello presuppone che i dati siano *ordinati per soggetto e per trial*, altrimenti la dinamica `i - 1` non corrisponde al trial precedente dello stesso soggetto. 
 
@@ -254,7 +275,11 @@ standraws |>
   print()
 ```
 
-Diagnostica rapida (Rhat ed ESS): 
+**Checklist rapida**
+
+- R-hat ≤ 1.01 e ESS > 400? ✓
+- Traceplot senza “stallo”? ✓
+- Posterior di $\sigma$ non schiacciata verso 0? ✓
 
 ```{r}
 # Se qualche Rhat > 1.01 o ESS basso, considerare run più lunghi o reparametrizzazioni
@@ -296,7 +321,6 @@ plot_person_alpha <- ggplot(data = CIs_person) +
   geom_point(aes(y = alpha_order, x = alpha_mean)) +
   geom_errorbar(
     aes(y = alpha_order, xmin = alpha_lower, xmax = alpha_upper),
-    color = "red",
     orientation = "y"
   ) +
   labs(x = expression(alpha), y = "Subject")
@@ -314,7 +338,6 @@ plot_person_beta <- ggplot(data = CIs_person) +
   geom_point(aes(y = beta_order, x = beta_mean)) +
   geom_errorbar(
     aes(y = beta_order, xmin = beta_lower, xmax = beta_upper),
-    color = "red",
     orientation = "y"
   ) +
   labs(x = expression(beta), y = "Subject")
@@ -332,11 +355,11 @@ plot_person_alphabeta <- ggplot(data = CIs_person) +
   geom_point(aes(x = alpha_mean, y = beta_mean)) +
   geom_errorbar(
     aes(x = alpha_mean, ymin = beta_lower, ymax = beta_upper),
-    color = "red", alpha = 0.25
+    alpha = 0.25
   ) +
   geom_errorbar(
     aes(y = beta_mean, xmin = alpha_lower, xmax = alpha_upper),
-    color = "red", alpha = 0.25,
+    alpha = 0.25,
     orientation = "y"
   ) +
   labs(x = expression(alpha), y = expression(beta))
@@ -366,21 +389,30 @@ In sintesi:
 * il modello *person-level* mostra che i partecipanti non solo differiscono nel grado di apprendimento dal feedback ($\alpha$), ma anche nella direzione e nell’intensità della deriva motivazionale ($\beta$);
 * questa eterogeneità costituisce un’informazione preziosa per comprendere i profili comportamentali individuali, impossibile da cogliere con un modello che assume parametri omogenei per tutto il campione.
 
-
 ## Modello gerarchico
 
-Stimare i parametri per ogni partecipante separatamente (come nel modello a livello individuale) permette di rappresentare le differenze individuali, ma presenta un limite cruciale: le stime rimangono isolate. Analizzare i dati "persona per persona" equivale a condurre un'analisi indipendente per ciascun soggetto, senza "riutilizzare" le informazioni presenti negli altri individui. Ciò riduce il potere statistico, aumenta la variabilità delle stime quando i dati per soggetto sono pochi e rende più difficile trarre conclusioni a livello di popolazione.
+Il *modello a livello individuale* (*person-level*) stima parametri distinti $(\alpha_i, \beta_i)$ per ogni partecipante $i$. In questa formulazione, ogni individuo possiede il proprio tasso di apprendimento $\alpha_i$ e la propria deriva motivazionale $\beta_i$, consentendo di mappare la variabilità inter-individuale nei processi di aggiornamento degli obiettivi e di identificare profili comportamentali distinti. Il parametro $\sigma$, che cattura la variabilità residua (rumore decisionale), rimane comune a tutti i soggetti in questa versione di base (estendibile a varianze soggetto-specifiche quando necessario).
 
-In molti contesti, però, l'interesse del ricercatore non è solo quello di descrivere le differenze tra gli individui, ma anche di cogliere le regolarità comuni alla popolazione. Per questo motivo, i modelli gerarchici bayesiani (o multilevel) offrono una soluzione particolarmente efficace (Turner et al., 2013; Vincent, 2016; Kruschke & Vanpaemel, 2015).
+Sebbene la stima separata dei parametri per ogni partecipante rappresenti un passo avanti nel riconoscere le differenze individuali, questo approccio presenta un limite cruciale: le stime restano *concettualmente e statisticamente isolate*. Analizzare i dati “soggetto per soggetto” equivale a condurre una serie di analisi indipendenti, senza riutilizzare l’informazione presente nel resto del campione.
 
-L’idea di fondo è semplice:
+Questa frammentazione ha tre conseguenze sfavorevoli:
 
-* i parametri individuali (es. $\alpha_s, \beta_s$) sono trattati come *variabili casuali*, non come quantità del tutto indipendenti;
-* ciascuno di essi è estratto da una distribuzione a livello di popolazione, descritta da iper-parametri ($\alpha_{\text{mean}}, \alpha_{\text{sd}}$, ecc.);
-* in questo modo, le stime individuali sono “informate” sia dai dati del singolo soggetto sia dalla tendenza generale osservata nel campione (Lewandowsky & Farrell, 2011).
+1. **Riduce il potere statistico**, perché ogni stima usa solo una frazione dei dati totali.
+2. **Aumenta la variabilità delle stime**, soprattutto quando il numero di osservazioni per soggetto è esiguo.
+3. **Complica la generalizzazione a livello di popolazione**, rendendo meno solide le conclusioni aggregate.
 
-Il risultato è una *regolarizzazione*: i valori estremi vengono attenuati verso la media di popolazione (*shrinkage*), riducendo il rischio che stime instabili o rumorose abbiano troppo peso. Si ottengono così inferenze più robuste e interpretabili, specialmente in campioni piccoli o con dati per soggetto limitati (Boehm et al., 2018; Rouder & Lu, 2005).
+Un sintomo tipico è la presenza, per molti soggetti, di *intervalli di credibilità molto ampi* o di *posterior multi-modali* su $\alpha_i$ e/o $\beta_i$: segnali di informazione locale insufficiente e, talvolta, di *non-identificabilità* in specifiche regioni dello spazio dei parametri.
 
+È in questo contesto che i *modelli gerarchici* mostrano il loro valore, “prestando” informazione a livello di popolazione per **regolarizzare** le stime individuali ed evitare valori estremi non supportati dai dati. I modelli gerarchici bayesiani (o *multilevel*) *concettualizzano* i parametri individuali non come entità indipendenti, ma come realizzazioni di una **distribuzione di gruppo** sovraordinata. In pratica, si introduce un **pooling parziale**: i parametri soggetto-specifici vengono tirati verso la tendenza di popolazione nella misura in cui i loro dati sono poco informativi.
+
+Formalmente,
+$$
+\alpha_i \sim \mathcal{N}(\mu_\alpha,\ \tau_\alpha^2),\qquad
+\beta_i \sim \mathcal{N}(\mu_\beta,\ \tau_\beta^2),
+$$
+dove $(\mu_\alpha,\tau_\alpha)$ e $(\mu_\beta,\tau_\beta)$ sono *iper-parametri* che descrivono la popolazione. Questa struttura consente di bilanciare in modo ottimale *idiosincrasie individuali* e *regolarità aggregate* (Kruschke & Vanpaemel, 2015; Turner et al., 2013; Vincent, 2016). Il risultato è una *regolarizzazione*: le stime estreme vengono attenuate (*shrinkage*) verso la media di popolazione, riducendo il peso di stime instabili o rumorose e producendo inferenze più *robuste* e *interpretabili*, specialmente con campioni piccoli o pochi trial per soggetto (Boehm et al., 2018; Rouder & Lu, 2005).
+
+> *Intuizione*: più i dati del soggetto $i$ sono informativi, meno la stima di $(\alpha_i,\beta_i)$ viene “tirata” verso $(\mu_\alpha,\mu_\beta)$; con dati scarsi/rumorosi, lo shrinkage aumenta e protegge dall’*overfitting*.
 
 ### Definizione del modello Stan
 
@@ -458,6 +490,15 @@ generated quantities {
 "
 ```
 
+::: {.callout-note collapse=true title="Parametrizzazione tramite tanh per il tasso di apprendimento"}
+La scelta di modellare il tasso di apprendimento $\alpha$ mediante una trasformazione "tanh" (iperbolica tangente) è motivata da considerazioni sia teoriche che pratiche.
+
+Dal punto di vista del modello dinamico, la stabilità del processo di aggiornamento ricorsivo richiede che il parametro $\alpha$ si trovi nell'intervallo (0, 2). Tuttavia, quando si lavora con dati standardizzati, pratica comune per migliorare la convergenza degli algoritmi, è preferibile contenere $\alpha$ in un intervallo più ristretto, tipicamente $(-1, 1),$ al fine di evitare aggiornamenti eccessivi che potrebbero destabilizzare le stime.
+
+La funzione tanh fornisce una soluzione elegante a questo requisito, mappando in modo continuo e differenziabile qualsiasi valore reale (ad esempio, il valore di un parametro latente non vincolato) nell'intervallo (-1, 1). Il fattore moltiplicativo di 0.95 applicato all'output di tanh (cioè $\alpha = 0.95 \cdot \text{tanh}(\cdot)$) introduce un ulteriore margine di sicurezza numerica, ritirandosi leggermente dai limiti estremi dell'intervallo. Questa contrazione marginale si è rivelata efficace nel ridurre il verificarsi di divergenze durante il campionamento con la tecnica del Hamilton Monte Carlo (HMC), migliorando la stabilità e l'efficienza computazionale dell'inferenza.
+
+Questa parametrizzazione garantisce quindi che i valori di $\alpha$ siano sempre ben definiti e gestibili dal punto di vista numerico, facilitando un processo inferenziale robusto ed efficiente. 
+:::
 
 ### Differenza chiave rispetto al modello precedente
 
@@ -497,7 +538,6 @@ fit2 <- stanmod$sample(
   max_treedepth = 15
 )
 ```
-
 
 ### Analisi dei risultati
 
@@ -547,7 +587,6 @@ plot_person_alpha <- ggplot(CIs_person) +
   geom_point(aes(y = alpha_order, x = alpha_mean)) +
   geom_errorbar(
     aes(y = alpha_order, xmin = alpha_lower, xmax = alpha_upper),
-    color = "red",
     orientation = "y"
   ) +
   labs(x = expression(alpha), y = "Soggetto")
@@ -557,7 +596,6 @@ plot_person_beta <- ggplot(CIs_person) +
   geom_point(aes(y = beta_order, x = beta_mean)) +
   geom_errorbar(
     aes(y = beta_order, xmin = beta_lower, xmax = beta_upper),
-    color = "red",
     orientation = "y"
   ) +
   labs(x = expression(beta), y = "Soggetto")
@@ -567,11 +605,11 @@ plot_person_alphabeta <- ggplot(CIs_person) +
   geom_point(aes(x = alpha_mean, y = beta_mean)) +
   geom_errorbar(
     aes(x = alpha_mean, ymin = beta_lower, ymax = beta_upper),
-    color = "red", alpha = 0.25
+    alpha = 0.25
   ) +
   geom_errorbar(
     aes(y = beta_mean, xmin = alpha_lower, xmax = alpha_upper),
-    color = "red", alpha = 0.25,
+    alpha = 0.25,
     orientation = "y"
   ) +
   labs(x = expression(alpha), y = expression(beta))
@@ -616,7 +654,6 @@ I grafici per $\alpha$ e $\beta$ mostrano chiaramente l’eterogeneità interind
 Rispetto a un modello puramente individuale, gli intervalli credibili delle stime soggettive risultano *meno dispersi e più regolari*. Questo fenomeno è noto come *shrinkage*: le stime dei singoli soggetti sono “attirate” verso la media della popolazione, riducendo l’impatto dei dati rumorosi o scarsi.
 
 Nel grafico bivariato, lo shrinkage si traduce in una distribuzione più compatta dei punti attorno al centro della distribuzione collettiva. L’effetto principale è una maggiore *robustezza* delle inferenze: le stime estreme vengono mitigate, la variabilità non plausibile è penalizzata e la capacità di generalizzare a nuovi dati risulta rafforzata (Boehm et al., 2018).
-
 
 ## Differenze tra gruppi
 
@@ -778,7 +815,6 @@ generated quantities {
 
 In sintesi, il modello permette di stimare non solo le differenze tra individui, ma anche *le differenze sistematiche tra condizioni sperimentali*.
 
-
 ### Compilazione ed esecuzione
 
 ```{r}
@@ -817,7 +853,6 @@ L’obiettivo è verificare se i parametri di popolazione *$\alpha$* (tasso di a
 3. stimiamo la media della differenza, il 95% CrI e la probabilità a posteriori che la differenza sia negativa;  
 4. visualizziamo i risultati per facilitarne l’interpretazione.  
 
-
 ##### Step 1. Etichette di condizione
 
 ```{r}
@@ -829,7 +864,6 @@ cond_labels <- dat %>%
 cond_labels
 # Esempio: c("approach", "avoidance")
 ```
-
 
 ##### Step 2. Contrasto su α (media per condizione)
 
@@ -870,7 +904,6 @@ delta_beta |>
     p_lt0  = mean(delta_beta_mean < 0)
   )
 ```
-
 
 ##### Step 4. Visualizzazione delle posterior
 

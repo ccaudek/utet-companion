@@ -2,14 +2,13 @@
 
 ## Introduzione {.unnumbered .unlisted}
 
-Nei capitoli precedenti abbiamo visto come utilizzare Stan per analizzare un problema familiare, quello delle proporzioni, introducendo l’odds ratio come primo esempio pratico. In questo capitolo allarghiamo l’orizzonte a un’altra classe di dati molto comune in psicologia: i conteggi.
+Nei capitoli precedenti abbiamo visto come utilizzare Stan per analizzare un problema familiare, quello delle proporzioni, introducendo l’odds ratio come primo esempio pratico. In questo capitolo, allargheremo il nostro orizzonte a un'altra classe di dati molto comune in psicologia: i conteggi.
 
-Molti fenomeni sperimentali e clinici si presentano sotto forma di conteggi. Pensiamo al numero di errori commessi in un compito di attenzione, al numero di risposte corrette in una sessione di apprendimento, o al numero di episodi sintomatici riportati in un diario clinico. In tutti questi casi, il modello probabilistico di riferimento è spesso la distribuzione di Poisson, che descrive il numero di eventi osservati in un dato intervallo di tempo o di prove, quando gli eventi hanno una probabilità media di verificarsi.
+Molti fenomeni sperimentali e clinici si presentano sotto forma di conteggi: pensiamo, ad esempio, al numero di errori commessi in un compito di attenzione, al numero di risposte corrette in una sessione di apprendimento o al numero di episodi sintomatici riportati in un diario clinico. Pensiamo, ad esempio, al numero di errori commessi in un compito di attenzione, al numero di risposte corrette in una sessione di apprendimento o al numero di episodi sintomatici riportati in un diario clinico. In tutti questi casi, il modello probabilistico di riferimento è spesso la distribuzione di Poisson che descrive il numero di eventi osservati in un dato intervallo di tempo o di prove quando la probabilità media di verificarsi di tali eventi è nota.
 
-Il modello di Poisson rappresenta quindi un banco di prova ideale per consolidare due aspetti fondamentali: da un lato, la generalità dell’inferenza bayesiana – la logica rimane la stessa, cambiano solo la forma della verosimiglianza e i parametri da stimare –; dall’altro, la potenza di Stan come strumento pratico per affrontare modelli che, pur essendo concettualmente semplici, diventano rapidamente complicati se implementati a mano.
+Il modello di Poisson rappresenta quindi un banco di prova ideale per consolidare due aspetti fondamentali: da un lato, la generalità dell'inferenza bayesiana, per cui la logica rimane la stessa, mentre cambiano la forma della verosimiglianza e i parametri da stimare; dall'altro, la potenza di Stan come strumento pratico per affrontare modelli che, pur essendo concettualmente semplici, diventano rapidamente complicati se implementati manualmente.
 
-In questo capitolo mostreremo come specificare e stimare un modello di Poisson in Stan, partendo da un esempio psicologico concreto. Questo ci consentirà di acquisire familiarità con un nuovo tipo di dati e di consolidare la logica bayesiana in un contesto diverso, preparandoci ad affrontare nei capitoli successivi modelli più articolati e multilivello.
-
+In questo capitolo mostreremo come specificare e stimare un modello di Poisson in Stan, partendo da un esempio concreto di ambito psicologico. Questo ci consentirà di acquisire familiarità con un nuovo tipo di dati e di consolidare la logica bayesiana in un contesto diverso, preparandoci ad affrontare, nei capitoli successivi, modelli più articolati e multilivello.
 
 ### Panoramica del capitolo {.unnumbered .unlisted}
 
@@ -51,12 +50,11 @@ conflicts_prefer(dplyr::count)
 ```
 :::
 
-
 ## Dal modello teorico al modello computazionale
 
-Quando raccogliamo dati in psicologia, non ci interessa solo descrivere quello che è accaduto nel nostro campione, ma soprattutto *stimare il processo che genera i dati nella popolazione*.
+Quando raccogliamo dati in psicologia, non ci interessa solo descrivere ciò che è accaduto nel nostro campione, ma soprattutto stimare il processo che genera i dati nella popolazione.
 
-Immaginiamo di osservare, in *otto finestre temporali di pari durata*, quante volte si verifica un certo evento psicologico o comportamentale. Per esempio, il numero di *compulsioni* in otto momenti della giornata, oppure il numero di *telefonate* ricevute in otto turni orari.
+Supponiamo di osservare, in otto finestre temporali di pari durata, quante volte si verifica un certo evento psicologico o comportamentale. Per esempio, il numero di compulsioni in otto momenti della giornata o il numero di telefonate ricevute in otto turni orari.
 
 I dati raccolti sono:
 
@@ -64,12 +62,11 @@ I dati raccolti sono:
 y <- c(2, 1, 3, 2, 2, 1, 1, 1)
 ```
 
-Abbiamo quindi $N = 8$ osservazioni. Dal campione potremmo calcolare una semplice media ($\bar y = 1.625$), ma questo ci dice solo *quanto spesso l’evento è avvenuto nei nostri dati*. La domanda più interessante è:
+Abbiamo quindi $N = 8$ osservazioni. Dal campione potremmo calcolare una semplice media ($\bar y = 1.625$), ma questo ci dice solo quanto spesso l'evento si è verificato nei nostri dati. La domanda più interessante è:
 
 > *qual è il tasso medio di occorrenza nella popolazione?*
 
 Chiamiamo questo tasso $\lambda$: il *numero medio di eventi attesi in una finestra temporale*.
-
 
 ### Perché serve un modello probabilistico?
 
@@ -77,8 +74,7 @@ I dati osservati sono solo un piccolo campione e possono variare da una raccolta
 Un modello probabilistico ci serve per due motivi principali:
 
 1. *Separare il segnale dal rumore*: capire quanto dell’andamento osservato è dovuto al caso e quanto riflette una regolarità della popolazione.
-2. *Quantificare l’incertezza*: non ci basta stimare $\lambda$, vogliamo anche dire quanto siamo sicuri (o incerti) di quella stima.
-
+2. *Quantificare l’incertezza*: non ci basta stimare $\lambda$, ma vogliamo anche esprimere il grado di certezza (o di incertezza) della stima.
 
 ### Il modello di Poisson
 
@@ -116,15 +112,14 @@ In tutti questi casi, il modello di Poisson ci aiuta a stimare il *tasso medio d
 
 ### La distribuzione a priori
 
-Nell’approccio bayesiano dobbiamo dichiarare che cosa riteniamo plausibile per $\lambda$ *prima di osservare i dati*. Per i modelli di Poisson la scelta naturale è la *distribuzione Gamma*. Ad esempio, una prior Gamma(9, 2) esprime l’idea che, prima di osservare i dati, ci aspettiamo circa 4–5 eventi per finestra, ma lasciamo spazio a una certa variabilità.
-
+Nell’approccio bayesiano dobbiamo dichiarare che cosa riteniamo plausibile per $\lambda$ *prima di osservare i dati*. Per i modelli di Poisson la scelta naturale è la *distribuzione Gamma*. Ad esempio, una distribuzione Gamma(9, 2) esprime l'idea che, prima di osservare i dati, ci si aspetti circa 4-5 eventi per finestra, lasciando comunque spazio a una certa variabilità.
 
 ### Perché usiamo Stan?
 
-Potremmo calcolare la distribuzione a posteriori anche con formule chiuse (qui la posterior è ancora una Gamma). Ma usiamo Stan per due motivi didattici fondamentali:
+Potremmo calcolare la distribuzione a posteriori anche con formule chiuse (in questo caso, la distribuzione a posteriori è ancora una Gamma). Tuttavia, utilizziamo Stan per due motivi didattici fondamentali:
 
-1. *Generalizzare*: nella pratica incontreremo modelli per cui non esiste una soluzione analitica semplice. Con Stan impariamo un workflow valido in tutti i casi.
-2. *Quantificare l’incertezza*: Stan ci fornisce direttamente campioni dalla distribuzione a posteriori, che possiamo usare per costruire intervalli credibili, fare previsioni, confrontare modelli, ecc.
+1. *Generalizzare*: nella pratica, ci troveremo di fronte a modelli per i quali non esiste una soluzione analitica semplice. Con Stan impariamo un flusso di lavoro valido in tutti i casi.
+2. *Quantificare l’incertezza*: Stan ci fornisce direttamente dei campioni dalla distribuzione a posteriori che possiamo usare per costruire degli intervalli di credibilità, fare delle previsioni, confrontare dei modelli, ecc.
 
 ::: {.callout-tip collapse=true title="Un caso semplice per allenarsi"}
 In questo esempio l’uso di Stan può sembrare eccessivo, perché sappiamo già che la posterior è una Gamma e potremmo calcolarla con una formula.  
@@ -558,16 +553,15 @@ cat("95% CrI: [", round(ci95[1], 2), ", ", round(ci95[2], 2), "]\n")
 
 La derivazione *analitica* e i risultati *MCMC* coincidono (entro l’errore Monte Carlo).
 
-
 ## Riflessioni conclusive
 
-L’esempio del modello di Poisson ci ha permesso di estendere l’inferenza bayesiana a un nuovo tipo di dati, mostrando la versatilità di Stan nel trattare situazioni diverse. Abbiamo visto che la logica rimane invariata: definiamo un prior, specifichiamo la verosimiglianza (in questo caso di Poisson) e otteniamo una distribuzione a posteriori che rappresenta la nostra incertezza sui parametri.
+L'esempio del modello di Poisson ha esteso l'applicazione dell'inferenza bayesiana a una nuova classe di dati, confermandone la versatilità operativa nell'ambiente Stan. Come nei casi precedenti, la logica di fondo rimane coerente: dopo la definizione di distribuzioni a priori e di una verosimiglianza (in questo caso, di Poisson), si perviene a una distribuzione a posteriori che quantifica l'incertezza residua sui parametri di interesse.
 
-Dal punto di vista applicativo, questo esempio è particolarmente rilevante per la ricerca psicologica. I dati di conteggio sono onnipresenti, e spesso la loro analisi viene ridotta a modelli frequentisti standardizzati. Con l’approccio bayesiano, invece, possiamo esplicitare le nostre assunzioni, incorporare conoscenze pregresse e comunicare l’incertezza in modo più trasparente.
+Dal punto di vista applicativo, questo esempio è particolarmente rilevante per la ricerca psicologica. I dati di conteggio sono onnipresenti e spesso la loro analisi viene ridotta a modelli frequentisti standardizzati. Con l'approccio bayesiano, invece, è possibile incorporare nel modello in modo trasparente le assunzioni teoriche e la conoscenza pregressa, offrendo una rappresentazione più sfumata dell'incertezza inferenziale.
 
-Il valore didattico di questo capitolo sta nel mostrare la continuità: ciò che abbiamo imparato con le proporzioni e l’odds ratio si applica senza sforzo concettuale anche a contesti diversi. Al tempo stesso, l’uso di Stan ci ha reso evidente che, anche per modelli semplici, il supporto di un PPL è indispensabile quando vogliamo scalare verso situazioni più complesse.
+Il valore didattico di questo capitolo risiede nella dimostrazione della coerenza dell'approccio metodologico bayesiano: quanto appreso riguardo alle proporzioni e all'odds ratio può essere applicato senza sforzo concettuale anche a contesti differenti. Allo stesso tempo, l’uso di Stan ci ha mostrato che, anche per modelli semplici, il supporto di un PPL è indispensabile quando si desidera affrontare situazioni più complesse.
 
-Nei prossimi capitoli faremo proprio questo passo: passeremo da modelli semplici e univariati a strutture più articolate e gerarchiche, scoprendo come l’approccio bayesiano ci permetta di affrontare in modo sistematico la complessità della ricerca psicologica contemporanea.
+Nei prossimi capitoli affronteremo proprio questo passaggio: passeremo da modelli semplici e univariati a strutture più complesse e gerarchiche, scoprendo come l'approccio bayesiano ci permetta di affrontare in modo sistematico la complessità della ricerca psicologica contemporanea.
 
 ::: {.callout-tip collapse=true title="Cosa abbiamo imparato?"}
 - Come tradurre un *modello teorico* di conteggio (Poisson con prior Gamma) in un modello Stan.  
