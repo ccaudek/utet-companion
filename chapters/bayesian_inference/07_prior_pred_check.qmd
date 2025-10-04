@@ -3,16 +3,16 @@
 ::: {.epigraph}
 > “The prior distribution expresses our beliefs, but its real meaning is revealed in the predictions it makes.”
 >
-> -- **George E. P. Box & George C. Tiao**, Bayesian Inference in Statistical Analysis (1973)
+> -- **George E. P. Box & George C. Tiao**, *Bayesian Inference in Statistical Analysis* (1973)
 :::
 
 ## Introduzione {.unnumbered .unlisted}
 
-Nei capitoli precedenti abbiamo mostrato che l’inferenza bayesiana nasce dall’integrazione fra ciò che sappiamo in partenza (i *prior*) e ciò che osserviamo nei dati (la *verosimiglianza*). Abbiamo anche discusso il bilanciamento tra assunzioni iniziali ed evidenza empirica, sottolineando che i *prior* non sono un dettaglio tecnico, bensì una componente essenziale del ragionamento statistico. Ne discende una domanda operativa: come valutare se i *prior* scelti sono ragionevoli?*
+Nei capitoli precedenti abbiamo dimostrato come l'inferenza bayesiana emerga dall'integrazione tra le conoscenze preliminari (i *prior*) e l'evidenza empirica (la verosimiglianza). Abbiamo inoltre analizzato il bilanciamento tra assunzioni iniziali e osservazioni, evidenziando come i *prior* costituiscano non un mero dettaglio tecnico, bensì una componente fondamentale del ragionamento statistico. Sorge quindi una domanda operativa: *come valutare l'appropriatezza dei prior selezionati?*
 
-Una risposta diretta è offerta dalle *verifiche predittive a priori* (*prior predictive checks*; @gelman2020bayesianworkflow). L’idea è lineare: se i *prior* rappresentano le nostre credenze *prima* di osservare i dati, possiamo usarli per *simulare esiti ipotetici* e chiederci se tali esiti risultano plausibili alla luce della conoscenza del dominio. Quando le simulazioni producono valori fisicamente impossibili, ordini di grandezza irrealistici o una variabilità inverosimile, i *prior* devono essere riconsiderati.
+Una risposta diretta è offerta dalle *verifiche predittive a priori* [*prior predictive checks*; @gelman2020bayesianworkflow]. Il concetto fondamentale è il seguente: se i *prior* rappresentano le nostre credenze *preliminari*, possiamo utilizzarli per *generare dati simulati* e valutare se tali risultati appaiano plausibili alla luce della conoscenza sostantiva del dominio di ricerca. Quando le simulazioni producono valori fisicamente impossibili, ordini di grandezza irrealistici o pattern di variabilità inverosimili, è necessario riconsiderare la specificazione dei *prior*.
 
-In questo capitolo introduciamo il concetto e la pratica delle verifiche predittive a priori, discutendo *che cosa sono*, *perché sono cruciali* per una modellazione coerente e *come implementarle* in modo sistematico, con esempi applicativi ed errori comuni da evitare.
+In questo capitolo ci proponiamo di definire sistematicamente il concetto di verifica predittiva a priori, di spiegarne la rilevanza per una modellazione statisticamente coerente, e di illustrarne l'implementazione pratica attraverso esempi applicativi, evidenziando al contempo gli errori metodologici più comuni da evitare.
 
 ### Panoramica del capitolo {.unnumbered .unlisted}
 
@@ -35,242 +35,206 @@ library(cmdstanr)
 ```
 :::
 
+## Che cos’è la distribuzione predittiva a priori (e perché è importante)
 
-## Che cos’è la Distribuzione Predittiva a Priori (e perché è importante)
+La *distribuzione predittiva a priori* rappresenta l'insieme delle previsioni generate dal nostro modello prima di qualsiasi osservazione empirica. Concettualmente, essa descrive i dati che ci aspetteremmo di osservare, considerando integralmente l'incertezza iniziale associata ai parametri del modello.
 
-La *distribuzione predittiva a priori* rappresenta le previsioni del nostro modello *prima* di aver osservato qualsiasi dato. In pratica, descrive quali dati ci aspetteremmo di vedere, tenendo conto di tutta l'incertezza iniziale sui parametri.
+### Significato concettuale
 
-### La definizione formale
+Questa distribuzione costituisce il ponte tra le assunzioni teoriche del modello e le loro implicazioni empiriche. Prima di raccogliere dati, possiamo utilizzare la distribuzione predittiva a priori per:
 
-Matematicamente, essa si ottiene "mediando" le previsioni condizionate ai parametri, $p(\tilde{y} \mid \theta)$, rispetto alla nostra distribuzione a priori $p(\theta)$ per quei parametri. Si calcola con il seguente integrale:
+* valutare la coerenza delle nostre credenze iniziali con la conoscenza sostantiva del dominio;
+* identificare previsioni irrealistiche o biologicamente impossibili;
+* comprendere le implicazioni delle scelte di modellazione.
+
+### Definizione formale
+
+Dal punto di vista matematico, la distribuzione predittiva a priori si ottiene *integrando* le previsioni condizionate ai parametri, $p(\tilde{y} \mid \theta)$, rispetto alla distribuzione a priori $p(\theta)$ assegnata a tali parametri. La formulazione completa è:
+
 $$
 p(\tilde{y}) = \int p(\tilde{y} \mid \theta) \, p(\theta) \, d\theta,
 $$ {#eq-prior-predictive-distribution}
 dove:
 
-- $\tilde{y}$ rappresenta un'osservazione nuova e non ancora osservata;
-- $\theta$ è il vettore dei parametri del modello;
-- $p(\theta)$ è la distribuzione a priori che assegnamo a $\theta$.
+- $\tilde{y}$ rappresenta un'osservazione futura non ancora osservata,
+- $\theta$ indica il vettore dei parametri del modello,
+- $p(\theta)$ è la distribuzione a priori assegnata a $\theta$,
+- $p(\tilde{y} \mid \theta)$ è la verosimiglianza per i dati futuri.
 
-### Un'interpretazione intuitiva
+Questa integrazione tiene conto di tutta l'incertezza parametrica, producendo una distribuzione marginale che riflette sia la variabilità intrinseca del processo generativo dei dati che l'incertezza epistemica sui parametri.
 
-L'@eq-prior-predictive-distribution può essere letta come un *valore atteso*:
-$$
-p(\tilde{y}) = \mathbb{E}_{p(\theta)} \left[ \, p(\tilde{y} \mid \theta) \, \right].
-$$
-Questo ci dice una cosa fondamentale: *non stiamo facendo la media di singoli valori, ma di intere distribuzioni*. Il risultato è una *distribuzione di mistura* (*mixture distribution*), in cui ogni possibile configurazione dei parametri $\theta$ contribuisce a formare la previsione finale in proporzione alla sua plausibilità a priori.
+L'importanza di questo strumento risiede nella sua capacità di rendere esplicite le implicazioni delle nostre scelte a priori, fornendo così un fondamento metodologico  per il *prior predictive check*.
+
+### Intuizione attraverso un esperimento mentale
+
+Un modo efficace per *comprendere intuitivamente* l'@eq-prior-predictive-distribution consiste nell'interpretare la *distribuzione predittiva a priori* come una *media ponderata di previsioni*, in cui i pesi non derivano dai dati osservati (*posterior*), ma *dalle nostre credenze iniziali* (*prior*).
+
+**Esperimento mentale (modello beta-binomiale).**
+Si consideri una griglia di valori possibili per $\theta$ (ad esempio 0, 0.01, ..., 0.99, 1). Per *ciascun* valore $\theta'$:
+
+1. Si costruisce la *distribuzione predittiva condizionata* di $\tilde y$ (da 0 a $n_{\text{new}}$) utilizzando la distribuzione binomiale con parametro $\theta'$:
+   $$
+   p(\tilde y \mid \theta') = \binom{n_{\text{new}}}{\tilde y} (\theta')^{\tilde y} (1 - \theta')^{n_{\text{new}} - \tilde y};
+   $$
+
+2. Si assegna a questa distribuzione un *peso* pari alla plausibilità *a priori* di $\theta'$, cioè $p(\theta')$.
+   Se il *prior* concentra massa attorno a $\theta' \approx 0.7$, quella distribuzione avrà maggiore influenza; se invece il *prior* assegna scarsa densità a $\theta' \approx 0.1$, la corrispondente distribuzione avrà minore peso;
+
+3. Si *sovrappongono e sommano* (secondo i pesi definiti dal *prior*) le probabilità associate a ciascun valore di $\tilde y$ su tutta la griglia di $\theta$.
+   La *probabilità finale* per $\tilde y = k$ corrisponde alla media ponderata delle probabilità $p(\tilde y = k \mid \theta')$ generate da tutti i valori $\theta'$.
+
+Il risultato di questa integrazione ponderata *coincide* con la distribuzione predittiva a priori $p(\tilde y)$. In altri termini:
+
+> ciascun valore $\theta$ "propone" una previsione per $\tilde y$; il *prior* determina *quanto peso attribuire* a ciascuna di queste previsioni.
+
+**Confronto con la distribuzione predittiva *a posteriori*.**
+La struttura formale è identica (media di distribuzioni condizionate), ma *i pesi differiscono*:
+
+* Nella *distribuzione predittiva a posteriori*, i pesi sono $p(\theta \mid y)$, quindi *informati dai dati* osservati;
+* Nella *distribuzione predittiva a priori*, i pesi sono $p(\theta)$, quindi *riflettono esclusivamente le credenze iniziali*, prima di osservare qualsiasi evidenza empirica.
+
+Ne consegue che, a parità di modello di verosimiglianza, $p(\tilde y)$ cattura *esclusivamente* quanto reso plausibile dal *prior*: se il *prior* è molto disperso, la distribuzione predittiva a priori risulterà tipicamente *più variegata* e con *code più pesanti*; se il *prior* è informativo in modo sostanziale, la predittiva si *concentrerà* sugli esiti coerenti con tale conoscenza preliminare.
+
+::: {.callout-tip title="Esempio numerico con $n_{\text{new}} = 10$ (modello beta-binomiale)"}
+
+* *Prior "vago"* $p \sim \mathrm{Beta}(2,2)$: $\mathbb E[p] = 0.5$, ma con massa significativa anche vicino a 0 e 1 → la distribuzione predittiva assegna *probabilità non trascurabili* a risultati estremi come 0/10 e 10/10.
+* *Prior informativo* $p \sim \mathrm{Beta}(10,3)$: $\mathbb E[p] \approx 0.77$, con varianza ridotta → la distribuzione predittiva concentra la massa probabilistica su 6-9 successi; gli esiti estremi diventano *estremamente improbabili*.
+:::
+
+**Messaggio fondamentale.**
+La distribuzione predittiva a priori *non corrisponde* alla distribuzione condizionata a un singolo valore di $\theta$, ma rappresenta la *media ponderata* (secondo il *prior*) di *tutte* le possibili previsioni condizionate. Quando disponiamo di informazioni preliminari limitate (*prior* ampi), le nostre previsioni *prima di osservare i dati* devono necessariamente essere *più caute e disperse*; quando le conoscenze sono sostanziali (*prior* informativi), le previsioni possono essere *più focalizzate*. Questa intuizione costituisce la base concettuale del *prior predictive check*: verificare che quanto implicato dal *prior* riguardo ai dati sia *plausibile nel dominio di applicazione*.
 
 ### Perché è cruciale
 
-- è la prima verifica di coerenza tra prior e verosimiglianza: mostra quali dati il modello reputa plausibili prima di osservare qualsiasi evidenza;
-Rende operativa la conoscenza del dominio: vincoli (segno, intervallo, discreto/continuo), ordini di grandezza, forma (code, asimmetrie) devono emergere già da $p(\tilde y)$.
-Consente di evitare errori concettuali: I *prior* "vaghi" non sono neutrali: combinati con la verosimiglianza, possono generare predizioni assurde (valori impossibili o quasi deterministici).
+La distribuzione predittiva a priori costituisce il primo e più importante controllo di coerenza del modello, poiché:
 
-### Distinzione chiave: prior vs posterior predictive
+- **Verifica la compatibilità tra assunzioni iniziali e realtà empirica**: mostra quali tipi di dati il modello considera plausibili prima di qualsiasi osservazione, rivelando eventuali incongruenze tra le nostre credenze iniziali e la conoscenza del dominio;
+- **Rende operativa la conoscenza sostantiva**: tutti i vincoli teorici (segno, intervallo, natura discreta o continua), gli ordini di grandezza realistici e le caratteristiche distributive (peso delle code, asimmetrie) devono riflettersi già nelle previsioni generate a priori;
+- **Previene errori concettuali sistematici**: i *prior* spesso considerati "vaghi" o "non informativi" raramente sono neutrali; quando combinati con il modello di verosimiglianza, possono produrre previsioni irrealistiche, come valori fisicamente impossibili o pattern quasi deterministici privi di giustificazione teorica.
 
-* *Prior predictive* $p(\tilde y)$: si usa *prima* di guardare i dati. Domanda: *Le nostre assunzioni generano scenari plausibili?*
-* *Posterior predictive* $p(\tilde y \mid y)$: si usa *dopo* l’inferenza. Domanda: *Dato ciò che abbiamo appreso dai dati (y), il modello riproduce adeguatamente nuovi esiti?*
-  Mescolare le due fasi senza dichiararlo comporta un *doppio uso dell’informazione*.
+### Distinzione fondamentale: verifiche predittive a priori e a posteriori
 
-::: {.callout-note title="Nota tecnica: il caso coniugato Beta–Binomiale"}
-Se $Y\mid p \sim \text{Binomiale}(n,p)$ e $p \sim \text{Beta}(a,b)$, allora
+* **Verifica predittiva a priori** $p(\tilde y)$: si applica *prima* dell'analisi dei dati. Risponde alla domanda: *Le nostre assunzioni iniziali generano scenari plausibili alla luce della conoscenza del dominio?*
+* **Verifica predittiva a posteriori** $p(\tilde y \mid y)$: si utilizza *dopo* l'inferenza. Risponde alla domanda: *Alla luce di quanto appreso dai dati osservati $(y)$, il modello è in grado di riprodurre adeguatamente nuovi dati?*
+
+::: {.callout-note title="Approfondimento: il caso coniugato Beta-Binomiale"}
+Quando $Y\mid p \sim \text{Binomiale}(n,p)$ e $p \sim \text{Beta}(a,b)$, la distribuzione predittiva a priori assume forma analitica chiusa:
 $$
-\Pr(Y=y) \;=\; \binom{n}{y}\, \frac{B(y+a\,; n-y+b)}{B(a,b)}\,
-\qquad y=0,\dots,n,
+\Pr(Y=y) \;=\; \binom{n}{y}\, \frac{B(y+a, n-y+b)}{B(a,b)}\,, \qquad y=0,\dots,n,
 $$
-ossia una *Beta–Binomiale*. Questa forma chiusa rende evidente come i parametri (a,b) (pseudo-conteggi) spostino la massa predittiva verso estremi o valori centrali, rendendo immediata la diagnosi di *prior* troppo larghi o stretti.
+corrispondente a una distribuzione *Beta-Binomiale*. Questa formulazione esplicita rende evidente come i parametri $(a,b)$ (interpretabili come pseudo-conteggi) influenzino la distribuzione predittiva, concentrando la massa probabilistica verso valori estremi o centrali e facilitando l'identificazione di *prior* eccessivamente ampi o restrittivi.
 :::
 
-### Implicazioni pratiche (che cosa guardare in $p(\tilde y))$
+### Implicazioni per la pratica: cosa esaminare in $p(\tilde y)$
 
-* **Aderenza al dominio**: rispetto dei range e dei vincoli (es. probabilità in $[0,1]$; tempi > 0; conteggi interi).
-* **Ordini di grandezza**: medie e varianze realistiche per il fenomeno.
-* **Forma**: asimmetrie e *code* compatibili con la teoria/metodologia.
-* **Gerarchia**: *prior* sugli *iper-parametri* che generino individui plausibili (né tutti identici, né tutti estremi).
+- **Coerenza con il dominio applicativo**: rispetto di vincoli fondamentali (probabilità in $[0,1]$, tempi di reazione positivi, conteggi non negativi e interi);
+- **Realismo degli ordini di grandezza**: valori attesi e variabilità compatibili con l'esperienza pregressa e la letteratura di riferimento;
+- **Proprietà distributive appropriate**: asimmetrie e comportamento delle code coerenti con la teoria sottostante e le caratteristiche del fenomeno;
+- **Coerenza nelle strutture gerarchiche**: *prior* sugli iperparametri che generino previsioni realistiche a livello individuale, evitando sia l'eccessiva omogeneità che la variabilità irrealistica.
 
-::: {.callout-tip title="Regola pratica"}
-Se $p(\tilde y)$ assegna *molta massa* a regioni impossibili o inverosimili, non sono “i dati” a essere strani: è la *specificazione bayesiana* (*prior*, scala, verosimiglianza) che va rivista.
+::: {.callout-important title="Principio fondamentale"}
+Se la distribuzione predittiva a priori $p(\tilde y)$ assegna probabilità non trascurabili a regioni dello spazio campionario impossibili o altamente improbabili, non sono "i dati" a essere problematici, ma la *specificazione del modello bayesiano* (*prior*, scala di misura, forma della verosimiglianza) che richiede revisione.
 :::
 
 ## Come si fa: una procedura in quattro passi
 
-La verifica predittiva a priori traduce assunzioni sui *prior* in implicazioni osservabili. La procedura seguente rende esplici­te le scelte e favorisce iterazioni trasparenti.
+Questa procedura vi guiderà nel tradurre le vostre ipotesi iniziali (i *prior*) in previsioni concrete sui dati, permettendovi di verificarne la plausibilità *prima* di analizzare i dati reali.
 
-### Specificare i *prior* *sulla scala appropriata*
+### 1. Scegliere i *prior* sulla scala giusta
 
-**Obiettivo.** Allineare *supporto* e *ordine di grandezza* dei parametri al fenomeno studiato.
-**Cosa fare.**
+**Obiettivo:** Assicurarsi che i *prior* riflettano ciò che già sappiamo sul fenomeno.
 
-* Lavorare, quando possibile, sulla *scala dei dati* (o standardizzare con criterio); usare funzioni di collegamento (logit, log) per rispettare vincoli naturali.
-* Imporre *prior* coerenti col *supporto*: half-distribuzioni per varianze/deviazioni standard; Beta per probabilità; Gamma/Exponential per tassi.
-* In presenza di confronti tra gruppi/condizioni, preferire *scala globale unica* per evitare artefatti.
-  **Da evitare.** “Vaghezza” indiscriminata (scale immense) o *prior* troppo concentrate che pre-determinano gli esiti.
+**Cosa fare:**
+- Usare *prior* che rispettino i vincoli naturali dei parametri (es. usare una distribuzione Beta per una probabilità, che deve essere tra 0 e 1).
+- Pensare all'ordine di grandezza atteso. Se state modellando un tempo di reazione, il *prior* per la media dovrebbe essere centrato su un valore realistico (es. 500 ms, non 5 secondi o 5 millisecondi).
 
-### Simulare dalla predittiva a priori $p(\tilde y)$
+**Da evitare:**
+- *Prior* "enormi" che ammettono valori fisicamente impossibili (es. una probabilità di 150%).
+- *Prior* troppo "stretti" che forzano il modello verso un risultato specifico senza una giustificazione solida.
 
-**Obiettivo.** Generare esiti ipotetici prima di guardare i dati reali.
-**Cosa fare.**
+### 2. Simulare dati ipotetici
 
-* Campionare $\theta^{(s)} \sim p(\theta)$, quindi $\tilde y^{(s)} \sim p(y\mid \theta^{(s)})$, per $s=1,\dots,S$ (tipicamente *500–2000* repliche).
-* Fissare il seme per *riproducibilità*; salvare quantità riassuntive e, se utile, repliche complete.
-  **Da evitare.** Controllare solo i parametri: le decisioni operative si prendono *sulla scala dei dati* $\tilde y$.
+**Obiettivo:** Generare dei "dati fittizi" basati solo sulle vostre ipotesi iniziali (i *prior*).
 
-### Definire **quantità diagnostiche** su scala dei dati
+**Cosa fare:**
+- Usare il computer per estrarre migliaia di valori campionari per i parametri (θ) dai vostri *prior*.
+- Per ogni set di parametri campionati, simulare un insieme di dati (ỹ) corrispondente.
+- Questo vi darà una collezione di migliaia di dataset ipotetici, che rappresentano ciò che il modello si aspetta di vedere *prima* di osservare i dati veri.
 
-**Obiettivo.** Valutare aderenza al dominio e realismo quantitativo.
-**Cosa guardare.**
+### 3. Controllare se i dati simulati sono realistici
 
-* **Vincoli**: range, segno, interezza (p.es. proporzioni in ([0,1]); RT > 0; conteggi interi).
-* **Ordini di grandezza**: medie/varianze plausibili, percentili attesi.
-* **Forma**: asimmetrie e *code* compatibili con teoria e misura.
-* **Gerarchia**: con *prior* su iper-parametri, gli “individui simulati” devono risultare plausibili (né tutti identici, né tutti estremi).
-  **Segnali di allarme.** Percentuali non trascurabili di valori impossibili, masse agli estremi non giustificate, varianze implausibili.
+**Obiettivo:** Valutare se i dati che avete simulato al passo 2 hanno senso per il vostro studio.
 
-### Confrontare con la conoscenza sostantiva e *ricalibrare*
+**Cosa guardare:**
+- I dati simulati rispettano le regole di base? (Es. le proporzioni sono tra 0 e 1? I conteggi sono numeri interi?).
+- L'ordine di grandezza è plausibile? (Es. se simulate punteggi a un test, sono vicini a 70/100 o a 7/100?).
+- La variabilità è realistica? (Es. i dati simulati sono tutti praticamente identici o mostrano una dispersione credibile?).
 
-**Obiettivo.** Correggere ciò che non è plausibile prima dell’analisi dei dati osservati.
-**Leve di correzione (sintesi).**
+**Segnali di allarme:**
+- Una percentuale notevole di valori impossibili (es. età negative).
+- La maggior parte dei dati simulati si concentra su valori estremi e implausibili.
 
-* **Estremi troppo frequenti** → restringere scale dei *prior* (o aumentare df in t-half), introdurre struttura gerarchica più informativa.
-* **Repliche “schiacciate”** → allargare le scale o usare code più pesanti (t-half con df più basse per (\sigma)).
-* **Probabilità quasi deterministiche in logistica** → ridurre la varianza dei coefficienti su scala logit (es. $\mathcal N(0,1)$ anziché $\mathcal N(0,2.5))$.
-* **Heterogeneity irrealistica in gerarchici** → rivedere *prior* su deviazioni tra-soggetto (iper-sd troppo grandi o troppo piccole).
-  Documentare sempre le modifiche (cosa, perché, effetto su $p(\tilde y))$.
+### 4. Correggere il modello se necessario
 
-::: {.callout-tip title="Domande guida (check rapido)"}
-* Le repliche rispettano **unità e vincoli fisici**?
-* L’**ordine di grandezza** è realistico?
-* Le **code** sono coerenti con teoria e misura?
-* In gerarchico: gli individui simulati sono **plausibili**?
+**Obiettivo:** Migliorare le vostre ipotesi iniziali se le simulazioni non sono realistiche.
+
+**Cosa fare:**
+- Se le simulazioni mostrano troppi valori estremi, rendete i *prior* più informativi, in modo da "focalizzare" le previsioni su un intervallo più plausibile.
+- Se le simulazioni sono tutte molto simili e "piatte", allargate leggermente i *prior* per permettere una variabilità più realistica.
+- **Documentate sempre** ogni modifica e il motivo per cui l'avete fatta.
+
+::: {.callout-tip title="Domande per un controllo rapido"}
+- I dati simulati potrebbero esistere nel mondo reale?
+- Assomigliano, per ordine di grandezza, a dati che ci si aspetterebbe di raccogliere?
+- C'è una variabilità credibile, o sono tutti troppo uguali o troppo diversi?
 :::
 
-### Esempi rapidi (intuizione)
+### Esempi per fissare le idee
 
-Gli esempi seguenti mostrano come scelte diverse dei *prior* si traducano in *implicazioni osservabili* nella predittiva a priori $p(\tilde y)$.
+#### Esempio 1: Prevedere il successo in un test
 
-#### Bernoulli/Binomiale (proporzione di successi)
+**Scenario:** Vogliamo modellare la probabilità di successo in un test di 10 domande.
 
-*Idea.* Con $Y\mid p \sim \mathrm{Binom}(n,p)$ e $p\sim \mathrm{Beta}(a,b)$, la predittiva a priori è *Beta–Binomiale*:
-$$
-\mathbb E[Y]=n,\frac{a}{a+b},\qquad
-\mathrm{Var}[Y]= n,\frac{ab}{(a+b)^2},\frac{a+b+n}{a+b+1},
-$$
-cioè una varianza *più ampia* della Binomiale con $p$ fissato (overdispersione).
+- **Prior "Troppo Vago":** `p ~ Beta(1, 1)`. Questo *prior* dice che qualsiasi probabilità di successo è ugualmente plausibile. Le simulazioni produrranno spesso punteggi estremi (0/10 o 10/10), che potrebbero non essere realistici.
+- **Prior "Ragionevole":** `p ~ Beta(5, 5)`. Questo *prior* è centrato su una probabilità di 0.5 (5 successi su 10) ma ammette una variazione plausibile. Le simulazioni mostreranno per lo più punteggi tra 3 e 7, che è un risultato molto più credibile.
 
-* **Prior “vaga”** (es. $\mathrm{Beta}(1,1)$ o $\mathrm{Beta}(2,2))$.
-  Concentra poca informazione: $p$ può cadere ovunque in $[0,1]$. Per $n$ piccoli (es. 10 item) ciò *gonfia* la massa predittiva agli estremi (0/10, 10/10). Utile solo se il dominio *ammette davvero* prestazioni quasi perfette o quasi nulle con una certa frequenza.
+**Morale:** Un *prior* vago può portare a previsioni assurde. È meglio usare una conoscenza di base per scegliere un *prior* più realistico.
 
-* **Prior informativa** (es. $\mathrm{Beta}(8,12)$).
-  $\mathbb E[p]\approx 0.40$, pseudo-conteggi $a{+}b=20$: la predittiva concentra la massa su punteggi intermedi (es. 3–7 su 10), riducendo gli estremi non giustificati.
+#### Esempio 2: Modellare i punteggi di un questionario
 
-**Caption suggerita (istogramma punteggi su 10).**
-*Distribuzione predittiva a priori dei punteggi $Y$ con $n{=}10$: la prior vaga assegna troppa massa agli estremi; la prior informativa concentra gli esiti in un range coerente con l’aspettativa sostantiva.*
+**Scenario:** Modelliamo i punteggi (standardizzati) di un questionario di personalità.
 
-**Micro-regola.** Per test a numero di item ridotto, *prior* uniformi/larghissime su $p$ *amplificano artificialmente* gli 0/10 e 10/10: preferire Beta moderatamente informative coerenti con il contesto.
+- **Prior "Troppo Stretto" per la variabilità:** `σ ~ Half-Normal(0, 0.1)`. Questo *prior* forza la deviazione standard a essere molto piccola. Le simulazioni produrranno dati con variabilità insufficiente, tutti molto ammassati attorno alla media.
+- **Prior "Robusto" per la variabilità:** `σ ~ Half-Student-t(3, 0, 0.5)`. Questo *prior* permette una gamma più ampia di variabilità realistiche senza esagerare.
 
-#### Normale su scala osservata (punteggi z o scale note)
+**Morale:** La scelta del *prior* per la variabilità ($\sigma$) è cruciale. Un *prior* troppo stretto può sottostimare la naturale variabilità dei dati.
 
-*Idea.* Con $Y\sim \mathcal N(\mu,\sigma)$, le scelte su $\mu$ e *soprattutto* su $\sigma$ determinano *range e forma* della predittiva.
+> **Messaggio Principale:** una *prior* efficace è quella che genera scenari plausibili, non perfetti. Se le simulazioni basate sui *prior* producono risultati inverosimili, questo è un segnale che le ipotesi iniziali devono essere riformulate.
 
-* **Prior su $\sigma$ troppo stretta** (es. $\sigma\sim \mathrm{half\mbox{-}Normal}(0,0.1)$ su dati z).
-  Repliche “schiacciate”: varianza predittiva irrealistica, rischio di falsare il posterior verso residui troppo piccoli.
+## Esempio concreto: un test a 10 domande
 
-* **Prior robusta su $\sigma$** (es. $\sigma \sim t^{+}(3,0,0.5))$.
-  Scala interpretabile e *code più pesanti*: consente variabilità realistica senza esplodere verso valori assurdi.
+Questo esempio mostra come le nostre scelte sui *prior* si traducano in previsioni concrete sui dati osservabili. L'idea fondamentale è semplice: *ogni prior sui parametri implica specifiche previsioni sui risultati che possiamo osservare*.
 
-**Caption suggerita (densità sovrapposte).**
-*Predittiva a priori di $Y$: con half-Normal(0,0.1) la variabilità è sottostimata; con $t^{+}(3,0,0.5)$ la dispersione è compatibile con dati z-standardizzati.*
-
-**Micro-regola.** Preferisci half-Student-t per $\sigma$ quando la scala naturale è incerta: è *più stabile* di half-Normal e riduce l’underdispersione a priori.
-
-> **Messaggio chiave.** In entrambi i casi, la domanda è: *i dati simulati da $p(\tilde y)$ “assomigliano” a ciò che ci aspettiamo nel contesto?* Se no, **ricalibrare i prior** (scala, forma, pseudo-conteggi) prima di guardare i dati osservati.
-
-::: {.callout-caution title="Checklist: errori comuni e criteri decisionali"}
-**Errori ricorrenti**
-
-* Tarare i *prior* *dopo* aver visto i dati senza dichiararlo → documentare ogni iterazione.
-* Controllare solo i *parametri* e non la *scala dei dati*: le decisioni si prendono su $\tilde y$, non su $\theta$.
-* *Prior* impropri o *troppo larghi* che generano valori impossibili: “vago” ≠ “neutro”.
-* Gerarchici senza controllo di scala: *iper-sd* troppo grandi (individui irrealistici) o troppo piccole (eterogeneità cancellata).
-* Ignorare i *predittori*: se i range sono noti, rifletterli nella generazione di  $\tilde y$.
-
-**Criteri pratici**
-
-* Se le repliche *a priori* violano spesso vincoli del dominio → *prior* *da rivedere* (scala/forma).
-* Se coprono bene il *plausibile* senza allargarsi inutilmente → *prior* *ragionevoli*.
-* Se sono *troppo strette* (repliche quasi indistinguibili) → rischio di imporre conclusioni → *allentare*.
-
-**Messaggio chiave**
-Le *prior predictive checks* sono il *primo banco di prova* del modello: trasformano assunzioni sui parametri in *implicazioni osservabili*. Solo *prior* che generano dati plausibili sostengono inferenze robuste e interpretabili.
-:::
-
-## Implementazione e valutazione del PPC
-
-Per verificare l’adeguatezza della *prior*, adottiamo un percorso sistematico:
-
-1. **Definizione del modello generativo.**
-   Specificare $p(y \mid \theta)$ e le eventuali funzioni di collegamento (logit, log, ecc.) coerenti con il dominio.
-
-2. **Specificazione della *prior*.**
-   Privilegiare *prior* debolmente informative sulla *scala naturale* del problema; per parametri con vincoli (es. deviazioni standard), usare distribuzioni a supporto corretto (half-normal, esponenziale, half-Student-t).
-
-3. **Simulazione di $p(\tilde y)$.**
-   Generare $\theta^{(s)} \sim p(\theta)$ e poi $\tilde y^{(s)} \sim p(y \mid \theta^{(s)})$, $s=1,\dots,S$; l’insieme ${\tilde y^{(s)}}$ approssima la predittiva a priori.
-
-4. **Validazione rispetto ai vincoli teorici.**
-
-   * **Aderenza al dominio** (range, segno, discreto/continuo).
-   * **Realismo quantitativo** (ordini di grandezza e variabilità).
-   * **Forma distributiva** (asimmetrie e code attese).
-
-::: {.callout-note collapse="true"}
-## Caso studio: risposte dicotomiche (beta–binomiale)
-
-Consideriamo la probabilità (p) di successo in un test psicometrico.
-
-* *Prior estrema* (Beta(0.1, 0.1)) implica prestazioni polarizzate: simulazioni con picchi vicini a 0% e 100%, spesso irrealistiche in contesti educativi.
-* *Prior bilanciata* (Beta(2, 2)) concentra simulazioni attorno a valori intermedi, più plausibili per popolazioni eterogenee.
-
-**Ricalibrazione.** Se >30% delle simulazioni cade in regioni estreme non giustificate dalla teoria, riconsiderare: (i) parametri della *prior* (es. Beta(1,1)), (ii) trasformazioni (es. logit), (iii) *prior* gerarchiche per catturare eterogeneità tra sottogruppi.
-
-**Nota epistemologica.** Formalizzare le ipotesi (scelta della *prior*), simularne le conseguenze e confrontarle con la conoscenza del dominio riduce il rischio di *prior* che sovradeterminano i risultati o producono artefatti.
-:::
-
-::: {.callout-note}
-**Regola pratica.** Una *prior* adeguata non deve essere “perfetta”, ma deve generare *scenari plausibili*. Se le simulazioni risultano sistematicamente lontane dalla realtà teorica, è la *specificazione del modello* che va ripensata — non i dati osservati.
-:::
-
-## Esempio: un test a 10 domande
-
-Questo esempio illustra l’idea chiave del *prior predictive check (PPC)*: una *prior sui parametri* (qui, la probabilità di risposta corretta) *implica* *predizioni sui punteggi osservabili*. Se la prior assegna troppa massa a esiti estremi (0/10 o 10/10) senza giustificazione, sta “spingendo” verso scenari poco plausibili.
-
-Consideriamo uno studente che affronta un test da 10 domande. Il numero di risposte corrette è
+Immaginiamo uno studente che affronta un test con 10 domande a scelta multipla. Il numero di risposte corrette segue una distribuzione binomiale:
 
 $$
 y \sim \text{Binomiale}(n=10,\; p),
 $$
-dove $p$ è la probabilità di rispondere correttamente a una singola domanda. La prior è su $p$; ciò che osserviamo, però, sono i punteggi $y$. Il PPC “propaga” l’incertezza su $p$ fino ai punteggi, generando la *distribuzione predittiva a priori*:
+dove $p$ rappresenta la probabilità di rispondere correttamente a una singola domanda. Anche se il nostro interesse principale è $p$, ciò che effettivamente osserviamo sono i punteggi $y$.
 
-$$
-p(y) \;=\; \int \underbrace{p(y \mid p)}_{\text{Binom}(10,p)} \;\underbrace{p(p)}_{\text{prior}} \, dp,
-$$
-che nel caso $p \sim \text{Beta}(a,b)$ è una *Beta–Binomiale*.
+### Due scenari a confronto
 
-### Scenario 1: prior debole (alta incertezza)
+#### Scenario 1: Prior debole (alta incertezza)
 
-Scegliamo una *prior* larga, ad es. $p \sim \text{Beta}(2,2)$.
+Supponiamo di sapere molto poco sugli studenti e di scegliere una *prior* poco informativa: $p \sim \text{Beta}(2,2)$.
 
-- Media: $\mathbb{E}[p] = \tfrac{2}{2+2} = 0.5$
-- Forza a priori (pseudo-conteggi): $a+b=4$ (2 “successi immaginari” + 2 “errori immaginari”)
-
-Questa prior favorisce valori centrali ma *non* esclude affatto $p$ vicino a 0 o 1, quindi produce più esiti estremi nei punteggi.
+- Probabilità media attesa: $\mathbb{E}[p] = 0.5$
+- Forza del *prior*: equivalente a 4 osservazioni "immaginarie" (2 successi + 2 insuccessi)
 
 ```{r}
-#| label: ppc-beta22
 #| message: false
 #| warning: false
 set.seed(1)
-
 n <- 10
 S <- 10000
 p_sim <- rbeta(S, 2, 2)
@@ -278,24 +242,28 @@ y_sim <- rbinom(S, size = n, prob = p_sim)
 
 tibble(y = y_sim) |>
   ggplot(aes(x = y)) +
-  geom_histogram(aes(y = after_stat(density)), bins = 11) +
-  labs(x = "Numero di risposte corrette su 10", y = "Densità")
+  geom_histogram(
+    aes(y = after_stat(density)), bins = 11, 
+    fill = modern_palette$blue,
+    color = modern_palette$white,
+    alpha = 0.8,
+    linewidth = 0.2) +
+  labs(x = "Numero di risposte corrette su 10", 
+       y = "Densità",
+       title = "Prior Beta(2,2): distribuzione molto dispersa") 
 ```
 
-**Lettura.** Il modello utilizza un *prior* eccessivamente permissivo, adatto a una popolazione di studenti molto eterogenea (che include sia individui con prestazioni quasi sempre perfette, sia altri quasi sempre insufficienti). Il risultato è una distribuzione predittiva che assegna probabilità irrealisticamente elevate agli estremi (0/10 e 10/10), un chiaro indicatore che il prior è troppo debole (ovvero, troppo diffuso).
 
-### Scenario 2: prior informativa (studenti preparati)
+**Interpretazione:** Questo prior è appropriato solo se riteniamo plausibile che nella popolazione ci siano molti studenti con prestazioni estreme (molti 0/10 o 10/10). In contesti educativi reali, questo è spesso irrealistico.
 
-Supponiamo ora che gli studenti siano mediamente ben preparati: $p \sim \text{Beta}(10,3)$.
+#### Scenario 2: Prior informativa (studenti preparati)
 
-* Media: $\mathbb{E}[p] \approx 0.77$
-* Forza a priori: $a+b=13$ (10 “successi immaginari”, 3 “errori immaginari”)
-* Varianza più contenuta (meno peso agli estremi)
+Supponiamo invece che gli studenti siano mediamente preparati: $p \sim \text{Beta}(10,3)$.
 
-Ci aspettiamo punteggi tra 6 e 9 risposte corrette.
+- Probabilità media attesa: $\mathbb{E}[p] \approx 0.77$
+- Forza del prior: equivalente a 13 osservazioni "immaginarie"
 
 ```{r}
-#| label: ppc-beta103
 #| message: false
 #| warning: false
 set.seed(2)
@@ -304,38 +272,45 @@ y_sim2 <- rbinom(S, size = n, prob = p_sim2)
 
 tibble(y = y_sim2) |>
   ggplot(aes(x = y)) +
-  geom_histogram(aes(y = after_stat(density)), bins = 11) +
-  labs(x = "Numero di risposte corrette su 10", y = "Densità")
+  geom_histogram(
+    aes(y = after_stat(density)), bins = 11, 
+    fill = modern_palette$blue,
+    color = modern_palette$white,
+    alpha = 0.8,
+    linewidth = 0.2
+  ) +
+  labs(x = "Numero di risposte corrette su 10", 
+       y = "Densità",
+       title = "Prior Beta(10,3): distribuzione più realistica")
 ```
 
-**Lettura.** Gli esiti molto bassi (0–3) diventano poco probabili; la massa si concentra su esiti coerenti con studenti preparati.
+**Interpretazione:** I punteghi si concentrano tra 6 e 9 risposte corrette, uno scenario molto più plausibile per studenti mediamente preparati.
 
-### Perché è utile?
+### Cosa abbiamo imparato?
 
-Il confronto mostra che la prior *non è un dettaglio tecnico*: traduce in probabilità ciò che riteniamo plausibile.
+Il confronto mostra chiaramente che *la scelta del prior non è un dettaglio tecnico* ma influenza direttamente le nostre previsioni:
 
-* Se la predittiva a priori genera esiti *irrealistici* (es. molti 0/10), la prior va rivista (più informativa, scala coerente, pseudo-conteggi ragionevoli).
-* Se la predittiva a priori è *in linea* con le aspettative, la prior è adeguata.
+- se le simulazioni producono troppi risultati estremi e implausibili, il prior è troppo "vago";
+- se le simulazioni sono in linea con le nostre aspettative, il prior è adeguato;
+- il *prior predictive check* ci permette di scoprire questi problemi *prima* di raccogliere i dati reali.
 
-Il *PPC* rende trasparente il legame tra assunzioni sul parametro $p$ e punteggi osservabili $y$, permettendo diagnosi *prima* di analizzare i dati reali.
+## Implementazione pratica con `brms`
 
-## Prior Predictive Check con `brms`
-
-Finora abbiamo eseguito le simulazioni per la *Prior Predictive Check* (PPC) utilizzando funzioni di base di R. Con `brms` è possibile ottenere lo stesso risultato in modo più diretto, semplicemente specificando l'opzione `sample_prior = "only"`. In questo modo, il modello non utilizza i dati osservati ma genera valori *esclusivamente a partire dalle distribuzioni a priori (prior)*.
+Nella pratica, possiamo automatizzare le simulazioni usando il pacchetto `brms`. L'opzione `sample_prior = "only"` genera dati esclusivamente dai prior, senza utilizzare i dati osservati.
 
 ```{r}
-#| label: brms-binomial-prior-only
 #| output: false
 n_studenti <- 50
 n_item <- 10
 
 dati_dummy <- tibble(
-  correct  = 0L,   # Valore segnaposto: necessario per la sintassi della formula
+  correct  = 0L,   # Valore segnaposto
   n_trials = n_item
 ) |> slice(rep(1, n_studenti))
 
+# Usiamo la prior approssimata per Beta(10,3) in scala logit
 priors <- c(
-  prior(normal(0, 1.5), class = "Intercept") # Prior sull'intercetta in scala logit
+  prior(normal(1.2, 0.5), class = "Intercept")
 )
 
 fit_prior_only <- brm(
@@ -343,581 +318,174 @@ fit_prior_only <- brm(
   data = dati_dummy,
   family = binomial(),
   prior = priors,
-  sample_prior = "only",  # <-- Simulazione prior predictive
+  sample_prior = "only",  # Simulazione prior predictive
   chains = 4, iter = 1000, cores = 4,
   backend = "cmdstanr", seed = 123
 )
 ```
 
+Usiamo la funzione `ppc_bars()`:
+
 ```{r}
-#| label: brms-binomial-prior-ppc
 yrep <- posterior_predict(fit_prior_only)
 ppc_bars(y = rep(0, n_studenti), yrep = yrep[1:200, ]) 
 ```
 
-**Interpretazione.**
-
-*   La distribuzione a priori Normal(0, 1.5) è specificata per l'intercetta del modello nella scala logit.
-*   Ciò implica che la probabilità sottostante di una risposta corretta, $p$, ha una distribuzione a priori il cui massimo della densità è compreso approssimativamente tra ~0.05 e ~0.95. Questa scelta esclude, in linea di principio, probabilità sistematiche estreme (vicine a 0 o a 1), pur mantenendo un'ampia variabilità di valori plausibili.
-*   Il grafico mostra le distribuzioni dei punteggi totali (da 0 a 10 su 10 item) che il modello considera plausibili *prima di aver osservato i dati reali* (distribuzione predittiva a priori).
-
-## Prior Predictive Check con *Stan*
-
-Con Stan è possibile eseguire la stessa analisi in modo ancora più esplicito: specifichiamo esclusivamente le distribuzioni a prior (*prior*), omettendo completamente la verosimiglianza (*likelihood*), e generiamo i dati simulati direttamente nel blocco `generated quantities`.
-Questo approccio permette di comprendere *cosa avviene a livello computazionale*.
+Costruiamo un diagramma simile a quello generato in precedenza:
 
 ```{r}
-#| label: write-stan-binom
+#| message: false
+#| warning: false
+
+# Estrai tutte le simulazioni
+yrep <- posterior_predict(fit_prior_only)
+
+# Converti in un dataframe per ggplot
+sim_data <- tibble(
+  y = as.vector(yrep)
+)
+
+# Crea l'istogramma
+ggplot(sim_data, aes(x = y)) +
+  geom_histogram(
+    aes(y = after_stat(density)), bins = 11, 
+    fill = modern_palette$blue,
+    color = modern_palette$white,
+    alpha = 0.8,
+    linewidth = 0.2
+  ) +
+  labs(
+    x = "Numero di risposte corrette su 10", 
+    y = "Densità",
+    title = "Distribuzione predittiva a priori con brms",
+    subtitle = "Prior normale(1.2, 0.5) in scala logit (approssimazione Beta(10,3))"
+  ) +
+  scale_x_continuous(breaks = 0:10) 
+```
+
+**Vantaggio:** Questo approccio è più efficiente e si integra direttamente con il workflow di analisi bayesiana.
+
+::: {.callout-note collapse=true title="Perché in `brms` i prior sono sulla scala logit"}
+In `brms`, i prior si specificano sui parametri del *predittore lineare*; con famiglia binomiale a *link logit*, l’intercetta $\alpha$ è definita sulla scala dei *log-odds* e la probabilità $p$ si ottiene via $p=\mathrm{logit}^{-1}(\alpha)$. Un prior Normale su $\alpha$ induce quindi un prior *logit-normale* su $p$, che *non coincide* con una Beta. Per riprodurre in modo *esatto* una $\mathrm{Beta}(a,b)$ su $p$ bisogna ricorrere a Stan; in `brms` si usa invece una *approssimazione* scegliendo $\alpha \sim \mathcal N(\mu,\sigma)$ con $\mu \approx \mathrm{logit}\big(\tfrac{a}{a+b}\big)$ e $\sigma$ tarata per ottenere una dispersione simile sulla scala di $p$. Nel nostro esempio, $\alpha \sim \mathcal N(1.2, 0.5)$ approssima bene $\mathrm{Beta}(10,3)$ e produce una predittiva a priori per $Y$ (su 10 item) con *picco intorno a 7–8*, coerente con lo scenario “studenti preparati”.
+:::
+
+## Approfondimento tecnico: implementazione in Stan
+
+Per comprendere cosa avviene "dietro le quinte", possiamo implementare il modello direttamente in Stan. Questo modello Stan campiona $p$ direttamente da Beta(10,3) (nessuna verosimiglianza) e, ad ogni draw, genera i punteggi binomiali per $N$ studenti con la stessa $p$ (come fa brms con un’unica intercetta globale per draw).
+
+```{r}
 binom_prior_ppc_stan <- '
 data {
-  int<lower=1> N;           // numero di studenti simulati
-  int<lower=1> n_items;     // numero di item per studente
+  int<lower=1> N;        // numero di righe (studenti)
+  int<lower=1> n_items;  // numero di item per studente
 }
 parameters {
-  real alpha;               // intercetta in scala logit
+  real<lower=0, upper=1> p;   // probabilità globale
 }
 model {
-  alpha ~ normal(0, 1.5);   // prior debolmente informativa
-  // Nessuna verosimiglianza specificata: modello basato solo sulle prior
+  p ~ beta(10, 3);            // prior esatto
+  // Nessuna likelihood: prior-only
 }
 generated quantities {
-  vector[N] p;              // probabilità individuali di successo
-  array[N] int y_rep;       // punteggi simulati (dati replicati)
+  array[N] int y_rep;         // punteggi replicati
   for (i in 1:N) {
-    p[i] = inv_logit(alpha);            // trasformazione da logit a probabilità
-    y_rep[i] = binomial_rng(n_items, p[i]); // simulazione dei punteggi binomiali
+    y_rep[i] = binomial_rng(n_items, p);
   }
 }
 '
-writeLines(binom_prior_ppc_stan, "binom_prior_ppc.stan")
 ```
 
 Compiliamo ed eseguiamo il modello:
 
 ```{r}
+mod <- cmdstan_model(
+  write_stan_file(binom_prior_ppc_stan),
+  compile = TRUE
+)
+```
+
+```{r}
 #| output: false
-mod_binom <- cmdstan_model("binom_prior_ppc.stan")
-fit_binom <- mod_binom$sample(
-  data = list(N = 100, n_items = 10),
+n_studenti <- 50
+n_item     <- 10
+
+fit_beta <- mod$sample(
+  data = list(N = n_studenti, n_items = n_item),
   chains = 4, iter_warmup = 500, iter_sampling = 1000,
   seed = 123, refresh = 0
 )
 ```
 
-Estrazione dei punteggi simulati e analisi della distribuzione delle medie:
+Questo codice mostra esplicitamente i tre passaggi fondamentali:
+
+1. campioniamo i parametri dai prior;
+2. trasformiamo nella scala delle probabilità;
+3. generiamo dati simulati.
 
 ```{r}
-draws <- fit_binom$draws(variables = "y_rep", format = "draws_matrix")
-y_rep <- as_draws_matrix(draws)
+#| message: false
+draws_mat <- fit_beta$draws("y_rep", format = "draws_matrix")
+y_rep_vec <- as.vector(as.matrix(draws_mat))  # pool draw x righe
 
-tibble(mu = rowMeans(y_rep)) |>
-  ggplot(aes(x = mu)) +
-  geom_histogram(bins = 30) +
-  labs(x = "Media delle risposte corrette (su 10 item)", 
-       y = "Frequenza")
-```
-
-### Interpretazione
-
-*   Ad ogni iterazione di campionamento, viene estratto un valore del parametro $\alpha$ dalla sua distribuzione a priori, Normal(0, 1.5).
-*   Questo valore viene convertito in una probabilità di successo $p$ applicando la funzione logistica inversa: $p = \text{inv\_logit}(\alpha)$.
-*   Utilizzando questa probabilità $p$, vengono simulati i punteggi di 100 studenti fittizi per una prova di 10 item, assumendo una distribuzione binomiale.
-*   L'istogramma risultante mostra la distribuzione campionaria della *media dei punteggi simulati* attraverso tutte le iterazioni.
-
-Questo processo mostra chiaramente *quali valori per la media del punteggio il modello considera plausibili sulla base esclusiva delle distribuzioni a priori specificate*. Se avessimo scelto una distribuzione a priori più informativa (ad esempio, Normal(2, 0.5) per il logit), la distribuzione dei punteggi medi si sarebbe concentrata verso valori più elevati (indicando un'aspettativa a priori di una maggior proporzione di risposte corrette).
-
-
-## Esempi di modelli più complessi
-
-I precedenti esempi si sono concentrati su modelli semplici, in particolare sul caso di una singola proporzione. Estendiamo ora l'analisi a modelli di maggiore complessità. L'obiettivo è illustrare come *diverse scelte delle distribuzioni precedenti (prior) per i parametri* si traducano in *diverse implicazioni predittive per i dati osservabili*. Consideriamo tre casi di studio:
-
-1.  **Modello gaussiano** (stima dell'intercetta e della varianza dei dati);
-2.  **Regressione lineare** (scala appropriata per i coefficienti e per la varianza residua);
-3.  **Regressione logistica** (interpretazione dei coefficienti nella scala logit e loro impatto sulle probabilità sottostanti).
-
-
-### Modello gaussiano semplice
-
-Assumiamo che il meccanismo generativo dei dati segua una distribuzione normale: $y \sim \mathcal{N}(\mu, \sigma)$.
-
-Domanda cruciale: *quali scelte delle distribuzioni precedenti per $\mu$ e $\sigma$ producono valori predittivi $y$ plausibili per la variabile psicologica in esame (ad esempio, punteggi compresi tra 0 e 100)?*
-
-```{r}
-#| label: gaussian-prior-ppc
-S <- 10000
-
-# Scenario A: prior molto larga
-mu_A    <- rnorm(S, 50, 50)        # media plausibile ma molto incerta
-sigma_A <- rexp(S, rate = 1/20)     # sigma ~ Exp(mean=20), molto larga
-yA      <- rnorm(S, mu_A, sigma_A)
-
-# Scenario B: prior più informativa
-mu_B    <- rnorm(S, 50, 10)
-sigma_B <- rexp(S, rate = 1/10)     # mean=10
-yB      <- rnorm(S, mu_B, sigma_B)
-
-bind_rows(
-  tibble(y = yA, scenario = "A: prior larghissima"),
-  tibble(y = yB, scenario = "B: prior informativa")
-) |>
-  ggplot(aes(x = y, fill = scenario)) +
-  geom_density(alpha = 0.35) +
-  labs(x = "y (es. punteggio 0–100)", y = "Densità")
-```
-
-**Interpretazione.** Se è noto che i punteggi della variabile di interesse sono compresi tra 0 e 100, lo Scenario A potrebbe generare una proporzione eccessiva di valori negativi o superiori a 100, indicando che le distribuzioni precedenti sono troppo poco informative e necessitano di essere ricalibrate (rendendole più informative sia per $\mu$ che per $\sigma$).
-
-**Implementazione in Stan:** modello solo con *prior* e `generated quantities`.
-
-```{r}
-#| label: write-stan-gaussian
-gauss_prior_ppc_stan <- '
-data {
-  int<lower=1> N;
-}
-parameters {
-  real mu;
-  real<lower=0> sigma;
-}
-model {
-  mu ~ normal(50, 10);
-  sigma ~ exponential(1.0/10); // mean 10
-}
-generated quantities {
-  vector[N] y_rep;
-  for (i in 1:N) {
-    y_rep[i] = normal_rng(mu, sigma);
-  }
-}
-'
-writeLines(gauss_prior_ppc_stan, "gauss_prior_ppc.stan")
-```
-
-```{r}
-#| output: false
-mod_gauss <- cmdstan_model("gauss_prior_ppc.stan")
-```
-
-
-```{r}
-#| label: run-stan-gaussian
-#| output: false
-fit_gauss <- mod_gauss$sample(
-  data = list(N = 200),
-  chains = 4, iter_warmup = 500, iter_sampling = 1000, seed = 123,
-  refresh = 0
-)
-```
-
-```{r}
-yrep_g <- fit_gauss$draws("y_rep", format = "draws_matrix")
-as_tibble(yrep_g) |>
-  pivot_longer(everything(), values_to = "y") |>
+tibble(y = y_rep_vec) |>
   ggplot(aes(x = y)) +
-  geom_density() 
+  geom_histogram(
+    aes(y = after_stat(density)), bins = 11, 
+    fill = modern_palette$blue,
+    color = modern_palette$white,
+    alpha = 0.8,
+    linewidth = 0.2
+    ) +
+  scale_x_continuous(breaks = 0:10) +
+  labs(
+    x = "Numero di risposte corrette su 10",
+    y = "Densità",
+    title = "Prior predictive con Stan",
+    subtitle = "Prior Beta(10,3)"
+  )
 ```
 
-
-
-### Regressione lineare
-
-Consideriamo il seguente modello generativo:
-
-$$
-y = \alpha + \beta x + \varepsilon, \qquad \varepsilon \sim \mathcal{N}(0,\sigma).
-$$
-
-#### Importanza della scelta delle distribuzioni precedenti
-
-Nell'ambito della regressione lineare, l'interpretazione del coefficiente $\beta$ dipende criticamente dalla scala della variabile predittrice $x$:
-
-* Se $x$ è *standardizzata* (media 0, deviazione standard 1), $\beta$ rappresenta la variazione attesa in $y$ associata a *un incremento di una deviazione standard* in $x$.
-* Ad esempio, specificare una distribuzione a priori $\beta \sim \mathcal{N}(0,1)$ equivale ad assumere che: *"effetti di modesta entità sono plausibili, mentre effetti superiori a 3 deviazioni standard sono estremamente rari"*.
-
-I controlli predittivi basati sulle distribuzioni a priori (prior predictive checks) consentono di rispondere a due interrogativi fondamentali:
-
-1. Le rette di regressione simulate generano valori di $y$ compatibili con la scala del fenomeno oggetto di studio?
-2. La dispersione residua intorno alla retta (determinata da $\sigma$) è realisticamente plausibile?
-
-Se la risposta a queste domande è negativa, è necessario rivedere le distribuzioni precedenti specificate per $\alpha$, $\beta$ e $\sigma$, o considerare una trasformazione appropriata della variabile $y$.
-
-#### Scenario C: Distribuzioni a priori eccessivamente diffuse
-
-In questo scenario specifichiamo varianze eccessivamente ampie per $\alpha$ e $\beta$.
-Il risultato: i valori simulati di $y$ risultano irrealistici (eccessivamente negativi o elevati rispetto alla scala empirica del costrutto).
+Oppure:
 
 ```{r}
-#| label: linear-prior-ppc
-S <- 10000
-x  <- runif(S, -2, 2)  # predittore standardizzato
+# Estrai in formato draws x N per ppc_bars
+vars <- paste0("y_rep[", 1:n_studenti, "]")
+yrep_mat <- posterior::as_draws_matrix(fit_beta$draws(variables = vars))
+yrep_mat <- as.matrix(yrep_mat)
 
-alpha_C <- rnorm(S, 0, 10)
-beta_C  <- rnorm(S, 0, 10)
-sigma_C <- rexp(S, rate = 1/5)  # media ~5
-yC      <- rnorm(S, alpha_C + beta_C * x, sigma_C)
+bayesplot::ppc_bars(y = rep(0, n_studenti), yrep = yrep_mat[1:200, ])
 ```
 
-**Interpretazione.** Distribuzioni precedenti eccessivamente diffuse per $\sigma$ e $\beta$ rendono probabilisticamente plausibili valori di $y$ privi di senso nel dominio applicativo. Questo non rappresenta un approccio "cauto" o "umile", ma piuttosto una specificazione incoerente con l'evidenza empirica disponibile.
+### Perché è importante?
 
-#### Scenario D: Distribuzioni a priori debolmente informative
+- **Trasparenza:** Mostriamo esplicitamente cosa implica il nostro prior.
+- **Prevenzione errori:** Identifichiamo problemi prima di analizzare i dati reali.
+- **Apprendimento:** Capiamo meglio il legame tra prior e previsioni.
 
-In questo scenario adottiamo distribuzioni precedenti centrate su zero ma con varianze moderate:
-
-$\alpha \sim \mathcal{N}(0,1)$ e $\beta \sim \mathcal{N}(0,1)$: effetti plausibili ma di entità contenuta
-$\sigma \sim \text{Exp}(1/2)$: valore medio atteso di 2, compatibile con la variabilità tipica di punteggi psicologici standardizzati
-
-```{r}
-alpha_D <- rnorm(S, 0, 1)
-beta_D  <- rnorm(S, 0, 1)
-sigma_D <- rexp(S, rate = 1/2)  # media ~2
-yD      <- rnorm(S, alpha_D + beta_D * x, sigma_D)
-
-bind_rows(
-  tibble(y = yC, scenario = "C: prior molto larga"),
-  tibble(y = yD, scenario = "D: prior W.I.")
-) |>
-  ggplot(aes(x = y, fill = scenario)) +
-  geom_density(alpha = 0.35) +
-  labs(x = "Valori simulati di y", y = "Densità")
-```
-
-**Interpretazione.** Con distribuzioni precedenti debolmente informative, la distribuzione di $y$ mantiene un'ampiezza plausibile. Al contrario, distribuzioni precedenti eccessivamente diffuse producono una variabilità irrealistica di $y$.
-
-
-#### Implementazione in Stan: simulazione esclusiva dalle distribuzioni a priori
-
-Per illustrare esplicitamente il concetto, implementiamo un modello Stan che *non incorpora dati osservati* ma simula esclusivamente dalle distribuzioni precedenti.
-
-```{r}
-#| label: write-stan-linear
-linear_prior_ppc_stan <- '
-data {
-  int<lower=1> N;
-  vector[N] x;
-}
-parameters {
-  real alpha;
-  real beta;
-  real<lower=0> sigma;
-}
-model {
-  alpha ~ normal(0, 1);
-  beta  ~ normal(0, 1);
-  sigma ~ exponential(1.0/2); // media 2
-}
-generated quantities {
-  vector[N] y_rep;
-  for (i in 1:N) {
-    y_rep[i] = normal_rng(alpha + beta * x[i], sigma);
-  }
-}
-'
-writeLines(linear_prior_ppc_stan, "linear_prior_ppc.stan")
-```
-
-Esecuzione della simulazione:
-
-```{r}
-#| output: false
-mod_lin <- cmdstan_model("linear_prior_ppc.stan")
-x_new   <- runif(200, -2, 2)
-
-fit_lin <- mod_lin$sample(
-  data = list(N = length(x_new), x = x_new),
-  chains = 4, iter_warmup = 500, iter_sampling = 1000, seed = 123,
-  refresh = 0
-)
-```
-
-Visualizzazione della distribuzione predittiva:
-
-```{r}
-yrep_l <- fit_lin$draws("y_rep", format = "draws_matrix")
-as_tibble(yrep_l) |>
-  pivot_longer(everything(), values_to = "y") |>
-  ggplot(aes(x = y)) +
-  geom_density() +
-  labs(x = "Valori simulati di y", y = "Densità")
-```
-
-#### Conclusioni
-
-- La scala delle distribuzioni precedenti specificate per $\alpha$, $\beta$ e $\sigma$ determina direttamente la distribuzione dei valori simulati di $y$.
-- Se i valori di $y$ simulati risultano al di fuori del dominio realistico (ad esempio, punteggi negativi o superiori al massimo teorico), le distribuzioni precedenti devono essere ricalibrate.
-- L'utilizzo di distribuzioni precedenti debolmente informative (centrate su zero con varianze moderate) produce simulazioni coerenti con il contesto psicologico di riferimento.
-
-
-### Regressione logistica
-
-Nella regressione logistica, il modello per un esito binario è specificato come:
-
-$$
-\text{logit}\, P(y=1 \mid x) = \alpha + \beta x .
-$$
-
-In questo framework, i parametri $\alpha$ e $\beta$ operano sulla *scala logit*, che non è direttamente interpretabile in termini di probabilità. È cruciale ricordare che la funzione logit è caratterizzata da una pendenza accentuata: differenze di 2-3 unità sulla scala logit corrispondono a variazioni estreme nelle probabilità sottostanti (da circa 0.1 a 0.9).
-
-#### Importanza della scelta delle distribuzioni a priori
-
-* Con predittori *standardizzati* (media 0, deviazione standard 1), una distribuzione a priori $\beta \sim \mathcal{N}(0,1)$ implica che effetti di moderata entità sono plausibili, mentre probabilità estreme (vicine a 0 o 1) rimangono poco probabili.
-* Al contrario, una distribuzione a priori $\beta \sim \mathcal{N}(0,2.5)$ consente valori sulla scala logit fino a ±5, che corrispondono a probabilità praticamente certe (0 o 1). Questo approccio rischia di incorporare nel modello assunzioni di certezza assoluta prima ancora di osservare i dati.
-
-Il controllo predittivo basato sulle distribuzioni a priori (PPC) permette di verificare se le probabilità implicite generate dalle specifiche scelte parametriche sono coerenti con le aspettative del dominio applicativo.
-
-#### Simulazioni in R
-
-```{r}
-#| label: logistic-prior-ppc
-S <- 10000
-x  <- rnorm(S, 0, 1)  # standardizzare è buona pratica
-
-# Scenario E: prior larga
-alpha_E <- rnorm(S, 0, 2.5)
-beta_E  <- rnorm(S, 0, 2.5)
-pE      <- plogis(alpha_E + beta_E * x)
-yE      <- rbinom(S, 1, pE)
-
-# Scenario F: prior weakly-informative
-alpha_F <- rnorm(S, 0, 1)
-beta_F  <- rnorm(S, 0, 1)
-pF      <- plogis(alpha_F + beta_F * x)
-yF      <- rbinom(S, 1, pF)
-
-tibble(p = pE, scenario = "E: prior larga") |>
-  bind_rows(tibble(p = pF, scenario = "F: prior W.I.")) |>
-  ggplot(aes(x = p, fill = scenario)) +
-  geom_density(alpha = 0.35) +
-  labs(x = "p(x) = P(y=1|x)", y = "Densità")
-```
-
-**Interpretazione.**
-
-- Con distribuzioni a priori eccessivamente diffuse (Scenario E), le probabilità implicite sono frequentemente vicine ai valori estremi di 0 o 1. Ciò indica che il modello, in assenza di dati osservati, considera plausibili situazioni di quasi-certezza assoluta.
-- Con distribuzioni a priori debolmente informative (Scenario F), le probabilità si distribuiscono in un range più realistico (0.05-0.95), riflettendo appropriatamente l'incertezza caratteristica dei fenomeni psicologici.
-
-**Linee guida pratiche**
-
-* Con *prior* standardizzat, l'utilizzo di distribuzioni $\mathcal{N}(0,1)$ o $\mathcal{N}(0,1.5)$ per i coefficienti sulla scala logit rappresenta generalmente una scelta robusta: permette sufficiente variabilità senza generare previsioni probabilistiche estreme.
-* Distribuzioni a priori eccessivamente diffuse possono produrre modelli "rigidi" che, a priori, assumono comportamenti quasi deterministici, risultando incoerenti con la variabilità tipica dei dati psicologici.
-
-#### Implementazione in Stan: simulazione esclusiva dalle distribuzioni precedenti
-
-Possiamo rendere esplicito il processo mediante un modello Stan che non incorpora dati osservati ma genera esclusivamente previsioni a partire dalle distribuzioni a priori.
-
-```{r}
-#| label: write-stan-logistic
-logistic_prior_ppc_stan <- '
-data {
-  int<lower=1> N;
-  vector[N] x;
-}
-parameters {
-  real alpha;
-  real beta;
-}
-model {
-  alpha ~ normal(0, 1);
-  beta  ~ normal(0, 1);
-}
-generated quantities {
-  vector[N] p;
-  array[N] int y_rep;
-  for (i in 1:N) {
-    p[i] = inv_logit(alpha + beta * x[i]);
-    y_rep[i] = bernoulli_rng(p[i]);
-  }
-}
-'
-writeLines(logistic_prior_ppc_stan, "logistic_prior_ppc.stan")
-```
-
-Esecuzione del modello:
-
-```{r}
-#| output: false
-mod_log <- cmdstan_model("logistic_prior_ppc.stan")
-x_new   <- rnorm(300)
-
-fit_log <- mod_log$sample(
-  data = list(N = length(x_new), x = x_new),
-  chains = 4, iter_warmup = 500, iter_sampling = 1000,
-  seed = 123, refresh = 0
-)
-```
-
-Visualizzazione delle probabilità implicite:
-
-```{r}
-post_p <- fit_log$draws("p", format = "draws_matrix")
-as_tibble(post_p) |>
-  pivot_longer(everything(), values_to = "p") |>
-  ggplot(aes(x = p)) +
-  geom_density() +
-  labs(x = "p(x)", y = "Densità")
-```
-
-
-#### Conclusioni
-
-* Le distribuzioni a priori nella regressione logistica influenzano direttamente la distribuzione delle probabilità implicite generate dal modello.
-* Distribuzioni a priori eccessivamente diffuse equivalgono ad assumere, prima di osservare i dati, che siano probabili risposte quasi certe (0 o 1).
-* Distribuzioni a priori moderate preservano invece l'incertezza appropriata, riflettendo più fedelmente la realtà dei fenomeni psicologici.
-
-
-## Linee guida pratiche per la specificazione delle distribuzioni a priori
-
-1. **Lavorare sulla scala appropriata**
-
-   * Quando possibile, *standardizzare i predittori* (centrati a media 0 e scalati a deviazione standard 1).
-   * Questo approccio garantisce un'interpretazione uniforme dei coefficienti: una distribuzione Normal(0,1) suggerisce che effetti "moderati" (variazioni di circa una deviazione standard nell'outcome per ogni deviazione standard nel predittore) siano i più plausibili.
-
-2. **Coefficienti di regressione ($\beta$)**
-
-   * Un punto di partenza solido consiste nell'utilizzare distribuzioni a priori *Normal(0, 0.5–2)*.
-   * Con $\beta \sim \mathcal{N}(0,1)$: effetti di piccola e media entità sono considerati plausibili, mentre effetti di grande magnitudine rimangono possibili ma meno probabili.
-   * Importante: senza standardizzazione dei predittori, la scala di $\beta$ cambia radicalmente, invalidando queste linee guida.
-
-3. **Intercetta ($\alpha$)**
-
-   * Per outcome continui (modelli gaussiani), centrare la variabile dipendente $y$ rende l'intercetta più direttamente interpretabile.
-   * Per outcome binari (modelli logistici), una Normal(0,1–1.5) implica probabilità a priori tipicamente comprese tra 0.05 e 0.95; una Normal(0,2.5) è significativamente più permissiva, rendendo probabili scenari di quasi-certezza.
-
-4. **Parametri di dispersione ($\sigma$)**
-
-   * Utilizzare distribuzioni a priori definite solo per valori positivi (Half-Normal, Exponential, Gamma).
-   * Specificare il parametro di scala dell'Exponential in accordo con l'ordine di grandezza atteso nel dominio applicativo. Ad esempio, per punteggi su scala 0-100, una Exponential(media ≈ 5–10) rappresenta una scelta generalmente ragionevole.
-   * Verificare sistematicamente mediante simulazioni che la dispersione generata sia coerente con la variabilità attesa nei dati reali.
-
-5. **Trasformazioni non lineari (logit, log)**
-
-   * Evitare di interpretare esclusivamente i coefficienti sulla scala trasformata: convertire sistematicamente nelle scale naturali di interesse.
-   * Tradurre i coefficienti logit in *probabilità implicite* e i coefficienti log in *tassi attesi*.
-   * Porsi criticamente la domanda: "Queste distribuzioni a priori implicano che i soggetti abbiano probabilità estreme (vicine a 0 o 1) di manifestare il comportamento?"
-
-6. **Validazione e trasparenza metodologica**
-
-   * Eseguire sempre *controlli predittivi basati sulle distribuzioni a priori* (prior predictive checks): se i dati simulati appaiono "irrealistici" (ad esempio, valori negativi per scale positive o fuori range), le distribuzioni a priori necessitano ri-calibrazione.
-   * Documentare dettagliatamente il processo di specificazione: quali distribuzioni sono state testate, quali modifiche sono state apportate e le motivazioni sottostanti. Questa trasparenza costituisce un elemento fondamentale del rigore metodologico nell'analisi bayesiana.
-
-
-::: {.callout-caution collapse="true"}
-## Appendice: prior predictive con `brms` per i tre casi
-
-**Modello gaussiano.**
-
-```{r}
-#| output: false
-#| label: brms-gaussian-prior-only
-N <- 100
-df_g <- tibble(y = rnorm(N, 50, 10)) # placeholder, non usato con "only"
-
-fit_g_prior <- brm(
-  bf(y ~ 1),
-  data = df_g,
-  family = gaussian(),
-  prior = c(
-    prior(normal(50, 10), class = "Intercept"),
-    prior(exponential(0.1), class = "sigma")        
-    # prior(exponential(1.0/10), class = "sigma")   
-  ),
-  sample_prior = "only",
-  chains = 4, iter = 1000, cores = 4,
-  backend = "cmdstanr", seed = 123
-)
-```
-
-
-```{r}
-yrep_g <- posterior_predict(fit_g_prior)
-ppc_dens_overlay(y = df_g$y, yrep = yrep_g[1:200, ])
-```
-
-**Regressione lineare.**
-
-```{r}
-N <- 120
-df_l <- tibble(
-  y = rnorm(N),
-  x = rnorm(N)
-)
-```
-
-
-```{r}
-#| label: brms-linear-prior-only
-#| output: false
-fit_l_prior <- brm(
-  bf(y ~ 1 + x),
-  data = df_l,
-  family = gaussian(),
-  prior = c(
-    prior(normal(0, 1), class = "Intercept"),
-    prior(normal(0, 1), class = "b", coef = "x"),
-    prior(exponential(0.5), class = "sigma")      # <-- 0.5 (oppure 1.0/2)
-    # prior(exponential(1.0/2), class = "sigma")  # <-- equivalente
-  ),
-  sample_prior = "only",
-  chains = 4, iter = 1000, cores = 4,
-  backend = "cmdstanr", seed = 123
-)
-```
-
-```{r}
-yrep_l <- posterior_predict(fit_l_prior)
-ppc_dens_overlay(y = df_l$y, yrep = yrep_l[1:200, ]) +
-  xlim(-5, 5)
-```
-
-**Regressione logistica.**
-
-```{r}
-N <- 150
-df_log <- tibble(
-  y = rbinom(N, 1, 0.5),  # placeholder
-  x = rnorm(N)
-)
-```
-
-
-```{r}
-#| label: brms-logistic-prior-only
-#| output: false
-
-fit_log_prior <- brm(
-  bf(y ~ 1 + x),
-  data = df_log,
-  family = bernoulli(),
-  prior = c(
-    prior(normal(0, 1.5), class = "Intercept"),
-    prior(normal(0, 1), class = "b", coef = "x")
-  ),
-  sample_prior = "only",
-  chains = 4, iter = 1000, cores = 4,
-  backend = "cmdstanr", seed = 123
-)
-```
-
-```{r}
-yrep_log <- posterior_predict(fit_log_prior)
-ppc_bars(y = df_log$y, yrep = yrep_log[1:200, ]) 
-```
+::: {.callout-success title="Punto chiave da ricordare"}
+> Il prior predictive check è come un "test di realtà" per le nostre assunzioni iniziali. Se i dati simulati non hanno senso, non sono i dati reali ad essere sbagliati, ma le nostre ipotesi di partenza che devono essere riviste.
 :::
-
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-I controlli predittivi sui priori rappresentano una delle innovazioni più importanti portate dall’approccio bayesiano alla pratica della ricerca psicologica. Non ci limitiamo più a dichiarare i priori come un’astrazione matematica, ma li trattiamo come *ipotesi concrete* che generano conseguenze osservabili.
+Il controllo predittivo a priori rappresenta un cambiamento fondamentale nell'approccio alla modellazione statistica in psicologia. Esso trasforma le nostre assunzioni a priori da entità astratte in *ipotesi verificabili*, permettendoci di valutarne la plausibilità prima di raccogliere i dati. Come abbiamo visto negli esempi del test a 10 domande, scelte diverse dei priori (ad esempio, Beta(2,2) vs Beta(10,3)) producono previsioni molto diverse sui punteggi osservabili. Questo non è un dettaglio tecnico, ma un aspetto essenziale per una ricerca trasparente e robusta.
 
-Questo ha almeno tre implicazioni rilevanti:
+Attraverso i prior predictive checks, impariamo a:
 
-* *Trasparenza*: invece di nascondere le nostre assunzioni, le rendiamo visibili e criticabili, mostrando quali dati ci aspetteremmo prima ancora di fare l’esperimento.
-* *Coerenza con la teoria psicologica*: i priori possono e devono riflettere la letteratura, la teoria o l’esperienza accumulata. Se la simulazione produce risultati incompatibili con ciò che sappiamo, significa che stiamo imponendo assunzioni sbagliate.
-* *Robustezza inferenziale*: controllare i priori prima di analizzare i dati riduce il rischio di ottenere posteriori fuorvianti o difficili da interpretare.
+- **Comunicare** in modo chiaro le nostre aspettative iniziali, mostrando concretamente quali dati ci aspetteremmo di osservare;
+- **Allineare** le nostre scelte di modellazione con la conoscenza sostantiva del dominio, evitando di imporre assunzioni irrealistiche;
+- **Prevenire** conclusioni fuorvianti, identificando e correggendo i priori problematici prima che influenzino l'inferenza.
 
-Dal punto di vista didattico, i prior predictive checks aiutano anche a chiarire agli studenti il significato dei priori: non sono semplici parametri arbitrari, ma veri e propri modelli di ciò che consideriamo plausibile *prima* di vedere i dati.
+Dal punto di vista didattico, questo approccio aiuta a comprendere che i *prior* non sono semplici parametri matematici, ma rappresentano ciò che riteniamo plausibile sulla base della teoria e dell'esperienza. Il caso del test binomiale, ad esempio, mostra come un *prior* vago possa generare previsioni estreme e irrealistiche, mentre un *prior* informativo possa concentrare le previsioni su un intervallo più credibile. Per un esame più approfondito che coinvolge modelli di maggiore complessità, si rimanda all'@sec-apx-prior-predictive-check.
 
-In sintesi, questo capitolo mostra che i priori non devono essere accettati acriticamente: vanno testati e, se necessario, rivisti. Nei prossimi capitoli vedremo come un approccio analogo possa essere applicato anche ai posteriori, estendendo l’idea dei controlli predittivi all’intero processo di modellazione.
+In sintesi, il controllo predittivo a priori ci impone di assumerci la responsabilità delle nostre assunzioni iniziali e di testarne le implicazioni in modo esplicito. Questo non solo migliora la qualità delle nostre analisi, ma anche la credibilità della ricerca psicologica. Nel prossimo capitolo, estenderemo questo approccio ai controlli predittivi a posteriori, completando così il quadro di una modellazione bayesiana rigorosa e trasparente.
 
+::: {.callout-success title="Punti chiave del capitolo"}
+- **I priori hanno conseguenze osservabili**: ogni scelta di *prior* genera previsioni specifiche sui dati che possiamo simulare e verificare;
+- **La plausibilità è misurabile**: confrontando le simulazioni con la conoscenza del dominio, possiamo valutare oggettivamente l'adeguatezza dei nostri *prior*;
+- **L'iterazione è una risorsa**: rivedere i *prior* sulla base dei *prior predictive checks* non è "barare", ma un processo scientifico trasparente;
+- **Gli strumenti sono accessibili**: con R, brms e Stan, qualsiasi ricercatore può implementare questi controlli nel proprio workflow.
+:::
 
 ::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
 ```{r}
