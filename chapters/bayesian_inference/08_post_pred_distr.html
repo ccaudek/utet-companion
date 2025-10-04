@@ -821,8 +821,14 @@ window.Quarto = {
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../../chapters/appendix/a46_prior_pred_check.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">R</span>&nbsp; <span class="chapter-title">Controllo predittivo a priori</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../../chapters/appendix/a50_lin_fun.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">R</span>&nbsp; <span class="chapter-title">La funzione lineare</span></span></a>
+ <span class="menu-text"><span class="chapter-number">S</span>&nbsp; <span class="chapter-title">La funzione lineare</span></span></a>
   </div>
 </li>
       </ul>
@@ -864,8 +870,8 @@ window.Quarto = {
 </blockquote>
 </div>
 <section id="introduzione" class="level2 unnumbered unlisted"><h2 class="unnumbered unlisted anchored" data-anchor-id="introduzione">Introduzione</h2>
-<p>Nei capitoli precedenti abbiamo visto due aspetti fondamentali dell’inferenza bayesiana: da un lato, la costruzione delle distribuzioni a posteriori per i parametri di interesse; dall’altro, l’importanza di verificare i priori attraverso i controlli predittivi, per assicurarci che le nostre assunzioni iniziali siano coerenti con la realtà psicologica che vogliamo studiare.</p>
-<p>Ora compiamo un passo ulteriore: invece di chiederci se i nostri priori siano ragionevoli, ci chiediamo se <em>l’intero modello</em>, dopo aver incorporato i dati osservati, sia in grado di generare previsioni plausibili. Questo ci porta al concetto di <em>distribuzione predittiva a posteriori</em> (<em>posterior predictive distribution</em>).</p>
+<p>Nei capitoli precedenti abbiamo visto due aspetti fondamentali dell’inferenza bayesiana: da un lato, la costruzione delle distribuzioni a posteriori per i parametri di interesse; dall’altro, l’importanza di verificare i <em>prior</em> attraverso i controlli predittivi, per assicurarci che le nostre assunzioni iniziali siano coerenti con la realtà psicologica che vogliamo studiare.</p>
+<p>Ora compiamo un passo ulteriore: invece di chiederci se i nostri <em>prior</em> siano ragionevoli, ci chiediamo se <em>l’intero modello</em>, dopo aver incorporato i dati osservati, sia in grado di generare previsioni plausibili. Questo ci porta al concetto di <em>distribuzione predittiva a posteriori</em> (<em>posterior predictive distribution</em>).</p>
 <p>La logica è semplice e potente: se un modello è una rappresentazione credibile del processo che ha generato i dati, allora dovrebbe essere in grado non solo di adattarsi ai dati raccolti, ma anche di simulare dati nuovi con caratteristiche simili. In questo senso, le distribuzioni predittive a posteriori diventano uno strumento centrale per la valutazione dei modelli: collegano direttamente i parametri stimati ai dati futuri che ci aspettiamo di osservare.</p>
 <p>In questo capitolo vedremo come costruire la distribuzione predittiva a posteriori, come interpretarla e come utilizzarla per verificare la coerenza del modello con l’evidenza empirica. Questo approccio ci permetterà di mettere alla prova in modo pratico la capacità del modello di spiegare e prevedere i fenomeni psicologici che ci interessano.</p>
 <section id="panoramica-del-capitolo" class="level3 unnumbered unlisted"><h3 class="unnumbered unlisted anchored" data-anchor-id="panoramica-del-capitolo">Panoramica del capitolo</h3>
@@ -954,43 +960,51 @@ p(\tilde{y} \mid y) = \int p(\tilde{y} \mid \theta)\, p(\theta \mid y)\, d\theta
 </section><section id="interpretazione" class="level4" data-number="9.1.1.4"><h4 data-number="9.1.1.4" class="anchored" data-anchor-id="interpretazione">
 <span class="header-section-number">9.1.1.4</span> Interpretazione</h4>
 <p>La distribuzione predittiva a posteriori <span class="math inline">\(p(\tilde{y} \mid y)\)</span> rappresenta la migliore previsione probabilistica per dati futuri, incorporando tanto l’incertezza sui parametri del modello quanto la variabilità intrinseca del processo generativo dei dati.</p>
+<p>Ecco la sezione rivista con un linguaggio più appropriato per un manuale didattico, mantenendo il rigore scientifico ma migliorando fluidità e chiarezza espositiva:</p>
 </section></section></section><section id="intuizione" class="level2" data-number="9.2"><h2 data-number="9.2" class="anchored" data-anchor-id="intuizione">
 <span class="header-section-number">9.2</span> Intuizione</h2>
-<p>Un modo utile per <em>comprendere in un modo intuitivo</em> l’<a href="#eq-post-pred-distr" class="quarto-xref">Equazione&nbsp;<span>9.1</span></a> è pensare alla distribuzione predittiva a posteriori come a una <em>media ponderata di previsioni</em>.</p>
-<p><strong>Esperimento mentale (beta–binomiale).</strong> Immagina una griglia di possibili valori di <span class="math inline">\(\theta\)</span>: ad es. 0, 0.01, 0.02, …, 0.99, 1. Per <em>ogni</em> valore <span class="math inline">\(\theta'\)</span> della griglia:</p>
+<p>Un modo efficace per <em>comprendere intuitivamente</em> l’<a href="#eq-post-pred-distr" class="quarto-xref">Equazione&nbsp;<span>9.1</span></a> consiste nell’interpretare la distribuzione predittiva a posteriori come una <em>media ponderata di previsioni</em>.</p>
+<p><strong>Esperimento mentale (modello beta-binomiale).</strong> Si consideri una griglia di valori possibili per <span class="math inline">\(\theta\)</span>, ad esempio 0, 0.01, 0.02, …, 0.99, 1. Per <em>ciascun</em> valore <span class="math inline">\(\theta'\)</span> in questa griglia:</p>
 <ol type="1">
-<li><p>costruisci l’<em>istogramma predittivo condizionale</em> di <span class="math inline">\(\tilde y\)</span> (le barre da 0 a <span class="math inline">\(n_{\text{new}})\)</span> usando la Binomiale con parametro <span class="math inline">\(\theta'\)</span>: <span class="math display">\[
-p(\tilde y \mid \theta')=\binom{n_{\text{new}}}{\tilde y},(\theta')^{\tilde y}(1-\theta')^{,n_{\text{new}}-\tilde y}.
+<li><p>Si costruisce la <em>distribuzione predittiva condizionata</em> di <span class="math inline">\(\tilde y\)</span> (con valori da 0 a <span class="math inline">\(n_{\text{new}}\)</span>) utilizzando la distribuzione binomiale di parametro <span class="math inline">\(\theta'\)</span>: <span class="math display">\[
+p(\tilde y \mid \theta') = \binom{n_{\text{new}}}{\tilde y} (\theta')^{\tilde y} (1-\theta')^{n_{\text{new}}-\tilde y}.
 \]</span></p></li>
-<li><p>attribuisci a quell’istogramma un <em>peso</em> pari alla plausibilità di <span class="math inline">\(\theta'\)</span> secondo la <em>distribuzione a posteriori</em> <span class="math inline">\(p(\theta\mid y)\)</span>. Se la distribuzione a posteriori assegna molta massa a <span class="math inline">\(\theta'\approx 0.7\)</span>, ad esempio, quell’istogramma “vale” di più; se assegna poca massa a <span class="math inline">\(\theta'\approx 0.1\)</span>, quell’istogramma “vale” di meno.</p></li>
-<li><p><em>Sovrapponi e somma</em> (in base ai pesi dati dalla distribuzione a posteriori) tutte le barre corrispondenti allo stesso valore di <span class="math inline">\(\tilde y\)</span>. La <em>barretta finale</em> per <span class="math inline">\(\tilde y=k\)</span> è la media ponderata delle barrette per <span class="math inline">\(\tilde y=k\)</span> prodotte da tutti i <span class="math inline">\(\theta'\)</span> della griglia.</p></li>
+<li><p>A questa distribuzione viene assegnato un <em>peso</em> pari alla plausibilità di <span class="math inline">\(\theta'\)</span> in base alla <em>distribuzione a posteriori</em> <span class="math inline">\(p(\theta \mid y)\)</span>. Se la distribuzione a posteriori assegna un’elevata densità a <span class="math inline">\(\theta' \approx 0.7\)</span>, ad esempio, la corrispondente distribuzione predittiva avrà maggiore rilevanza; se invece assegna una bassa densità a <span class="math inline">\(\theta' \approx 0.1\)</span>, la distribuzione predittiva avrà minore influenza.</p></li>
+<li><p>Si <em>sovrappongono e sommano</em> (secondo i pesi definiti dalla distribuzione a posteriori) tutte le probabilità associate a ciascun valore di <span class="math inline">\(\tilde y\)</span>. La <em>probabilità finale</em> per <span class="math inline">\(\tilde y = k\)</span> corrisponde alla media ponderata delle probabilità per <span class="math inline">\(\tilde y = k\)</span> generate da tutti i valori di <span class="math inline">\(\theta'\)</span> della griglia.</p></li>
 </ol>
-<p>Il risultato di questa somma pesata <em>è</em> la distribuzione predittiva a posteriori <span class="math inline">\(p(\tilde y\mid y)\)</span>. In altre parole:</p>
+<p>Il risultato di questa integrazione ponderata <em>coincide</em> con la distribuzione predittiva a posteriori <span class="math inline">\(p(\tilde y \mid y)\)</span>. In altri termini:</p>
 <blockquote class="blockquote">
-<p>Ogni <span class="math inline">\(\theta\)</span> “prova a prevedere” <span class="math inline">\(\tilde y\)</span>; la distribuzione a posteriori decide <em>quanto ascoltare</em> ciascuna previsione.</p>
+<p>Ciascun valore di <span class="math inline">\(\theta\)</span> “propone” una previsione per <span class="math inline">\(\tilde y\)</span>; la distribuzione a posteriori determina <em>quanto peso attribuire</em> a ciascuna di queste previsioni.</p>
 </blockquote>
-<p><strong>Cosa cambia rispetto a fissare <span class="math inline">\(\theta\)</span>.</strong></p>
+<p><strong>Differenze rispetto all’approccio con <span class="math inline">\(\theta\)</span> fissato.</strong></p>
 <ul>
-<li>Se la distribuzione a posteriori è <em>concentrata</em> (es. <span class="math inline">\(\theta\approx 0.70\pm 0.03\)</span>), la media ponderata è quasi identica alla Binomiale con <span class="math inline">\(p\simeq 0.70\)</span>: la distribuzione predittiva è <em>stretta</em> e centrata dove ti aspetti.</li>
-<li>Se la distribuzione a posteriori è <em>diffusa</em> (es. <span class="math inline">\(\theta\)</span> plausibile tanto vicino a 0.4 quanto a 0.8), stai mediando istogrammi molto diversi tra loro: la distribuzione predittiva a posteriori diventa <em>più larga</em> e con <em>code più pesanti</em>.</li>
+<li>Se la distribuzione a posteriori è <em>concentrata</em> (ad esempio se <span class="math inline">\(\theta \approx 0.70 \pm 0.03\)</span>), la media ponderata sarà quasi identica alla distribuzione binomiale con <span class="math inline">\(p \simeq 0.70\)</span>: la distribuzione predittiva risulterà <em>concentrata</em> attorno al valore atteso.</li>
+<li>Se la distribuzione a posteriori è <em>dispersa</em> (con valori di <span class="math inline">\(\theta\)</span> plausibili sia intorno a 0.4 che a 0.8), si stanno mediando distribuzioni molto diverse tra loro: la distribuzione predittiva a posteriori risulterà <em>più dispersa</em> e con <em>code più pesanti</em>.</li>
 </ul>
-<p>Questa dilatazione riflette due fonti di incertezza:</p>
+<p>Questa dilatazione riflette la combinazione di due diverse fonti di incertezza:</p>
 <ul>
 <li>
-<strong>la casualità</strong> del processo (<span class="math inline">\(\tilde y\mid \theta\)</span>),</li>
+<em>la variabilità intrinseca</em> del processo generativo dei dati (<span class="math inline">\(\tilde y \mid \theta\)</span>);</li>
 <li>
-<strong>l’incertezza epistemica</strong> sui parametri (<span class="math inline">\(\theta\mid y\)</span>). Un modo sintetico per ricordarlo è la decomposizione della varianza: <span class="math display">\[
-\mathrm{Var}(\tilde y\mid y)=\underbrace{\mathbb E_{p(\theta\mid y)}[\mathrm{Var}(\tilde y\mid \theta)]}*{\text{rumore del processo}}
-+\underbrace{\mathrm{Var}*{p(\theta\mid y)}[\mathbb E(\tilde y\mid \theta)]}_{\text{incertezza sul parametro}}.
-\]</span>
-</li>
+<em>l’incertezza epistemica</em> sulla stima dei parametri (<span class="math inline">\(\theta \mid y\)</span>).</li>
 </ul>
-<p><strong>Piccolo esempio numerico <span class="math inline">\(n(_\text{new})=10\)</span>.</strong></p>
+<div class="callout callout-style-default callout-tip callout-titled" title="Esempio numerico con $n_{\text{new}} = 10$">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Consiglio</span>Esempio numerico con <span class="math inline">\(n_{\text{new}} = 10\)</span>
+</div>
+</div>
+<div class="callout-body-container callout-body">
 <ul>
-<li>Posterior concentrata attorno a (0.7): la massa predittiva è su 6–8 successi; 0/10 o 10/10 sono rarissimi.</li>
-<li>Posterior ampia tra 0.4 e 0.8: la massa si stende da ~4 a ~9 successi; aumentano sensibilmente le probabilità in coda.</li>
+<li>Con una posterior concentrata attorno a 0.7: la massa di probabilità si concentra su 6-8 successi; valori estremi come 0/10 o 10/10 sono estremamente improbabili.</li>
+<li>Con una posterior ampia tra 0.4 e 0.8: la probabilità si distribuisce da circa 4 a 9 successi, con probabilità nelle code sensibilmente maggiori.</li>
 </ul>
-<p><strong>Messaggio chiave.</strong> La distribuzione predittiva a posteriori <em>non è l’istogramma di un singolo <span class="math inline">\(\theta\)</span></em>, ma la <em>media ponderata</em> (dalla distribuzione a posteriori) di <em>tutte</em> le predizioni condizionali. Se sappiamo poco del parametro, le nostre previsioni sui dati futuri devono essere <em>più caute</em> (più larghe). Se sappiamo molto, possono essere <em>più concentrate</em>.</p>
+</div>
+</div>
+<p><strong>Messaggio fondamentale.</strong> La distribuzione predittiva a posteriori <em>non corrisponde</em> alla distribuzione di <span class="math inline">\(\tilde{y}\)</span> condizionata a un singolo valore di <span class="math inline">\(\theta\)</span>, ma rappresenta la <em>media ponderata</em> (secondo la distribuzione a posteriori) di <em>tutte</em> le possibili previsioni condizionate. Quando le informazioni sul parametro sono limitate, le nostre previsioni per i dati futuri devono necessariamente essere <em>più conservative</em> (più disperse). Al contrario, quando si dispone di informazioni più precise, le previsioni possono essere più focalizzate.</p>
 </section><section id="il-modello-beta-binomiale" class="level2" data-number="9.3"><h2 data-number="9.3" class="anchored" data-anchor-id="il-modello-beta-binomiale">
 <span class="header-section-number">9.3</span> Il modello Beta-Binomiale</h2>
 <p>Si consideri un esperimento binomiale consistente in <span class="math inline">\(n\)</span> prove indipendenti, dove si osserva il numero di successi <span class="math inline">\(y\)</span> (ad esempio, il numero di teste nel lancio di una moneta). L’approccio bayesiano si articola in tre fasi fondamentali:</p>
@@ -1070,12 +1084,15 @@ beta_posterior = 2 + (100 - 70) = 32</code></pre>
 <span class="header-section-number">9.4.5</span> Visualizziamo i risultati</h3>
 <p>Distribuzione iniziale (prima di vedere i dati):</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu">ggplot</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html">data.frame</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span><span class="op">)</span><span class="op">)</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">x</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">stat_function</span><span class="op">(</span>fun <span class="op">=</span> <span class="va">dbeta</span>, </span>
-<span>                args <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html">list</a></span><span class="op">(</span>shape1 <span class="op">=</span> <span class="va">alpha_prior</span>, shape2 <span class="op">=</span> <span class="va">beta_prior</span><span class="op">)</span>, </span>
-<span>                color <span class="op">=</span> <span class="st">"#4682B4"</span>, size <span class="op">=</span> <span class="fl">1</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">labs</span><span class="op">(</span>x <span class="op">=</span> <span class="st">"Probabilità di successo (p)"</span>,</span>
-<span>       y <span class="op">=</span> <span class="st">"Densità"</span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># Distribuzione iniziale (prima di vedere i dati) — PRIOR (blu)</span></span>
+<span><span class="fu">ggplot</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html">data.frame</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span><span class="op">)</span><span class="op">)</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">x</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">stat_function</span><span class="op">(</span></span>
+<span>    fun  <span class="op">=</span> <span class="va">dbeta</span>,</span>
+<span>    args <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html">list</a></span><span class="op">(</span>shape1 <span class="op">=</span> <span class="va">alpha_prior</span>, shape2 <span class="op">=</span> <span class="va">beta_prior</span><span class="op">)</span>,</span>
+<span>    color <span class="op">=</span> <span class="va">modern_palette</span><span class="op">$</span><span class="va">blue</span>,</span>
+<span>    linewidth <span class="op">=</span> <span class="fl">1.1</span></span>
+<span>  <span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span>x <span class="op">=</span> <span class="st">"Probabilità di successo (p)"</span>, y <span class="op">=</span> <span class="st">"Densità"</span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure"><p><a href="08_post_pred_distr_files/figure-html/unnamed-chunk-3-1.png" class="lightbox" data-gallery="quarto-lightbox-gallery-1"><img src="08_post_pred_distr_files/figure-html/unnamed-chunk-3-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:85.0%"></a></p>
@@ -1085,12 +1102,15 @@ beta_posterior = 2 + (100 - 70) = 32</code></pre>
 </div>
 <p>Conoscenza aggiornata (dopo aver visto i dati):</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu">ggplot</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html">data.frame</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span><span class="op">)</span><span class="op">)</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">x</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">stat_function</span><span class="op">(</span>fun <span class="op">=</span> <span class="va">dbeta</span>, </span>
-<span>                args <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html">list</a></span><span class="op">(</span>shape1 <span class="op">=</span> <span class="va">alpha_post</span>, shape2 <span class="op">=</span> <span class="va">beta_post</span><span class="op">)</span>, </span>
-<span>                color <span class="op">=</span> <span class="st">"#A0522D"</span>, size <span class="op">=</span> <span class="fl">1</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">labs</span><span class="op">(</span>x <span class="op">=</span> <span class="st">"Probabilità di successo (p)"</span>,</span>
-<span>       y <span class="op">=</span> <span class="st">"Densità"</span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># Conoscenza aggiornata (dopo aver visto i dati) — POSTERIOR (viola)</span></span>
+<span><span class="fu">ggplot</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html">data.frame</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span><span class="op">)</span><span class="op">)</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">x</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">stat_function</span><span class="op">(</span></span>
+<span>    fun  <span class="op">=</span> <span class="va">dbeta</span>,</span>
+<span>    args <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html">list</a></span><span class="op">(</span>shape1 <span class="op">=</span> <span class="va">alpha_post</span>, shape2 <span class="op">=</span> <span class="va">beta_post</span><span class="op">)</span>,</span>
+<span>    color <span class="op">=</span> <span class="va">modern_palette</span><span class="op">$</span><span class="va">purple</span>,</span>
+<span>    linewidth <span class="op">=</span> <span class="fl">1.1</span></span>
+<span>  <span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span>x <span class="op">=</span> <span class="st">"Probabilità di successo (p)"</span>, y <span class="op">=</span> <span class="st">"Densità"</span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure"><p><a href="08_post_pred_distr_files/figure-html/unnamed-chunk-4-1.png" class="lightbox" data-gallery="quarto-lightbox-gallery-2"><img src="08_post_pred_distr_files/figure-html/unnamed-chunk-4-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:85.0%"></a></p>
@@ -1100,12 +1120,23 @@ beta_posterior = 2 + (100 - 70) = 32</code></pre>
 </div>
 <p>Previsioni per i prossimi 10 lanci:</p>
 <div class="cell" data-layout-align="center">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu">ggplot</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html">data.frame</a></span><span class="op">(</span>proporzioni <span class="op">=</span> <span class="va">proporzioni_future</span><span class="op">)</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">proporzioni</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">geom_histogram</span><span class="op">(</span><span class="fu">aes</span><span class="op">(</span>y <span class="op">=</span> <span class="va">..density..</span><span class="op">)</span>, bins <span class="op">=</span> <span class="fl">20</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">geom_vline</span><span class="op">(</span><span class="fu">aes</span><span class="op">(</span>xintercept <span class="op">=</span> <span class="va">successi_osservati</span> <span class="op">/</span> <span class="va">lanci_totali</span><span class="op">)</span>, </span>
-<span>             color <span class="op">=</span> <span class="st">"black"</span>, size <span class="op">=</span> <span class="fl">1</span>, linetype <span class="op">=</span> <span class="st">"dashed"</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">labs</span><span class="op">(</span>x <span class="op">=</span> <span class="st">"Proporzione di successi attesi"</span>,</span>
-<span>       y <span class="op">=</span> <span class="st">"Densità"</span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># Previsioni per i prossimi 10 lanci — Posterior predictive (istogramma verde)</span></span>
+<span><span class="fu">ggplot</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html">data.frame</a></span><span class="op">(</span>proporzioni <span class="op">=</span> <span class="va">proporzioni_future</span><span class="op">)</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">proporzioni</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_histogram</span><span class="op">(</span></span>
+<span>    <span class="fu">aes</span><span class="op">(</span>y <span class="op">=</span> <span class="va">..density..</span><span class="op">)</span>,</span>
+<span>    bins <span class="op">=</span> <span class="fl">20</span>,</span>
+<span>    fill <span class="op">=</span> <span class="va">modern_palette</span><span class="op">$</span><span class="va">green</span>,</span>
+<span>    color <span class="op">=</span> <span class="va">modern_palette</span><span class="op">$</span><span class="va">white</span>,</span>
+<span>    alpha <span class="op">=</span> <span class="fl">0.8</span>,</span>
+<span>    linewidth <span class="op">=</span> <span class="fl">0.2</span></span>
+<span>  <span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_vline</span><span class="op">(</span></span>
+<span>    <span class="fu">aes</span><span class="op">(</span>xintercept <span class="op">=</span> <span class="va">successi_osservati</span> <span class="op">/</span> <span class="va">lanci_totali</span><span class="op">)</span>,</span>
+<span>    color <span class="op">=</span> <span class="va">modern_palette</span><span class="op">$</span><span class="va">red</span>,</span>
+<span>    linewidth <span class="op">=</span> <span class="fl">0.8</span>,</span>
+<span>    linetype <span class="op">=</span> <span class="st">"dashed"</span></span>
+<span>  <span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span>x <span class="op">=</span> <span class="st">"Proporzione di successi attesi"</span>, y <span class="op">=</span> <span class="st">"Densità"</span><span class="op">)</span></span></code></pre></div><button title="Copia negli appunti" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure"><p><a href="08_post_pred_distr_files/figure-html/unnamed-chunk-5-1.png" class="lightbox" data-gallery="quarto-lightbox-gallery-3"><img src="08_post_pred_distr_files/figure-html/unnamed-chunk-5-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:85.0%"></a></p>
@@ -1127,7 +1158,7 @@ beta_posterior = 2 + (100 - 70) = 32</code></pre>
 </ul>
 <p><strong>In pratica</strong>: se dovessi scommettere sui prossimi 10 lanci, ti aspetteresti probabilmente 6-8 successi, ma potrebbero essercene anche 5 o 9 per puro caso.</p>
 <div class="callout callout-style-default callout-caution callout-titled" title="Nota">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-3-contents" aria-controls="callout-3" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-4-contents" aria-controls="callout-4" aria-expanded="false" aria-label="Toggle callout">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
@@ -1136,7 +1167,7 @@ beta_posterior = 2 + (100 - 70) = 32</code></pre>
 </div>
 <div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
 </div>
-<div id="callout-3" class="callout-3-contents callout-collapse collapse">
+<div id="callout-4" class="callout-4-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
 <p>Il fatto che, nel nostro esempio, la distribuzione predittiva a posteriori riproduca efficacemente i dati osservati potrebbe apparire come un risultato scontato. In realtà, questo esito positivo è significativo e tutt’altro che banale; dimostra che il nostro modello semplice è ben calibrato. Abbiamo scelto deliberatamente un modello binomiale con prior Beta proprio per la sua chiarezza espositiva, che ci permette di illustrare in modo trasparente la logica sottostante alla distribuzione predittiva a posteriori e mostrare visivamente come l’incertezza sui parametri e la variabilità intrinseca dei dati si integrino in un unico framework.</p>
 <p>Tuttavia, è fondamentale comprendere che nella ricerca psicologica reale ci si confronta con modelli notevolmente più complessi. In questi contesti, la corrispondenza tra i dati effettivamente osservati e quelli generati dal modello attraverso la distribuzione predittiva non può mai essere considerata una garanzia preliminare. Al contrario, questa corrispondenza rappresenta proprio l’obiettivo da verificare.</p>
@@ -1144,12 +1175,12 @@ beta_posterior = 2 + (100 - 70) = 32</code></pre>
 </div>
 </div>
 </section></section><section id="riflessioni-conclusive" class="level2 unnumbered unlisted"><h2 class="unnumbered unlisted anchored" data-anchor-id="riflessioni-conclusive">Riflessioni conclusive</h2>
-<p>Le distribuzioni predittive a posteriori rappresentano il naturale completamento del percorso iniziato con i priori. Se i <em>prior predictive checks</em> ci consentono di controllare la plausibilità delle nostre assunzioni iniziali, i <em>posterior predictive checks</em> ci permettono di verificare la plausibilità del modello alla luce dei dati.</p>
+<p>Le distribuzioni predittive a posteriori rappresentano il naturale completamento del percorso iniziato con i <em>prior</em>. Se i <em>prior predictive checks</em> ci consentono di controllare la plausibilità delle nostre assunzioni iniziali, i <em>posterior predictive checks</em> ci permettono di verificare la plausibilità del modello alla luce dei dati.</p>
 <p>Dal punto di vista concettuale, questo passaggio è cruciale: sposta l’attenzione dai parametri astratti ai dati concreti, e ci chiede di valutare i modelli sulla base della loro capacità di generare osservazioni simili a quelle reali. In questo senso, la distribuzione predittiva a posteriori non è soltanto un accessorio tecnico, ma una vera e propria <em>prova di realtà</em> per i modelli psicologici.</p>
 <p>Dal punto di vista applicativo, questo approccio rafforza la trasparenza e la robustezza delle nostre inferenze. Non ci limitiamo più a riportare valori puntuali o intervalli credibili per i parametri: mostriamo esplicitamente quali dati il nostro modello ritiene plausibili e li confrontiamo con i dati effettivamente raccolti. Questo rende la comunicazione dei risultati più chiara e intuitiva, anche per chi non ha familiarità con la statistica bayesiana.</p>
 <p>In sintesi, le distribuzioni predittive a posteriori ci ricordano che la forza dell’approccio bayesiano non risiede soltanto nella stima dei parametri, ma soprattutto nella capacità di <em>prevedere e spiegare</em> i fenomeni. Nei capitoli successivi vedremo come questa logica si estenda anche al confronto sistematico tra modelli, aprendo la strada a un approccio più rigoroso e cumulativo alla scienza psicologica.</p>
 <div class="callout callout-style-default callout-important callout-titled" title="Problemi">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-4-contents" aria-controls="callout-4" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-5-contents" aria-controls="callout-5" aria-expanded="false" aria-label="Toggle callout">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
@@ -1158,7 +1189,7 @@ beta_posterior = 2 + (100 - 70) = 32</code></pre>
 </div>
 <div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
 </div>
-<div id="callout-4" class="callout-4-contents callout-collapse collapse">
+<div id="callout-5" class="callout-5-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
 <p>Consideriamo i dati della SWLS somministrata a un campione di studenti, ottenendo per ciascuno uno <em>score</em> complessivo. Per semplicità, vogliamo “dichiarare positivo” lo studente se il punteggio SWLS supera una determinata <strong>soglia</strong> (ad esempio, 20 su 35). In questo modo otteniamo una variabile dicotomica (0/1), che useremo come “successo” in un modello binomiale.</p>
 <ol type="1">
@@ -1242,7 +1273,7 @@ beta_posterior = 2 + (100 - 70) = 32</code></pre>
 </div>
 </div>
 <div class="callout callout-style-default callout-tip callout-titled" title="Soluzioni">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-5-contents" aria-controls="callout-5" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-6-contents" aria-controls="callout-6" aria-expanded="false" aria-label="Toggle callout">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
@@ -1251,7 +1282,7 @@ beta_posterior = 2 + (100 - 70) = 32</code></pre>
 </div>
 <div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
 </div>
-<div id="callout-5" class="callout-5-contents callout-collapse collapse">
+<div id="callout-6" class="callout-6-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
 <ol type="1">
 <li>
@@ -1323,7 +1354,7 @@ beta_posterior = 2 + (100 - 70) = 32</code></pre>
 </div>
 </div>
 <div class="callout callout-style-default callout-note callout-titled" title="Informazioni sull'ambiente di sviluppo">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-6-contents" aria-controls="callout-6" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-7-contents" aria-controls="callout-7" aria-expanded="false" aria-label="Toggle callout">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
@@ -1332,7 +1363,7 @@ beta_posterior = 2 + (100 - 70) = 32</code></pre>
 </div>
 <div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
 </div>
-<div id="callout-6" class="callout-6-contents callout-collapse collapse">
+<div id="callout-7" class="callout-7-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
 <div class="cell" data-layout-align="center">
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html">sessionInfo</a></span><span class="op">(</span><span class="op">)</span></span>
@@ -1883,9 +1914,9 @@ Schoot, R. van de, Depaoli, S., King, R., Kramer, B., Märtens, K., Tadesse, M. 
 <span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a><span class="fu">## Introduzione {.unnumbered .unlisted}</span></span>
 <span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>Nei capitoli precedenti abbiamo visto due aspetti fondamentali dell’inferenza bayesiana: da un lato, la costruzione delle distribuzioni a posteriori per i parametri di interesse; dall’altro, l’importanza di verificare i priori attraverso i controlli predittivi, per assicurarci che le nostre assunzioni iniziali siano coerenti con la realtà psicologica che vogliamo studiare.</span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>Nei capitoli precedenti abbiamo visto due aspetti fondamentali dell’inferenza bayesiana: da un lato, la costruzione delle distribuzioni a posteriori per i parametri di interesse; dall’altro, l’importanza di verificare i *prior* attraverso i controlli predittivi, per assicurarci che le nostre assunzioni iniziali siano coerenti con la realtà psicologica che vogliamo studiare.</span>
 <span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>Ora compiamo un passo ulteriore: invece di chiederci se i nostri priori siano ragionevoli, ci chiediamo se *l’intero modello*, dopo aver incorporato i dati osservati, sia in grado di generare previsioni plausibili. Questo ci porta al concetto di *distribuzione predittiva a posteriori* (*posterior predictive distribution*).</span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>Ora compiamo un passo ulteriore: invece di chiederci se i nostri *prior* siano ragionevoli, ci chiediamo se *l’intero modello*, dopo aver incorporato i dati osservati, sia in grado di generare previsioni plausibili. Questo ci porta al concetto di *distribuzione predittiva a posteriori* (*posterior predictive distribution*).</span>
 <span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>La logica è semplice e potente: se un modello è una rappresentazione credibile del processo che ha generato i dati, allora dovrebbe essere in grado non solo di adattarsi ai dati raccolti, ma anche di simulare dati nuovi con caratteristiche simili. In questo senso, le distribuzioni predittive a posteriori diventano uno strumento centrale per la valutazione dei modelli: collegano direttamente i parametri stimati ai dati futuri che ci aspettiamo di osservare.</span>
 <span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a></span>
@@ -1956,337 +1987,352 @@ Schoot, R. van de, Depaoli, S., King, R., Kramer, B., Märtens, K., Tadesse, M. 
 <span id="cb15-83"><a href="#cb15-83" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb15-84"><a href="#cb15-84" aria-hidden="true" tabindex="-1"></a>La distribuzione predittiva a posteriori $p(\tilde{y} \mid y)$ rappresenta la migliore previsione probabilistica per dati futuri, incorporando tanto l'incertezza sui parametri del modello quanto la variabilità intrinseca del processo generativo dei dati.</span>
 <span id="cb15-85"><a href="#cb15-85" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-86"><a href="#cb15-86" aria-hidden="true" tabindex="-1"></a><span class="fu">## Intuizione</span></span>
+<span id="cb15-86"><a href="#cb15-86" aria-hidden="true" tabindex="-1"></a>Ecco la sezione rivista con un linguaggio più appropriato per un manuale didattico, mantenendo il rigore scientifico ma migliorando fluidità e chiarezza espositiva:</span>
 <span id="cb15-87"><a href="#cb15-87" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-88"><a href="#cb15-88" aria-hidden="true" tabindex="-1"></a>Un modo utile per *comprendere in un modo intuitivo* l’@eq-post-pred-distr è pensare alla distribuzione predittiva a posteriori come a una *media ponderata di previsioni*.</span>
+<span id="cb15-88"><a href="#cb15-88" aria-hidden="true" tabindex="-1"></a><span class="fu">## Intuizione</span></span>
 <span id="cb15-89"><a href="#cb15-89" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-90"><a href="#cb15-90" aria-hidden="true" tabindex="-1"></a>**Esperimento mentale (beta–binomiale).**</span>
-<span id="cb15-91"><a href="#cb15-91" aria-hidden="true" tabindex="-1"></a>Immagina una griglia di possibili valori di $\theta$: ad es. 0, 0.01, 0.02, …, 0.99, 1. Per *ogni* valore $\theta'$ della griglia:</span>
-<span id="cb15-92"><a href="#cb15-92" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-93"><a href="#cb15-93" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>costruisci l’*istogramma predittivo condizionale* di $\tilde y$ (le barre da 0 a $n_{\text{new}})$ usando la Binomiale con parametro $\theta'$:</span>
-<span id="cb15-94"><a href="#cb15-94" aria-hidden="true" tabindex="-1"></a>   $$</span>
-<span id="cb15-95"><a href="#cb15-95" aria-hidden="true" tabindex="-1"></a>   p(\tilde y \mid \theta')=\binom{n_{\text{new}}}{\tilde y},(\theta')^{\tilde y}(1-\theta')^{,n_{\text{new}}-\tilde y}.</span>
+<span id="cb15-90"><a href="#cb15-90" aria-hidden="true" tabindex="-1"></a>Un modo efficace per *comprendere intuitivamente* l'@eq-post-pred-distr consiste nell'interpretare la distribuzione predittiva a posteriori come una *media ponderata di previsioni*.</span>
+<span id="cb15-91"><a href="#cb15-91" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-92"><a href="#cb15-92" aria-hidden="true" tabindex="-1"></a>**Esperimento mentale (modello beta-binomiale).**</span>
+<span id="cb15-93"><a href="#cb15-93" aria-hidden="true" tabindex="-1"></a>Si consideri una griglia di valori possibili per $\theta$, ad esempio 0, 0.01, 0.02, ..., 0.99, 1. Per *ciascun* valore $\theta'$ in questa griglia:</span>
+<span id="cb15-94"><a href="#cb15-94" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-95"><a href="#cb15-95" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>Si costruisce la *distribuzione predittiva condizionata* di $\tilde y$ (con valori da 0 a $n_{\text{new}}$) utilizzando la distribuzione binomiale di parametro $\theta'$:</span>
 <span id="cb15-96"><a href="#cb15-96" aria-hidden="true" tabindex="-1"></a>   $$</span>
-<span id="cb15-97"><a href="#cb15-97" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-98"><a href="#cb15-98" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>attribuisci a quell’istogramma un *peso* pari alla plausibilità di $\theta'$ secondo la *distribuzione a posteriori* $p(\theta\mid y)$.</span>
-<span id="cb15-99"><a href="#cb15-99" aria-hidden="true" tabindex="-1"></a>   Se la distribuzione a posteriori assegna molta massa a $\theta'\approx 0.7$, ad esempio, quell’istogramma “vale” di più; se assegna poca massa a $\theta'\approx 0.1$, quell’istogramma “vale” di meno.</span>
-<span id="cb15-100"><a href="#cb15-100" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-101"><a href="#cb15-101" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>*Sovrapponi e somma* (in base ai pesi dati dalla distribuzione a posteriori) tutte le barre corrispondenti allo stesso valore di $\tilde y$.</span>
-<span id="cb15-102"><a href="#cb15-102" aria-hidden="true" tabindex="-1"></a>   La *barretta finale* per $\tilde y=k$ è la media ponderata delle barrette per $\tilde y=k$ prodotte da tutti i $\theta'$ della griglia.</span>
-<span id="cb15-103"><a href="#cb15-103" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-104"><a href="#cb15-104" aria-hidden="true" tabindex="-1"></a>Il risultato di questa somma pesata *è* la distribuzione predittiva a posteriori $p(\tilde y\mid y)$. In altre parole:</span>
+<span id="cb15-97"><a href="#cb15-97" aria-hidden="true" tabindex="-1"></a>   p(\tilde y \mid \theta') = \binom{n_{\text{new}}}{\tilde y} (\theta')^{\tilde y} (1-\theta')^{n_{\text{new}}-\tilde y}.</span>
+<span id="cb15-98"><a href="#cb15-98" aria-hidden="true" tabindex="-1"></a>   $$</span>
+<span id="cb15-99"><a href="#cb15-99" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-100"><a href="#cb15-100" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>A questa distribuzione viene assegnato un *peso* pari alla plausibilità di $\theta'$ in base alla *distribuzione a posteriori* $p(\theta \mid y)$.</span>
+<span id="cb15-101"><a href="#cb15-101" aria-hidden="true" tabindex="-1"></a>   Se la distribuzione a posteriori assegna un'elevata densità a $\theta' \approx 0.7$, ad esempio, la corrispondente distribuzione predittiva avrà maggiore rilevanza; se invece assegna una bassa densità a $\theta' \approx 0.1$, la distribuzione predittiva avrà minore influenza.</span>
+<span id="cb15-102"><a href="#cb15-102" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-103"><a href="#cb15-103" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>Si *sovrappongono e sommano* (secondo i pesi definiti dalla distribuzione a posteriori) tutte le probabilità associate a ciascun valore di $\tilde y$.</span>
+<span id="cb15-104"><a href="#cb15-104" aria-hidden="true" tabindex="-1"></a>   La *probabilità finale* per $\tilde y = k$ corrisponde alla media ponderata delle probabilità per $\tilde y = k$ generate da tutti i valori di $\theta'$ della griglia.</span>
 <span id="cb15-105"><a href="#cb15-105" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-106"><a href="#cb15-106" aria-hidden="true" tabindex="-1"></a><span class="at">&gt; Ogni $\theta$ “prova a prevedere” $\tilde y$; la distribuzione a posteriori decide *quanto ascoltare* ciascuna previsione.</span></span>
+<span id="cb15-106"><a href="#cb15-106" aria-hidden="true" tabindex="-1"></a>Il risultato di questa integrazione ponderata *coincide* con la distribuzione predittiva a posteriori $p(\tilde y \mid y)$. In altri termini:</span>
 <span id="cb15-107"><a href="#cb15-107" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-108"><a href="#cb15-108" aria-hidden="true" tabindex="-1"></a>**Cosa cambia rispetto a fissare $\theta$.**</span>
+<span id="cb15-108"><a href="#cb15-108" aria-hidden="true" tabindex="-1"></a><span class="at">&gt; Ciascun valore di $\theta$ "propone" una previsione per $\tilde y$; la distribuzione a posteriori determina *quanto peso attribuire* a ciascuna di queste previsioni.</span></span>
 <span id="cb15-109"><a href="#cb15-109" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-110"><a href="#cb15-110" aria-hidden="true" tabindex="-1"></a><span class="ss">* </span>Se la distribuzione a posteriori è *concentrata* (es. $\theta\approx 0.70\pm 0.03$), la media ponderata è quasi identica alla Binomiale con $p\simeq 0.70$: la distribuzione predittiva è *stretta* e centrata dove ti aspetti.</span>
-<span id="cb15-111"><a href="#cb15-111" aria-hidden="true" tabindex="-1"></a><span class="ss">* </span>Se la distribuzione a posteriori è *diffusa* (es. $\theta$ plausibile tanto vicino a 0.4 quanto a 0.8), stai mediando istogrammi molto diversi tra loro: la distribuzione predittiva a posteriori diventa *più larga* e con *code più pesanti*.</span>
-<span id="cb15-112"><a href="#cb15-112" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-113"><a href="#cb15-113" aria-hidden="true" tabindex="-1"></a>Questa dilatazione riflette due fonti di incertezza:</span>
+<span id="cb15-110"><a href="#cb15-110" aria-hidden="true" tabindex="-1"></a>**Differenze rispetto all'approccio con $\theta$ fissato.**</span>
+<span id="cb15-111"><a href="#cb15-111" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-112"><a href="#cb15-112" aria-hidden="true" tabindex="-1"></a><span class="ss">* </span>Se la distribuzione a posteriori è *concentrata* (ad esempio se $\theta \approx 0.70 \pm 0.03$), la media ponderata sarà quasi identica alla distribuzione binomiale con $p \simeq 0.70$: la distribuzione predittiva risulterà *concentrata* attorno al valore atteso.</span>
+<span id="cb15-113"><a href="#cb15-113" aria-hidden="true" tabindex="-1"></a><span class="ss">* </span>Se la distribuzione a posteriori è *dispersa* (con valori di $\theta$ plausibili sia intorno a 0.4 che a 0.8), si stanno mediando distribuzioni molto diverse tra loro: la distribuzione predittiva a posteriori risulterà *più dispersa* e con *code più pesanti*.</span>
 <span id="cb15-114"><a href="#cb15-114" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-115"><a href="#cb15-115" aria-hidden="true" tabindex="-1"></a><span class="ss">* </span>**la casualità** del processo ($\tilde y\mid \theta$),</span>
-<span id="cb15-116"><a href="#cb15-116" aria-hidden="true" tabindex="-1"></a><span class="ss">* </span>**l'incertezza epistemica** sui parametri ($\theta\mid y$).</span>
-<span id="cb15-117"><a href="#cb15-117" aria-hidden="true" tabindex="-1"></a>  Un modo sintetico per ricordarlo è la decomposizione della varianza:</span>
-<span id="cb15-118"><a href="#cb15-118" aria-hidden="true" tabindex="-1"></a>  $$</span>
-<span id="cb15-119"><a href="#cb15-119" aria-hidden="true" tabindex="-1"></a>  \mathrm{Var}(\tilde y\mid y)=\underbrace{\mathbb E_{p(\theta\mid y)}<span class="co">[</span><span class="ot">\mathrm{Var}(\tilde y\mid \theta)</span><span class="co">]</span>}*{\text{rumore del processo}}</span>
-<span id="cb15-120"><a href="#cb15-120" aria-hidden="true" tabindex="-1"></a>  +\underbrace{\mathrm{Var}*{p(\theta\mid y)}<span class="co">[</span><span class="ot">\mathbb E(\tilde y\mid \theta)</span><span class="co">]</span>}_{\text{incertezza sul parametro}}.</span>
-<span id="cb15-121"><a href="#cb15-121" aria-hidden="true" tabindex="-1"></a>  $$</span>
-<span id="cb15-122"><a href="#cb15-122" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-123"><a href="#cb15-123" aria-hidden="true" tabindex="-1"></a>**Piccolo esempio numerico $n(_\text{new})=10$.**</span>
+<span id="cb15-115"><a href="#cb15-115" aria-hidden="true" tabindex="-1"></a>Questa dilatazione riflette la combinazione di due diverse fonti di incertezza:</span>
+<span id="cb15-116"><a href="#cb15-116" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-117"><a href="#cb15-117" aria-hidden="true" tabindex="-1"></a><span class="ss">* </span>*la variabilità intrinseca* del processo generativo dei dati ($\tilde y \mid \theta$);</span>
+<span id="cb15-118"><a href="#cb15-118" aria-hidden="true" tabindex="-1"></a><span class="ss">* </span>*l'incertezza epistemica* sulla stima dei parametri ($\theta \mid y$).</span>
+<span id="cb15-119"><a href="#cb15-119" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-120"><a href="#cb15-120" aria-hidden="true" tabindex="-1"></a>::: {.callout-tip title="Esempio numerico con $n_{\text{new}} = 10$"}</span>
+<span id="cb15-121"><a href="#cb15-121" aria-hidden="true" tabindex="-1"></a><span class="ss">* </span>Con una posterior concentrata attorno a 0.7: la massa di probabilità si concentra su 6-8 successi; valori estremi come 0/10 o 10/10 sono estremamente improbabili.</span>
+<span id="cb15-122"><a href="#cb15-122" aria-hidden="true" tabindex="-1"></a><span class="ss">* </span>Con una posterior ampia tra 0.4 e 0.8: la probabilità si distribuisce da circa 4 a 9 successi, con probabilità nelle code sensibilmente maggiori.</span>
+<span id="cb15-123"><a href="#cb15-123" aria-hidden="true" tabindex="-1"></a>:::</span>
 <span id="cb15-124"><a href="#cb15-124" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-125"><a href="#cb15-125" aria-hidden="true" tabindex="-1"></a><span class="ss">* </span>Posterior concentrata attorno a (0.7): la massa predittiva è su 6–8 successi; 0/10 o 10/10 sono rarissimi.</span>
-<span id="cb15-126"><a href="#cb15-126" aria-hidden="true" tabindex="-1"></a><span class="ss">* </span>Posterior ampia tra 0.4 e 0.8: la massa si stende da ~4 a ~9 successi; aumentano sensibilmente le probabilità in coda.</span>
+<span id="cb15-125"><a href="#cb15-125" aria-hidden="true" tabindex="-1"></a>**Messaggio fondamentale.**</span>
+<span id="cb15-126"><a href="#cb15-126" aria-hidden="true" tabindex="-1"></a>La distribuzione predittiva a posteriori *non corrisponde* alla distribuzione di $\tilde{y}$ condizionata a un singolo valore di $\theta$, ma rappresenta la *media ponderata* (secondo la distribuzione a posteriori) di *tutte* le possibili previsioni condizionate. Quando le informazioni sul parametro sono limitate, le nostre previsioni per i dati futuri devono necessariamente essere *più conservative* (più disperse). Al contrario, quando si dispone di informazioni più precise, le previsioni possono essere più focalizzate.</span>
 <span id="cb15-127"><a href="#cb15-127" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-128"><a href="#cb15-128" aria-hidden="true" tabindex="-1"></a>**Messaggio chiave.**</span>
-<span id="cb15-129"><a href="#cb15-129" aria-hidden="true" tabindex="-1"></a>La distribuzione predittiva a posteriori *non è l’istogramma di un singolo $\theta$*, ma la *media ponderata* (dalla distribuzione a posteriori) di *tutte* le predizioni condizionali. Se sappiamo poco del parametro, le nostre previsioni sui dati futuri devono essere *più caute* (più larghe). Se sappiamo molto, possono essere *più concentrate*.</span>
-<span id="cb15-130"><a href="#cb15-130" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-131"><a href="#cb15-131" aria-hidden="true" tabindex="-1"></a><span class="fu">## Il modello Beta-Binomiale</span></span>
-<span id="cb15-132"><a href="#cb15-132" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-133"><a href="#cb15-133" aria-hidden="true" tabindex="-1"></a>Si consideri un esperimento binomiale consistente in $n$ prove indipendenti, dove si osserva il numero di successi $y$ (ad esempio, il numero di teste nel lancio di una moneta). L'approccio bayesiano si articola in tre fasi fondamentali:</span>
+<span id="cb15-128"><a href="#cb15-128" aria-hidden="true" tabindex="-1"></a><span class="fu">## Il modello Beta-Binomiale</span></span>
+<span id="cb15-129"><a href="#cb15-129" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-130"><a href="#cb15-130" aria-hidden="true" tabindex="-1"></a>Si consideri un esperimento binomiale consistente in $n$ prove indipendenti, dove si osserva il numero di successi $y$ (ad esempio, il numero di teste nel lancio di una moneta). L'approccio bayesiano si articola in tre fasi fondamentali:</span>
+<span id="cb15-131"><a href="#cb15-131" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-132"><a href="#cb15-132" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>**Specificazione della distribuzione a priori**</span>
+<span id="cb15-133"><a href="#cb15-133" aria-hidden="true" tabindex="-1"></a>   La conoscenza iniziale riguardante la probabilità di successo $p$ viene formalizzata attraverso una distribuzione *Beta($\alpha, \beta$)*, particolarmente appropriata per parametri definiti sull'intervallo unitario:</span>
 <span id="cb15-134"><a href="#cb15-134" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-135"><a href="#cb15-135" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>**Specificazione della distribuzione a priori**</span>
-<span id="cb15-136"><a href="#cb15-136" aria-hidden="true" tabindex="-1"></a>   La conoscenza iniziale riguardante la probabilità di successo $p$ viene formalizzata attraverso una distribuzione *Beta($\alpha, \beta$)*, particolarmente appropriata per parametri definiti sull'intervallo unitario:</span>
+<span id="cb15-135"><a href="#cb15-135" aria-hidden="true" tabindex="-1"></a><span class="ss">   * </span>Il parametro $\alpha$ rappresenta un numero pseudo-osservato di successi;</span>
+<span id="cb15-136"><a href="#cb15-136" aria-hidden="true" tabindex="-1"></a><span class="ss">   * </span>Il parametro $\beta$ rappresenta un numero pseudo-osservato di insuccessi.</span>
 <span id="cb15-137"><a href="#cb15-137" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-138"><a href="#cb15-138" aria-hidden="true" tabindex="-1"></a><span class="ss">   * </span>Il parametro $\alpha$ rappresenta un numero pseudo-osservato di successi;</span>
-<span id="cb15-139"><a href="#cb15-139" aria-hidden="true" tabindex="-1"></a><span class="ss">   * </span>Il parametro $\beta$ rappresenta un numero pseudo-osservato di insuccessi.</span>
-<span id="cb15-140"><a href="#cb15-140" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-141"><a href="#cb15-141" aria-hidden="true" tabindex="-1"></a>   Questa parametrizzazione consente di incorporare conoscenze pregresse in forma di "evidenza virtuale".</span>
+<span id="cb15-138"><a href="#cb15-138" aria-hidden="true" tabindex="-1"></a>   Questa parametrizzazione consente di incorporare conoscenze pregresse in forma di "evidenza virtuale".</span>
+<span id="cb15-139"><a href="#cb15-139" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-140"><a href="#cb15-140" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>**Aggiornamento bayesiano alla distribuzione a posteriori**</span>
+<span id="cb15-141"><a href="#cb15-141" aria-hidden="true" tabindex="-1"></a>   Dopo l'osservazione di $y$ successi in $n$ prove, la distribuzione a posteriori si ottiene mediante aggiornamento coniugato:</span>
 <span id="cb15-142"><a href="#cb15-142" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-143"><a href="#cb15-143" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>**Aggiornamento bayesiano alla distribuzione a posteriori**</span>
-<span id="cb15-144"><a href="#cb15-144" aria-hidden="true" tabindex="-1"></a>   Dopo l'osservazione di $y$ successi in $n$ prove, la distribuzione a posteriori si ottiene mediante aggiornamento coniugato:</span>
-<span id="cb15-145"><a href="#cb15-145" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-146"><a href="#cb15-146" aria-hidden="true" tabindex="-1"></a>   $$</span>
-<span id="cb15-147"><a href="#cb15-147" aria-hidden="true" tabindex="-1"></a>   p \mid y \sim \text{Beta}(\alpha + y, \beta + n - y).</span>
-<span id="cb15-148"><a href="#cb15-148" aria-hidden="true" tabindex="-1"></a>   $$</span>
-<span id="cb15-149"><a href="#cb15-149" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-150"><a href="#cb15-150" aria-hidden="true" tabindex="-1"></a>   Questa distribuzione caratterizza completamente l'incertezza residua sul parametro $p$ condizionatamente ai dati osservati.</span>
+<span id="cb15-143"><a href="#cb15-143" aria-hidden="true" tabindex="-1"></a>   $$</span>
+<span id="cb15-144"><a href="#cb15-144" aria-hidden="true" tabindex="-1"></a>   p \mid y \sim \text{Beta}(\alpha + y, \beta + n - y).</span>
+<span id="cb15-145"><a href="#cb15-145" aria-hidden="true" tabindex="-1"></a>   $$</span>
+<span id="cb15-146"><a href="#cb15-146" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-147"><a href="#cb15-147" aria-hidden="true" tabindex="-1"></a>   Questa distribuzione caratterizza completamente l'incertezza residua sul parametro $p$ condizionatamente ai dati osservati.</span>
+<span id="cb15-148"><a href="#cb15-148" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-149"><a href="#cb15-149" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>**Costruzione della distribuzione predittiva a posteriori**</span>
+<span id="cb15-150"><a href="#cb15-150" aria-hidden="true" tabindex="-1"></a>   Per prevedere il numero di successi $y_{\text{new}}$ in $n_{\text{new}}$ prove future, si integra l'incertezza parametrica con la variabilità campionaria attraverso il seguente procedimento:</span>
 <span id="cb15-151"><a href="#cb15-151" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-152"><a href="#cb15-152" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>**Costruzione della distribuzione predittiva a posteriori**</span>
-<span id="cb15-153"><a href="#cb15-153" aria-hidden="true" tabindex="-1"></a>   Per prevedere il numero di successi $y_{\text{new}}$ in $n_{\text{new}}$ prove future, si integra l'incertezza parametrica con la variabilità campionaria attraverso il seguente procedimento:</span>
+<span id="cb15-152"><a href="#cb15-152" aria-hidden="true" tabindex="-1"></a><span class="ss">   * </span>Campionamento parametrico: $p^{(s)} \sim \text{Beta}(\alpha + y, \beta + n - y)$</span>
+<span id="cb15-153"><a href="#cb15-153" aria-hidden="true" tabindex="-1"></a><span class="ss">   * </span>Generazione predittiva: $y_{\text{new}}^{(s)} \sim \text{Binomial}(n_{\text{new}}, p^{(s)})$</span>
 <span id="cb15-154"><a href="#cb15-154" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-155"><a href="#cb15-155" aria-hidden="true" tabindex="-1"></a><span class="ss">   * </span>Campionamento parametrico: $p^{(s)} \sim \text{Beta}(\alpha + y, \beta + n - y)$</span>
-<span id="cb15-156"><a href="#cb15-156" aria-hidden="true" tabindex="-1"></a><span class="ss">   * </span>Generazione predittiva: $y_{\text{new}}^{(s)} \sim \text{Binomial}(n_{\text{new}}, p^{(s)})$</span>
+<span id="cb15-155"><a href="#cb15-155" aria-hidden="true" tabindex="-1"></a>   La distribuzione empirica dei valori $y_{\text{new}}^{(s)}$ costituisce un'approssimazione Monte Carlo della distribuzione predittiva a posteriori, incorporando sia l'incertezza epistemica su $p$ sia la variabilità aleatoria del processo binomiale.</span>
+<span id="cb15-156"><a href="#cb15-156" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb15-157"><a href="#cb15-157" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-158"><a href="#cb15-158" aria-hidden="true" tabindex="-1"></a>   La distribuzione empirica dei valori $y_{\text{new}}^{(s)}$ costituisce un'approssimazione Monte Carlo della distribuzione predittiva a posteriori, incorporando sia l'incertezza epistemica su $p$ sia la variabilità aleatoria del processo binomiale.</span>
+<span id="cb15-158"><a href="#cb15-158" aria-hidden="true" tabindex="-1"></a><span class="fu">## Un esempio numerico</span></span>
 <span id="cb15-159"><a href="#cb15-159" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-160"><a href="#cb15-160" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-161"><a href="#cb15-161" aria-hidden="true" tabindex="-1"></a><span class="fu">## Un esempio numerico</span></span>
-<span id="cb15-162"><a href="#cb15-162" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-163"><a href="#cb15-163" aria-hidden="true" tabindex="-1"></a><span class="fu">### I dati e le nostre conoscenze iniziali</span></span>
+<span id="cb15-160"><a href="#cb15-160" aria-hidden="true" tabindex="-1"></a><span class="fu">### I dati e le nostre conoscenze iniziali</span></span>
+<span id="cb15-161"><a href="#cb15-161" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-162"><a href="#cb15-162" aria-hidden="true" tabindex="-1"></a><span class="ss">* </span>**Dati osservati**: 70 successi su 100 prove (ad esempio, 70 teste su 100 lanci di moneta)</span>
+<span id="cb15-163"><a href="#cb15-163" aria-hidden="true" tabindex="-1"></a><span class="ss">* </span>**Conoscenza iniziale (prior)**: usiamo una distribuzione Beta(2, 2). Questa prior è "debole" e suggerisce che pensiamo che la moneta sia probabilmente equilibrata (p ≈ 0.5), ma siamo aperti ad altre possibilità.</span>
 <span id="cb15-164"><a href="#cb15-164" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-165"><a href="#cb15-165" aria-hidden="true" tabindex="-1"></a><span class="ss">* </span>**Dati osservati**: 70 successi su 100 prove (ad esempio, 70 teste su 100 lanci di moneta)</span>
-<span id="cb15-166"><a href="#cb15-166" aria-hidden="true" tabindex="-1"></a><span class="ss">* </span>**Conoscenza iniziale (prior)**: usiamo una distribuzione Beta(2, 2). Questa prior è "debole" e suggerisce che pensiamo che la moneta sia probabilmente equilibrata (p ≈ 0.5), ma siamo aperti ad altre possibilità.</span>
-<span id="cb15-167"><a href="#cb15-167" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-168"><a href="#cb15-168" aria-hidden="true" tabindex="-1"></a><span class="fu">### Aggiornamento delle nostre conoscenze</span></span>
-<span id="cb15-169"><a href="#cb15-169" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-170"><a href="#cb15-170" aria-hidden="true" tabindex="-1"></a>Dopo aver visto i dati, aggiorniamo le nostre convinzioni sulla probabilità di successo p:</span>
-<span id="cb15-171"><a href="#cb15-171" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-165"><a href="#cb15-165" aria-hidden="true" tabindex="-1"></a><span class="fu">### Aggiornamento delle nostre conoscenze</span></span>
+<span id="cb15-166"><a href="#cb15-166" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-167"><a href="#cb15-167" aria-hidden="true" tabindex="-1"></a>Dopo aver visto i dati, aggiorniamo le nostre convinzioni sulla probabilità di successo p:</span>
+<span id="cb15-168"><a href="#cb15-168" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-169"><a href="#cb15-169" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb15-170"><a href="#cb15-170" aria-hidden="true" tabindex="-1"></a><span class="in">alpha_posterior = 2 + 70 = 72</span></span>
+<span id="cb15-171"><a href="#cb15-171" aria-hidden="true" tabindex="-1"></a><span class="in">beta_posterior = 2 + (100 - 70) = 32</span></span>
 <span id="cb15-172"><a href="#cb15-172" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb15-173"><a href="#cb15-173" aria-hidden="true" tabindex="-1"></a><span class="in">alpha_posterior = 2 + 70 = 72</span></span>
-<span id="cb15-174"><a href="#cb15-174" aria-hidden="true" tabindex="-1"></a><span class="in">beta_posterior = 2 + (100 - 70) = 32</span></span>
-<span id="cb15-175"><a href="#cb15-175" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb15-176"><a href="#cb15-176" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-177"><a href="#cb15-177" aria-hidden="true" tabindex="-1"></a>Ora crediamo che p segua una distribuzione Beta(72, 32), che è centrata attorno a 0.7.</span>
-<span id="cb15-178"><a href="#cb15-178" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-179"><a href="#cb15-179" aria-hidden="true" tabindex="-1"></a><span class="fu">### Simulazione delle previsioni</span></span>
-<span id="cb15-180"><a href="#cb15-180" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-181"><a href="#cb15-181" aria-hidden="true" tabindex="-1"></a>Vogliamo prevedere cosa succederà in 10 lanci futuri:</span>
-<span id="cb15-182"><a href="#cb15-182" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-185"><a href="#cb15-185" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb15-186"><a href="#cb15-186" aria-hidden="true" tabindex="-1"></a><span class="co"># Dati osservati</span></span>
-<span id="cb15-187"><a href="#cb15-187" aria-hidden="true" tabindex="-1"></a>successi_osservati <span class="ot">&lt;-</span> <span class="dv">70</span></span>
-<span id="cb15-188"><a href="#cb15-188" aria-hidden="true" tabindex="-1"></a>lanci_totali <span class="ot">&lt;-</span> <span class="dv">100</span></span>
-<span id="cb15-189"><a href="#cb15-189" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-190"><a href="#cb15-190" aria-hidden="true" tabindex="-1"></a><span class="co"># Prior (conoscenza iniziale)</span></span>
-<span id="cb15-191"><a href="#cb15-191" aria-hidden="true" tabindex="-1"></a>alpha_prior <span class="ot">&lt;-</span> <span class="dv">2</span></span>
-<span id="cb15-192"><a href="#cb15-192" aria-hidden="true" tabindex="-1"></a>beta_prior <span class="ot">&lt;-</span> <span class="dv">2</span></span>
-<span id="cb15-193"><a href="#cb15-193" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-194"><a href="#cb15-194" aria-hidden="true" tabindex="-1"></a><span class="co"># Posterior (conoscenza aggiornata)</span></span>
-<span id="cb15-195"><a href="#cb15-195" aria-hidden="true" tabindex="-1"></a>alpha_post <span class="ot">&lt;-</span> alpha_prior <span class="sc">+</span> successi_osservati</span>
-<span id="cb15-196"><a href="#cb15-196" aria-hidden="true" tabindex="-1"></a>beta_post <span class="ot">&lt;-</span> beta_prior <span class="sc">+</span> (lanci_totali <span class="sc">-</span> successi_osservati)</span>
+<span id="cb15-173"><a href="#cb15-173" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-174"><a href="#cb15-174" aria-hidden="true" tabindex="-1"></a>Ora crediamo che p segua una distribuzione Beta(72, 32), che è centrata attorno a 0.7.</span>
+<span id="cb15-175"><a href="#cb15-175" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-176"><a href="#cb15-176" aria-hidden="true" tabindex="-1"></a><span class="fu">### Simulazione delle previsioni</span></span>
+<span id="cb15-177"><a href="#cb15-177" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-178"><a href="#cb15-178" aria-hidden="true" tabindex="-1"></a>Vogliamo prevedere cosa succederà in 10 lanci futuri:</span>
+<span id="cb15-179"><a href="#cb15-179" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-182"><a href="#cb15-182" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb15-183"><a href="#cb15-183" aria-hidden="true" tabindex="-1"></a><span class="co"># Dati osservati</span></span>
+<span id="cb15-184"><a href="#cb15-184" aria-hidden="true" tabindex="-1"></a>successi_osservati <span class="ot">&lt;-</span> <span class="dv">70</span></span>
+<span id="cb15-185"><a href="#cb15-185" aria-hidden="true" tabindex="-1"></a>lanci_totali <span class="ot">&lt;-</span> <span class="dv">100</span></span>
+<span id="cb15-186"><a href="#cb15-186" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-187"><a href="#cb15-187" aria-hidden="true" tabindex="-1"></a><span class="co"># Prior (conoscenza iniziale)</span></span>
+<span id="cb15-188"><a href="#cb15-188" aria-hidden="true" tabindex="-1"></a>alpha_prior <span class="ot">&lt;-</span> <span class="dv">2</span></span>
+<span id="cb15-189"><a href="#cb15-189" aria-hidden="true" tabindex="-1"></a>beta_prior <span class="ot">&lt;-</span> <span class="dv">2</span></span>
+<span id="cb15-190"><a href="#cb15-190" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-191"><a href="#cb15-191" aria-hidden="true" tabindex="-1"></a><span class="co"># Posterior (conoscenza aggiornata)</span></span>
+<span id="cb15-192"><a href="#cb15-192" aria-hidden="true" tabindex="-1"></a>alpha_post <span class="ot">&lt;-</span> alpha_prior <span class="sc">+</span> successi_osservati</span>
+<span id="cb15-193"><a href="#cb15-193" aria-hidden="true" tabindex="-1"></a>beta_post <span class="ot">&lt;-</span> beta_prior <span class="sc">+</span> (lanci_totali <span class="sc">-</span> successi_osservati)</span>
+<span id="cb15-194"><a href="#cb15-194" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-195"><a href="#cb15-195" aria-hidden="true" tabindex="-1"></a><span class="co"># Simuliamo 1000 valori plausibili per p</span></span>
+<span id="cb15-196"><a href="#cb15-196" aria-hidden="true" tabindex="-1"></a>valori_p <span class="ot">&lt;-</span> <span class="fu">rbeta</span>(<span class="dv">1000</span>, alpha_post, beta_post)</span>
 <span id="cb15-197"><a href="#cb15-197" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-198"><a href="#cb15-198" aria-hidden="true" tabindex="-1"></a><span class="co"># Simuliamo 1000 valori plausibili per p</span></span>
-<span id="cb15-199"><a href="#cb15-199" aria-hidden="true" tabindex="-1"></a>valori_p <span class="ot">&lt;-</span> <span class="fu">rbeta</span>(<span class="dv">1000</span>, alpha_post, beta_post)</span>
+<span id="cb15-198"><a href="#cb15-198" aria-hidden="true" tabindex="-1"></a><span class="co"># Per ogni valore di p, simuliamo 10 lanci futuri</span></span>
+<span id="cb15-199"><a href="#cb15-199" aria-hidden="true" tabindex="-1"></a>successi_futuri <span class="ot">&lt;-</span> <span class="fu">rbinom</span>(<span class="dv">1000</span>, <span class="at">size =</span> <span class="dv">10</span>, <span class="at">prob =</span> valori_p)</span>
 <span id="cb15-200"><a href="#cb15-200" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-201"><a href="#cb15-201" aria-hidden="true" tabindex="-1"></a><span class="co"># Per ogni valore di p, simuliamo 10 lanci futuri</span></span>
-<span id="cb15-202"><a href="#cb15-202" aria-hidden="true" tabindex="-1"></a>successi_futuri <span class="ot">&lt;-</span> <span class="fu">rbinom</span>(<span class="dv">1000</span>, <span class="at">size =</span> <span class="dv">10</span>, <span class="at">prob =</span> valori_p)</span>
-<span id="cb15-203"><a href="#cb15-203" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-204"><a href="#cb15-204" aria-hidden="true" tabindex="-1"></a><span class="co"># Calcoliamo le proporzioni di successo</span></span>
-<span id="cb15-205"><a href="#cb15-205" aria-hidden="true" tabindex="-1"></a>proporzioni_future <span class="ot">&lt;-</span> successi_futuri <span class="sc">/</span> <span class="dv">10</span></span>
-<span id="cb15-206"><a href="#cb15-206" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb15-207"><a href="#cb15-207" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-201"><a href="#cb15-201" aria-hidden="true" tabindex="-1"></a><span class="co"># Calcoliamo le proporzioni di successo</span></span>
+<span id="cb15-202"><a href="#cb15-202" aria-hidden="true" tabindex="-1"></a>proporzioni_future <span class="ot">&lt;-</span> successi_futuri <span class="sc">/</span> <span class="dv">10</span></span>
+<span id="cb15-203"><a href="#cb15-203" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb15-204"><a href="#cb15-204" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-205"><a href="#cb15-205" aria-hidden="true" tabindex="-1"></a><span class="fu">### Spiegazione passo per passo</span></span>
+<span id="cb15-206"><a href="#cb15-206" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-207"><a href="#cb15-207" aria-hidden="true" tabindex="-1"></a>Abbiamo osservato 70 successi su 100 lanci. Con una prior Beta(2,2), la distribuzione a posteriori diventa Beta(72,32). Questo significa che non conosciamo il valore esatto della probabilità di successo $p$, ma possiamo descrivere in modo plausibile l’incertezza che lo circonda: molto probabilmente $p$ si trova vicino a 0.7, con una certa variabilità intorno a questo valore.</span>
 <span id="cb15-208"><a href="#cb15-208" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-209"><a href="#cb15-209" aria-hidden="true" tabindex="-1"></a><span class="fu">### Spiegazione passo per passo</span></span>
+<span id="cb15-209"><a href="#cb15-209" aria-hidden="true" tabindex="-1"></a>Per rappresentare questa incertezza, estraiamo 1000 valori da una distribuzione Beta(72,32): <span class="in">`valori_p &lt;- rbeta(1000, 72, 32)`</span>. Ciascun valore estratto è un candidato possibile per $p$, compatibile con i dati osservati e con la nostra conoscenza iniziale. A questo punto, ci chiediamo: cosa potremmo osservare nei prossimi lanci? Per rispondere, per ogni valore di $p$ simuliamo 10 nuovi lanci, ottenendo così 1000 possibili scenari futuri: <span class="in">`successi_futuri &lt;- rbinom(1000, size = 10, prob = valori_p)`</span>.</span>
 <span id="cb15-210"><a href="#cb15-210" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-211"><a href="#cb15-211" aria-hidden="true" tabindex="-1"></a>Abbiamo osservato 70 successi su 100 lanci. Con una prior Beta(2,2), la distribuzione a posteriori diventa Beta(72,32). Questo significa che non conosciamo il valore esatto della probabilità di successo $p$, ma possiamo descrivere in modo plausibile l’incertezza che lo circonda: molto probabilmente $p$ si trova vicino a 0.7, con una certa variabilità intorno a questo valore.</span>
+<span id="cb15-211"><a href="#cb15-211" aria-hidden="true" tabindex="-1"></a>Infine, trasformiamo il numero di successi in proporzioni dividendo per 10, in modo da avere risultati immediatamente interpretabili come probabilità di successo nei lanci futuri: <span class="in">`proporzioni_future &lt;- successi_futuri / 10`</span>. In altre parole, otteniamo un quadro di ciò che possiamo aspettarci, tenendo insieme due fonti di incertezza: da un lato non sappiamo il valore esatto di $p$, dall’altro anche conoscendo $p$ i risultati dei lanci rimarrebbero comunque soggetti al caso.</span>
 <span id="cb15-212"><a href="#cb15-212" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-213"><a href="#cb15-213" aria-hidden="true" tabindex="-1"></a>Per rappresentare questa incertezza, estraiamo 1000 valori da una distribuzione Beta(72,32): <span class="in">`valori_p &lt;- rbeta(1000, 72, 32)`</span>. Ciascun valore estratto è un candidato possibile per $p$, compatibile con i dati osservati e con la nostra conoscenza iniziale. A questo punto, ci chiediamo: cosa potremmo osservare nei prossimi lanci? Per rispondere, per ogni valore di $p$ simuliamo 10 nuovi lanci, ottenendo così 1000 possibili scenari futuri: <span class="in">`successi_futuri &lt;- rbinom(1000, size = 10, prob = valori_p)`</span>.</span>
+<span id="cb15-213"><a href="#cb15-213" aria-hidden="true" tabindex="-1"></a>Il vettore <span class="in">`proporzioni_future`</span> riassume queste possibilità: non una singola previsione puntuale, ma un’intera distribuzione di esiti futuri, coerente con i dati raccolti e con il modello bayesiano adottato.</span>
 <span id="cb15-214"><a href="#cb15-214" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-215"><a href="#cb15-215" aria-hidden="true" tabindex="-1"></a>Infine, trasformiamo il numero di successi in proporzioni dividendo per 10, in modo da avere risultati immediatamente interpretabili come probabilità di successo nei lanci futuri: <span class="in">`proporzioni_future &lt;- successi_futuri / 10`</span>. In altre parole, otteniamo un quadro di ciò che possiamo aspettarci, tenendo insieme due fonti di incertezza: da un lato non sappiamo il valore esatto di $p$, dall’altro anche conoscendo $p$ i risultati dei lanci rimarrebbero comunque soggetti al caso.</span>
+<span id="cb15-215"><a href="#cb15-215" aria-hidden="true" tabindex="-1"></a><span class="fu">### Visualizziamo i risultati</span></span>
 <span id="cb15-216"><a href="#cb15-216" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-217"><a href="#cb15-217" aria-hidden="true" tabindex="-1"></a>Il vettore <span class="in">`proporzioni_future`</span> riassume queste possibilità: non una singola previsione puntuale, ma un’intera distribuzione di esiti futuri, coerente con i dati raccolti e con il modello bayesiano adottato.</span>
-<span id="cb15-218"><a href="#cb15-218" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-219"><a href="#cb15-219" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-220"><a href="#cb15-220" aria-hidden="true" tabindex="-1"></a><span class="fu">### Visualizziamo i risultati</span></span>
-<span id="cb15-221"><a href="#cb15-221" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-222"><a href="#cb15-222" aria-hidden="true" tabindex="-1"></a>Distribuzione iniziale (prima di vedere i dati):</span>
-<span id="cb15-225"><a href="#cb15-225" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb15-226"><a href="#cb15-226" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(<span class="fu">data.frame</span>(<span class="at">x =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>)), <span class="fu">aes</span>(<span class="at">x =</span> x)) <span class="sc">+</span></span>
-<span id="cb15-227"><a href="#cb15-227" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_function</span>(<span class="at">fun =</span> dbeta, </span>
-<span id="cb15-228"><a href="#cb15-228" aria-hidden="true" tabindex="-1"></a>                <span class="at">args =</span> <span class="fu">list</span>(<span class="at">shape1 =</span> alpha_prior, <span class="at">shape2 =</span> beta_prior), </span>
-<span id="cb15-229"><a href="#cb15-229" aria-hidden="true" tabindex="-1"></a>                <span class="at">color =</span> <span class="st">"#4682B4"</span>, <span class="at">size =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
-<span id="cb15-230"><a href="#cb15-230" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Probabilità di successo (p)"</span>,</span>
-<span id="cb15-231"><a href="#cb15-231" aria-hidden="true" tabindex="-1"></a>       <span class="at">y =</span> <span class="st">"Densità"</span>)</span>
-<span id="cb15-232"><a href="#cb15-232" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb15-233"><a href="#cb15-233" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-234"><a href="#cb15-234" aria-hidden="true" tabindex="-1"></a>Conoscenza aggiornata (dopo aver visto i dati):</span>
+<span id="cb15-217"><a href="#cb15-217" aria-hidden="true" tabindex="-1"></a>Distribuzione iniziale (prima di vedere i dati):</span>
+<span id="cb15-220"><a href="#cb15-220" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb15-221"><a href="#cb15-221" aria-hidden="true" tabindex="-1"></a><span class="co"># Distribuzione iniziale (prima di vedere i dati) — PRIOR (blu)</span></span>
+<span id="cb15-222"><a href="#cb15-222" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(<span class="fu">data.frame</span>(<span class="at">x =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>)), <span class="fu">aes</span>(<span class="at">x =</span> x)) <span class="sc">+</span></span>
+<span id="cb15-223"><a href="#cb15-223" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_function</span>(</span>
+<span id="cb15-224"><a href="#cb15-224" aria-hidden="true" tabindex="-1"></a>    <span class="at">fun  =</span> dbeta,</span>
+<span id="cb15-225"><a href="#cb15-225" aria-hidden="true" tabindex="-1"></a>    <span class="at">args =</span> <span class="fu">list</span>(<span class="at">shape1 =</span> alpha_prior, <span class="at">shape2 =</span> beta_prior),</span>
+<span id="cb15-226"><a href="#cb15-226" aria-hidden="true" tabindex="-1"></a>    <span class="at">color =</span> modern_palette<span class="sc">$</span>blue,</span>
+<span id="cb15-227"><a href="#cb15-227" aria-hidden="true" tabindex="-1"></a>    <span class="at">linewidth =</span> <span class="fl">1.1</span></span>
+<span id="cb15-228"><a href="#cb15-228" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb15-229"><a href="#cb15-229" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Probabilità di successo (p)"</span>, <span class="at">y =</span> <span class="st">"Densità"</span>)</span>
+<span id="cb15-230"><a href="#cb15-230" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-231"><a href="#cb15-231" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb15-232"><a href="#cb15-232" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-233"><a href="#cb15-233" aria-hidden="true" tabindex="-1"></a>Conoscenza aggiornata (dopo aver visto i dati):</span>
+<span id="cb15-234"><a href="#cb15-234" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb15-237"><a href="#cb15-237" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb15-238"><a href="#cb15-238" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(<span class="fu">data.frame</span>(<span class="at">x =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>)), <span class="fu">aes</span>(<span class="at">x =</span> x)) <span class="sc">+</span></span>
-<span id="cb15-239"><a href="#cb15-239" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_function</span>(<span class="at">fun =</span> dbeta, </span>
-<span id="cb15-240"><a href="#cb15-240" aria-hidden="true" tabindex="-1"></a>                <span class="at">args =</span> <span class="fu">list</span>(<span class="at">shape1 =</span> alpha_post, <span class="at">shape2 =</span> beta_post), </span>
-<span id="cb15-241"><a href="#cb15-241" aria-hidden="true" tabindex="-1"></a>                <span class="at">color =</span> <span class="st">"#A0522D"</span>, <span class="at">size =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
-<span id="cb15-242"><a href="#cb15-242" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Probabilità di successo (p)"</span>,</span>
-<span id="cb15-243"><a href="#cb15-243" aria-hidden="true" tabindex="-1"></a>       <span class="at">y =</span> <span class="st">"Densità"</span>)</span>
-<span id="cb15-244"><a href="#cb15-244" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb15-245"><a href="#cb15-245" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-246"><a href="#cb15-246" aria-hidden="true" tabindex="-1"></a>Previsioni per i prossimi 10 lanci:</span>
-<span id="cb15-249"><a href="#cb15-249" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb15-250"><a href="#cb15-250" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(<span class="fu">data.frame</span>(<span class="at">proporzioni =</span> proporzioni_future), <span class="fu">aes</span>(<span class="at">x =</span> proporzioni)) <span class="sc">+</span></span>
-<span id="cb15-251"><a href="#cb15-251" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="fu">aes</span>(<span class="at">y =</span> ..density..), <span class="at">bins =</span> <span class="dv">20</span>) <span class="sc">+</span></span>
-<span id="cb15-252"><a href="#cb15-252" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="fu">aes</span>(<span class="at">xintercept =</span> successi_osservati <span class="sc">/</span> lanci_totali), </span>
-<span id="cb15-253"><a href="#cb15-253" aria-hidden="true" tabindex="-1"></a>             <span class="at">color =</span> <span class="st">"black"</span>, <span class="at">size =</span> <span class="dv">1</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
-<span id="cb15-254"><a href="#cb15-254" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Proporzione di successi attesi"</span>,</span>
-<span id="cb15-255"><a href="#cb15-255" aria-hidden="true" tabindex="-1"></a>       <span class="at">y =</span> <span class="st">"Densità"</span>)</span>
-<span id="cb15-256"><a href="#cb15-256" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb15-257"><a href="#cb15-257" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-258"><a href="#cb15-258" aria-hidden="true" tabindex="-1"></a><span class="fu">### Interpretazione dei risultati</span></span>
-<span id="cb15-259"><a href="#cb15-259" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-260"><a href="#cb15-260" aria-hidden="true" tabindex="-1"></a><span class="ss">* </span>La nostra conoscenza su $p$ è ora concentrata attorno a 0.7 (grafico in rosso).</span>
-<span id="cb15-261"><a href="#cb15-261" aria-hidden="true" tabindex="-1"></a><span class="ss">* </span>Le previsioni per 10 lanci futuri sono più variabili perché:</span>
-<span id="cb15-262"><a href="#cb15-262" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>Siamo ancora un po' incerti sul valore esatto di $p$.</span>
-<span id="cb15-263"><a href="#cb15-263" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>Anche se conoscessimo p perfettamente, 10 lanci potrebbero dare risultati leggermente diversi.</span>
-<span id="cb15-264"><a href="#cb15-264" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-265"><a href="#cb15-265" aria-hidden="true" tabindex="-1"></a><span class="ss">* </span>Il risultato osservato (70% di successi) cade nella zona più probabile delle nostre previsioni: questo ci dice che il nostro modello è ragionevole e può essere usato per fare previsioni future.</span>
-<span id="cb15-266"><a href="#cb15-266" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-267"><a href="#cb15-267" aria-hidden="true" tabindex="-1"></a>**In pratica**: se dovessi scommettere sui prossimi 10 lanci, ti aspetteresti probabilmente 6-8 successi, ma potrebbero essercene anche 5 o 9 per puro caso.</span>
-<span id="cb15-268"><a href="#cb15-268" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-269"><a href="#cb15-269" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-270"><a href="#cb15-270" aria-hidden="true" tabindex="-1"></a>::: {.callout-caution collapse=true title="Nota"}</span>
-<span id="cb15-271"><a href="#cb15-271" aria-hidden="true" tabindex="-1"></a>Il fatto che, nel nostro esempio, la distribuzione predittiva a posteriori riproduca efficacemente i dati osservati potrebbe apparire come un risultato scontato. In realtà, questo esito positivo è significativo e tutt'altro che banale; dimostra che il nostro modello semplice è ben calibrato. Abbiamo scelto deliberatamente un modello binomiale con prior Beta proprio per la sua chiarezza espositiva, che ci permette di illustrare in modo trasparente la logica sottostante alla distribuzione predittiva a posteriori e mostrare visivamente come l'incertezza sui parametri e la variabilità intrinseca dei dati si integrino in un unico framework.</span>
+<span id="cb15-238"><a href="#cb15-238" aria-hidden="true" tabindex="-1"></a><span class="co"># Conoscenza aggiornata (dopo aver visto i dati) — POSTERIOR (viola)</span></span>
+<span id="cb15-239"><a href="#cb15-239" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(<span class="fu">data.frame</span>(<span class="at">x =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>)), <span class="fu">aes</span>(<span class="at">x =</span> x)) <span class="sc">+</span></span>
+<span id="cb15-240"><a href="#cb15-240" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_function</span>(</span>
+<span id="cb15-241"><a href="#cb15-241" aria-hidden="true" tabindex="-1"></a>    <span class="at">fun  =</span> dbeta,</span>
+<span id="cb15-242"><a href="#cb15-242" aria-hidden="true" tabindex="-1"></a>    <span class="at">args =</span> <span class="fu">list</span>(<span class="at">shape1 =</span> alpha_post, <span class="at">shape2 =</span> beta_post),</span>
+<span id="cb15-243"><a href="#cb15-243" aria-hidden="true" tabindex="-1"></a>    <span class="at">color =</span> modern_palette<span class="sc">$</span>purple,</span>
+<span id="cb15-244"><a href="#cb15-244" aria-hidden="true" tabindex="-1"></a>    <span class="at">linewidth =</span> <span class="fl">1.1</span></span>
+<span id="cb15-245"><a href="#cb15-245" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb15-246"><a href="#cb15-246" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Probabilità di successo (p)"</span>, <span class="at">y =</span> <span class="st">"Densità"</span>)</span>
+<span id="cb15-247"><a href="#cb15-247" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb15-248"><a href="#cb15-248" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-249"><a href="#cb15-249" aria-hidden="true" tabindex="-1"></a>Previsioni per i prossimi 10 lanci:</span>
+<span id="cb15-250"><a href="#cb15-250" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-253"><a href="#cb15-253" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb15-254"><a href="#cb15-254" aria-hidden="true" tabindex="-1"></a><span class="co"># Previsioni per i prossimi 10 lanci — Posterior predictive (istogramma verde)</span></span>
+<span id="cb15-255"><a href="#cb15-255" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(<span class="fu">data.frame</span>(<span class="at">proporzioni =</span> proporzioni_future), <span class="fu">aes</span>(<span class="at">x =</span> proporzioni)) <span class="sc">+</span></span>
+<span id="cb15-256"><a href="#cb15-256" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(</span>
+<span id="cb15-257"><a href="#cb15-257" aria-hidden="true" tabindex="-1"></a>    <span class="fu">aes</span>(<span class="at">y =</span> ..density..),</span>
+<span id="cb15-258"><a href="#cb15-258" aria-hidden="true" tabindex="-1"></a>    <span class="at">bins =</span> <span class="dv">20</span>,</span>
+<span id="cb15-259"><a href="#cb15-259" aria-hidden="true" tabindex="-1"></a>    <span class="at">fill =</span> modern_palette<span class="sc">$</span>green,</span>
+<span id="cb15-260"><a href="#cb15-260" aria-hidden="true" tabindex="-1"></a>    <span class="at">color =</span> modern_palette<span class="sc">$</span>white,</span>
+<span id="cb15-261"><a href="#cb15-261" aria-hidden="true" tabindex="-1"></a>    <span class="at">alpha =</span> <span class="fl">0.8</span>,</span>
+<span id="cb15-262"><a href="#cb15-262" aria-hidden="true" tabindex="-1"></a>    <span class="at">linewidth =</span> <span class="fl">0.2</span></span>
+<span id="cb15-263"><a href="#cb15-263" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb15-264"><a href="#cb15-264" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(</span>
+<span id="cb15-265"><a href="#cb15-265" aria-hidden="true" tabindex="-1"></a>    <span class="fu">aes</span>(<span class="at">xintercept =</span> successi_osservati <span class="sc">/</span> lanci_totali),</span>
+<span id="cb15-266"><a href="#cb15-266" aria-hidden="true" tabindex="-1"></a>    <span class="at">color =</span> modern_palette<span class="sc">$</span>red,</span>
+<span id="cb15-267"><a href="#cb15-267" aria-hidden="true" tabindex="-1"></a>    <span class="at">linewidth =</span> <span class="fl">0.8</span>,</span>
+<span id="cb15-268"><a href="#cb15-268" aria-hidden="true" tabindex="-1"></a>    <span class="at">linetype =</span> <span class="st">"dashed"</span></span>
+<span id="cb15-269"><a href="#cb15-269" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb15-270"><a href="#cb15-270" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Proporzione di successi attesi"</span>, <span class="at">y =</span> <span class="st">"Densità"</span>)</span>
+<span id="cb15-271"><a href="#cb15-271" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb15-272"><a href="#cb15-272" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-273"><a href="#cb15-273" aria-hidden="true" tabindex="-1"></a>Tuttavia, è fondamentale comprendere che nella ricerca psicologica reale ci si confronta con modelli notevolmente più complessi. In questi contesti, la corrispondenza tra i dati effettivamente osservati e quelli generati dal modello attraverso la distribuzione predittiva non può mai essere considerata una garanzia preliminare. Al contrario, questa corrispondenza rappresenta proprio l'obiettivo da verificare.</span>
-<span id="cb15-274"><a href="#cb15-274" aria-hidden="true" tabindex="-1"></a>:::</span>
-<span id="cb15-275"><a href="#cb15-275" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-276"><a href="#cb15-276" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-277"><a href="#cb15-277" aria-hidden="true" tabindex="-1"></a><span class="fu">## Riflessioni conclusive {.unnumbered .unlisted}</span></span>
-<span id="cb15-278"><a href="#cb15-278" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-279"><a href="#cb15-279" aria-hidden="true" tabindex="-1"></a>Le distribuzioni predittive a posteriori rappresentano il naturale completamento del percorso iniziato con i priori. Se i *prior predictive checks* ci consentono di controllare la plausibilità delle nostre assunzioni iniziali, i *posterior predictive checks* ci permettono di verificare la plausibilità del modello alla luce dei dati.</span>
-<span id="cb15-280"><a href="#cb15-280" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-281"><a href="#cb15-281" aria-hidden="true" tabindex="-1"></a>Dal punto di vista concettuale, questo passaggio è cruciale: sposta l’attenzione dai parametri astratti ai dati concreti, e ci chiede di valutare i modelli sulla base della loro capacità di generare osservazioni simili a quelle reali. In questo senso, la distribuzione predittiva a posteriori non è soltanto un accessorio tecnico, ma una vera e propria *prova di realtà* per i modelli psicologici.</span>
-<span id="cb15-282"><a href="#cb15-282" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-283"><a href="#cb15-283" aria-hidden="true" tabindex="-1"></a>Dal punto di vista applicativo, questo approccio rafforza la trasparenza e la robustezza delle nostre inferenze. Non ci limitiamo più a riportare valori puntuali o intervalli credibili per i parametri: mostriamo esplicitamente quali dati il nostro modello ritiene plausibili e li confrontiamo con i dati effettivamente raccolti. Questo rende la comunicazione dei risultati più chiara e intuitiva, anche per chi non ha familiarità con la statistica bayesiana.</span>
+<span id="cb15-273"><a href="#cb15-273" aria-hidden="true" tabindex="-1"></a><span class="fu">### Interpretazione dei risultati</span></span>
+<span id="cb15-274"><a href="#cb15-274" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-275"><a href="#cb15-275" aria-hidden="true" tabindex="-1"></a><span class="ss">* </span>La nostra conoscenza su $p$ è ora concentrata attorno a 0.7 (grafico in rosso).</span>
+<span id="cb15-276"><a href="#cb15-276" aria-hidden="true" tabindex="-1"></a><span class="ss">* </span>Le previsioni per 10 lanci futuri sono più variabili perché:</span>
+<span id="cb15-277"><a href="#cb15-277" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>Siamo ancora un po' incerti sul valore esatto di $p$.</span>
+<span id="cb15-278"><a href="#cb15-278" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>Anche se conoscessimo p perfettamente, 10 lanci potrebbero dare risultati leggermente diversi.</span>
+<span id="cb15-279"><a href="#cb15-279" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-280"><a href="#cb15-280" aria-hidden="true" tabindex="-1"></a><span class="ss">* </span>Il risultato osservato (70% di successi) cade nella zona più probabile delle nostre previsioni: questo ci dice che il nostro modello è ragionevole e può essere usato per fare previsioni future.</span>
+<span id="cb15-281"><a href="#cb15-281" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-282"><a href="#cb15-282" aria-hidden="true" tabindex="-1"></a>**In pratica**: se dovessi scommettere sui prossimi 10 lanci, ti aspetteresti probabilmente 6-8 successi, ma potrebbero essercene anche 5 o 9 per puro caso.</span>
+<span id="cb15-283"><a href="#cb15-283" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb15-284"><a href="#cb15-284" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-285"><a href="#cb15-285" aria-hidden="true" tabindex="-1"></a>In sintesi, le distribuzioni predittive a posteriori ci ricordano che la forza dell’approccio bayesiano non risiede soltanto nella stima dei parametri, ma soprattutto nella capacità di *prevedere e spiegare* i fenomeni. Nei capitoli successivi vedremo come questa logica si estenda anche al confronto sistematico tra modelli, aprendo la strada a un approccio più rigoroso e cumulativo alla scienza psicologica.</span>
-<span id="cb15-286"><a href="#cb15-286" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-285"><a href="#cb15-285" aria-hidden="true" tabindex="-1"></a>::: {.callout-caution collapse=true title="Nota"}</span>
+<span id="cb15-286"><a href="#cb15-286" aria-hidden="true" tabindex="-1"></a>Il fatto che, nel nostro esempio, la distribuzione predittiva a posteriori riproduca efficacemente i dati osservati potrebbe apparire come un risultato scontato. In realtà, questo esito positivo è significativo e tutt'altro che banale; dimostra che il nostro modello semplice è ben calibrato. Abbiamo scelto deliberatamente un modello binomiale con prior Beta proprio per la sua chiarezza espositiva, che ci permette di illustrare in modo trasparente la logica sottostante alla distribuzione predittiva a posteriori e mostrare visivamente come l'incertezza sui parametri e la variabilità intrinseca dei dati si integrino in un unico framework.</span>
 <span id="cb15-287"><a href="#cb15-287" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-288"><a href="#cb15-288" aria-hidden="true" tabindex="-1"></a>::: {.callout-important title="Problemi" collapse="true"}</span>
-<span id="cb15-289"><a href="#cb15-289" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-290"><a href="#cb15-290" aria-hidden="true" tabindex="-1"></a>Consideriamo i dati della SWLS somministrata a un campione di studenti, ottenendo per ciascuno uno *score* complessivo. Per semplicità, vogliamo “dichiarare positivo” lo studente se il punteggio SWLS supera una determinata **soglia** (ad esempio, 20 su 35). In questo modo otteniamo una variabile dicotomica (0/1), che useremo come “successo” in un modello binomiale.</span>
+<span id="cb15-288"><a href="#cb15-288" aria-hidden="true" tabindex="-1"></a>Tuttavia, è fondamentale comprendere che nella ricerca psicologica reale ci si confronta con modelli notevolmente più complessi. In questi contesti, la corrispondenza tra i dati effettivamente osservati e quelli generati dal modello attraverso la distribuzione predittiva non può mai essere considerata una garanzia preliminare. Al contrario, questa corrispondenza rappresenta proprio l'obiettivo da verificare.</span>
+<span id="cb15-289"><a href="#cb15-289" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb15-290"><a href="#cb15-290" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb15-291"><a href="#cb15-291" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-292"><a href="#cb15-292" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>**Dati e conteggio dei successi**  </span>
+<span id="cb15-292"><a href="#cb15-292" aria-hidden="true" tabindex="-1"></a><span class="fu">## Riflessioni conclusive {.unnumbered .unlisted}</span></span>
 <span id="cb15-293"><a href="#cb15-293" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-294"><a href="#cb15-294" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Carica il dataset con le risposte SWLS.  </span>
-<span id="cb15-295"><a href="#cb15-295" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Costruisci la variabile binaria (ad esempio <span class="in">`SWLS_dich`</span>) che vale 1 se lo score ≥ 20, e 0 altrimenti.  </span>
-<span id="cb15-296"><a href="#cb15-296" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Calcola il **numero di successi** (numero di persone che superano la soglia) e il **numero totale di osservazioni** (N).</span>
+<span id="cb15-294"><a href="#cb15-294" aria-hidden="true" tabindex="-1"></a>Le distribuzioni predittive a posteriori rappresentano il naturale completamento del percorso iniziato con i *prior*. Se i *prior predictive checks* ci consentono di controllare la plausibilità delle nostre assunzioni iniziali, i *posterior predictive checks* ci permettono di verificare la plausibilità del modello alla luce dei dati.</span>
+<span id="cb15-295"><a href="#cb15-295" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-296"><a href="#cb15-296" aria-hidden="true" tabindex="-1"></a>Dal punto di vista concettuale, questo passaggio è cruciale: sposta l’attenzione dai parametri astratti ai dati concreti, e ci chiede di valutare i modelli sulla base della loro capacità di generare osservazioni simili a quelle reali. In questo senso, la distribuzione predittiva a posteriori non è soltanto un accessorio tecnico, ma una vera e propria *prova di realtà* per i modelli psicologici.</span>
 <span id="cb15-297"><a href="#cb15-297" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-298"><a href="#cb15-298" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>**Modello beta-binomiale (approccio manuale via simulazione)**  </span>
+<span id="cb15-298"><a href="#cb15-298" aria-hidden="true" tabindex="-1"></a>Dal punto di vista applicativo, questo approccio rafforza la trasparenza e la robustezza delle nostre inferenze. Non ci limitiamo più a riportare valori puntuali o intervalli credibili per i parametri: mostriamo esplicitamente quali dati il nostro modello ritiene plausibili e li confrontiamo con i dati effettivamente raccolti. Questo rende la comunicazione dei risultati più chiara e intuitiva, anche per chi non ha familiarità con la statistica bayesiana.</span>
 <span id="cb15-299"><a href="#cb15-299" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-300"><a href="#cb15-300" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>**Specifica una distribuzione Beta(a, b)** come prior per la probabilità di successo $p$. Scegli una coppia $(a, b)$ relativamente poco informativa, ad esempio (2,2) o (1,1).  </span>
-<span id="cb15-301"><a href="#cb15-301" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Osservando $y$ successi su $n$ soggetti, aggiorna i parametri a posteriori:</span>
-<span id="cb15-302"><a href="#cb15-302" aria-hidden="true" tabindex="-1"></a>     $$</span>
-<span id="cb15-303"><a href="#cb15-303" aria-hidden="true" tabindex="-1"></a>       a_{\text{post}} = a + y, </span>
-<span id="cb15-304"><a href="#cb15-304" aria-hidden="true" tabindex="-1"></a>       \quad</span>
-<span id="cb15-305"><a href="#cb15-305" aria-hidden="true" tabindex="-1"></a>       b_{\text{post}} = b + (n - y).</span>
-<span id="cb15-306"><a href="#cb15-306" aria-hidden="true" tabindex="-1"></a>     $$  </span>
-<span id="cb15-307"><a href="#cb15-307" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Simula un gran numero di campioni di $p$ dalla distribuzione Beta$\bigl(a_{\text{post}},\, b_{\text{post}}\bigr)$.  </span>
-<span id="cb15-308"><a href="#cb15-308" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Per ciascun campione di $p$, genera un valore $\tilde{y}$ da una Binomiale$\bigl(n_{\text{new}}, p\bigr)$, dove $n_{\text{new}}$ è la dimensione di un ipotetico nuovo campione (che puoi scegliere, ad esempio, uguale a $n$ oppure un valore diverso). Otterrai così una **posterior predictive distribution** per $\tilde{y}$.  </span>
-<span id="cb15-309"><a href="#cb15-309" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Infine, calcola statistiche descrittive (media, varianza, intervalli) e/o disegna un istogramma di $\tilde{y}$ o della proporzione $\tilde{y}/n_{\text{new}}$.  </span>
-<span id="cb15-310"><a href="#cb15-310" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-311"><a href="#cb15-311" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>**Replicare con *brms***  </span>
+<span id="cb15-300"><a href="#cb15-300" aria-hidden="true" tabindex="-1"></a>In sintesi, le distribuzioni predittive a posteriori ci ricordano che la forza dell’approccio bayesiano non risiede soltanto nella stima dei parametri, ma soprattutto nella capacità di *prevedere e spiegare* i fenomeni. Nei capitoli successivi vedremo come questa logica si estenda anche al confronto sistematico tra modelli, aprendo la strada a un approccio più rigoroso e cumulativo alla scienza psicologica.</span>
+<span id="cb15-301"><a href="#cb15-301" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-302"><a href="#cb15-302" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-303"><a href="#cb15-303" aria-hidden="true" tabindex="-1"></a>::: {.callout-important title="Problemi" collapse="true"}</span>
+<span id="cb15-304"><a href="#cb15-304" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-305"><a href="#cb15-305" aria-hidden="true" tabindex="-1"></a>Consideriamo i dati della SWLS somministrata a un campione di studenti, ottenendo per ciascuno uno *score* complessivo. Per semplicità, vogliamo “dichiarare positivo” lo studente se il punteggio SWLS supera una determinata **soglia** (ad esempio, 20 su 35). In questo modo otteniamo una variabile dicotomica (0/1), che useremo come “successo” in un modello binomiale.</span>
+<span id="cb15-306"><a href="#cb15-306" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-307"><a href="#cb15-307" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>**Dati e conteggio dei successi**  </span>
+<span id="cb15-308"><a href="#cb15-308" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-309"><a href="#cb15-309" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Carica il dataset con le risposte SWLS.  </span>
+<span id="cb15-310"><a href="#cb15-310" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Costruisci la variabile binaria (ad esempio <span class="in">`SWLS_dich`</span>) che vale 1 se lo score ≥ 20, e 0 altrimenti.  </span>
+<span id="cb15-311"><a href="#cb15-311" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Calcola il **numero di successi** (numero di persone che superano la soglia) e il **numero totale di osservazioni** (N).</span>
 <span id="cb15-312"><a href="#cb15-312" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-313"><a href="#cb15-313" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Usa il pacchetto **brms** per costruire un modello binomiale. Per esempio:</span>
-<span id="cb15-314"><a href="#cb15-314" aria-hidden="true" tabindex="-1"></a>   </span>
-<span id="cb15-315"><a href="#cb15-315" aria-hidden="true" tabindex="-1"></a>     <span class="in">```r</span></span>
-<span id="cb15-316"><a href="#cb15-316" aria-hidden="true" tabindex="-1"></a>     <span class="fu">library</span>(brms)</span>
-<span id="cb15-317"><a href="#cb15-317" aria-hidden="true" tabindex="-1"></a>     </span>
-<span id="cb15-318"><a href="#cb15-318" aria-hidden="true" tabindex="-1"></a>     <span class="co"># Crea un data frame con la variabile dicotomica</span></span>
-<span id="cb15-319"><a href="#cb15-319" aria-hidden="true" tabindex="-1"></a>     df_binom <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb15-320"><a href="#cb15-320" aria-hidden="true" tabindex="-1"></a>       <span class="at">successes =</span> y,    <span class="co"># conteggio dei successi</span></span>
-<span id="cb15-321"><a href="#cb15-321" aria-hidden="true" tabindex="-1"></a>       <span class="at">failures  =</span> n <span class="sc">-</span> y</span>
-<span id="cb15-322"><a href="#cb15-322" aria-hidden="true" tabindex="-1"></a>     )</span>
-<span id="cb15-323"><a href="#cb15-323" aria-hidden="true" tabindex="-1"></a>     </span>
-<span id="cb15-324"><a href="#cb15-324" aria-hidden="true" tabindex="-1"></a>     <span class="co"># Modello binomiale con prior Beta(a,b) approssimato tramite logit</span></span>
-<span id="cb15-325"><a href="#cb15-325" aria-hidden="true" tabindex="-1"></a>     fit_brms <span class="ot">&lt;-</span> <span class="fu">brm</span>(</span>
-<span id="cb15-326"><a href="#cb15-326" aria-hidden="true" tabindex="-1"></a>       <span class="fu">bf</span>(successes <span class="sc">|</span> <span class="fu">trials</span>(n) <span class="sc">~</span> <span class="dv">1</span>), </span>
-<span id="cb15-327"><a href="#cb15-327" aria-hidden="true" tabindex="-1"></a>       <span class="at">data =</span> df_binom,</span>
-<span id="cb15-328"><a href="#cb15-328" aria-hidden="true" tabindex="-1"></a>       <span class="at">family =</span> <span class="fu">binomial</span>(<span class="at">link =</span> <span class="st">"logit"</span>),</span>
-<span id="cb15-329"><a href="#cb15-329" aria-hidden="true" tabindex="-1"></a>       <span class="at">prior =</span> <span class="fu">c</span>(</span>
-<span id="cb15-330"><a href="#cb15-330" aria-hidden="true" tabindex="-1"></a>         <span class="fu">prior</span>(<span class="fu">beta</span>(<span class="dv">2</span>, <span class="dv">2</span>), <span class="at">class =</span> <span class="st">"Intercept"</span>, <span class="at">dpar =</span> <span class="st">"mu"</span>) </span>
-<span id="cb15-331"><a href="#cb15-331" aria-hidden="true" tabindex="-1"></a>         <span class="co"># NOTA: la specifica di una "beta(2,2)" diretta sull'intercetta</span></span>
-<span id="cb15-332"><a href="#cb15-332" aria-hidden="true" tabindex="-1"></a>         <span class="co"># è un'approssimazione, tipicamente serve passare a una scala logit.</span></span>
-<span id="cb15-333"><a href="#cb15-333" aria-hidden="true" tabindex="-1"></a>         <span class="co"># In brms, di solito si usa prior su scale normali dell'intercetta.</span></span>
-<span id="cb15-334"><a href="#cb15-334" aria-hidden="true" tabindex="-1"></a>       ),</span>
-<span id="cb15-335"><a href="#cb15-335" aria-hidden="true" tabindex="-1"></a>       <span class="at">seed =</span> <span class="dv">123</span></span>
-<span id="cb15-336"><a href="#cb15-336" aria-hidden="true" tabindex="-1"></a>     )</span>
-<span id="cb15-337"><a href="#cb15-337" aria-hidden="true" tabindex="-1"></a>     <span class="in">```</span></span>
-<span id="cb15-338"><a href="#cb15-338" aria-hidden="true" tabindex="-1"></a>     *(Le specifiche del `prior` potrebbero richiedere una formulazione differente se vuoi rispettare esattamente la corrispondenza con Beta(a,b). In ogni caso, l’idea è mostrare come definire un prior e costruire un modello binomiale con `brms`.)*</span>
-<span id="cb15-339"><a href="#cb15-339" aria-hidden="true" tabindex="-1"></a>     </span>
-<span id="cb15-340"><a href="#cb15-340" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Verifica la convergenza e poi estrai la **posterior predictive distribution** con le funzioni di *brms*:</span>
-<span id="cb15-341"><a href="#cb15-341" aria-hidden="true" tabindex="-1"></a>   </span>
-<span id="cb15-342"><a href="#cb15-342" aria-hidden="true" tabindex="-1"></a>     <span class="in">```r</span></span>
-<span id="cb15-343"><a href="#cb15-343" aria-hidden="true" tabindex="-1"></a>     <span class="fu">pp_check</span>(fit_brms, <span class="at">nsamples =</span> <span class="dv">100</span>)</span>
-<span id="cb15-344"><a href="#cb15-344" aria-hidden="true" tabindex="-1"></a>     <span class="in">```</span></span>
-<span id="cb15-345"><a href="#cb15-345" aria-hidden="true" tabindex="-1"></a>     Questo ti mostrerà come i dati predetti dal modello (in termini di binomiale) si confrontano con i dati osservati.  </span>
-<span id="cb15-346"><a href="#cb15-346" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-347"><a href="#cb15-347" aria-hidden="true" tabindex="-1"></a><span class="ss">4. </span>**Confronto e interpretazione**  </span>
-<span id="cb15-348"><a href="#cb15-348" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-349"><a href="#cb15-349" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Metti a confronto i risultati della simulazione “manuale” (Beta-Binomial) e quelli ottenuti con *brms*. Noterai che le distribuzioni predittive dovrebbero essere coerenti, se hai impostato un prior per *brms* simile a quello del modello Beta-Binomiale.  </span>
-<span id="cb15-350"><a href="#cb15-350" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Discuti brevemente se la distribuzione predittiva a posteriori acquisita è plausibile rispetto ai dati osservati. Ad esempio, la probabilità di osservare $\tilde{y}$ simile a $y$ dovrebbe essere relativamente alta se il modello è appropriato.  </span>
-<span id="cb15-351"><a href="#cb15-351" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Se vuoi, puoi cambiare $n_{\text{new}}$ (es. previsione su 200 soggetti futuri) per vedere come la variabilità della previsione si “ridimensiona” o cresce a seconda della taglia del campione.  </span>
-<span id="cb15-352"><a href="#cb15-352" aria-hidden="true" tabindex="-1"></a>:::</span>
-<span id="cb15-353"><a href="#cb15-353" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-354"><a href="#cb15-354" aria-hidden="true" tabindex="-1"></a>::: {.callout-tip title="Soluzioni" collapse="true"}</span>
-<span id="cb15-355"><a href="#cb15-355" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-356"><a href="#cb15-356" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>**Costruzione del dataset**  </span>
-<span id="cb15-357"><a href="#cb15-357" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-358"><a href="#cb15-358" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Se la SWLS varia tra 5 e 35, e la soglia è 20, puoi fare:</span>
-<span id="cb15-359"><a href="#cb15-359" aria-hidden="true" tabindex="-1"></a>   </span>
-<span id="cb15-360"><a href="#cb15-360" aria-hidden="true" tabindex="-1"></a>     <span class="in">```r</span></span>
-<span id="cb15-361"><a href="#cb15-361" aria-hidden="true" tabindex="-1"></a>     df<span class="sc">$</span>SWLS_dich <span class="ot">&lt;-</span> <span class="fu">ifelse</span>(df<span class="sc">$</span>SWLS_score <span class="sc">&gt;=</span> <span class="dv">20</span>, <span class="dv">1</span>, <span class="dv">0</span>)</span>
-<span id="cb15-362"><a href="#cb15-362" aria-hidden="true" tabindex="-1"></a>     y <span class="ot">&lt;-</span> <span class="fu">sum</span>(df<span class="sc">$</span>SWLS_dich)</span>
-<span id="cb15-363"><a href="#cb15-363" aria-hidden="true" tabindex="-1"></a>     n <span class="ot">&lt;-</span> <span class="fu">nrow</span>(df)</span>
-<span id="cb15-364"><a href="#cb15-364" aria-hidden="true" tabindex="-1"></a>     <span class="in">```</span></span>
-<span id="cb15-365"><a href="#cb15-365" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>**Approccio Beta-Binomial manuale** </span>
-<span id="cb15-366"><a href="#cb15-366" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-367"><a href="#cb15-367" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Prior: $(a, b) = (2, 2)$  </span>
-<span id="cb15-368"><a href="#cb15-368" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Posterior: $(a_{\text{post}}, b_{\text{post}}) = (2 + y,\, 2 + n - y)$.  </span>
-<span id="cb15-369"><a href="#cb15-369" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Generazione dei campioni:</span>
-<span id="cb15-370"><a href="#cb15-370" aria-hidden="true" tabindex="-1"></a>   </span>
-<span id="cb15-371"><a href="#cb15-371" aria-hidden="true" tabindex="-1"></a>     <span class="in">```r</span></span>
-<span id="cb15-372"><a href="#cb15-372" aria-hidden="true" tabindex="-1"></a>     N_sim <span class="ot">&lt;-</span> <span class="dv">2000</span></span>
-<span id="cb15-373"><a href="#cb15-373" aria-hidden="true" tabindex="-1"></a>     p_post <span class="ot">&lt;-</span> <span class="fu">rbeta</span>(N_sim, a_post, b_post)</span>
-<span id="cb15-374"><a href="#cb15-374" aria-hidden="true" tabindex="-1"></a>     y_pred <span class="ot">&lt;-</span> <span class="fu">rbinom</span>(N_sim, <span class="at">size =</span> n_new, <span class="at">prob =</span> p_post)</span>
-<span id="cb15-375"><a href="#cb15-375" aria-hidden="true" tabindex="-1"></a>     </span>
-<span id="cb15-376"><a href="#cb15-376" aria-hidden="true" tabindex="-1"></a>     <span class="co"># Se preferisci la proporzione futura:</span></span>
-<span id="cb15-377"><a href="#cb15-377" aria-hidden="true" tabindex="-1"></a>     prop_pred <span class="ot">&lt;-</span> y_pred <span class="sc">/</span> n_new</span>
-<span id="cb15-378"><a href="#cb15-378" aria-hidden="true" tabindex="-1"></a>     <span class="in">```</span></span>
-<span id="cb15-379"><a href="#cb15-379" aria-hidden="true" tabindex="-1"></a>     </span>
-<span id="cb15-380"><a href="#cb15-380" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Statistiche: </span>
-<span id="cb15-381"><a href="#cb15-381" aria-hidden="true" tabindex="-1"></a>   </span>
-<span id="cb15-382"><a href="#cb15-382" aria-hidden="true" tabindex="-1"></a>     <span class="in">```r</span></span>
-<span id="cb15-383"><a href="#cb15-383" aria-hidden="true" tabindex="-1"></a>     mean_p <span class="ot">&lt;-</span> <span class="fu">mean</span>(p_post) <span class="co"># media a posteriori di p</span></span>
-<span id="cb15-384"><a href="#cb15-384" aria-hidden="true" tabindex="-1"></a>     quantile_p <span class="ot">&lt;-</span> <span class="fu">quantile</span>(p_post, <span class="fu">c</span>(<span class="fl">0.025</span>, <span class="fl">0.975</span>))  </span>
-<span id="cb15-385"><a href="#cb15-385" aria-hidden="true" tabindex="-1"></a>     </span>
-<span id="cb15-386"><a href="#cb15-386" aria-hidden="true" tabindex="-1"></a>     mean_prop_pred <span class="ot">&lt;-</span> <span class="fu">mean</span>(prop_pred)</span>
-<span id="cb15-387"><a href="#cb15-387" aria-hidden="true" tabindex="-1"></a>     quantile_prop_pred <span class="ot">&lt;-</span> <span class="fu">quantile</span>(prop_pred, <span class="fu">c</span>(<span class="fl">0.025</span>, <span class="fl">0.975</span>))</span>
-<span id="cb15-388"><a href="#cb15-388" aria-hidden="true" tabindex="-1"></a>     <span class="in">```</span></span>
-<span id="cb15-389"><a href="#cb15-389" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Grafici (istogramma e densità):</span>
-<span id="cb15-390"><a href="#cb15-390" aria-hidden="true" tabindex="-1"></a>   </span>
-<span id="cb15-391"><a href="#cb15-391" aria-hidden="true" tabindex="-1"></a>     <span class="in">```r</span></span>
-<span id="cb15-392"><a href="#cb15-392" aria-hidden="true" tabindex="-1"></a>     <span class="fu">hist</span>(prop_pred, <span class="at">freq=</span><span class="cn">FALSE</span>, <span class="at">col=</span><span class="st">'lightblue'</span>,</span>
-<span id="cb15-393"><a href="#cb15-393" aria-hidden="true" tabindex="-1"></a>          <span class="at">main=</span><span class="st">'Posterior Predictive Distribution: prop. di successi'</span>)</span>
-<span id="cb15-394"><a href="#cb15-394" aria-hidden="true" tabindex="-1"></a>     <span class="in">```</span></span>
-<span id="cb15-395"><a href="#cb15-395" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>**Modello con *brms***  </span>
-<span id="cb15-396"><a href="#cb15-396" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-397"><a href="#cb15-397" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Usa la sintassi di una binomiale con offset o con <span class="in">`trials(n)`</span>.  </span>
-<span id="cb15-398"><a href="#cb15-398" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Specifica un prior che approssimi Beta(2,2) sullo scale logit, ad esempio:</span>
-<span id="cb15-399"><a href="#cb15-399" aria-hidden="true" tabindex="-1"></a>   </span>
-<span id="cb15-400"><a href="#cb15-400" aria-hidden="true" tabindex="-1"></a>     <span class="in">```r</span></span>
-<span id="cb15-401"><a href="#cb15-401" aria-hidden="true" tabindex="-1"></a>     <span class="co"># Beta(2,2) ha media ~ 0.5, varianza relativamente ampia.</span></span>
-<span id="cb15-402"><a href="#cb15-402" aria-hidden="true" tabindex="-1"></a>     <span class="co"># Approssimandola su scala logit ~ normal(0, 2.2) </span></span>
-<span id="cb15-403"><a href="#cb15-403" aria-hidden="true" tabindex="-1"></a>     <span class="co"># (valore indicativo: la normal(0, 2) su logit copre un intervallo ampio).</span></span>
-<span id="cb15-404"><a href="#cb15-404" aria-hidden="true" tabindex="-1"></a>     </span>
-<span id="cb15-405"><a href="#cb15-405" aria-hidden="true" tabindex="-1"></a>     prior_approx <span class="ot">&lt;-</span> <span class="fu">prior</span>(<span class="fu">normal</span>(<span class="dv">0</span>, <span class="dv">2</span>), <span class="at">class =</span> <span class="st">"Intercept"</span>)</span>
-<span id="cb15-406"><a href="#cb15-406" aria-hidden="true" tabindex="-1"></a>     <span class="in">```</span></span>
-<span id="cb15-407"><a href="#cb15-407" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Esegui <span class="in">`pp_check(fit_brms)`</span> e interpreta.</span>
-<span id="cb15-408"><a href="#cb15-408" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-409"><a href="#cb15-409" aria-hidden="true" tabindex="-1"></a><span class="ss">4. </span>**Interpretazione**  </span>
-<span id="cb15-410"><a href="#cb15-410" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-411"><a href="#cb15-411" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Se la soglia scelta per la SWLS cattura un “buon livello di soddisfazione”, potresti aspettarti una certa % di successi.  </span>
-<span id="cb15-412"><a href="#cb15-412" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Se i dati futuri simulati sono coerenti con i dati reali — ad esempio, la media di $\tilde{y}$ è vicina a $y$ — allora il modello sembra descrivere bene la realtà. Altrimenti, potresti rivedere la soglia o la specifica del prior.</span>
-<span id="cb15-413"><a href="#cb15-413" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-414"><a href="#cb15-414" aria-hidden="true" tabindex="-1"></a>L’elemento chiave è che la **distribuzione predittiva a posteriori** (posterior predictive distribution) non si limita a considerare *un solo* valore di $p$, bensì campiona molteplici valori plausibili (dalla *posterior*), e per *ciascuno* simula un potenziale outcome. Così facendo, si riflette pienamente l’incertezza residua sul parametro e l’aleatorietà del processo binomiale.</span>
-<span id="cb15-415"><a href="#cb15-415" aria-hidden="true" tabindex="-1"></a>:::</span>
-<span id="cb15-416"><a href="#cb15-416" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-417"><a href="#cb15-417" aria-hidden="true" tabindex="-1"></a>::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}</span>
-<span id="cb15-420"><a href="#cb15-420" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb15-421"><a href="#cb15-421" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span>
-<span id="cb15-422"><a href="#cb15-422" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb15-423"><a href="#cb15-423" aria-hidden="true" tabindex="-1"></a>:::</span>
-<span id="cb15-424"><a href="#cb15-424" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-425"><a href="#cb15-425" aria-hidden="true" tabindex="-1"></a><span class="fu">## Bibliografia {.unnumbered .unlisted}</span></span>
-<span id="cb15-426"><a href="#cb15-426" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-313"><a href="#cb15-313" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>**Modello beta-binomiale (approccio manuale via simulazione)**  </span>
+<span id="cb15-314"><a href="#cb15-314" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-315"><a href="#cb15-315" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>**Specifica una distribuzione Beta(a, b)** come prior per la probabilità di successo $p$. Scegli una coppia $(a, b)$ relativamente poco informativa, ad esempio (2,2) o (1,1).  </span>
+<span id="cb15-316"><a href="#cb15-316" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Osservando $y$ successi su $n$ soggetti, aggiorna i parametri a posteriori:</span>
+<span id="cb15-317"><a href="#cb15-317" aria-hidden="true" tabindex="-1"></a>     $$</span>
+<span id="cb15-318"><a href="#cb15-318" aria-hidden="true" tabindex="-1"></a>       a_{\text{post}} = a + y, </span>
+<span id="cb15-319"><a href="#cb15-319" aria-hidden="true" tabindex="-1"></a>       \quad</span>
+<span id="cb15-320"><a href="#cb15-320" aria-hidden="true" tabindex="-1"></a>       b_{\text{post}} = b + (n - y).</span>
+<span id="cb15-321"><a href="#cb15-321" aria-hidden="true" tabindex="-1"></a>     $$  </span>
+<span id="cb15-322"><a href="#cb15-322" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Simula un gran numero di campioni di $p$ dalla distribuzione Beta$\bigl(a_{\text{post}},\, b_{\text{post}}\bigr)$.  </span>
+<span id="cb15-323"><a href="#cb15-323" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Per ciascun campione di $p$, genera un valore $\tilde{y}$ da una Binomiale$\bigl(n_{\text{new}}, p\bigr)$, dove $n_{\text{new}}$ è la dimensione di un ipotetico nuovo campione (che puoi scegliere, ad esempio, uguale a $n$ oppure un valore diverso). Otterrai così una **posterior predictive distribution** per $\tilde{y}$.  </span>
+<span id="cb15-324"><a href="#cb15-324" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Infine, calcola statistiche descrittive (media, varianza, intervalli) e/o disegna un istogramma di $\tilde{y}$ o della proporzione $\tilde{y}/n_{\text{new}}$.  </span>
+<span id="cb15-325"><a href="#cb15-325" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-326"><a href="#cb15-326" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>**Replicare con *brms***  </span>
+<span id="cb15-327"><a href="#cb15-327" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-328"><a href="#cb15-328" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Usa il pacchetto **brms** per costruire un modello binomiale. Per esempio:</span>
+<span id="cb15-329"><a href="#cb15-329" aria-hidden="true" tabindex="-1"></a>   </span>
+<span id="cb15-330"><a href="#cb15-330" aria-hidden="true" tabindex="-1"></a>     <span class="in">```r</span></span>
+<span id="cb15-331"><a href="#cb15-331" aria-hidden="true" tabindex="-1"></a>     <span class="fu">library</span>(brms)</span>
+<span id="cb15-332"><a href="#cb15-332" aria-hidden="true" tabindex="-1"></a>     </span>
+<span id="cb15-333"><a href="#cb15-333" aria-hidden="true" tabindex="-1"></a>     <span class="co"># Crea un data frame con la variabile dicotomica</span></span>
+<span id="cb15-334"><a href="#cb15-334" aria-hidden="true" tabindex="-1"></a>     df_binom <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb15-335"><a href="#cb15-335" aria-hidden="true" tabindex="-1"></a>       <span class="at">successes =</span> y,    <span class="co"># conteggio dei successi</span></span>
+<span id="cb15-336"><a href="#cb15-336" aria-hidden="true" tabindex="-1"></a>       <span class="at">failures  =</span> n <span class="sc">-</span> y</span>
+<span id="cb15-337"><a href="#cb15-337" aria-hidden="true" tabindex="-1"></a>     )</span>
+<span id="cb15-338"><a href="#cb15-338" aria-hidden="true" tabindex="-1"></a>     </span>
+<span id="cb15-339"><a href="#cb15-339" aria-hidden="true" tabindex="-1"></a>     <span class="co"># Modello binomiale con prior Beta(a,b) approssimato tramite logit</span></span>
+<span id="cb15-340"><a href="#cb15-340" aria-hidden="true" tabindex="-1"></a>     fit_brms <span class="ot">&lt;-</span> <span class="fu">brm</span>(</span>
+<span id="cb15-341"><a href="#cb15-341" aria-hidden="true" tabindex="-1"></a>       <span class="fu">bf</span>(successes <span class="sc">|</span> <span class="fu">trials</span>(n) <span class="sc">~</span> <span class="dv">1</span>), </span>
+<span id="cb15-342"><a href="#cb15-342" aria-hidden="true" tabindex="-1"></a>       <span class="at">data =</span> df_binom,</span>
+<span id="cb15-343"><a href="#cb15-343" aria-hidden="true" tabindex="-1"></a>       <span class="at">family =</span> <span class="fu">binomial</span>(<span class="at">link =</span> <span class="st">"logit"</span>),</span>
+<span id="cb15-344"><a href="#cb15-344" aria-hidden="true" tabindex="-1"></a>       <span class="at">prior =</span> <span class="fu">c</span>(</span>
+<span id="cb15-345"><a href="#cb15-345" aria-hidden="true" tabindex="-1"></a>         <span class="fu">prior</span>(<span class="fu">beta</span>(<span class="dv">2</span>, <span class="dv">2</span>), <span class="at">class =</span> <span class="st">"Intercept"</span>, <span class="at">dpar =</span> <span class="st">"mu"</span>) </span>
+<span id="cb15-346"><a href="#cb15-346" aria-hidden="true" tabindex="-1"></a>         <span class="co"># NOTA: la specifica di una "beta(2,2)" diretta sull'intercetta</span></span>
+<span id="cb15-347"><a href="#cb15-347" aria-hidden="true" tabindex="-1"></a>         <span class="co"># è un'approssimazione, tipicamente serve passare a una scala logit.</span></span>
+<span id="cb15-348"><a href="#cb15-348" aria-hidden="true" tabindex="-1"></a>         <span class="co"># In brms, di solito si usa prior su scale normali dell'intercetta.</span></span>
+<span id="cb15-349"><a href="#cb15-349" aria-hidden="true" tabindex="-1"></a>       ),</span>
+<span id="cb15-350"><a href="#cb15-350" aria-hidden="true" tabindex="-1"></a>       <span class="at">seed =</span> <span class="dv">123</span></span>
+<span id="cb15-351"><a href="#cb15-351" aria-hidden="true" tabindex="-1"></a>     )</span>
+<span id="cb15-352"><a href="#cb15-352" aria-hidden="true" tabindex="-1"></a>     <span class="in">```</span></span>
+<span id="cb15-353"><a href="#cb15-353" aria-hidden="true" tabindex="-1"></a>     *(Le specifiche del `prior` potrebbero richiedere una formulazione differente se vuoi rispettare esattamente la corrispondenza con Beta(a,b). In ogni caso, l’idea è mostrare come definire un prior e costruire un modello binomiale con `brms`.)*</span>
+<span id="cb15-354"><a href="#cb15-354" aria-hidden="true" tabindex="-1"></a>     </span>
+<span id="cb15-355"><a href="#cb15-355" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Verifica la convergenza e poi estrai la **posterior predictive distribution** con le funzioni di *brms*:</span>
+<span id="cb15-356"><a href="#cb15-356" aria-hidden="true" tabindex="-1"></a>   </span>
+<span id="cb15-357"><a href="#cb15-357" aria-hidden="true" tabindex="-1"></a>     <span class="in">```r</span></span>
+<span id="cb15-358"><a href="#cb15-358" aria-hidden="true" tabindex="-1"></a>     <span class="fu">pp_check</span>(fit_brms, <span class="at">nsamples =</span> <span class="dv">100</span>)</span>
+<span id="cb15-359"><a href="#cb15-359" aria-hidden="true" tabindex="-1"></a>     <span class="in">```</span></span>
+<span id="cb15-360"><a href="#cb15-360" aria-hidden="true" tabindex="-1"></a>     Questo ti mostrerà come i dati predetti dal modello (in termini di binomiale) si confrontano con i dati osservati.  </span>
+<span id="cb15-361"><a href="#cb15-361" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-362"><a href="#cb15-362" aria-hidden="true" tabindex="-1"></a><span class="ss">4. </span>**Confronto e interpretazione**  </span>
+<span id="cb15-363"><a href="#cb15-363" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-364"><a href="#cb15-364" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Metti a confronto i risultati della simulazione “manuale” (Beta-Binomial) e quelli ottenuti con *brms*. Noterai che le distribuzioni predittive dovrebbero essere coerenti, se hai impostato un prior per *brms* simile a quello del modello Beta-Binomiale.  </span>
+<span id="cb15-365"><a href="#cb15-365" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Discuti brevemente se la distribuzione predittiva a posteriori acquisita è plausibile rispetto ai dati osservati. Ad esempio, la probabilità di osservare $\tilde{y}$ simile a $y$ dovrebbe essere relativamente alta se il modello è appropriato.  </span>
+<span id="cb15-366"><a href="#cb15-366" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Se vuoi, puoi cambiare $n_{\text{new}}$ (es. previsione su 200 soggetti futuri) per vedere come la variabilità della previsione si “ridimensiona” o cresce a seconda della taglia del campione.  </span>
+<span id="cb15-367"><a href="#cb15-367" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb15-368"><a href="#cb15-368" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-369"><a href="#cb15-369" aria-hidden="true" tabindex="-1"></a>::: {.callout-tip title="Soluzioni" collapse="true"}</span>
+<span id="cb15-370"><a href="#cb15-370" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-371"><a href="#cb15-371" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>**Costruzione del dataset**  </span>
+<span id="cb15-372"><a href="#cb15-372" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-373"><a href="#cb15-373" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Se la SWLS varia tra 5 e 35, e la soglia è 20, puoi fare:</span>
+<span id="cb15-374"><a href="#cb15-374" aria-hidden="true" tabindex="-1"></a>   </span>
+<span id="cb15-375"><a href="#cb15-375" aria-hidden="true" tabindex="-1"></a>     <span class="in">```r</span></span>
+<span id="cb15-376"><a href="#cb15-376" aria-hidden="true" tabindex="-1"></a>     df<span class="sc">$</span>SWLS_dich <span class="ot">&lt;-</span> <span class="fu">ifelse</span>(df<span class="sc">$</span>SWLS_score <span class="sc">&gt;=</span> <span class="dv">20</span>, <span class="dv">1</span>, <span class="dv">0</span>)</span>
+<span id="cb15-377"><a href="#cb15-377" aria-hidden="true" tabindex="-1"></a>     y <span class="ot">&lt;-</span> <span class="fu">sum</span>(df<span class="sc">$</span>SWLS_dich)</span>
+<span id="cb15-378"><a href="#cb15-378" aria-hidden="true" tabindex="-1"></a>     n <span class="ot">&lt;-</span> <span class="fu">nrow</span>(df)</span>
+<span id="cb15-379"><a href="#cb15-379" aria-hidden="true" tabindex="-1"></a>     <span class="in">```</span></span>
+<span id="cb15-380"><a href="#cb15-380" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>**Approccio Beta-Binomial manuale** </span>
+<span id="cb15-381"><a href="#cb15-381" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-382"><a href="#cb15-382" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Prior: $(a, b) = (2, 2)$  </span>
+<span id="cb15-383"><a href="#cb15-383" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Posterior: $(a_{\text{post}}, b_{\text{post}}) = (2 + y,\, 2 + n - y)$.  </span>
+<span id="cb15-384"><a href="#cb15-384" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Generazione dei campioni:</span>
+<span id="cb15-385"><a href="#cb15-385" aria-hidden="true" tabindex="-1"></a>   </span>
+<span id="cb15-386"><a href="#cb15-386" aria-hidden="true" tabindex="-1"></a>     <span class="in">```r</span></span>
+<span id="cb15-387"><a href="#cb15-387" aria-hidden="true" tabindex="-1"></a>     N_sim <span class="ot">&lt;-</span> <span class="dv">2000</span></span>
+<span id="cb15-388"><a href="#cb15-388" aria-hidden="true" tabindex="-1"></a>     p_post <span class="ot">&lt;-</span> <span class="fu">rbeta</span>(N_sim, a_post, b_post)</span>
+<span id="cb15-389"><a href="#cb15-389" aria-hidden="true" tabindex="-1"></a>     y_pred <span class="ot">&lt;-</span> <span class="fu">rbinom</span>(N_sim, <span class="at">size =</span> n_new, <span class="at">prob =</span> p_post)</span>
+<span id="cb15-390"><a href="#cb15-390" aria-hidden="true" tabindex="-1"></a>     </span>
+<span id="cb15-391"><a href="#cb15-391" aria-hidden="true" tabindex="-1"></a>     <span class="co"># Se preferisci la proporzione futura:</span></span>
+<span id="cb15-392"><a href="#cb15-392" aria-hidden="true" tabindex="-1"></a>     prop_pred <span class="ot">&lt;-</span> y_pred <span class="sc">/</span> n_new</span>
+<span id="cb15-393"><a href="#cb15-393" aria-hidden="true" tabindex="-1"></a>     <span class="in">```</span></span>
+<span id="cb15-394"><a href="#cb15-394" aria-hidden="true" tabindex="-1"></a>     </span>
+<span id="cb15-395"><a href="#cb15-395" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Statistiche: </span>
+<span id="cb15-396"><a href="#cb15-396" aria-hidden="true" tabindex="-1"></a>   </span>
+<span id="cb15-397"><a href="#cb15-397" aria-hidden="true" tabindex="-1"></a>     <span class="in">```r</span></span>
+<span id="cb15-398"><a href="#cb15-398" aria-hidden="true" tabindex="-1"></a>     mean_p <span class="ot">&lt;-</span> <span class="fu">mean</span>(p_post) <span class="co"># media a posteriori di p</span></span>
+<span id="cb15-399"><a href="#cb15-399" aria-hidden="true" tabindex="-1"></a>     quantile_p <span class="ot">&lt;-</span> <span class="fu">quantile</span>(p_post, <span class="fu">c</span>(<span class="fl">0.025</span>, <span class="fl">0.975</span>))  </span>
+<span id="cb15-400"><a href="#cb15-400" aria-hidden="true" tabindex="-1"></a>     </span>
+<span id="cb15-401"><a href="#cb15-401" aria-hidden="true" tabindex="-1"></a>     mean_prop_pred <span class="ot">&lt;-</span> <span class="fu">mean</span>(prop_pred)</span>
+<span id="cb15-402"><a href="#cb15-402" aria-hidden="true" tabindex="-1"></a>     quantile_prop_pred <span class="ot">&lt;-</span> <span class="fu">quantile</span>(prop_pred, <span class="fu">c</span>(<span class="fl">0.025</span>, <span class="fl">0.975</span>))</span>
+<span id="cb15-403"><a href="#cb15-403" aria-hidden="true" tabindex="-1"></a>     <span class="in">```</span></span>
+<span id="cb15-404"><a href="#cb15-404" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Grafici (istogramma e densità):</span>
+<span id="cb15-405"><a href="#cb15-405" aria-hidden="true" tabindex="-1"></a>   </span>
+<span id="cb15-406"><a href="#cb15-406" aria-hidden="true" tabindex="-1"></a>     <span class="in">```r</span></span>
+<span id="cb15-407"><a href="#cb15-407" aria-hidden="true" tabindex="-1"></a>     <span class="fu">hist</span>(prop_pred, <span class="at">freq=</span><span class="cn">FALSE</span>, <span class="at">col=</span><span class="st">'lightblue'</span>,</span>
+<span id="cb15-408"><a href="#cb15-408" aria-hidden="true" tabindex="-1"></a>          <span class="at">main=</span><span class="st">'Posterior Predictive Distribution: prop. di successi'</span>)</span>
+<span id="cb15-409"><a href="#cb15-409" aria-hidden="true" tabindex="-1"></a>     <span class="in">```</span></span>
+<span id="cb15-410"><a href="#cb15-410" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>**Modello con *brms***  </span>
+<span id="cb15-411"><a href="#cb15-411" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-412"><a href="#cb15-412" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Usa la sintassi di una binomiale con offset o con <span class="in">`trials(n)`</span>.  </span>
+<span id="cb15-413"><a href="#cb15-413" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Specifica un prior che approssimi Beta(2,2) sullo scale logit, ad esempio:</span>
+<span id="cb15-414"><a href="#cb15-414" aria-hidden="true" tabindex="-1"></a>   </span>
+<span id="cb15-415"><a href="#cb15-415" aria-hidden="true" tabindex="-1"></a>     <span class="in">```r</span></span>
+<span id="cb15-416"><a href="#cb15-416" aria-hidden="true" tabindex="-1"></a>     <span class="co"># Beta(2,2) ha media ~ 0.5, varianza relativamente ampia.</span></span>
+<span id="cb15-417"><a href="#cb15-417" aria-hidden="true" tabindex="-1"></a>     <span class="co"># Approssimandola su scala logit ~ normal(0, 2.2) </span></span>
+<span id="cb15-418"><a href="#cb15-418" aria-hidden="true" tabindex="-1"></a>     <span class="co"># (valore indicativo: la normal(0, 2) su logit copre un intervallo ampio).</span></span>
+<span id="cb15-419"><a href="#cb15-419" aria-hidden="true" tabindex="-1"></a>     </span>
+<span id="cb15-420"><a href="#cb15-420" aria-hidden="true" tabindex="-1"></a>     prior_approx <span class="ot">&lt;-</span> <span class="fu">prior</span>(<span class="fu">normal</span>(<span class="dv">0</span>, <span class="dv">2</span>), <span class="at">class =</span> <span class="st">"Intercept"</span>)</span>
+<span id="cb15-421"><a href="#cb15-421" aria-hidden="true" tabindex="-1"></a>     <span class="in">```</span></span>
+<span id="cb15-422"><a href="#cb15-422" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Esegui <span class="in">`pp_check(fit_brms)`</span> e interpreta.</span>
+<span id="cb15-423"><a href="#cb15-423" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-424"><a href="#cb15-424" aria-hidden="true" tabindex="-1"></a><span class="ss">4. </span>**Interpretazione**  </span>
+<span id="cb15-425"><a href="#cb15-425" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-426"><a href="#cb15-426" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Se la soglia scelta per la SWLS cattura un “buon livello di soddisfazione”, potresti aspettarti una certa % di successi.  </span>
+<span id="cb15-427"><a href="#cb15-427" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>Se i dati futuri simulati sono coerenti con i dati reali — ad esempio, la media di $\tilde{y}$ è vicina a $y$ — allora il modello sembra descrivere bene la realtà. Altrimenti, potresti rivedere la soglia o la specifica del prior.</span>
+<span id="cb15-428"><a href="#cb15-428" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-429"><a href="#cb15-429" aria-hidden="true" tabindex="-1"></a>L’elemento chiave è che la **distribuzione predittiva a posteriori** (posterior predictive distribution) non si limita a considerare *un solo* valore di $p$, bensì campiona molteplici valori plausibili (dalla *posterior*), e per *ciascuno* simula un potenziale outcome. Così facendo, si riflette pienamente l’incertezza residua sul parametro e l’aleatorietà del processo binomiale.</span>
+<span id="cb15-430"><a href="#cb15-430" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb15-431"><a href="#cb15-431" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-432"><a href="#cb15-432" aria-hidden="true" tabindex="-1"></a>::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}</span>
+<span id="cb15-435"><a href="#cb15-435" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb15-436"><a href="#cb15-436" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span>
+<span id="cb15-437"><a href="#cb15-437" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb15-438"><a href="#cb15-438" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb15-439"><a href="#cb15-439" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-440"><a href="#cb15-440" aria-hidden="true" tabindex="-1"></a><span class="fu">## Bibliografia {.unnumbered .unlisted}</span></span>
+<span id="cb15-441"><a href="#cb15-441" aria-hidden="true" tabindex="-1"></a></span>
 </code></pre></div><button title="Copia negli appunti" class="code-copy-button" data-in-quarto-modal=""><i class="bi"></i></button></div>
 </div></div></div></div></div>
 </div> <!-- /content -->
