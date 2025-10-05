@@ -2,7 +2,7 @@
 
 ## Introduzione {.unnumbered .unlisted}
 
-I capitoli precedenti ci hanno fornito due strumenti concettuali fondamentali: l'*entropia*, che misura l'incertezza di una distribuzione, e la *divergenza di Kullback–Leibler* ($D_{\text{KL}}$), che quantifica la distanza informazionale tra due distribuzioni. È giunto il momento di fare il passo successivo: utilizzare questi strumenti per *valutare e confrontare i modelli statistici* in ambito bayesiano.
+I capitoli precedenti ci hanno fornito due strumenti concettuali fondamentali: l'*entropia*, che misura l'incertezza di una distribuzione, e la *divergenza di Kullback–Leibler* ($D_{\text{KL}}$), che quantifica la distanza informazionale tra due distribuzioni. È giunto il momento di fare il passo successivo: utilizzare questi strumenti per *valutare e confrontare i modelli statistici* in ambito bayesiano. 
 
 Tutto parte da una domanda cruciale: *quanto sarà capace il nostro modello di prevedere dati mai visti?* Un modello valido non è quello che si adatta perfettamente ai dati osservati, ma quello che sa *generalizzare* efficacemente a situazioni future. Questa distinzione tra adattamento (*fitting*) e generalizzazione è il cuore della valutazione predittiva.
 
@@ -732,28 +732,31 @@ cat(sprintf("KL(p || q): %.4f\n", kl_pq))
 
 Questo mostra sia algebricamente sia numericamente che *massimizzare ELPD = minimizzare KL*.
 
-## Stimare l’ELPD nella pratica: la Leave-One-Out Cross-Validation
+## Stima dell'ELPD nella pratica: il metodo Leave-One-Out Cross-Validation
 
-Abbiamo chiarito che l’ELPD è la misura ideale della bontà predittiva di un modello perché è direttamente collegata alla divergenza KL. Il problema è che, per definizione, richiede un’aspettativa rispetto alla vera distribuzione dei dati futuri $p(\tilde{y})$, che non conosciamo mai.
+Come abbiamo stabilito, l'ELPD rappresenta la misura ideale per valutare la capacità predittiva di un modello, grazie alla sua diretta connessione con la divergenza di Kullback-Leibler. Tuttavia, la sua definizione teorica richiede il calcolo di un'aspettativa rispetto alla vera distribuzione dei dati futuri $p(\tilde{y})$, che nella pratica risulta sempre ignota.
 
-*Come possiamo allora stimarlo?* La soluzione più usata è la *Leave-One-Out Cross-Validation* (LOO-CV), che ci permette di avvicinarci all’ELPD teorico usando soltanto i dati osservati.
+*In che modo è possibile stimare questa quantità?* La soluzione metodologicamente più solida è offerta dalla *Leave-One-Out Cross-Validation* (LOO-CV), una procedura che consente di approssimare l'ELPD teorico utilizzando esclusivamente i dati osservati.
 
 ### L’idea alla base della LOO-CV
 
-Il principio è semplice: trattare ogni osservazione del dataset come se fosse “nuova” e verificare se il modello, addestrato sui dati rimanenti, riesce a prevederla.
+L'approccio Leave-One-Out si basa su un concetto intuitivo ma potente: utilizzare ciascuna osservazione del dataset come dato "nuovo", valutando la capacità del modello - stimato sulle restanti osservazioni - di prevederla adeguatamente.
 
-1. Si prende un’osservazione $y_i$.
-2. La si rimuove temporaneamente dal dataset.
-3. Si stima il modello sui dati rimanenti $y_{-i}$.
-4. Si calcola la densità predittiva per il dato escluso, $q(y_i \mid y_{-i})$.
-5. Si ripete per tutte le osservazioni e si sommano i logaritmi.
+La procedura si articola nei seguenti passi:
 
-In formula:
+1. **Isolamento**: si seleziona un'osservazione $y_i$ dal dataset.
+2. **Esclusione**: la si rimuove temporaneamente dal campione di stima.
+3. **Stima**: si adatta il modello ai dati rimanenti $y_{-i}$.
+4. **Valutazione**: si calcola la densità predittiva per l'osservazione esclusa, $q(y_i \mid y_{-i})$.
+5. **Iterazione**: si ripete il processo per tutte le $n$ osservazioni.
+6. **Aggregazione**: si sommano i logaritmi delle densità predittive ottenute.
+
+Formalmente:
 
 $$
 \mathrm{ELPD}_{\mathrm{LOO}} \;=\; \sum_{i=1}^n \log q(y_i \mid y_{-i}) .
 $$ {#eq-elpd-loo}
-Così otteniamo una stima *out-of-sample*: ogni punto è valutato da un modello che non lo ha "visto".
+Il risultato è una stima *out-of-sample* genuina: ciascuna osservazione viene valutata da un modello stimato in sua assenza, garantendo così una valutazione imparziale della capacità predittiva.
 
 ### Perché funziona
 
@@ -765,41 +768,44 @@ $$ {#eq-elpd-loo-interpretation}
 
 ### Confrontare i modelli con LOO-CV
 
-Una volta stimato l’ELPD-LOO, confrontiamo due modelli calcolando la differenza:
+Una volta ottenuta la stima dell'ELPD-LOO per ciascun modello, il confronto avviene calcolando la differenza:
 
 $$
 \Delta \mathrm{ELPD} \;=\; \mathrm{ELPD}_{\mathrm{LOO}}(M_1) - \mathrm{ELPD}_{\mathrm{LOO}}(M_2).
 $$ {#eq-delta-elpd}
 
-Se $\Delta \mathrm{ELPD} > 0$, $M_1$ è più predittivo di $M_2$ (su quella scala). È utile riportare anche l’errore standard della differenza: come regola pratica, una differenza di almeno *due volte l'SE* indica un vantaggio credibile.
+Un valore positivo di $\Delta \mathrm{ELPD}$ indica una migliore capacità predittiva del modello $M_1$ rispetto a $M_2$. Per una valutazione completa, è fondamentale accompagnare questa differenza con il suo errore standard: secondo una regola empirica consolidata, un vantaggio pari ad almeno due errori standard può considerarsi credibile.
 
-> **Nota di coerenza:** quando confronti modelli, usa sempre la stessa *unità puntowise* (stesso “pezzo” di likelihood per osservazione o per cluster) in tutti i modelli.
+> **Coerenza metodologica:** nei confronti tra modelli, è essenziale mantenere la stessa definizione puntuale della verosimiglianza (identica unità di osservazione o cluster) attraverso tutti i modelli analizzati.
 
-### Overfitting e vantaggio della LOO-CV
+### Overfitting e vantaggi della validazione LOO
 
-Valutare un modello sugli stessi dati usati per addestrarlo gonfia artificiosamente la performance (*overfitting*). La LOO-CV aggira questo problema: ogni $y_i$ è valutata da un modello che non include $y_i$, producendo una misura molto più realistica della capacità di generalizzare.
+La valutazione di un modello sugli stessi dati utilizzati per la stima tende a sovrastimarne sistematicamente le prestazioni, un fenomeno noto come overfitting. La validazione Leave-One-Out (LOO) supera questa limitazione strutturale: ciascuna osservazione $y_i$ viene valutata da un modello stimato escludendo proprio $y_i$, producendo così una stima più realistica della capacità predittiva del modello su nuovi dati.
 
-### PSIS-LOO: la scorciatoia pratica
+### PSIS-LOO: l'approssimazione efficiente
 
-Riadattare il modello $n$ volte è spesso impraticabile. Per questo si usa il *Pareto-Smoothed Importance Sampling LOO* (PSIS-LOO), che stima $\mathrm{ELPD}_{\mathrm{LOO}}$ da *un'unica* stima MCMC del modello e fornisce anche diagnostiche di affidabilità.
+Il refitting ripetuto del modello per ciascuna osservazione risulta spesso proibitivo dal punto di vista computazionale. Il metodo *Pareto-Smoothed Importance Sampling LOO* (PSIS-LOO) supera questa limitazione stimando $\mathrm{ELPD}_{\mathrm{LOO}}$ a partire da un'unica campionatura MCMC, offrendo al contempo strumenti diagnostici per valutarne l'affidabilità.
 
-* **Diagnostica Pareto-$k$** (regola pratica):
-  $k \le 0.5$ → ottimo; \quad $0.5\text{--}0.7$ → attenzione; \quad $>0.7$ → la stima può essere instabile → valuta *K-fold CV*, LOO per cluster o un refit mirato.
-* **Vantaggi**: efficienza computazionale, stima puntuale di ELPD e SE, controllo di qualità via $k$.
+* **Diagnostica Pareto-$k$** (interpretazione orientativa):
+  - $k \leq 0.5$: stima affidabile
+  - $0.5 < k \leq 0.7$: attendibilità moderata, interpretare con cautela
+  - $k > 0.7$: possibile instabilità → considerare alternative come *K-fold CV*, LOO per cluster o refitting mirato
 
-In R, è tutto implementato nel pacchetto `loo`, già integrato in `brms` e `rstanarm` tramite `loo()` e `loo_compare()`. Con Stan "puro", salva la *log-likelihood punto per punto* in `generated quantities` e passala a `loo::loo()`.
+* **Vantaggi principali**: efficienza computazionale, stima puntuale dell'ELPD con errore standard, e controllo qualità attraverso il parametro $k$.
 
-::: {.callout-note title="Clusters"}
-Con dati dipendenti (EMA, misure ripetute, trial per soggetto) la LOO va definita *per cluster* (ad es. per soggetto o sessione), non per singolo punto: si lascia fuori ogni volta *tutto* il cluster correlato.
+In R, le metodologie descritte sono implementate nel pacchetto `loo`, che risulta già integrato negli ambienti `brms` e `rstanarm` attraverso le funzioni `loo()` e `loo_compare()`. Per gli utenti che lavorano direttamente con Stan, è sufficiente calcolare la *log-verosimiglianza punto per punto* all'interno del blocco `generated quantities` e successivamente passare l'output alla funzione `loo::loo()`.
+
+::: {.callout-note title="Validazione per cluster"}
+In presenza di dati dipendenti (come nei studi EMA, misure ripetute o trial multipli per soggetto), la procedura LOO deve essere applicata a livello di cluster. Ciò significa che per ogni validazione si esclude l'intero gruppo di osservazioni correlate (ad esempio, tutti i dati di un soggetto o di una sessione sperimentale), preservando così la struttura di dipendenza dei dati.
 :::
 
-#### In sintesi
+### Sintesi concettuale
 
-* L’ELPD misura la capacità predittiva su dati futuri.
-* Non conoscendo $p(\tilde{y})$, lo stimiamo con LOO-CV.
-* La differenza di ELPD-LOO tra modelli approssima la differenza nelle loro divergenze KL.
-* PSIS-LOO rende il calcolo efficiente e fornisce diagnostiche ($k$ di Pareto).
-* Regola pratica: preferire l’ELPD-LOO più alto, riportando $\Delta \mathrm{ELPD}$ **con SE**, e considerando parsimonia e interpretabilità.
+* L'ELPD quantifica la capacità predittiva del modello su dati non osservati.
+* In assenza della distribuzione vera $p(\tilde{y})$, la procedura LOO-CV ne fornisce una stima empirica.
+* Le differenze nell'ELPD-LOO tra modelli approssimano le relative divergenze di Kullback-Leibler.
+* L'implementazione PSIS-LOO garantisce efficienza computazionale e include diagnostiche di affidabilità (parametro $k$ di Pareto).
+* Linea guida operativa: privilegiare i modelli con ELPD-LOO più elevato, riportando sistematicamente $\Delta \mathrm{ELPD}$ *con il corrispondente errore standard*, e integrando la valutazione con considerazioni sulla parsimonia e l'interpretabilità.
 
 ::: {.callout-note collapse=true title="Esempio: confronto ELPD-LOO tra due modelli"}
 Questo esempio mostra come passare dalla definizione teorica dell’ELPD alla stima pratica via LOO, nel caso elementare Beta–Bernoulliano.
@@ -863,33 +869,33 @@ cat(sprintf("SE differenza     : %.6f\n", se_diff))
 > **Regola pratica:** $|\Delta \mathrm{ELPD}| \ge 2 \times \mathrm{SE}$ → evidenza credibile a favore del modello migliore.
 :::
 
-::: {.callout-note title="In pratica: stimare e confrontare l’ELPD-LOO"}
-**Strumenti**
+::: {.callout-note title="Implementazione pratica: stima e confronto dell'ELPD-LOO"}
+**Strumenti computazionali**
 
-* `loo::loo()` e `loo::loo_compare()`; integrati in `brms`/`rstanarm`.
-* **Stan**: salva la *log-likelihood puntowise* in `generated quantities` e passa la matrice a `loo()`.
+* Funzioni `loo::loo()` e `loo::loo_compare()` nel pacchetto R omonimo; già integrate negli ambienti `brms` e `rstanarm`.
+* **Implementazione Stan personalizzata**: memorizzare la *log-verosimiglianza puntuale* nel blocco `generated quantities` e fornire la matrice risultante a `loo()`.
 
-**Workflow tipico**
+**Procedura operativa**
 
-1. Adatta ogni modello (`brm()`, `stan_glm()` o Stan nativo).
-2. Estrai la *log-likelihood puntowise* (`log_lik()` o variabile salvata in Stan).
-3. Calcola `loo()` (ottieni ELPD, SE, e Pareto-$k$).
-4. Confronta con `loo_compare()` (riporta $\Delta \mathrm{ELPD}$ e SE).
-5. Se Pareto-$k$ alti: usa *K-fold CV*, LOO per cluster, o considera un refit più robusto.
+1. Stimare ciascun modello candidato (`brm()`, `stan_glm()` o codice Stan personalizzato).
+2. Estrarre la *log-verosimiglianza puntuale* (tramite `log_lik()` o variabile definita in Stan).
+3. Applicare `loo()` per ottenere ELPD, errore standard e diagnostiche Pareto-$k$
+4. Confrontare i modelli con `loo_compare()`, riportando $\Delta \mathrm{ELPD}$ ed errore standard.
+5. In presenza di valori elevati di Pareto-$k$: ricorrere a *K-fold CV*, LOO per cluster, o valutare un refitting più robusto.
 
-**Decisione**
+**Criteri decisionali**
 
-* Preferisci l’ELPD-LOO più alto.
-* Riporta sempre $\Delta \mathrm{ELPD}$ **con SE**.
-* Se differenze $< 2\times \mathrm{SE}$, fai pesare parsimonia e interpretabilità.
-* Per serie temporali, preferisci schemi *leave-future-out* (blocchi temporali), non LOO casuale.
+* Privilegiare i modelli con valori più elevati di ELPD-LOO.
+* Comunicare sistematicamente $\Delta \mathrm{ELPD}$ *accompagnato dall'errore standard*.
+* Per differenze inferiori a $2\times \mathrm{SE}$, considerare prioritariamente parsimonia e interpretabilità.
+* Nel caso di serie temporali, adottare schemi di validazione *leave-future-out* strutturati a blocchi temporali.
 :::
 
-## Criteri di informazione
+## Criteri di informazione per la valutazione dei modelli
 
-La *quantità di riferimento* che intendiamo massimizzare è l'ELPD (*Expected Log Predictive Density*): questa misura quantifica quanto la distribuzione predittiva del modello $q(\tilde{y} \mid y)$ approssimi la distribuzione vera $p(\tilde{y})$, in termini di divergenza di Kullback–Leibler minimale. I *criteri di informazione* forniscono delle approssimazioni – più o meno accurate – per stimare *su nuovi dati* tale capacità predittiva, operando un bilanciamento tra adattamento ai dati osservati e complessità del modello.
+La *metrica fondamentale* per la valutazione predittiva è l'ELPD (*Expected Log Predictive Density*), che misura quanto la distribuzione predittiva del modello $q(\tilde{y} \mid y)$ si avvicini alla distribuzione vera dei dati $p(\tilde{y})$, minimizzando la divergenza di Kullback-Leibler. I *criteri di informazione* costituiscono diverse approssimazioni - di varia accuratezza - per stimare questa capacità predittiva *su nuovi dati*, bilanciando in modo ottimale il trade-off tra adattamento ai dati osservati e complessità del modello.
 
-Nelle applicazioni pratiche, le implementazioni più diffuse riportano i criteri su *scala di devianza*, ovvero nella forma $-2 \times \text{ELPD}$ o di grandezze correlate. Su questa scala, *valori più bassi indicano prestazioni migliori*. Tra i criteri disponibili, LOO e WAIC sono quelli concettualmente più prossimi all'ELPD; AIC e BIC risultano invece particolarmente utili in contesti più classici, caratterizzati da maggiore regolarità strutturale.
+Tra i vari criteri disponibili, LOO e WAIC rappresentano le approssimazioni concettualmente più vicine all'ELPD in un'ottica bayesiana, mentre AIC e BIC si collocano nell'ambito della statistica frequentista, dove funzionano bene per modelli con strutture parametriche semplici e dati indipendenti. Essendo statistiche asintotiche, il loro utilizzo richiede campioni di dati di numerosità elevata per garantire stime affidabili.
 
 ### Panoramica dei criteri di valutazione
 

@@ -2,21 +2,25 @@
 
 ## Introduzione {.unnumbered .unlisted}
 
-In molti compiti psicologici osserviamo, per ciascun partecipante, successi/insuccessi su un certo numero di prove. Vogliamo rispondere a tre domande:
+In molti contesti di ricerca psicologica, i dati sperimentali consistono in serie di successi e insuccessi registrati per ciascun partecipante su un numero definito di prove. Questo scenario solleva tre interrogativi fondamentali:
 
-- (Q1) qual è la probabilità di successo per ogni individuo?
-- (Q2) come variano queste probabilità nella popolazione (media e dispersione)?
-- (Q3) date poche prove, come evitare stime estreme e instabili?
+- **(Q1)** Qual è la probabilità di successo di ogni singolo individuo?
+- **(Q2)** Come variano queste probabilità all'interno della popolazione, in termini di valore centrale e dispersione?
+- **(Q3)** Data la limitatezza del numero di prove per partecipante, come è possibile evitare stime individuali estreme e instabili?
 
-Il modello gerarchico beta–binomiale risponde a tutte e tre, introducendo un livello di popolazione che regolarizza le stime individuali (shrinkage) e quantifica la variabilità tra soggetti.
+Un quadro di riferimento efficace per rispondere a queste domande è offerto dal *modello gerarchico beta-binomiale*. Questo approccio introduce un livello superiore (la "popolazione") che regolarizza le stime individuali attraverso un meccanismo di *shrinkage*, quantificando al contempo la variabilità tra i soggetti.
 
-Il modello si fonda su tre livelli. Al primo livello, i dati osservati sono modellati come variabili binomiali: per ogni partecipante osserviamo un certo numero di risposte corrette in un numero fissato di prove. Al secondo livello, ciascuna probabilità individuale di successo è considerata non come un valore fisso, ma come un’estrazione da una distribuzione Beta comune a tutti i partecipanti. Al terzo livello, i parametri della distribuzione Beta, che descrivono la tendenza centrale e la variabilità tra le probabilità individuali, sono essi stessi trattati come incerti e stimati dai dati attraverso delle distribuzioni a priori.
+La struttura del modello si articola su tre livelli:
 
-Un modo intuitivo di interpretare questi iperparametri è attraverso la parametrizzazione in termini di media e concentrazione. La media rappresenta la probabilità di successo tipica nella popolazione, mentre la concentrazione descrive quanto le probabilità individuali tendono a essere simili tra loro oppure a differenziarsi. Valori alti della concentrazione implicano che le probabilità dei singoli partecipanti sono molto vicine alla media di popolazione; valori bassi indicano invece una maggiore eterogeneità. Questa riformulazione semplifica la scelta delle distribuzioni a priori e rende più immediata l’interpretazione psicologica dei risultati.
+1.  **Livello dei Dati:** Le osservazioni di ciascun partecipante sono modellate come variabili casuali binomiali, dove il numero di successi dipende da una probabilità sottostante e da un numero fisso di prove.
+2.  **Livello Individuale:** Le probabilità di successo dei singoli partecipanti non sono trattate come valori fissi, bensì come estrazioni da una distribuzione Beta comune all'intera popolazione.
+3.  **Livello di Popolazione:** I parametri della distribuzione Beta, che ne definiscono la forma, sono a loro volta considerati incerti e vengono stimati dai dati, utilizzando distribuzioni a priori che riflettono l'incertezza del ricercatore.
 
-Dal punto di vista inferenziale, il modello consente di ottenere contemporaneamente stime individuali e stime di popolazione. Le prime beneficiano del fenomeno noto come *shrinkage*: le probabilità di successo di ciascun partecipante non vengono stimate isolatamente, ma vengono “attirate” verso la media di popolazione, con un’intensità che dipende dalla quantità di dati disponibili per quel partecipante. Questo meccanismo evita che pochi tentativi producano stime estreme e instabili, rendendo più robuste le conclusioni. Le seconde, cioè le stime di popolazione, forniscono una descrizione sintetica della distribuzione delle abilità e permettono di valutare se la prestazione media del gruppo si discosta da ciò che ci si attenderebbe dal puro caso.
+Un'interpretazione particolarmente intuitiva degli iperparametri della Beta si ottiene utilizzando una *parametrizzazione in termini di media e concentrazione*. La media rappresenta la probabilità di successo tipica nella popolazione, mentre la concentrazione indica il grado di omogeneità tra gli individui. Alti valori di concentrazione suggeriscono che le probabilità individuali sono molto vicine alla media del gruppo; valori bassi, al contrario, segnalano una sostanziale eterogeneità. Questa riformulazione non solo facilita la scelta di distribuzioni a priori sensate, ma rende anche l'interpretazione dei risultati immediatamente pertinente e ricca di senso sul piano psicologico.
 
-In questo capitolo vedremo come costruire e stimare un modello gerarchico beta-binomiale con Stan, applicandolo a dati reali tratti dalla letteratura. L’analisi mostrerà non solo come implementare tecnicamente il modello, ma anche come interpretare i risultati a livello individuale e collettivo, evidenziando il ruolo centrale della struttura gerarchica nell’affrontare in maniera coerente la variabilità dei dati psicologici.
+Dal punto di vista inferenziale, il modello fornisce stime simultanee a livello individuale e di popolazione. Le *stime individuali* beneficiano del fenomeno dello *shrinkage*: invece di essere calcolate in isolamento, le probabilità di ciascun partecipante vengono "attratte" verso la media di popolazione. L'entità di questa regolarizzazione è inversamente proporzionale alla quantità di dati disponibili per l'individuo, un meccanismo che previene efficacemente stime estreme e inaffidabili quando il numero di prove è esiguo. Le *stime di popolazione*, d'altro canto, offrono una sintesi della distribuzione delle abilità, permettendo ad esempio di stabilire se la prestazione media del campione sia credibilmente diversa da un benchmark teorico, come il puro caso.
+
+In questo capitolo, illustreremo la costruzione e la stima di un modello gerarchico beta-binomiale utilizzando *Stan*, applicandolo a un set di dati reali tratto dalla letteratura. L'analisi mostrerà non solo l'implementazione tecnica del modello, ma anche come interpretare in modo integrato gli output, evidenziando il ruolo cruciale della struttura gerarchica nel gestire la variabilità intrinseca dei dati psicologici in modo coerente.
 
 ### Panoramica del capitolo {.unnumbered .unlisted}
 
@@ -249,17 +253,15 @@ dr <- fit$draws(variables = c("alpha","beta","overall_p","p[1]","p[2]","p[3]"))
 posterior::summarise_draws(dr, "mean","sd","rhat","ess_bulk","ess_tail")
 ```
 
-Se le diagnostiche confermano convergenza e buona esplorazione della posteriore, si può passare con tranquillità alle analisi substantive. In caso contrario, vale la pena considerare piccoli aggiustamenti mirati. Un aumento di `adapt_delta` tende a eliminare le divergenze al costo di un campionamento leggermente più lento; qualora persista autocorrelazione elevata, un incremento di `iter_sampling` migliora l’ESS, mentre problemi ostinati di geometria della posteriore spesso traggono beneficio da una parametrizzazione alternativa. In questo modello specifico, la riformulazione in termini di media di popolazione $\mu$ e concentrazione $\kappa$ è un’opzione pratica che può rendere più regolare la geometria, come verrà illustrato più avanti.
+Se le diagnostiche di convergenza confermano un'adeguata esplorazione della distribuzione a posteriori, si può procedere con l'analisi sostantiva. In caso contrario, è opportuno valutare opportuni riparametrizzazioni o altri aggiustamenti del modello. Un aumento del parametro `adapt_delta` è generalmente efficace nell'eliminare le divergenze, sebbene a scapito di una velocità di campionamento leggermente ridotta. Qualora si riscontri un'elevata autocorrelazione, un incremento di `iter_sampling` consente di migliorare l'*Effective Sample Size* (ESS). Per problemi più ostinati, legati alla geometria della distribuzione a posteriori, è spesso vantaggioso ricorrere a una riparametrizzazione alternativa del modello. Nel caso specifico qui trattato, la parametrizzazione basata sulla media della popolazione ($\mu$) e sul parametro di concentrazione (κ) rappresenta una soluzione praticabile, in grado di regolarizzare la geometria dello spazio dei parametri, come si avrà modo di illustrare nella sezione dedicata all'implementazione.
 
-Chiusa questa fase, il modello è pronto per le esplorazioni posteriori e, soprattutto, per collegare le quantità di interesse psicologico—le probabilità individuali $p_i$ e la media di popolazione—alle domande che motivano l’analisi. Nei passaggi successivi entreremo nel merito della lettura delle distribuzioni a posteriori, mostreremo come visualizzare lo shrinkage e come quantificare l’evidenza rispetto all’ipotesi di caso puro.
-
+Una volta conclusa questa fase diagnostica, il modello è pronto per l'esplorazione delle distribuzioni a posteriori. L'obiettivo primario diventa quindi collegare le quantità di interesse psicologico—le probabilità individuali $p_i$ e la media di popolazione—alle domande di ricerca che hanno motivato l'analisi. Nei prossimi paragrafi ci dedicheremo all'interpretazione delle distribuzioni a posteriori, illustreremo le modalità per visualizzare il fenomeno dello *shrinkage* e presenteremo metodi per quantificare l'evidenza a supporto o a sfavore dell'ipotesi che la prestazione sia riconducibile al puro caso.
 
 ### Controlli predittivi essenziali
 
-**Prior predictive.** Prima di osservare i dati, i prior su (α,β) o (μ,κ) implicano una distribuzione plausibile delle $p_i$ e dei conteggi $y_i$? Se i prior generano sistematicamente prestazioni “impossibili” (quasi 0 o quasi 1 con alta concentrazione), sono incoerenti col dominio psicologico.
+**Verifica predittiva a priori.** Prima di includere i dati osservati, è necessario valutare se le distribuzioni a priori specificate per le coppie (α, β) o (μ, κ) generino una distribuzione plausibile delle probabilità individuali $p_i$ e dei conteggi predetti $y_i$. Un prior che assegni massa elevata a scenari non realistici—come prestazioni prossime a 0 o 1 in un contesto di alta concentrazione—va considerato incoerente con le conoscenze di dominio e deve essere pertanto rivisto.
 
-**Posterior predictive.** Dopo il fit, i dati replicati dal modello somigliano ai dati osservati (istogrammi delle proporzioni per soggetto, media di gruppo, varianza tra soggetti)? Divergenze sistematiche suggeriscono di rivedere la concentrazione κ o l’assunzione di scambiabilità.
-
+**Verifica predittiva a posteriori.** Dopo la stima del modello, si simula la generazione di nuovi dati replicati basati sulla distribuzione a posteriori. La loro coerenza con i dati empirici osservati va valutata confrontando metriche chiave, quali la distribuzione delle proporzioni individuali, la media gruppale e la varianza tra i soggetti. Discrepanze sistematiche in questi confronti possono indicare una cattiva specificazione del parametro di concentrazione κ o una violazione dell'ipotesi di scambiabilità degli effetti individuali. 
 
 ## Shrinkage bayesiano
 

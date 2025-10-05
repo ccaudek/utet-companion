@@ -1,20 +1,16 @@
 # Distribuzione predittiva a posteriori {#sec-bayesian-inference-post-pred-distr}
 
-::: {.epigraph}
-> “The general idea of posterior predictive checking is simple: if a model is a good fit to data, then replicated data generated under the model should look similar to the observed data.”
->
-> -- **Andrew Gelman, Xiao-Li Meng & Hal Stern**, Posterior predictive assessment of model fitness via realized discrepancies (Statistica Sinica, 1996, p. 733)
-:::
-
 ## Introduzione {.unnumbered .unlisted}
 
-Nei capitoli precedenti abbiamo visto due aspetti fondamentali dell’inferenza bayesiana: da un lato, la costruzione delle distribuzioni a posteriori per i parametri di interesse; dall’altro, l’importanza di verificare i *prior* attraverso i controlli predittivi, per assicurarci che le nostre assunzioni iniziali siano coerenti con la realtà psicologica che vogliamo studiare.
+Nei capitoli precedenti abbiamo visto due aspetti fondamentali dell’inferenza bayesiana: (1) come costruire le distribuzioni a posteriori dei parametri di interesse e (2) come verificare i *prior* con controlli predittivi, per assicurarci che le nostre assunzioni iniziali siano compatibili con la realtà psicologica che vogliamo studiare.
 
-Ora compiamo un passo ulteriore: invece di chiederci se i nostri *prior* siano ragionevoli, ci chiediamo se *l’intero modello*, dopo aver incorporato i dati osservati, sia in grado di generare previsioni plausibili. Questo ci porta al concetto di *distribuzione predittiva a posteriori* (*posterior predictive distribution*).
+Ora compiamo un passo ulteriore. Non ci chiediamo più soltanto se i *prior* sono ragionevoli, ma se *l’intero modello*, dopo aver incorporato i dati osservati, è capace di generare previsioni plausibili per nuovi individui, nuove sedute o nuove prove. Questo ci porta al concetto di *distribuzione predittiva a posteriori*.
 
-La logica è semplice e potente: se un modello è una rappresentazione credibile del processo che ha generato i dati, allora dovrebbe essere in grado non solo di adattarsi ai dati raccolti, ma anche di simulare dati nuovi con caratteristiche simili. In questo senso, le distribuzioni predittive a posteriori diventano uno strumento centrale per la valutazione dei modelli: collegano direttamente i parametri stimati ai dati futuri che ci aspettiamo di osservare.
+L’idea è semplice e potente: se un modello rappresenta in modo credibile il processo che ha generato i dati, allora deve saper fare due cose: adattarsi ai dati raccolti *e* simulare dati nuovi con caratteristiche simili. In psicologia, questo significa ad esempio prevedere il punteggio a un questionario d’ansia per uno studente che non ha partecipato allo studio, stimare la probabilità di ricordo corretto in una prova di memoria per un nuovo partecipante, oppure quantificare la riduzione attesa dei sintomi depressivi dopo un ciclo di terapia cognitivo-comportamentale.
 
-In questo capitolo vedremo come costruire la distribuzione predittiva a posteriori, come interpretarla e come utilizzarla per verificare la coerenza del modello con l’evidenza empirica. Questo approccio ci permetterà di mettere alla prova in modo pratico la capacità del modello di spiegare e prevedere i fenomeni psicologici che ci interessano.
+Spesso la distribuzione predittiva è persino più interessante della sola distribuzione a posteriori dei parametri. La distribuzione a posteriori ci dice quanto siamo incerti, per esempio, sulla media dei punteggi BDI in una popolazione; la *distribuzione predittiva a posteriori* ci dice invece *cosa potremmo osservare* in futuro: qual è la probabilità che un nuovo paziente scenda sotto la soglia clinica? qual è la distribuzione dei tempi di risposta in un compito Stroop alla prossima sessione? In altre parole, la distribuzione a posteriori descrive l’incertezza sui parametri latenti; la distribuzione predittiva a posteriori somma a questa anche l’incertezza sugli esiti futuri, cioè ciò che realmente misuriamo.
+
+Nel seguito vedremo come costruire la distribuzione predittiva a posteriori, come leggerla e come usarla per mettere alla prova il modello in modo concreto: dai *posterior predictive checks* (il modello riproduce code, asimmetrie, varianze tra soggetti?) al confronto tra modelli basato sulla capacità di prevedere dati nuovi (ELPD e LOO). Grazie a questo approccio sarà possibile valutare non solo il corretto funzionamento del modello sui dati osservati, ma soprattutto la sua effettiva capacità di generalizzazione rispetto ai fenomeni psicologici di nostro interesse.
 
 ### Panoramica del capitolo {.unnumbered .unlisted}
 
@@ -152,7 +148,6 @@ Si consideri un esperimento binomiale consistente in $n$ prove indipendenti, dov
 
    La distribuzione empirica dei valori $y_{\text{new}}^{(s)}$ costituisce un'approssimazione Monte Carlo della distribuzione predittiva a posteriori, incorporando sia l'incertezza epistemica su $p$ sia la variabilità aleatoria del processo binomiale.
 
-
 ## Un esempio numerico
 
 ### I dati e le nostre conoscenze iniziali
@@ -212,27 +207,28 @@ Il vettore `proporzioni_future` riassume queste possibilità: non una singola pr
 
 Distribuzione iniziale (prima di vedere i dati):
 ```{r}
-# Distribuzione iniziale (prima di vedere i dati) — PRIOR (blu)
+# Distribuzione iniziale (prima di vedere i dati) — PRIOR 
 ggplot(data.frame(x = c(0, 1)), aes(x = x)) +
   stat_function(
     fun  = dbeta,
     args = list(shape1 = alpha_prior, shape2 = beta_prior),
-    color = modern_palette$blue,
-    linewidth = 1.1
+    linewidth = 1.1,
+    color = PRIMARY
   ) +
-  labs(x = "Probabilità di successo (p)", y = "Densità")
-
+  scale_x_continuous(labels = scales::label_percent(accuracy = 1)) +
+  labs(x = "Probabilità di successo (p)", y = "Densità") +
+  legenda_in_alto +
+  nessuna_griglia
 ```
 
 Conoscenza aggiornata (dopo aver visto i dati):
 
 ```{r}
-# Conoscenza aggiornata (dopo aver visto i dati) — POSTERIOR (viola)
+# Conoscenza aggiornata (dopo aver visto i dati) — POSTERIOR 
 ggplot(data.frame(x = c(0, 1)), aes(x = x)) +
   stat_function(
     fun  = dbeta,
     args = list(shape1 = alpha_post, shape2 = beta_post),
-    color = modern_palette$purple,
     linewidth = 1.1
   ) +
   labs(x = "Probabilità di successo (p)", y = "Densità")
@@ -241,20 +237,20 @@ ggplot(data.frame(x = c(0, 1)), aes(x = x)) +
 Previsioni per i prossimi 10 lanci:
 
 ```{r}
-# Previsioni per i prossimi 10 lanci — Posterior predictive (istogramma verde)
+# Previsioni per i prossimi 10 lanci — Posterior predictive 
 ggplot(data.frame(proporzioni = proporzioni_future), aes(x = proporzioni)) +
   geom_histogram(
-    aes(y = ..density..),
+    aes(y = after_stat(density)),
     bins = 20,
-    fill = modern_palette$green,
+    fill = modern_palette$grey5,
     color = modern_palette$white,
-    alpha = 0.8,
+    alpha = 0.85,
     linewidth = 0.2
   ) +
   geom_vline(
     aes(xintercept = successi_osservati / lanci_totali),
-    color = modern_palette$red,
-    linewidth = 0.8,
+    color = PRIMARY,
+    linewidth = 0.9,
     linetype = "dashed"
   ) +
   labs(x = "Proporzione di successi attesi", y = "Densità")
@@ -277,7 +273,6 @@ Il fatto che, nel nostro esempio, la distribuzione predittiva a posteriori ripro
 
 Tuttavia, è fondamentale comprendere che nella ricerca psicologica reale ci si confronta con modelli notevolmente più complessi. In questi contesti, la corrispondenza tra i dati effettivamente osservati e quelli generati dal modello attraverso la distribuzione predittiva non può mai essere considerata una garanzia preliminare. Al contrario, questa corrispondenza rappresenta proprio l'obiettivo da verificare.
 :::
-
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
