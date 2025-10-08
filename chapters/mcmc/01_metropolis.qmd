@@ -2,21 +2,21 @@
 
 ## Introduzione {.unnumbered .unlisted}
 
-Nei capitoli precedenti abbiamo visto che l’inferenza bayesiana può essere risolta esattamente in alcuni casi fortunati, grazie alle famiglie coniugate, oppure approssimata con metodi semplici come l’uso di una griglia di valori. Questi strumenti ci hanno permesso di comprendere a fondo la logica dell’aggiornamento bayesiano, ma hanno anche mostrato chiaramente i loro limiti: i casi coniugati sono eccezioni, e l’approccio su griglia diventa rapidamente impraticabile quando il numero di parametri cresce oltre uno o due.
-Per affrontare problemi realistici, che in psicologia riguardano quasi sempre modelli con più parametri e strutture complesse, dobbiamo introdurre un metodo generale che ci consenta di ottenere campioni dalla distribuzione a posteriori senza doverla calcolare in forma chiusa. Questo metodo esiste, ed è noto come algoritmo di Metropolis [@metropolist_etal_1953; @hastings_1970].
+Nei capitoli precedenti abbiamo esaminato due approcci all'inferenza bayesiana: la soluzione analitica tramite le famiglie coniugate e l'approssimazione numerica mediante la discretizzazione su griglia. Questi metodi hanno un notevole valore didattico per illustrare i principi dell'aggiornamento bayesiano, ma la loro applicabilità a problemi reali è limitata. Le famiglie coniugate rappresentano casi speciali, mentre l'approccio su griglia diventa computazionalmente intrattabile negli spazi parametrici multidimensionali.
 
-L’algoritmo di Metropolis rappresenta una svolta concettuale: offre una soluzione universale per generare campioni dalla distribuzione a posteriori, indipendentemente dalla forma della verosimiglianza e del prior. In questo senso, risolve in modo definitivo il problema di come rendere praticabile l’inferenza bayesiana. Tuttavia, presenta anche due limiti: è relativamente inefficiente dal punto di vista computazionale e richiede di scrivere codice su misura per ogni modello. Nonostante ciò, la sua logica è così generale e potente che costituisce la base di tutti gli algoritmi moderni di campionamento, incluso il metodo NUTS implementato in Stan.
+Per affrontare modelli psicologicamente realistici, che tipicamente coinvolgono più fonti di variabilità e strutture gerarchiche, è necessario disporre di un metodo generale in grado di campionare la distribuzione a posteriori senza richiederne la forma analitica. Tale metodo è fornito dall'algoritmo di Metropolis [@metropolist_etal_1953; @hastings_1970].
 
-In questo capitolo introdurremo passo dopo passo l’algoritmo di Metropolis, ne vedremo il funzionamento intuitivo e lo applicheremo a casi concreti. Questo ci permetterà di capire la logica alla base di gran parte dell’inferenza bayesiana moderna, che rimane immutata anche nei metodi più sofisticati.
+L'algoritmo di Metropolis rappresenta una soluzione fondamentale per il campionamento da distribuzioni target arbitrarie. La sua importanza risiede nell'universalità: è applicabile indipendentemente dalla forma funzionale della verosimiglianza e delle distribuzioni a priori. Sebbene presenti limitazioni in termini di efficienza computazionale e richieda un'implementazione specifica per ogni modello, la sua logica rappresenta il fondamento concettuale su cui si basano tecniche più sofisticate, come l'algoritmo NUTS implementato in Stan.
 
+In questo capitolo, analizzeremo in modo sistematico l'algoritmo di Metropolis, illustrandone il funzionamento attraverso applicazioni a casi concreti. 
 
 ### Panoramica del capitolo {.unnumbered .unlisted}
 
-- Utilizzare metodi Monte Carlo per stimare valori attesi e probabilità, evitando calcoli integrali complessi.
+- Utilizzare metodi Monte Carlo per stimare valori attesi e le probabilità, evitando calcoli integrali complessi.
 - Comprendere il ruolo delle catene di Markov nel campionamento dalla distribuzione a posteriori.
 - Implementare l'algoritmo di Metropolis per il campionamento a posteriori.
-- Valutare la convergenza delle catene con strumenti diagnostici come trace plot e autocorrelazione.
-- Gestire la fase di burn-in e utilizzare più catene per garantire stazionarietà e ridurre l'autocorrelazione.
+- Valutare la convergenza delle catene con strumenti diagnostici quali i trace plot e l'autocorrelazione.
+- Gestire la fase di burn-in e utilizzare più catene per garantire la stazionarietà e ridurre l'autocorrelazione.
 
 ::: {.callout-tip collapse=true}
 ## Prerequisiti
@@ -37,549 +37,519 @@ pacman::p_load(cmdstanr, reshape2)
 ```
 :::
 
-## L'obiettivo del metodo MCMC
+## Obiettivo di MCMC: campionare *posterior* complesse senza costanti di normalizzazione
 
-Il metodo MCMC (Markov Chain Monte Carlo) è un approccio computazionale che consente di approssimare distribuzioni di probabilità complesse generando una sequenza di valori campionati che segue la distribuzione a posteriori di interesse. L'idea di base è la seguente: consideriamo la distribuzione a posteriori come una popolazione da cui desideriamo estrarre dei campioni. Generando un numero sufficientemente grande di campioni (ad esempio diverse migliaia), la distribuzione empirica dei campioni ottenuti si avvicina progressivamente alla distribuzione teorica a posteriori. In questo modo, è possibile stimare quantità di interesse, come la media, la varianza o gli intervalli di credibilità, anche senza conoscere la forma analitica esplicita della distribuzione a posteriori.
+Il metodo *Markov Chain Monte Carlo* (MCMC) costituisce una classe di algoritmi computazionali progettati per generare campioni da distribuzioni di probabilità complesse, tipicamente multivariate e prive di forma analitica trattabile. Il suo principio fondamentale consiste nel costruire una *catena di Markov*[^markov-chain] la cui distribuzione stazionaria coincida con la distribuzione a posteriori target.
 
-### La natura dipendente del campionamento MCMC
+[^markov-chain]: Una catena di Markov è una sequenza di stati (in questo caso, valori dei parametri) in cui ogni stato dipende solo dallo stato immediatamente precedente, e non dall'intera storia passata (proprietà di "assenza di memoria"). In questo contesto, tale proprietà consente di costruire un percorso esplorativo nello spazio dei parametri, in cui ogni nuovo campione viene generato a partire dalla posizione corrente, facilitando l'esplorazione della distribuzione target.
 
-A differenza delle tecniche di campionamento indipendente precedentemente esaminate, l'approccio MCMC genera una sequenza di valori correlati tramite un meccanismo di transizione markoviana. La caratteristica distintiva di questo processo risiede nella proprietà di Markov: ogni nuovo campione dipende esclusivamente dallo stato corrente della catena e mostra memoria soltanto a breve termine, piuttosto che dipendere dall'intera storia precedente.
+Attraverso un processo iterativo, l'algoritmo produce una sequenza di valori campionati che, dopo un periodo di transizione (*burn-in*), converge verso la distribuzione desiderata. L'istogramma di questi campioni fornisce quindi un'approssimazione empirica della densità a posteriori, permettendo di stimare qualsiasi quantità inferenziale -- come medie, varianze, intervalli di credibilità o funzioni di parametri -- senza dover ricorrere all'integrazione analitica della distribuzione target.
 
-Questa architettura sequenziale produce inevitabilmente autocorrelazione tra le osservazioni adiacenti. Quando la catena visita una regione ad alta densità della distribuzione target, tende a persistere in tale zona per diverse iterazioni prima di migrare verso altre regioni. Questo comportamento è funzionale all'esplorazione efficiente dello spazio parametrico, ma introduce importanti considerazioni pratiche:
+### Catene di Markov e dipendenza seriale
 
-* l'informazione effettiva contenuta in $N$ campioni correlati è inferiore a quella di $N$ campioni indipendenti;
-* la valutazione della convergenza richiede analisi diagnostiche specifiche;
-* la dimensione efficace del campione (*ESS*) diventa un parametro cruciale per la qualità dell'inferenza.
+A differenza delle tecniche di campionamento indipendente, gli algoritmi MCMC generano sequenze di valori dipendenti attraverso un processo di transizione markoviana. La proprietà fondamentale che caratterizza questo approccio è l'assenza di memoria a lungo termine: ogni iterazione della catena dipende esclusivamente dallo stato immediatamente precedente, conformemente alla proprietà di Markov.
 
-Per compensare questa riduzione dell'informazione per campione, è generalmente necessario generare sequenze più lunghe rispetto al campionamento indipendente. Tuttavia, questo svantaggio apparente è ampiamente compensato dalla capacità di MCMC di affrontare problemi complessi che risulterebbero altrimenti irrisolvibili con i metodi tradizionali.
+Questa struttura sequenziale introduce un'autocorrelazione tra campioni consecutivi. Quando la catena raggiunge una regione ad alta densità probabilistica, tende a esplorarne i dintorni attraverso una serie di passi correlati prima di effettuare una transizione verso altre aree dello spazio parametrico. Sebbene questo meccanismo consenta un'esplorazione efficiente di distribuzioni complesse, comporta importanti implicazioni pratiche:
 
-### Perché utilizzare MCMC
+- il contenuto informativo di $N$ campioni correlati risulta inferiore a quello di $N$ campioni indipendenti;
+- la verifica della convergenza richiede strumenti diagnostici specifici;
+- la dimensione campionaria efficace (*Effective Sample Size*, ESS) diventa la metrica appropriata per valutare la precisione delle stime.
 
-Il metodo MCMC rappresenta uno strumento fondamentale per l'inferenza bayesiana moderna, in quanto consente di affrontare problemi complessi con distribuzioni a posteriori di forma arbitraria e in spazi ad alta dimensionalità. Uno dei suoi principali vantaggi risiede nella capacità di bypassare il calcolo esplicito dell'evidenza, ovvero dell'integrale di normalizzazione richiesto dal teorema di Bayes, che spesso risulta analiticamente intrattabile. Attraverso la simulazione numerica, è possibile generare campioni la cui distribuzione empirica converge alla vera distribuzione a posteriori, permettendo così una stima accurata di qualsiasi quantità inferenziale di interesse.
+Per compensare la ridotta efficienza informativa, è tipicamente necessario generare sequenze più lunghe rispetto al campionamento indipendente. Questo compromesso è comunque vantaggioso, in quanto rende trattabile una vasta classe di problemi inferenziali che risulterebbero altrimenti irrisolvibili con i metodi di campionamento diretto.
 
-Nel seguito ci concentreremo sull'*algoritmo di Metropolis*, uno dei metodi più semplici ed essenziali per implementare il campionamento MCMC.
+### Perché MCMC è centrale nell’inferenza bayesiana moderna
 
-## L'algoritmo di Metropolis: introduzione intuitiva
+Il metodo MCMC è uno strumento computazionale essenziale per l'inferenza bayesiana contemporanea, in quanto rende accessibile una vasta classe di modelli con distribuzioni a posteriori di forma arbitraria e dimensionalità elevata. Il suo vantaggio cruciale risiede nell'evitare il calcolo diretto dell'evidenza marginale, ovvero l'integrale di normalizzazione nel teorema di Bayes, che in molti contesti applicativi risulta analiticamente intrattabile o numericamente proibitivo.
 
-L'algoritmo di Metropolis è un metodo MCMC che consente di esplorare una distribuzione di probabilità complessa costruendo una sequenza di campioni dipendenti tra loro. La logica dell'algoritmo può essere riassunta nei seguenti passaggi fondamentali:
+Attraverso la simulazione iterativa, il metodo MCMC genera sequenze di campioni la cui distribuzione empirica converge asintoticamente alla distribuzione a posteriori target. Questo approccio consente di stimare in modo consistente qualsiasi quantità inferenziale, dalle semplici medie e varianze a funzioni non lineari complesse dei parametri, senza la necessità di una soluzione in forma chiusa.
 
-1. **Punto di partenza**: si inizia da un valore iniziale $\theta_0$ scelto arbitrariamente.
-2. **Proposta di un nuovo punto**: si genera un nuovo valore candidato $\theta^*$ partendo da $\theta_0$, utilizzando una distribuzione di proposta (ad esempio una distribuzione normale centrata su $\theta_0$).
-3. **Valutazione della proposta**: si confrontano le densità a posteriori associate al valore attuale $\theta_0$ e al valore proposto $\theta^*$.
-4. **Decisione di accettazione**: 
-   - se $\theta^*$ ha una densità a posteriori più alta di $\theta_0$, viene accettato automaticamente;
-   - se $\theta^*$ ha una densità a posteriori inferiore, viene accettato con una certa probabilità proporzionale al rapporto delle densità.
-5. **Registrazione**: in ogni caso, si registra la posizione attuale (sia che si sia accettato un nuovo punto, sia che si sia rimasti fermi).
+La nostra trattazione si concentrerà sull'algoritmo di Metropolis, che rappresenta il prototipo concettuale più elementare per il campionamento MCMC e ne incarna i principi operativi fondamentali.
 
-Questo processo viene ripetuto per un numero elevato di iterazioni, generando una catena di campioni che, dopo un opportuno periodo iniziale (detto *burn-in*), approssima la distribuzione a posteriori.
+## L'algoritmo di Metropolis: principi fondamentali
 
-## Perché accettiamo anche mosse peggiori
+L'algoritmo di Metropolis rappresenta un metodo MCMC per generare sequenze di campioni da distribuzioni target attraverso un processo di esplorazione stocastica guidata. La sua logica operativa si articola in cinque fasi fondamentali:
 
-Uno degli aspetti caratteristici dell'algoritmo di Metropolis è la regola di accettazione che consente, con una certa probabilità, di accettare anche proposte $\theta^*$ con densità a posteriori inferiore rispetto allo stato corrente. Questa scelta apparentemente controintuitiva è essenziale per garantire un'adeguata esplorazione dello spazio dei parametri.
+1. **Inizializzazione**: selezione di un valore iniziale $\theta_0$ (arbitrario o informato).
+2. **Generazione della proposta**: campionamento di un valore candidato $\theta^*$ da una distribuzione di proposta simmetrica, tipicamente centrata sullo stato corrente (es. $\theta^* \sim \mathcal{N}(\theta_t, \tau^2)$).
+3. **Valutazione probabilisticа**: calcolo del rapporto di accettazione $\alpha = \min\left(1, \frac{p(\theta^* \mid y)}{p(\theta_t \mid y)}\right)$.[^metropolis-ratio]
+4. **Decisione di transizione**: accettazione di $\theta^*$ con probabilità $\alpha$, mantenimento di $\theta_t$ con probabilità $1-\alpha$.
+5. **Aggiornamento iterativo**: ripetizione del processo per $T$ iterazioni.
 
-Se l'algoritmo accettasse esclusivamente mosse che migliorano la densità, convergerebbe rapidamente verso un picco locale della distribuzione, ma rischierebbe di tralasciare altre regioni significative dello spazio. Accettando occasionalmente mosse verso densità inferiori, la catena può sfuggire a massimi locali ed esplorare in modo più completo la distribuzione target, incluso l'accesso a modalità distinte che altrimenti risulterebbero inaccessibili.
+[^metropolis-ratio]: Il rapporto $\frac{p(\theta^* \mid y)}{p(\theta_t \mid y)}$ confronta la plausibilità a posteriori del candidato con quella dello stato corrente. Se il candidato è più plausibile ($\alpha \geq 1$), la proposta viene sempre accettata. Se è meno plausibile ($\alpha < 1$), la proposta viene accettata con una probabilità pari ad $\alpha$, permettendo così di esplorare anche regioni a bassa densità e di evitare una convergenza prematura verso massimi locali. Si noti che, poiché la distribuzione a posteriori compare sia al numeratore che al denominatore, le costanti di normalizzazione si annullano a vicenda, rendendo possibile il calcolo anche quando l'evidenza marginale è intrattabile.
 
-Questa proprietà è fondamentale per ottenere una catena in grado di rappresentare fedelmente l'intera distribuzione a posteriori, specialmente quando essa è multimodale o presenta regioni di bassa probabilità tra aree ad alta densità. Senza questo meccanismo, l'algoritmo perderebbe la capacità di esplorare globalmente lo spazio dei parametri, compromettendo la validità delle inferenze ottenute.
+Dopo un periodo transitorio (*burn-in*), la sequenza risultante $\{\theta_1, \theta_2, \dots, \theta_T\}$ costituisce un'approssimazione empirica della distribuzione a posteriori.
 
-## La scelta della larghezza della proposta
+### La logica dell'accettazione probabilistica
 
-Nell'algoritmo di Metropolis, la proposta di un nuovo valore $\theta^*$ viene solitamente generata a partire dallo stato corrente $\theta_t$ utilizzando una *distribuzione di proposta simmetrica*, ad esempio una distribuzione normale $\mathcal{N}(\theta_t, \tau^2)$, dove $\tau$ rappresenta la deviazione standard della proposta.
+La caratteristica distintiva dell'algoritmo risiede nella regola di accettazione che consente di passare a stati con densità a posteriori inferiore. Questo meccanismo apparentemente controintuitivo è essenziale per garantire l'*ergodicità* della catena, ovvero la capacità di esplorare tutto lo spazio degli stati in modo proporzionale alla loro densità target.
 
-La scelta del valore di $\tau$ (ovvero della *larghezza della proposta*) è cruciale per il buon funzionamento dell'algoritmo:
+Senza questa capacità di accettare occasionalmente mosse "peggiorative", la catena rimarrebbe confinata in massimi locali, impedendo la scoperta di regioni a più alta densità probabilistica separate da zone a bassa densità. Ciò è particolarmente critico nelle distribuzioni multimodali, dove l'algoritmo deve poter transitare tra modalità distinte per rappresentare adeguatamente l'incertezza complessiva.
 
-- se $\tau$ è *troppo piccolo*, i passi proposti saranno molto vicini al punto attuale. In questo caso, molte proposte saranno accettate, ma la catena si muoverà lentamente nello spazio dei parametri, esplorandolo inefficientemente (alta correlazione tra i campioni);
-- se $\tau$ è *troppo grande*, i passi proposti saranno molto lontani dal punto attuale. In questo caso, la maggior parte delle proposte cadrà in regioni di bassa densità, portando a un alto tasso di rifiuto delle proposte e quindi a una scarsa efficienza del campionamento.
+### Calibrazione della distribuzione di proposta
 
-Un valore ottimale di $\tau$ deve bilanciare l'*accettazione* sufficiente di nuove proposte e l'*esplorazione* efficiente dello spazio dei parametri. In generale, si cerca di ottenere un *tasso di accettazione* compreso tra il 40% e il 50% per l'algoritmo di Metropolis a singolo parametro.
+La scelta del parametro di scala $\tau$ nella distribuzione di proposta influisce in modo determinante sull'efficienza esplorativa:
 
-## L'importanza dei grafici diagnostici: Trace plot e Correlogramma
+- **$\tau$ troppo piccolo**: Alta probabilità di accettazione ma mobilità ridotta, con conseguente autocorrelazione elevata e copertura inefficiente dello spazio parametrico.
+- **$\tau$ troppo grande**: Bassa probabilità di accettazione con frequenti rifiuti, che porta a catene che persistono troppo a lungo negli stessi stati.
 
-Per valutare la qualità della catena generata dall'algoritmo di Metropolis, è fondamentale analizzare alcuni *grafici diagnostici*.
+La regola empirica ottimale per le proposte univariate prevede un *tasso di accettazione* target del 40-50%, bilanciando adeguatamente l'esplorazione locale e la mobilità globale.
 
-### Trace plot
+## Diagnostica grafica per catene MCMC: Trace plot e autocorrelazione
 
-Il trace plot, che rappresenta la sequenza dei valori campionati di $\theta$ in funzione delle iterazioni, costituisce uno strumento diagnostico essenziale per valutare il comportamento della catena MCMC. Una catena che si comporta bene mostra fluttuazioni stazionarie attorno a un valore medio costante, senza trend o derive prolungate nel tempo, indicando così una corretta esplorazione della regione di alta densità della distribuzione a posteriori.
+La valutazione della qualità delle catene MCMC richiede l'analisi di specifici strumenti diagnostici grafici, quali il *trace plot* e il *correlogramma*.
 
-Al contrario, trace plot problematici possono rivelare diverse criticità. Una fase iniziale con andamento sistematicamente crescente o decrescente suggerisce un periodo di burn-in insufficiente, richiedendo l’eliminazione di un maggior numero di campioni iniziali. Una catena che presenta bassa variabilità o che si stabilizza prematuramente in una regione ristretta dello spazio dei parametri può indicare una esplorazione incompleta, possibilmente a causa di una parametrizzazione inefficace o di una distribuzione proposta troppo stretta. In casi più gravi, la catena può apparire stazionaria pur essendo bloccata in un massimo locale, senza aver raggiunto la vera distribuzione target, situazione particolarmente insidiosa in presenza di multimodalità.
+### Trace plot: stazionarietà, mixing e segnali d’allarme
 
-### Correlogramma
+Il trace plot visualizza l'evoluzione temporale dei valori campionati $\theta^{(t)}$ durante le iterazioni dell'algoritmo. Una catena di buona qualità presenta:
 
-Il correlogramma rappresenta l’autocorrelazione tra i campioni della catena a diversi ritardi (*lag*). In una catena efficiente, l’autocorrelazione decresce rapidamente al crescere del lag, avvicinandosi a zero dopo pochi passi. Questo comportamento indica un adeguato mescolamento della catena, in cui ciascun campione apporta nuova informazione indipendente.
+- **Stazionarietà**: Fluttuazioni attorno a un livello medio costante, senza trend sistematici.
+- **Buon mescolamento**: Escursioni ampie che indicano un'adeguata esplorazione dello spazio parametrico.
+- **Assenza di derive**: Comportamento stabile lungo l'intera sequenza, eccetto l'eventuale periodo di *burn-in*.
 
-Al contrario, un’autocorrelazione persistentemente elevata — che si mantiene alta anche a lag elevati — segnala una forte dipendenza tra campioni consecutivi. In tali casi, la catena si muove lentamente attraverso lo spazio dei parametri, riducendo l’efficienza del campionamento e richiedendo un numero maggiore di iterazioni per ottenere stime affidabili. Un correlogramma di questo tipo suggerisce spesso la necessità di riparametrizzare il modello o di adottare un algoritmo di campionamento più efficiente.
+Pattern anomali rivelano invece problematiche specifiche:
 
-### Struttura del capitolo
+- **Burn-in insufficiente**: deriva iniziale persistente che richiede l'eliminazione di ulteriori iterazioni.
+- **Esplorazione limitata**: variabilità ridotta che suggerisce proposte troppo conservative.
+- **Convergenza verso massimi locali**: apparente stazionarietà in regioni subottimali dello spazio parametrico, particolarmente problematica in contesti multimodali.
 
-Questi concetti costituiscono il fondamento necessario per affrontare la comprensione operativa e pratica dell'algoritmo di Metropolis che svilupperemo nei prossimi esempi. A questo fine, il capitolo è strutturato in varie sezioni che facilitano la comprensione progressiva del tema. 
+### Correlogramma: decadimento dell’ACF e campione efficace
 
-- Inizieremo discutendo di come la distribuzione a posteriori possa essere approssimata mediante tecniche di simulazione convenzionali. Questa prima parte presuppone che la distribuzione target, o "a posteriori," sia già conosciuta o disponibile per l'analisi.
-- In seguito, passeremo a illustrare come l'algoritmo di Metropolis possa essere utilizzato per affrontare situazioni in cui la distribuzione a posteriori non è direttamente nota. In questi casi, spesso abbiamo a disposizione informazioni riguardanti la distribuzione a priori e la funzione di verosimiglianza, che possono essere utilizzate per ottenere un'approssimazione efficace della distribuzione a posteriori.
+Il correlogramma quantifica l'autocorrelazione $\rho(k)$ tra campioni separati da $k$ iterazioni (lag). Un profilo ideale mostra:
 
-## Un esempio concreto
+- **Decadimento rapido**: autocorrelazione prossima a zero entro lag contenuti (tipicamente <20-30).
+- **Indipendenza asintotica**: valori trascurabili per lag elevati, indicando un contributo informativo indipendente.
 
-A titolo esemplificativo, utilizzeremo il dataset `moma_sample.csv`, il quale costituisce un campione casuale di 100 artisti provenienti dal Museo di Arte Moderna di New York (MoMA) e contiene diverse informazioni relative a ciascun artista. Il nostro interesse è focalizzato sulla determinazione della probabilità che un artista presente nel MoMA appartenga alla generazione X o a una generazione successiva (nati dopo il 1965). Questa probabilità sarà indicata come $\pi$ [si veda @Johnson2022bayesrules]. 
+Un correlogramma problematico si caratterizza per:
 
-Importiamo i dati.
+- **Persistenza elevata**: autocorrelazione marcata anche a lag ampi.
+- **Decadimento lento**: segnale di mescolamento inefficiente e elevata dipendenza sequenziale.
+- **Comportamento oscillatorio**: possibile indicazione di periodicità non desiderata nella catena.
+
+Questi pattern suggeriscono spesso la necessità di ottimizzare la distribuzione della proposta o di adottare algoritmi più sofisticati (es. HMC) per migliorare l'efficienza esplorativa.
+
+### Come useremo Metropolis: prima su target note, poi su posteriori non normalizzate
+
+I concetti finora introdotti forniscono le basi per comprendere l'implementazione pratica dell'algoritmo di Metropolis, che svilupperemo attraverso esempi progressivi. Il capitolo è organizzato secondo una sequenza didattica che prevede due fasi principali:
+
+- **Approssimazione di distribuzioni note**: inizieremo applicando tecniche di simulazione per approssimare distribuzioni target di forma nota. Questo approccio ci permetterà di validare il metodo confrontando i risultati ottenuti con la soluzione analitica.
+
+- **Inferenza con distribuzioni non normalizzate**: successivamente, affronteremo il caso più realistico in cui la distribuzione a posteriori non è disponibile in forma chiusa. Mostreremo come l'algoritmo di Metropolis possa generare campioni utilizzando esclusivamente il prodotto tra verosimiglianza e la distribuzione a priori, aggirando il calcolo dell'evidenza marginale.
+
+Questa progressione garantisce una comprensione graduale del metodo, che va dal suo controllo in condizioni ideali alla sua applicazione in scenari inferenziali realistici.
+
+## Caso studio (binomiale): proporzione di artisti Gen-X al MoMA
+
+A titolo esemplificativo, utilizzeremo il dataset `moma_sample.csv`, che contiene un campione casuale di 100 artisti della collezione del Museum of Modern Art (MoMA) di New York [@Johnson2022bayesrules]. L'obiettivo inferenziale consiste nello stimare la probabilità $\theta$ che un artista del MoMA appartenga alla Generazione X o a generazioni successive (nati dopo il 1965).
+
+Importazione ed esplorazione dei dati:
 
 ```{r}
 moma_sample <- rio::import(here::here("data", "moma_sample.csv"))
+moma_sample |> head()
 ```
 
-Esaminiamo le prime cinque righe del data frame.
+Dall'analisi della variabile `genx` emergono 14 artisti appartenenti alla Generazione X o successive:
 
 ```{r}
-moma_sample |> 
-  head()
+table(moma_sample$genx)
 ```
 
-Dai dati osserviamo che solo 14 artisti su 100 appartengono alla generazione X o a una generazione successiva.
+### Modello binomiale + prior Beta: definizione e razionale
+
+Il dato osservato ($y = 14$ successi su $n = 100$ prove) è modellato come realizzazione di una variabile binomiale:
+
+$$
+y \sim \text{Binomiale}(n = 100, \theta).
+$$
+
+Specifichiamo un prior Beta(4,6) che incorpora la credenza pregressa di una proporzione inferiore al 50%:
 
 ```{r}
-# Calcoliamo la distribuzione delle generazioni
-result <- table(moma_sample$genx)
-result
+tibble(theta = seq(0, 1, .01),
+       densita = dbeta(theta, 4, 6)) |>
+  ggplot(aes(x = theta, y = densita)) + 
+  geom_line() +
+  labs(x = expression(theta), y = "Densità a priori")
 ```
 
-Il valore osservato $y = 14$ fornisce informazioni sul campione selezionato, ma la vera proporzione $\theta$ di opere riconducibili alla Generazione X o successive nell’intera collezione del MOMA rimane ignota. Per modellare l’incertezza su questo parametro, i dati possono essere formalizzati come realizzazione di una variabile casuale binomiale:  
+### Coniugazione Beta–Binomiale: posteriori in forma chiusa (per validazione)
 
+Il modello completo:
 $$
-y \sim \text{Binomial}(N = 100, \theta).
-$$ 
-
-Per incorporare la conoscenza a priori sulla probabilità $\theta$, assumiamo una distribuzione Beta(4, 6) come priore. Questa scelta riflette una credenza pregressa secondo cui $\theta$ tende a essere inferiore a 0.5, pur consentendo una certa flessibilità nell’inferenza.
-
-```{r}
-tibble(x = seq(0, 1, .01),
-       y = dbeta(x, 4, 6)) |>
-  ggplot(aes(x=x, y=y)) + 
-  geom_line()
-```
-
-Sfruttando le proprietà delle distribuzioni coniugate, possiamo calcolare esattamente la distribuzione a posteriori. Il modello specificato può essere rappresentato nel modo seguente:
-
-$$
-\begin{align}
-Y &\sim \text{Binomiale}(100, \theta),\notag\\
-\theta &\sim \text{Beta}(4, 6). \notag
-\end{align}
-$$
-Dopo aver osservato il dato $Y = 14$, la distribuzione a posteriori per $\theta$ si ottiene per coniugazione:
-$$
-\theta \mid (Y = 14) \sim \text{Beta}(4 + 14, 6 + 100 - 14) = \text{Beta}(18, 92)
+\begin{align*}
+y &\sim \text{Binomiale}(100, \theta) \\
+\theta &\sim \text{Beta}(4, 6)
+\end{align*}
 $$
 
-Nella figura seguente, è rappresentata la distribuzione a posteriori del parametro $\theta$ ($\text{Beta}(18, 92)$; colore arancione), insieme alla distribuzione alla *prior* specificata ($\text{Beta}(4, 6)$; colore blu).
+conduce alla distribuzione a posteriori[^beta-binomial-conjugacy]:
+$$
+\theta \mid y = 14 \sim \text{Beta}(18, 92).
+$$
+
+[^beta-binomial-conjugacy]: Per la famiglia coniugata Beta-Binomiale, l'aggiornamento bayesiano avviene mediante una semplice regola di aggiornamento dei parametri. Dati un prior $\text{Beta}(\alpha, \beta)$ e l'osservazione di $y$ successi in $n$ prove, la distribuzione a posteriori è $\text{Beta}(\alpha + y, \beta + n - y)$. Nell'esempio, a distribuzione a posteriori è: $\text{Beta}(4 + 14, 6 + 100 - 14) = \text{Beta}(18, 92)$.
+
+### Confronto visivo prior/posterior: cosa cambia con i dati
+
+La distribuzione a posteriori (blu) è più concentrata e spostata verso la proporzione osservata nel campione (14/100 = 0.14).
 
 ```{r}
 #| echo: false
-# Sequenza per θ
-x <- seq(0, 1, length.out = 1000)
+theta_val <- seq(0, 1, length.out = 1000)
 
-# Densità prior e posterior
-prior_density <- dbeta(x, 4, 6)
-posterior_density <- dbeta(x, 18, 92)
+df <- tibble(
+  theta = theta_val,
+  Prior = dbeta(theta_val, 4, 6),
+  Posterior = dbeta(theta_val, 18, 92)
+) |>
+  pivot_longer(-theta, names_to = "Distribuzione", values_to = "Densità")
 
-# Dati per il grafico
-df_long <- tibble(
-  x = x,
-  `Prior: Beta(4, 6)` = prior_density,
-  `Posterior: Beta(18, 92)` = posterior_density
-) %>%
-  pivot_longer(
-    cols = -x,
-    names_to = "distribuzione",
-    values_to = "densita"
-  ) %>%
-  mutate(
-    distribuzione = factor(
-      distribuzione,
-      levels = c("Prior: Beta(4, 6)", "Posterior: Beta(18, 92)")
-    )
-  )
-
-# Palette di colori alternativa
-colori_custom <- c(
-  "Prior: Beta(4, 6)" = "#1F77B4",       # Blu
-  "Posterior: Beta(18, 92)" = "#FF7F0E"  # Arancione
-)
-
-# Creazione del grafico
-ggplot(df_long, aes(x = x, y = densita)) +
-  geom_area(
-    aes(fill = distribuzione),
-    alpha = 0.30,
-    position = "identity",
-    color = NA,
-    show.legend = TRUE
-  ) +
-  geom_line(
-    aes(color = distribuzione),
-    linewidth = 1.1,
-    show.legend = FALSE   # << spegne la legenda per le linee
-  ) +
-  scale_fill_manual(
-    name = "Distribuzione",
-    values = colori_custom
-  ) +
-  scale_color_manual(values = colori_custom) +
-  guides(
-    fill = guide_legend(
-      override.aes = list(alpha = 0.30),
-      title = "Distribuzione"
-    ),
-    color = "none"  # Elimina completamente la legenda per i colori delle linee
-  ) +
-  labs(x = expression(theta), y = "Densità") +  # Cambiato da theta a θ
-  theme(
-    legend.position = "bottom",
-    legend.box = "horizontal",
-    legend.title = element_text(face = "bold"),
-    axis.title = element_text(face = "bold")
-  )
+ggplot(df, aes(x = theta, y = Densità, color = Distribuzione, fill = Distribuzione)) +
+  geom_line(linewidth = 1.1) +
+  geom_area(alpha = 0.3, position = "identity") +
+  scale_color_manual(values = c(PRIMARY, modern_palette$grey2)) +
+  scale_fill_manual(values = c(PRIMARY, modern_palette$grey2)) +
+  labs(x = expression(theta), y = "Densità") +
+  theme(legend.position = "bottom")
 ```
 
-Se vogliamo conoscere il valore della media a posteriori di $\theta$, per esempio, il risultato esatto è
+### Riassunti posteriori (media, varianza, quantili)
 
+La media della distribuzione a posteriori è:
 $$
-\bar{\theta}_{post} = \frac{\alpha}{\alpha + \beta} = \frac{18}{18 + 92} \approx 0.1636.
+\mathbb{E}[\theta \mid y] = \frac{18}{18 + 92} \approx 0.1636.
 $$
 
-### Simulazione con distribuzione target nota
+Questa stima rappresenta la proporzione attesa di artisti contemporanei nel MoMA, aggiornata alla luce dei dati osservati.
 
-Usiamo ora una simulazione numerica per stimare la media a posteriori di $\theta$. Conoscendo la forma della distribuzione a posteriori $Beta(18, 92)$, possiamo generare un campione di osservazioni casuali da questa distribuzione. Successivamente, calcoliamo la media delle osservazioni ottenute per ottenere un'approssimazione della media a posteriori.
+### Monte Carlo “diretto” su posterior nota: baseline per confrontare MCMC
 
-Se vogliamo ottenere un risultato approssimato con un numero limitato di campioni (ad esempio, 10), possiamo utilizzare la seguente simulazione:
+Affrontiamo ora il problema mediante simulazione numerica diretta. Disponendo della forma analitica della distribuzione a posteriori $\text{Beta}(18, 92)$, possiamo generare campioni casuali indipendenti e stimare la media a posteriori tramite media empirica.
+
+Con un campione di dimensioni ridotte (10 osservazioni) l'approssimazione risulta evidentemente imprecisa.
 
 ```{r}
-# Generiamo 10 campioni dalla distribuzione Beta(18, 92)
-set.seed(1234)  # Per riproducibilità
-y <- rbeta(10, shape1 = 18, shape2 = 92)
-y
+set.seed(1234)  # Riproducibilità
+campioni_10 <- rbeta(10, shape1 = 18, shape2 = 92)
+campioni_10
 ```
 
 ```{r}
-# Calcoliamo la media dei campioni
-mean(y)
+mean(campioni_10)
 ```
 
-Tuttavia, con soli 10 campioni, l'approssimazione potrebbe non essere molto accurata. Aumentando il numero di campioni, ad esempio a 10,000, possiamo ottenere una stima molto più precisa:
+Incrementando la dimensione campionaria a 10,000 otteniamo una stima più precisa.
 
 ```{r}
-# Generiamo 10000 campioni e calcoliamo la media
-set.seed(123)  # Per riproducibilità
-mean(rbeta(10000, shape1 = 18, shape2 = 92))
+set.seed(123)
+campioni_10k <- rbeta(10000, shape1 = 18, shape2 = 92)
+mean(campioni_10k)
 ```
 
-Quando il numero di campioni dalla distribuzione a posteriori diventa molto grande, la media campionaria *converge* al valore atteso della distribuzione della popolazione. Questo principio non si applica solo alla media, ma anche ad altre statistiche descrittive come la moda e la varianza.
+La legge dei grandi numeri garantisce che, aumentando la dimensione del campione, le statistiche empiriche (media, varianza, quantili) tendono a convergere verso i corrispondenti parametri della distribuzione target.
 
-È importante sottolineare che l’approccio di simulazione Monte Carlo diretto è applicabile solo quando la forma analitica della distribuzione a posteriori è nota e campionabile mediante apposite funzioni. Questo è stato possibile nel caso presentato, grazie alla coniugazione tra verosimiglianza binomiale e priori beta, che ha condotto a una distribuzione a posteriori beta di parametri noti. Tuttavia, in contesti reali più complessi, le distribuzioni a priori coniugate sono l’eccezione piuttosto che la regola, e la forma della posterior risulta spesso intrattabile analiticamente, impedendo l’uso di metodi di campionamento diretto.
+### Perché il diretto non basta: quando serve MCMC
 
-In tali scenari, gli algoritmi MCMC, come l’algoritmo di Metropolis, offrono una soluzione flessibile ed efficace. Tali metodi permettono di generare campioni approssimati dalla distribuzione a posteriori senza richiederne una forma chiusa, basandosi esclusivamente sulla valutazione della verosimiglianza e della distribuzione a priori fino a una costante di normalizzazione. Grazie a questa proprietà, le tecniche MCMC costituiscono lo strumento computazionale predominante per l’inferenza bayesiana in modelli avanzati e realistici, dove l’analisi esatta non è praticabile.
+Il metodo Monte Carlo diretto presuppone la disponibilità di:
 
-### L’algoritmo di Metropolis
+1. una forma analitica esplicita della distribuzione a posteriori,
+2. un algoritmo efficiente per il campionamento casuale.
 
-Dopo aver visto che la simulazione diretta è possibile solo in casi eccezionali, possiamo ora introdurre il primo vero strumento generale per affrontare distribuzioni posteriori di forma arbitraria: l’algoritmo di Metropolis. Questo metodo appartiene alla famiglia MCMC e sfrutta la costruzione di una catena di Markov per produrre campioni che, a regime, si distribuiscono secondo la distribuzione a posteriori desiderata.
+Queste condizioni sono soddisfatte nel caso del modello Beta-Binomiale grazie alla sua natura coniugata, che tuttavia rappresenta un'eccezione nell'ambito dei modelli bayesiani realistici. Nella maggior parte delle applicazioni, la distribuzione a posteriori risulta intrattabile analiticamente, il che preclude l'uso di tecniche di campionamento diretto.
 
-#### Logica di base
+### Passare a Metropolis: usare solo prior $\times$ likelihood (non normalizzate)
 
-Il procedimento è sorprendentemente semplice. La catena parte da un valore iniziale del parametro. A ogni passo, un nuovo candidato viene generato tramite una distribuzione di proposta (spesso una normale centrata sullo stato corrente). Il punto proposto viene poi confrontato con quello attuale: se la sua densità a posteriori è maggiore, viene accettato; se è minore, viene accettato con una probabilità proporzionale al rapporto delle due densità. In questo modo la catena si muove nello spazio dei parametri favorendo le regioni più plausibili, ma senza rimanere intrappolata in massimi locali, poiché di tanto in tanto vengono accettati anche spostamenti verso aree meno probabili.
+Gli algoritmi Markov Chain Monte Carlo (MCMC), come l'algoritmo di Metropolis, superano queste limitazioni generando sequenze di campioni dipendenti la cui distribuzione empirica converge asintoticamente alla distribuzione target. Il loro principale vantaggio risiede nella possibilità di campionare dalla distribuzione a posteriori conoscendo solo il prodotto tra verosimiglianza e distribuzione a priori, senza dover calcolare la costante di normalizzazione. Questa proprietà rende i metodi MCMC lo strumento computazionale fondamentale per l'inferenza bayesiana in modelli complessi, in cui le soluzioni analitiche non sono disponibili.
 
-#### Convergenza e burn-in
+## Metropolis passo-per-passo 
 
-Nei primi passi la catena riflette ancora la condizione iniziale e non rappresenta adeguatamente la distribuzione target. È per questo che una quota iniziale di iterazioni, detta *burn-in*, viene eliminata dall’analisi. Dopo questa fase transitoria, la catena tende alla distribuzione stazionaria: i campioni successivi possono allora essere utilizzati per stimare medie, varianze o probabilità a posteriori. La quantità di burn-in necessaria non è fissata a priori, ma deve essere valutata tramite strumenti diagnostici.
+Dopo aver constatato i limiti del campionamento diretto, introduciamo il primo metodo generale per distribuzioni a posteriori arbitrarie: l'algoritmo di Metropolis. Questo approccio MCMC costruisce una catena di Markov la cui distribuzione stazionaria coincide con la distribuzione target.
 
-#### Accettazione e rifiuto: un equilibrio sottile
+### Schema iterativo: proposta, rapporto, accettazione/rifiuto
 
-Il cuore dell’algoritmo sta nella regola di accettazione. Essa realizza un equilibrio tra due esigenze opposte: da un lato lo *sfruttamento* delle regioni già identificate come ad alta densità, dall’altro l’*esplorazione* di nuove aree che potrebbero rivelarsi rilevanti. Accettare solo proposte migliori renderebbe la catena miopicamente attratta da un singolo massimo, mentre accettare anche proposte peggiori — seppur con probabilità ridotta — consente una copertura globale dello spazio parametrico. È questo meccanismo che garantisce la capacità dell’algoritmo di approssimare fedelmente la distribuzione a posteriori.
+L'algoritmo genera una sequenza di stati dipendenti attraverso un processo iterativo. A partire da un valore iniziale, a ogni iterazione viene proposta una transizione verso un nuovo stato candidato. La decisione di accettare o rifiutare la proposta si basa sul rapporto tra le densità a posteriori degli stati candidato e corrente, garantendo la convergenza asintotica verso la distribuzione target.
 
-### Passaggi fondamentali dell’algoritmo di Metropolis
+### Burn-in e controllo visivo: quanto scartare e perché
 
-Il funzionamento dell’algoritmo può essere riassunto in una sequenza ricorsiva di operazioni, che trasforma un singolo punto di partenza in una catena di campioni distribuiti secondo la posteriori:
+Le iterazioni iniziali (*burn-in*) riflettono le condizioni iniziali e non rappresentano la distribuzione stazionaria. Questa fase transitoria deve essere identificata mediante strumenti diagnostici ed eliminata prima dell'analisi inferenziale. La lunghezza ottimale del *burn-in* dipende dalla complessità della distribuzione target e dalla scelta dei parametri algoritmici.
 
-1. **Inizializzazione.**
-   Si sceglie un valore iniziale $\theta_1$ per il parametro e si fissa l’indice di iterazione $t = 1$. Questo punto rappresenta il primo elemento della catena.
+### Bilanciamento tra stabilità ed esplorazione nel criterio di accettazione
 
-2. **Generazione di una proposta.**
-   A partire dallo stato corrente $\theta_t$, si estrae un nuovo candidato $\theta_p$ da una distribuzione di proposta $g(\theta_p \mid \theta_t)$. Una scelta comune è la distribuzione normale centrata su $\theta_t$ con deviazione standard $\tau$, che controlla l’ampiezza dei passi.
+Il meccanismo fondamentale dell'algoritmo risiede nel suo criterio di accettazione probabilistico, che regola dinamicamente due esigenze complementari:
 
-3. **Controllo di validità.**
-   Se il campione proposto non appartiene al dominio consentito (ad esempio, se $\theta$ rappresenta una probabilità, il valore deve rimanere compreso tra 0 e 1), la proposta viene immediatamente rifiutata e si prosegue con il campione corrente.
+- **Stabilità regionale**: consolidare la posizione in aree ad alta densità probabilistica;
+- **Esplorazione globale**: consentire transizioni verso regioni meno probabili per evitare una convergenza prematura verso massimi locali.
 
-4. **Calcolo del rapporto di accettazione.**
-   Si valuta il rapporto
+Questo bilanciamento sistematico garantisce una copertura completa dello spazio parametrico, rendendo l'algoritmo particolarmente efficace per le distribuzioni multimodali.
 
+### Pseudocodice operativo (univariato, proposal simmetrica)
+
+Il processo iterativo si articola in sei fasi:
+
+1. **Inizializzazione**
+   - Selezione del punto iniziale $\theta_1$.
+   - Impostazione dell'indice di iterazione $t = 1$.
+
+2. **Generazione della proposta**
+   - Campionamento di $\theta_p \sim g(\theta_p \mid \theta_t)$.
+   - Tipica scelta: $\mathcal{N}(\theta_t, \tau^2)$.
+
+3. **Verifica di ammissibilità**
+   - Controllo dell'appartenenza al dominio parametrico.
+   - Rifiuto immediato per proposte non ammissibili.
+
+4. **Calcolo del rapporto di accettazione**
    $$
-   \alpha = \frac{p(\theta_p \mid y)}{p(\theta_t \mid y)},
+   \alpha = \min\left(1, \frac{p(\theta_p \mid y)}{p(\theta_t \mid y)}\right).
    $$
 
-   che confronta la plausibilità a posteriori del punto proposto $\theta_p$ con quella dello stato corrente $\theta_t$.
+5. **Decisione di transizione**
+   - Accettazione di $\theta_p$ con probabilità $\alpha$.
+   - Mantenimento di $\theta_t$ con probabilità $1-\alpha$.
 
-5. **Decisione di accettazione.**
+6. **Iterazione**
+   - Ripetizione del processo per $T$ iterazioni.
+   - Costruzione della sequenza $\{\theta_1, \theta_2, \ldots, \theta_T\}$.
 
-   * Se $\alpha \geq 1$, la proposta viene accettata senza condizioni: lo stato successivo della catena sarà $\theta_{t+1} = \theta_p$.
-   * Se $\alpha < 1$, la proposta viene accettata con probabilità $\alpha$. In caso contrario, lo stato non cambia e $\theta_{t+1} = \theta_t$.
+### Parametri chiave: scelta della proposta, tuning, target di accettazione
 
-6. **Iterazione.**
-   I passaggi precedenti vengono ripetuti molte volte. La sequenza risultante ${\theta_1, \theta_2, \ldots}$ costituisce la catena di Markov che, dopo una fase di burn-in, riproduce fedelmente la distribuzione a posteriori.
+**Distribuzione della proposta**: la scelta di $g(\cdot \mid \theta_t)$ e del parametro di scala $\tau$ influisce in modo determinante sull'efficienza:
 
-### Alcuni aspetti cruciali
+- $\tau$ troppo piccolo: alta accettazione ma elevata autocorrelazione;
+- $\tau$ troppo grande: bassa accettazione con esplorazione inefficace.
 
-* **Distribuzione di proposta.**
-  La scelta di $g(\theta_p \mid \theta_t)$ determina il ritmo dell’esplorazione. Un valore di $\tau$ troppo piccolo rende i movimenti minimi: la catena accetta quasi tutte le proposte, ma procede lentamente e i campioni sono fortemente autocorrelati. Viceversa, un $\tau$ troppo grande genera proposte spesso improbabili, con conseguente alto tasso di rifiuto. L’efficienza dell’algoritmo dipende da un compromesso fra questi due estremi.
+Il tasso di accettazione ottimale per le proposte simmetriche univariate si colloca tipicamente tra 0.4 e 0.5.
 
-* **Ruolo del rapporto di accettazione.**
-  Il meccanismo dell’accettazione probabilistica assicura che la catena non si limiti a inseguire i massimi locali della distribuzione, ma sia in grado di attraversare anche regioni meno dense, favorendo una copertura più completa dello spazio dei parametri.
+**Robustezza inferenziale**: la capacità di accettare transizioni "peggiorative"[^worse-moves] conferisce all'algoritmo la proprietà di ergodicità[^ergodicity], garantendo la consistenza delle stime anche in scenari complessi.
 
-* **Esplorazione globale.**
-  Proprio grazie a questa possibilità di accettare campioni peggiori, l’algoritmo di Metropolis è in grado di rappresentare accuratamente distribuzioni multimodali e complesse, garantendo robustezza in contesti in cui metodi deterministici fallirebbero.
+[^worse-moves]: Per "peggiorative" si intendono quelle transizioni che portano a uno stato con minore densità a posteriori rispetto a quello corrente. Sebbene queste mosse riducano localmente la plausibilità, sono essenziali per esplorare l'intero spazio dei parametri e sfuggire ai massimi locali.
 
-## Esempio di implementazione
+[^ergodicity]: L'*ergodicità* è una proprietà fondamentale che garantisce due comportamenti cruciali per una catena di Markov: (1) la distribuzione dei campioni converge alla distribuzione target indipendentemente dal punto di partenza; (2) le medie calcolate sui campioni della catena convergono ai valori attesi teorici della distribuzione target. Nel contesto degli algoritmi MCMC, questa proprietà garantisce che, eseguendo l'algoritmo per un numero sufficiente di iterazioni, si otterranno stime affidabili della distribuzione a posteriori. L'ergodicità spiega perché, nonostante i campioni siano dipendenti, è possibile usarli per fare inferenze valide.
 
-Riprendiamo il caso del MoMA: vogliamo stimare la probabilità $\theta$ che un artista appartenga alla Generazione X o successiva, osservando 14 artisti su 100. Usiamo un modello binomiale con prior $\text{Beta}(4,6)$, e implementiamo l’algoritmo di Metropolis in R.
+## Implementazione in R del caso MoMA con Metropolis
 
-### Componenti del modello
+Riprendiamo il caso del MoMA: stimiamo la probabilità $\theta$ che un artista appartenga alla Generazione X o a una generazione successiva, osservando 14 successi su 100 prove. Implementiamo un modello binomiale con prior $\text{Beta}(4,6)$ utilizzando l'algoritmo di Metropolis.
+
+### Componenti del modello (prior, likelihood, posterior non normalizzata, proposal)
 
 **Distribuzione a priori**
-Rappresenta la nostra conoscenza iniziale:
-
 ```{r}
-prior <- function(p) {
-  dbeta(p, shape1 = 4, shape2 = 6)
+prior <- function(theta) {
+  dbeta(theta, shape1 = 4, shape2 = 6)
 }
 ```
 
-**Verosimiglianza**
-La probabilità di osservare 14 successi su 100 prove:
-
+**Funzione di verosimiglianza**
 ```{r}
-likelihood <- function(p) {
-  dbinom(14, size = 100, prob = p)
+likelihood <- function(theta) {
+  dbinom(14, size = 100, prob = theta)
 }
 ```
 
-**Posterior (non normalizzata)**
-Combinazione di priori e verosimiglianza:
-
+**Distribuzione a posteriori non normalizzata**
 ```{r}
-posterior <- function(p) {
-  prior(p) * likelihood(p)
+posterior <- function(theta) {
+  prior(theta) * likelihood(theta)
 }
 ```
 
-**Distribuzione di proposta**
-Genera un candidato vicino al punto attuale:
-
+**Distribuzione di proposta (simmetrica)**
 ```{r}
-proposal_distribution <- function(current_state, proposal_sigma) {
-  rnorm(1, mean = current_state, sd = proposal_sigma)
+proposal <- function(current, sigma = 0.1) {
+  rnorm(1, mean = current, sd = sigma)
 }
 ```
 
-### Algoritmo di Metropolis
+### Funzione `metropolis_sampler()`: implementazione dell'algoritmo
 
-L’implementazione segue esattamente i passaggi teorici discussi sopra:
+Il codice seguente traduce in R i passaggi fondamentali dell'algoritmo di Metropolis. Ogni iterazione del ciclo `for` corrisponde a un passo completo dell'algoritmo.
 
 ```{r}
-metropolis <- function(n_samples, start, proposal_sigma) {
-  samples <- numeric(n_samples)   # per salvare la catena
-  current <- start                # stato iniziale
-
-  for (i in seq_len(n_samples)) {
-    # 1. Genera una proposta
-    proposal <- proposal_distribution(current, proposal_sigma)
-
-    # 2. Controlla se la proposta è valida (qui θ deve stare in [0,1])
-    if (proposal >= 0 && proposal <= 1) {
-      # 3. Calcola il rapporto di accettazione
-      alpha <- posterior(proposal) / posterior(current)
-
-      # 4. Decidi se accettare
+metropolis_sampler <- function(n_iter, start, proposal_sd) {
+  chain <- numeric(n_iter)  # Vettore per memorizzare la catena
+  current <- start          # Stato iniziale della catena
+  accepted <- 0             # Contatore delle proposte accettate
+  
+  for (i in 1:n_iter) {
+    # 1. GENERAZIONE: Proposta di un nuovo candidato
+    candidate <- proposal(current, proposal_sd)
+    
+    # 2. VALUTAZIONE: Controllo ammissibilità e calcolo rapporto
+    if (candidate >= 0 && candidate <= 1) {
+      alpha <- posterior(candidate) / posterior(current)
+      
+      # 3. DECISIONE: Applicazione del criterio di Metropolis
       if (runif(1) < alpha) {
-        current <- proposal   # accettata
+        # Se alpha ≥ 1 (runif(1) < 1 sempre vero) OPPURE
+        # se alpha < 1 ma estrazione casuale < alpha: ACCETTA
+        current <- candidate
+        accepted <- accepted + 1
       }
+      # Se la condizione è falsa: RIFIUTA (mantiene 'current')
     }
-    # 5. Salva lo stato (attuale o precedente)
-    samples[i] <- current
+    # 4. REGISTRAZIONE: Salva lo stato corrente nella catena
+    chain[i] <- current
   }
-  return(samples)
+  
+  # Output: catena completa e tasso di accettazione
+  list(
+    chain = chain,
+    acceptance_rate = accepted / n_iter
+  )
 }
 ```
 
-### Interpretazione intuitiva
+**Spiegazione del meccanismo decisionale:**
 
-Si può immaginare l’algoritmo come una passeggiata su un paesaggio collinare:
+- **`alpha ≥ 1`**: il candidato è più plausibile dello stato corrente. La condizione `runif(1) < alpha` è sempre vera (poiché `runif(1) < 1 ≤ alpha`), quindi il candidato viene sempre accettato.
+- **`alpha < 1`**: il candidato è meno plausibile. Viene accettato solo se un numero casuale estratto da una distribuzione uniforme (0,1) è minore di `alpha`, ossia con probabilità `alpha`.
+- **Registrazione**: in ogni caso, che la proposta sia accettata o rifiutata, lo stato **corrente** (che può essere il candidato o il precedente) viene salvato nella catena.
 
-* *L’altezza delle colline* corrisponde alla densità a posteriori.
-* *Ogni passo* è una proposta casuale in una direzione vicina.
-* *Se il punto è più alto*, lo accettiamo sempre (meglio!).
-* *Se è più basso*, lo accettiamo con una probabilità proporzionale a quanto è più basso: qualche volta sì, qualche volta no.
-
-Ripetendo questa passeggiata migliaia di volte, i luoghi visitati con più frequenza corrispondono alle zone dove la posteriori è più densa.
-Ottimo blocco! Ti propongo una versione più pulita e didattica, con micro-migliorie che aiutano a leggere e a verificare (senza aggiungere complessità): aggiungo il calcolo del *tasso di accettazione*, etichette chiare nei grafici, una gestione del burn-in esplicita e un confronto numerico con i valori esatti.
-
-## Esecuzione dell’algoritmo
+### Esecuzione, tasso di accettazione e prime ispezioni
 
 ```{r}
 # Parametri dell'algoritmo
-n_samples <- 10000
-start <- 0.50
-proposal_sigma <- 0.10
+set.seed(123)
+n_iter <- 10000
+results <- metropolis_sampler(n_iter, start = 0.5, proposal_sd = 0.1)
 
-# Esecuzione del campionamento
-set.seed(123)  # riproducibilità
-samples <- metropolis(n_samples, start, proposal_sigma)
-
-# Tasso di accettazione (quante volte la catena si muove)
-accept_rate <- mean(diff(samples) != 0)
-accept_rate
+# Statistiche di accettazione
+cat("Tasso di accettazione:", round(results$acceptance_rate, 3), "\n")
 ```
 
-Il tasso di accettazione è un indicatore utile del “ritmo” della catena. In 1D valori \~0.4–0.5 sono spesso un buon compromesso.
-
-## Analisi dei risultati
-
-### Burn-in
-
-Scartiamo i primi 50% dei campioni (criterio semplice e chiaro per questo esempio):
+### Scarto del burn-in e preparazione dei campioni utili
 
 ```{r}
-burnin <- floor(n_samples * 0.50)
-post_burnin_samples <- samples[(burnin + 1):n_samples]
+burnin <- floor(n_iter * 0.5)
+post_burnin <- results$chain[(burnin + 1):n_iter]
 ```
 
-### Riassunti numerici
+### Riassunti numerici: stime MCMC vs valori analitici
 
-Media e deviazione standard a posteriori (stima via MCMC):
-
+**Statistiche descrittive**
 ```{r}
-mean(post_burnin_samples)
-sd(post_burnin_samples)
-```
+# Stime MCMC
+mcmc_mean <- mean(post_burnin)
+mcmc_sd <- sd(post_burnin)
 
-Confronto con i valori esatti della Beta(18, 92):
-```{r}
-mean_exact <- 18 / (18 + 92)
-sd_exact <- sqrt( (18 * 92) / ( (18 + 92)^2 * (18 + 92 + 1) ) )
-c(media_esatta = mean_exact, sd_esatta = sd_exact)
-```
+# Valori analitici esatti
+exact_mean <- 18 / (18 + 92)
+exact_sd <- sqrt((18 * 92) / ((18 + 92)^2 * (18 + 92 + 1)))
 
-### Trace plot (inizio catena e tratto post burn-in)
-
-Prime 200 iterazioni: si vede l'avvio e l'assestamento:
-
-```{r}
-tibble(
-  Iterazione = 1:200,
-  Theta = samples[1:200]
-) |>
-  ggplot(aes(x = Iterazione, y = Theta)) +
-  geom_line(linewidth = 0.6) +
-  labs(x = "Iterazioni (prime 200)", y = expression(theta)) +
-  theme(axis.title = element_text(face = "bold"))
-```
-
-Andamento dopo il burn-in: la catena oscilla intorno alla regione stazionaria:
-```{r}
-tibble(
-  Iterazione = seq_along(post_burnin_samples),
-  Theta = post_burnin_samples
-) |>
-  ggplot(aes(x = Iterazione, y = Theta)) +
-  geom_line(linewidth = 0.6) +
-  labs(x = "Iterazioni (post burn-in)", y = expression(theta)) +
-  theme(axis.title = element_text(face = "bold"))
-```
-
-### Confronto visivo con la posteriore esatta
-
-Sovrapponiamo l’istogramma dei campioni post burn-in alla densità Beta(18, 92).
-
-```{r}
-# Palette per la legenda
-colori_custom <- c(
-  "Istogramma" = "#1F77B4",  # Blu
-  "Beta(18,92)" = "#FF7F0E"  # Arancione
+comparison <- data.frame(
+  Metodo = c("MCMC", "Analitico"),
+  Media = c(mcmc_mean, exact_mean),
+  SD = c(mcmc_sd, exact_sd)
 )
-
-tibble(Theta = post_burnin_samples) |>
-  ggplot(aes(x = Theta)) +
-  geom_histogram(
-    aes(y = after_stat(density), fill = "Istogramma"),
-    bins = 30, color = "black", alpha = 0.7, show.legend = TRUE
-  ) +
-  stat_function(
-    aes(color = "Beta(18,92)"),
-    fun = dbeta, args = list(shape1 = 18, shape2 = 92),
-    linewidth = 1.1, show.legend = TRUE
-  ) +
-  labs(x = expression(theta), y = "Densità") +
-  scale_fill_manual(
-    name = "Distribuzione",
-    values = colori_custom,
-    breaks = names(colori_custom)
-  ) +
-  scale_color_manual(
-    name = "Distribuzione",
-    values = colori_custom,
-    breaks = names(colori_custom)
-  ) +
-  guides(
-    fill  = guide_legend(override.aes = list(color = NA)),
-    color = guide_legend(override.aes = list(fill = NA))
-  ) +
-  theme(
-    legend.position = "bottom",
-    legend.title = element_text(face = "bold"),
-    axis.title = element_text(face = "bold")
-  )
+comparison
 ```
 
-### Intervallo di credibilità
+### Grafici diagnostici: trace (transiente/stazionaria) e confronto con Beta(18,92)
 
-Stimiamo un *94% ETI* dai campioni MCMC e confrontiamolo con l’analitico:
+**Trace plot - fase transiente**
+```{r}
+tibble(Iterazione = 1:500, theta = results$chain[1:500]) |>
+  ggplot(aes(x = Iterazione, y = theta)) +
+  geom_line(linewidth = 0.6, alpha = 0.8) +
+  labs(title = "Fase transiente (prime 500 iterazioni)",
+       x = "Iterazione", y = expression(theta)) 
+```
+
+**Trace plot - fase stazionaria**
+```{r}
+tibble(Iterazione = 1:length(post_burnin), theta = post_burnin) |>
+  ggplot(aes(x = Iterazione, y = theta)) +
+  geom_line(linewidth = 0.4, alpha = 0.6) +
+  labs(title = "Fase stazionaria (post burn-in)",
+       x = "Iterazione", y = expression(theta)) 
+```
+
+**Confronto con distribuzione esatta**
+```{r}
+tibble(theta = post_burnin) |>
+  ggplot(aes(x = theta)) +
+  geom_histogram(aes(y = after_stat(density), fill = "MCMC"), 
+                 bins = 30, alpha = 0.6, color = "white") +
+  stat_function(fun = dbeta, args = list(shape1 = 18, shape2 = 92),
+                aes(color = "Beta(18,92)"), linewidth = 1.2) +
+  scale_fill_manual(values = c("MCMC" = PRIMARY)) +
+  scale_color_manual(values = c("Beta(18,92)" = modern_palette$grey2)) +
+  labs(x = expression(theta), y = "Densità",
+       title = "Confronto: campionamento MCMC vs distribuzione esatta") +
+  theme(legend.position = "bottom", 
+        legend.title = element_blank())
+```
+
+### Come leggere concordanza e le possibili discrepanze
+
+L'implementazione dimostra che l'algoritmo di Metropolis genera campioni che approssimano efficacemente la distribuzione a posteriori target. Il confronto con i valori analitici conferma la correttezza dell'implementazione, mentre le analisi grafiche ne validano la qualità.
+
+### Stima degli intervalli di credibilità
+
+Calcoliamo l'intervallo di credibilità del 94% (*Equal-tailed Interval*) dai campioni MCMC e lo confrontiamo con la soluzione analitica.
 
 ```{r}
-# ETI 94% via MCMC
-quantile(post_burnin_samples, probs = c(0.03, 0.97))
+# ETI 94% via campionamento MCMC
+eti_mcmc <- quantile(post_burnin, probs = c(0.03, 0.97))
 
-# ETI 94% esatto (Beta)
-qbeta(c(0.03, 0.97), shape1 = 18, shape2 = 92)
+# ETI 94% dalla distribuzione Beta esatta
+eti_exact <- qbeta(c(0.03, 0.97), shape1 = 18, shape2 = 92)
+
+comparison_eti <- data.frame(
+  Metodo = c("MCMC", "Analitico"),
+  Lower = c(eti_mcmc[1], eti_exact[1]),
+  Upper = c(eti_mcmc[2], eti_exact[2])
+)
+comparison_eti
 ```
 
-### Cosa osservare (guida alla lettura)
+### Checklist di validazione: cosa deve tornare, cosa indagare
 
-* Il *trace plot post burn-in* oscilla senza trend: buon segnale di stazionarietà.
-* L’*istogramma* dei campioni si sovrappone bene alla *Beta(18, 92)*: l’algoritmo sta ricostruendo la posteriore.
-* *Media, deviazione standard e quantili* dai campioni sono molto vicini ai valori esatti: conferma pratica della correttezza dell’implementazione.
+L'analisi degli output conferma la qualità del campionamento:
 
-## Catene di Markov, convergenza e diagnostiche (anticipazione)
+- **Trace plot post burn-in**: mostra fluttuazioni stazionarie attorno al valore medio, indicando il raggiungimento della distribuzione stazionaria.
+- **Distribuzione empirica**: l'istogramma dei campioni si sovrappone accuratamente alla densità Beta(18,92) teorica.
+- **Statistiche descrittive**: media, deviazione standard e quantili MCMC sono in linea con i valori analitici, il che conferma la validità dell'implementazione.
 
-Durante una simulazione Monte Carlo basata su Metropolis — o, più in generale, su un algoritmo MCMC — otteniamo una *catena*, ossia una sequenza ordinata di valori del parametro $\theta$. Ogni elemento della catena rappresenta uno stato che l’algoritmo ha visitato nello spazio dei parametri. Possiamo immaginare questa sequenza come il percorso di un esploratore che si muove tra diverse regioni del paesaggio della distribuzione a posteriori.
+## Fondamentali MCMC (riassunto operativo)
 
-All’inizio, la catena riflette soprattutto il punto di partenza: i primi passi sono quindi influenzati dalle condizioni iniziali. Con il procedere delle iterazioni, però, l’effetto del punto di partenza si attenua e la catena converge verso una distribuzione stazionaria. È in questa fase che i campioni possono essere considerati rappresentativi della posteriore.
+### Catene e percorso nello spazio dei parametri (ripasso mirato)
 
-Per verificare che ciò avvenga, è prassi comune eseguire *più catene indipendenti*, ciascuna con un punto di partenza diverso. Questa strategia offre due vantaggi:
+Gli algoritmi MCMC producono *catene*, ovvero sequenze ordinate di valori parametrici che rappresentano il percorso esplorativo attraverso lo spazio degli stati. Ogni iterazione corrisponde a una transizione dallo stato corrente a uno stato candidato, secondo un meccanismo di proposta e accettazione.
 
-* consente di confrontare i *trace plot* e verificare se le catene si stabilizzano attorno alla stessa distribuzione,
-* riduce il rischio che una catena resti bloccata in un massimo locale, aumentando la robustezza complessiva dell’inferenza.
+### Convergenza e indipendenza dalle condizioni iniziali
 
-La valutazione della convergenza e della qualità del campionamento può basarsi su strumenti grafici (trace plot, correlogrammi) o su indicatori quantitativi come la statistica $\hat{R}$ di Gelman-Rubin e la dimensione del campione effettiva (ESS).
+La fase iniziale della catena, detta anche "burn-in", risente inevitabilmente del punto di partenza. Man mano che le iterazioni procedono, l'influenza delle condizioni iniziali si attenua e la catena converge verso la distribuzione stazionaria target. Solo i campioni successivi a questa fase transitoria possono essere utilizzati per l'inferenza.
 
-Poiché queste diagnostiche richiedono un’attenzione dedicata, qui ci limitiamo a introdurle brevemente. Il @sec-mcmc-diagnostics offrirà una trattazione completa, con esempi dettagliati e applicazioni pratiche.
+### Catene multiple: perché farle e come confrontarle
 
-::: {.callout-note collapse=true title="Per approfondire"}
-Un ulteriore esempio dell’algoritmo di Metropolis è presentato nell’Appendice, dove viene affrontato il caso Normale–Normale. In quel contesto la distribuzione a posteriori è nota analiticamente, e il confronto diretto con i campioni MCMC permette di verificare passo per passo la correttezza del procedimento.
+L'esecuzione di catene multiple indipendenti con punti di partenza diversificati è una pratica essenziale per diversi scopi diagnostici. Questo approccio consente di verificare la riproducibilità dei risultati, di identificare una convergenza prematura verso massimi locali e di validare il raggiungimento della distribuzione stazionaria. Attraverso il confronto tra catene che partono da diverse regioni dello spazio parametrico, è possibile accertare che l'algoritmo abbia esplorato adeguatamente l'intero supporto della distribuzione target.
+
+### Strumenti quantitativi: R-hat, ESS e soglie pratiche
+
+La valutazione della qualità del campionamento si avvale di:
+
+- **Diagnostiche grafiche**: trace plot, autocorrelogrammi, densità empiriche.
+- **Metriche quantitative**: statistica $\hat{R}$ di Gelman-Rubin, Effective Sample Size (ESS).
+- **Test di convergenza**: analisi della stazionarietà e mixing delle catene.
+
+Una trattazione sistematica di questi strumenti è disponibile nell'@sec-apx-mcmc-diagnostics, che fornisce le metodologie complete per la validazione dei risultati MCMC.
+
+::: {.callout-note collapse=true title="Approfondimento: caso Normale-Normale"}
+L'Appendice presenta un'ulteriore applicazione dell'algoritmo di Metropolis al caso Normale-Normale, in cui la disponibilità della soluzione analitica permette una validazione puntuale del campionamento MCMC.
 :::
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-L’introduzione dell’algoritmo di Metropolis ha rappresentato una svolta decisiva per l’inferenza bayesiana. Prima della sua comparsa, l’analisi era confinata a pochi casi speciali, gestibili grazie alle distribuzioni coniugate o a modelli estremamente semplici. Con Metropolis diventa invece possibile, almeno in linea di principio, ottenere campioni dalla distribuzione a posteriori in qualunque situazione, senza conoscerne la forma analitica.
+L'introduzione dell'algoritmo di Metropolis ha segnato una transizione epistemologica fondamentale per l'inferenza bayesiana, trasformandola da un framework teorico applicabile solo a casi speciali a una metodologia applicabile universalmente. Prima della sua introduzione, l'analisi bayesiana era limitata a modelli con soluzioni analitiche, principalmente mediante l'uso di famiglie coniugate. L'algoritmo di Metropolis ha dimostrato che è possibile generare campioni da distribuzioni a posteriori arbitrarie senza doverne conoscere la forma chiusa, risolvendo così il problema computazionale fondamentale dell'inferenza bayesiana.
 
-Questa è la vera potenza dell’algoritmo: dimostrare che il problema concettuale dell’inferenza bayesiana è risolto. Una volta stabilito il modello, non è più necessario calcolare integrali complicati: possiamo affidare l’esplorazione dello spazio dei parametri a una catena di Markov. Restano, naturalmente, limiti pratici: la velocità del campionamento, l’efficienza nel mescolamento e la necessità di implementazioni accurate. Non a caso, gli sviluppi successivi — dal Metropolis-Hastings fino al moderno algoritmo NUTS usato in Stan — possono essere visti come perfezionamenti tecnici di questa intuizione originaria, volti a rendere l’approccio più stabile e automatizzato [@duane1987hybrid; @geman_geman_1984; @hoffman2014no; @hanada2022mcmc].
+Il contributo essenziale di questo approccio risiede nella sua universalità: una volta specificato un modello tramite verosimiglianza e distribuzione a priori, il campionamento della distribuzione a posteriori diventa possibile, indipendentemente dalla sua complessità analitica. Rimangono ovviamente delle sfide pratiche, come l'efficienza esplorativa, la velocità di convergenza e la calibrazione dei parametri, ma il problema concettuale è stato superato.
 
-Dal punto di vista didattico, Metropolis rimane un passaggio fondamentale: non è soltanto un pezzo di storia, ma il nucleo concettuale da cui discendono i metodi odierni. Comprendere la sua logica — fatta di proposte, accettazioni e rifiuti — significa acquisire le chiavi per interpretare anche gli algoritmi più sofisticati, che ne condividono la stessa architettura di base.
+Lo sviluppo successivo di tecniche MCMC, dall'estensione di Metropolis-Hastings [@hastings_1970] all'Hamiltonian Monte Carlo [@duane1987hybrid] fino all'algoritmo NUTS [@hoffman2014no] implementato in Stan, può essere interpretato come un processo di raffinamento di questa intuizione fondamentale, finalizzato a ottimizzare l'efficienza computazionale e l'automazione del processo inferenziale [@hanada2022mcmc].
 
-In definitiva, l’algoritmo di Metropolis ci consegna due insegnamenti centrali. Primo: l’inferenza bayesiana non è limitata a pochi casi fortunati, ma può essere sempre condotta. Secondo: ogni modello psicologico, anche complesso e realistico, può essere trattato con questa logica, purché si disponga degli strumenti computazionali adeguati.
+Dal punto di vista didattico, l'algoritmo di Metropolis ha un valore inestimabile: non solo rappresenta un momento storico, ma anche il prototipo concettuale che svela i meccanismi operativi alla base di tutti i metodi MCMC moderni. Comprenderne la logica, ovvero il ciclo di proposta, valutazione e decisione di accettazione, fornisce le basi per interpretare correttamente anche gli algoritmi contemporanei più sofisticati.
+
+In sintesi, l'algoritmo di Metropolis illustra due principi fondamentali: primo, l'inferenza bayesiana è applicabile universalmente, superando i limiti dei casi trattabili analiticamente; secondo, qualsiasi modello psicologico realistico, per quanto complesso, può essere affrontato con questa metodologia, a condizione di disporre degli strumenti di calcolo adeguati.
 
 ::: {.callout-important title="Esercizio 1: Autostima negli Studenti Universitari" collapse="true"}
 
@@ -696,7 +666,7 @@ curva_teorica <- tibble(x = x, y = dens_teorica)
 tibble(Theta = post_samples) |> 
   ggplot(aes(x = Theta)) +
   geom_histogram(aes(y = after_stat(density)), bins = 30, 
-                 color = "black", fill = "lightblue", alpha = 0.6) +
+                 color = "white", fill = "lightblue", alpha = 0.6) +
   geom_line(data = curva_teorica, aes(x = x, y = y), 
             color = "red", size = 1) +
   labs(x = expression(theta), y = "Densità")
@@ -844,7 +814,7 @@ curva_teorica <- tibble(x = x, y = dens_teorica)
 post_samples |> 
   tibble(Mu = post_samples) |> 
   ggplot(aes(x = Mu)) +
-  geom_histogram(aes(y = after_stat(density)), bins = 30, fill = "skyblue", color = "black", alpha = 0.6) +
+  geom_histogram(aes(y = after_stat(density)), bins = 30, fill = "skyblue", color = "white", alpha = 0.6) +
   geom_line(data = curva_teorica, aes(x = x, y = y), color = "red", linewidth = 1) +
   labs(x = expression(mu), y = "Densit\u00e0")
 ```

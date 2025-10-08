@@ -120,8 +120,6 @@ modern_sans <- locate_sans_family()
 message("Font sans-serif per i grafici: ", modern_sans)
 
 # -------- Tema ggplot/bayesplot --------
-# Nota: il body nel libro è 18px; per i grafici uso 14–15 come base size per leggibilità.
-# -------- Tema ggplot/bayesplot: stile bayesplot + sans + sfondo bianco --------
 apply_visual_theme <- function(base_size = 15) {
   # base: tema bayesplot "di fabbrica"
   base <- bayesplot::theme_default(
@@ -133,6 +131,7 @@ apply_visual_theme <- function(base_size = 15) {
   # - pannello bianco (per stampa e coerenza col libro)
   # - plot background trasparente (utile in HTML/PNG sopra sfondo pagina)
   # - griglia sottile e neutra
+  # - spacing migliorato tra titolo e sottotitolo
   ggplot2::theme_set(
     base %+replace%
       ggplot2::theme(
@@ -165,12 +164,21 @@ apply_visual_theme <- function(base_size = 15) {
         ),
         plot.title = ggplot2::element_text(
           face = "bold",
-          colour = modern_palette$text_dark
+          colour = modern_palette$text_dark,
+          margin = ggplot2::margin(b = 8) # spazio sotto il titolo
         ),
         plot.subtitle = ggplot2::element_text(
-          colour = modern_palette$text_medium
+          colour = modern_palette$text_medium,
+          size = ggplot2::rel(0.88), # leggermente più piccolo del titolo
+          margin = ggplot2::margin(b = 10) # spazio sotto il sottotitolo
         ),
-        plot.caption = ggplot2::element_text(colour = modern_palette$text_light)
+        plot.caption = ggplot2::element_text(
+          colour = modern_palette$text_light,
+          hjust = 0, # allineamento a sinistra per le caption
+          margin = ggplot2::margin(t = 10) # spazio sopra la caption
+        ),
+        # Margini generali del plot più ariosi
+        plot.margin = ggplot2::margin(12, 12, 12, 12)
       )
   )
 
@@ -272,7 +280,6 @@ set_geom_defaults <- function() {
 }
 set_geom_defaults()
 
-# -------- Device: PNG ad alta qualità ovunque (HTML/PDF) --------
 # -------- Device: PNG alta qualità + background trasparente --------
 use_device_for_format <- function() {
   knitr::opts_chunk$set(
