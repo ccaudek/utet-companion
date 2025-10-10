@@ -1,21 +1,39 @@
 # L'influenza della distribuzione a priori {#sec-bayes-inference-prior}
 
-## Introduzione {.unnumbered .unlisted}
+## Introduzione 
 
-Nei capitoli precedenti abbiamo visto come costruire distribuzioni a posteriori combinando ciò che sapevamo prima (*priori*) con l’informazione proveniente dai dati. Abbiamo anche imparato a riassumere e comunicare queste distribuzioni attraverso quantità sintetiche e intervalli credibili. A questo punto, una domanda diventa cruciale: *quanto contano davvero i priori rispetto ai dati nell’inferenza bayesiana?*
+L'inferenza bayesiana integra in modo naturale due fonti di informazione: le nostre conoscenze pregresse (la distribuzione a priori) e l'evidenza empirica (i dati). Questo approccio è particolarmente prezioso in psicologia, dove i campioni sono piccoli e le misure sono rumorose, rendendo cruciale stabilizzare le stime incorporando la conoscenza accumulata dalla letteratura. In tali scenari, una prior *plausibile ma non eccessiva* stabilizza le stime e riduce la tendenza a sovrastimare gli effetti nei piccoli studi (il *winner’s curse*) limitando gli *errori di tipo M*[^M].
 
-Questa domanda non è solo tecnica, ma profondamente concettuale. In psicologia, come in altre scienze, i dati raccolti sono sempre limitati, e i priori rappresentano sia la conoscenza teorica accumulata sia le assunzioni inevitabili che facciamo prima di osservare i risultati. L’equilibrio tra questi due elementi definisce la natura dell’inferenza bayesiana: non un calcolo meccanico, ma un dialogo continuo tra teoria ed evidenza empirica.
+[^M]: *Errore di tipo M (Magnitude)*: scostamento sistematico tra la magnitudine stimata di un effetto e il suo valore reale. Nei piccoli campioni, la selezione dei risultati basata sulla significatività statistica (valore-p) tende a *sovrastimare* gli effetti. Si distingue dall'errore di tipo S (*Sign*), che riguarda l'inversione del segno dell'effetto. L'uso di distribuzioni a priori debolmente informative a code pesanti, definite su scale adimensionali (come $\beta/s$), introduce uno *shrinkage adattivo* che mitiga gli errori di tipo M quando l'evidenza è debole, preservando gli effetti genuini quando l'evidenza è forte [@gelman2014beyond; @ioannidis2005contradicted].
 
-In questo capitolo esploreremo come varia l’influenza dei priori in funzione della quantità di dati e della forza delle assunzioni iniziali. Vedremo che, con pochi dati, i priori possono avere un peso decisivo, mentre con molti dati la verosimiglianza tende a dominare. Questo ci aiuterà a capire meglio perché la scelta dei priori è così importante e, allo stesso tempo, perché non bisogna temere che un prior ragionevole “distorca” i risultati quando l’evidenza empirica è abbondante.
+Per esplorare concretamente l'influenza della distribuzione a priori, in questo capitolo adotteremo uno scenario semplificato ma fondamentale: supponiamo di osservare una stima $b$ di un coefficiente $\beta$, distribuita normalmente con errore standard noto $s$, tale che $b \sim \mathcal{N}(\beta, s^2)$. In questa cornice, la quantità cruciale è il *rapporto segnale-rumore* (SNR), che distingue il parametro latente dalla sua stima osservata:
+$$
+\xi = \frac{\beta}{s}, \qquad z = \frac{b}{s}.
+$$
+Definire la distribuzione a priori sulla quantità *adimensionale* $\xi = \beta/s$ garantisce che i risultati siano *invarianti* rispetto a cambiamenti di unità di misura e direttamente *confrontabili* tra studi diversi. Questa scelta rivela chiaramente quando la prior esercita la sua maggiore influenza: *se $|z|$* è piccolo (segnale debole), lo *shrinkage* verso valori plausibili è pronunciato; se $|z|$ è grande (segnale forte), *la likelihood domina* e l’influenza della prior si attenua.
 
+In sintesi: la scelta di distribuzioni a priori *trasparenti*, verificate attraverso *prior predictive check* e definite su scale *interpretabili e adimensionali* (come $\beta/s$), produce analisi che sono *robuste* in condizioni di informazione limitata, ma che sanno *lasciar parlare i dati* quando l'evidenza empirica è abbondante [@zwet2022proposal].
 
-### Panoramica del capitolo {.unnumbered .unlisted}
+::: {.callout-note title="Convenzioni notazionali"}
+-   $b$: stima puntuale (coefficiente campionario).
+-   $s$: errore standard associato a $b$.
+-   $z=b/s$: z-score osservato.
+-   $\beta$: parametro “vero” sulla scala del modello (coefficiente).
+-   $\xi=\beta/s$: *rapporto segnale/rumore (SNR)*, adimensionale.
+-   $\sigma$: deviazione standard (parametro di scala).
+-   $\text{Beta}(a,b)$: *distribuzione* Beta con parametri $a,b$ (attenzione: $\beta$ è un coefficiente, “Beta” è una distribuzione).
+-   $\nu$: gradi di libertà (Student-$t$); 
+-   $\eta$: parametro LKJ.
+:::
 
-* Funzione dei prior nell’inferenza.
-* Tipologie principali di prior.
-* Influenza della quantità di dati.
-* Effetti delle trasformazioni di scala.
-* Priori coniugati e sensibilità.
+## Panoramica del capitolo {.unnumbered .unlisted}
+
+* **Che cosa fa la prior?** — Intuizione e ruolo nell’inferenza.
+* **Come sceglierla?** — Non-informativa, debolmente informativa, informativa.
+* **Quanto “pesa”?** — Dipende dalla quantità di dati (e da $|z|$).
+* **Questione di scala.** — Perché conviene lavorare su $\beta/s$.
+* **Coniugazione vs metodi moderni.** — Quando semplificare e quando essere flessibili.
+* **Esempi in R.** — Mini-simulazioni per “vedere” l’effetto della prior.
 
 
 ::: {.callout-tip collapse=true}
@@ -32,330 +50,1159 @@ here::here("code", "_common.R") |>
 
 # Load packages
 if (!requireNamespace("pacman")) install.packages("pacman")
-pacman::p_load(mice)
+pacman::p_load(conflicted, tidytable )
+
+conflicts_prefer(tidyr::extract)
 ```
 :::
 
 
-## La distribuzione a priori
-
-La distribuzione a priori descrive ciò che sappiamo o ipotizziamo su un parametro *prima* di osservare i dati. In psicologia, questo significa poter integrare la conoscenza accumulata da studi precedenti o da esperienze cliniche nelle nostre analisi. Ad esempio, se stiamo studiando l’efficacia di un intervento di mindfulness sulla riduzione dell’ansia, potremmo già sapere da ricerche precedenti che l’effetto tipico si colloca intorno a una riduzione moderata dei sintomi. Una distribuzione a priori ben scelta ci consente di incorporare questa informazione e di rafforzare la plausibilità delle stime.
 
 
-## Tipologie di distribuzioni a priori
-
-La scelta della prior (nota come *elicitazione*) è uno dei passaggi più delicati dell’approccio bayesiano. Non va intesa come un atto puramente soggettivo: spesso può e deve basarsi su dati empirici e conoscenze consolidate.
-
-Si distinguono tre categorie principali:
-
-1. *Priori non informative.*
-   Servono quando non abbiamo conoscenze pregresse. Assegnano la stessa credibilità a tutti i valori di un parametro.
-   Esempio: se studiamo la correlazione tra due nuove variabili psicologiche mai indagate prima, potremmo iniziare assumendo che tutte le correlazioni da –1 a +1 siano ugualmente probabili.
-
-2. *Priori debolmente informative.*
-   Introducono ipotesi “di buon senso” senza imporre vincoli rigidi.
-   Esempio: nella ricerca psicologica è improbabile che un trattamento aumenti l’ansia in modo enorme (ad es. di 10 deviazioni standard). Una prior debolmente informativa può limitare la stima a un intervallo plausibile (ad es. effetti compresi tra –2 e +2 deviazioni standard), escludendo valori assurdi.
-
-3. *Priori informative.*
-   Riflettono conoscenze specifiche derivanti da studi precedenti o meta-analisi.
-   Esempio: se una meta-analisi mostra che gli interventi di terapia cognitivo-comportamentale riducono in media i sintomi depressivi con un effetto di circa 0.5 deviazioni standard, possiamo usare questa informazione per formulare una prior centrata intorno a 0.5.
 
 
-## L’importanza della prior in base ai dati
-
-Un principio fondamentale è che *più dati osserviamo, meno la prior influisce sulle stime*.
-Se raccogliamo centinaia di osservazioni, la verosimiglianza domina l’inferenza, rendendo meno rilevante la scelta della prior. Viceversa, con pochi dati la prior può avere un peso notevole. Questo è frequente in psicologia quando lavoriamo con campioni ridotti, ad esempio con pazienti affetti da un disturbo raro. In tali casi, una prior ben scelta può rendere le stime più stabili e coerenti.
 
 
-## Trasformazioni e scala dei parametri
-
-Un punto spesso trascurato riguarda il fatto che le prior non sono “neutre” rispetto al cambiamento di scala. Ad esempio, se in uno studio sulla soddisfazione lavorativa esprimiamo un punteggio medio in una scala da 1 a 10, una prior uniforme su quella scala appare “piatta” e non informativa. Ma se trasformiamo la scala in percentuale (0–100), la stessa prior non rimane più uniforme. Questo mostra che una prior non può essere “piatta” per tutte le possibili rappresentazioni del parametro: occorre sempre riflettere su quale scala sia più significativa per il problema psicologico studiato.
 
 
-## Priori coniugate e metodi moderni
 
-Storicamente, i ricercatori preferivano usare *priori coniugate*, che semplificano i calcoli perché producono posteriori della stessa famiglia di distribuzioni. Ad esempio, la distribuzione Beta è coniugata alla Binomiale: se osserviamo il numero di successi in un test di memoria, una prior Beta consente di calcolare facilmente la posteriori. Oggi, grazie ai metodi di campionamento (ad esempio MCMC), non è più necessario limitarsi alle priors coniugate. Possiamo scegliere priors più flessibili, anche non coniugate, che meglio riflettono le conoscenze psicologiche disponibili.
+## Simulazioni: vedere l’effetto della prior
 
+L’aggiornamento bayesiano si comprende davvero solo esaminando la trasformazione che il prior subisce, come conseguenza della likelihood, nel diventare il posterior. Le simulazioni ci permettono di “vedere” come la distribuzione *a posteriori* nasce dalla combinazione tra **ciò che credevamo prima** (la prior) e **ciò che osserviamo** (la verosimiglianza dei dati).
 
-## Simulazioni
+### Il principio generale
 
-Per comprendere meglio come le distribuzioni *a priori* influenzano le nostre conclusioni, possiamo usare delle simulazioni. La formula di Bayes
+La formula di Bayes si scrive:
 
 $$
 p(\theta \mid y) \propto p(\theta) \times p(y \mid \theta)
 $$
-ci dice che la distribuzione *a posteriori* nasce dalla combinazione di due elementi:
 
-* la distribuzione *a priori*, cioè ciò che crediamo prima di osservare i dati;
-* la *verosimiglianza*, cioè quanto i dati osservati sono compatibili con ciascun valore possibile del parametro $\theta$.
+cioè:
 
-In pratica, se abbiamo i valori della verosimiglianza e della prior su una griglia di possibili valori di $\theta$, possiamo moltiplicarli “punto per punto” e ottenere così la distribuzione *a posteriori*.
+> la distribuzione *a posteriori* è proporzionale alla prior × likelihood.
+
+Per calcolarla, possiamo considerare una griglia di possibili valori del parametro $\theta$,
+moltiplicare prior e likelihood “punto per punto”, e poi normalizzare.
 
 
 ### Un esempio psicologico: tassi di risposta corretta
 
-Immaginiamo di voler stimare la probabilità $\theta$ che uno studente risponda correttamente a una domanda di un test di memoria. Abbiamo osservato che, su 9 domande, lo studente ha risposto correttamente a 6. Questo può essere modellato con una *verosimiglianza binomiale*. Ora ci chiediamo: *come cambiano le nostre conclusioni se assumiamo priori differenti?*
+Immagina di voler stimare la probabilità $\theta$ che uno studente risponda correttamente a una domanda di memoria. Su 9 domande, lo studente ne ha azzeccate 6. Vogliamo capire come cambiano le nostre conclusioni a seconda della prior.
 
 
-### Passo 1: definire la verosimiglianza
+### 1. Definiamo la verosimiglianza
 
 ```{r}
-# Dati osservati: 6 risposte corrette su 9
 success <- 6
-tosses <- 9
-
-# Griglia di possibili valori di theta
-grid_points <- 100
-p_grid <- seq(0, 1, length.out = grid_points)
-
-# Verosimiglianza binomiale
+tosses  <- 9
+p_grid  <- seq(0, 1, length.out = 100)
 likelihood <- dbinom(success, tosses, p_grid)
 ```
 
-La verosimiglianza indica quali valori di $\theta$ (probabilità di risposta corretta) sono più compatibili con i dati. In questo caso, i valori intorno a 0.67 (6/9) hanno la probabilità più alta.
+Questa è la **likelihood binomiale**: indica per ogni possibile valore di $\theta$ quanto sono plausibili i dati osservati (6 successi su 9).
 
-
-### Passo 2: funzione per calcolare e visualizzare la posterior
+### 2. Funzione per calcolare la posterior e disegnare le curve
 
 ```{r}
 computePosterior <- function(likelihood, prior, p_grid) {
-  # Calcolo della posteriori non normalizzata
-  unstd_posterior <- likelihood * prior
-  # Normalizzazione
-  posterior <- unstd_posterior / sum(unstd_posterior)
+  posterior <- likelihood * prior
+  posterior <- posterior / sum(posterior)
   
-  # Preparazione dati per il grafico
-  data <- tibble(
+  tibble(
     theta = p_grid,
     Prior = prior,
     Likelihood = likelihood,
     Posterior = posterior
-  ) |> 
-    pivot_longer(cols = c(Prior, Likelihood, Posterior), 
-                 names_to = "distribution", 
-                 values_to = "density")
-  
-  # Grafico
-  g <- ggplot(data, aes(x = theta, y = density, color = distribution)) +
-    geom_line(size = 1.2) +
-    facet_wrap(~distribution, scales = "free_y", ncol = 3) +
-    labs(
-      x = expression(theta),
-      y = "Densità"
-    ) +
-    theme(plot.title = element_text(hjust = 0.5),
-          legend.position = "none",
-          strip.text = element_text(size = 12, face = "bold"))
-  
-  print(g)
-  return(posterior)
+  ) |>
+    pivot_longer(-theta, names_to = "Distribuzione", values_to = "Densità") |>
+    ggplot(aes(x = theta, y = Densità, color = Distribuzione)) +
+    geom_line(size = 1.1) +
+    facet_wrap(~Distribuzione, scales = "free_y", ncol = 3) +
+    labs(x = expression(theta), y = "Densità") +
+    theme(legend.position = "none")
 }
 ```
 
-La funzione non solo calcola la distribuzione *a posteriori*, ma produce anche un grafico comparativo di prior, likelihood e posterior.
 
+### 3. Confrontiamo tre scenari
 
-### Prior uniforme
+#### (A) Prior uniforme — “nessuna conoscenza iniziale”
 
-```{r fig.width=8, fig.asp=0.5, out.width="100%", echo=TRUE}
-prior1 <- rep(1, grid_points)
-posterior1 <- computePosterior(likelihood, prior1, p_grid)
+```{r fig.width=8, fig.asp=0.5, out.width="100%"}
+prior1 <- rep(1, length(p_grid))
+computePosterior(likelihood, prior1, p_grid)
 ```
 
-**Commento**: la prior uniforme assegna uguale credibilità a tutti i valori di $\theta$.
-Il risultato è che la posteriori coincide quasi con la verosimiglianza: senza conoscenze pregresse, sono i dati (6 risposte corrette su 9) a guidare completamente l’inferenza.
+**Interpretazione:**
 
+* tutti i valori di $\theta$ sono considerati ugualmente plausibili prima dei dati;
+* il risultato è che la *posterior* coincide quasi con la likelihood:
+  i dati (6 su 9 → 0.67) dominano completamente;
+* è l’analogo bayesiano del metodo “classico” basato solo sui dati.
 
-### Prior a gradino
+#### (B) Prior “a gradino” — “nessuno può andare sotto il 50%”
 
-```{r fig.width=8, fig.asp=0.5, out.width="100%", echo=TRUE}
+```{r fig.width=8, fig.asp=0.5, out.width="100%"}
 prior2 <- ifelse(p_grid >= 0.5, 1, 0)
-posterior2 <- computePosterior(likelihood, prior2, p_grid)
+computePosterior(likelihood, prior2, p_grid)
 ```
 
-**Commento**: qui assumiamo che $\theta$ non possa essere inferiore a 0.5 (cioè lo studente deve rispondere almeno come “a caso”).
-La posteriori esclude quindi qualsiasi valore sotto 0.5, anche se la verosimiglianza avrebbe assegnato loro un po’ di probabilità.
-Questo esempio mostra come una convinzione forte possa vincolare pesantemente le conclusioni.
+**Interpretazione:**
+
+* stiamo esprimendo una convinzione forte: lo studente non può andare peggio del caso;
+* tutti i valori sotto 0.5 vengono esclusi;
+* la *posterior* si concentra solo nella metà destra, ignorando parte della likelihood;
+* l’inferenza diventa più “ottimistica”: la media a posteriori è più alta di 0.67.
 
 
-### Prior esponenziale centrata su 0.5
+#### (C) Prior esponenziale centrata su 0.5 — “prestazione tipica intorno alla media”
 
-```{r fig.width=8, fig.asp=0.5, out.width="100%", echo=TRUE}
+```{r fig.width=8, fig.asp=0.5, out.width="100%"}
 prior3 <- exp(-5 * abs(p_grid - 0.5))
-posterior3 <- computePosterior(likelihood, prior3, p_grid)
+computePosterior(likelihood, prior3, p_grid)
 ```
 
-**Commento**: questa prior esprime l’idea che lo studente abbia circa il 50% di probabilità di rispondere correttamente. La posteriori viene “attirata” verso 0.5, pur tenendo conto dei dati (6 su 9 ≈ 0.67). Il risultato finale è un compromesso: né tutto nei dati, né tutto nella prior.
+**Interpretazione:**
 
-Questo esercizio mostra chiaramente il *ruolo delle prior*:
+* questa prior dice che la maggior parte delle persone ha prestazioni attorno al 50%, ma valori molto alti o bassi sono possibili (anche se meno probabili);
+* la *posterior* è un compromesso: un po’ più vicina a 0.5 di quanto direbbero i soli dati (0.67), ma non così rigida come la prior a gradino.
 
-* con una prior piatta prevalgono i dati,
-* con una prior vincolante (gradino) le ipotesi iniziali dominano,
-* con una prior moderata (esponenziale) si ottiene un compromesso.
+### 4. Confronto sintetico
 
-In psicologia, dove spesso i campioni sono piccoli, la scelta della prior può cambiare molto le conclusioni: un motivo in più per rendere trasparenti e motivate le ipotesi di partenza.
+| Tipo di prior                      | Idea intuitiva                  | Effetto sulla stima                |
+| ---------------------------------- | ------------------------------- | ---------------------------------- |
+| **Uniforme**                       | Nessuna conoscenza iniziale     | I dati dominano                    |
+| **Gradino (>0.5)**                 | Fiducia nella competenza minima | Spinge la stima verso valori alti  |
+| **Esponenziale (centrata su 0.5)** | Prestazione “media” attesa      | Compromesso tra dati e convinzioni |
 
+### 5. Cosa insegna l’esercizio
 
-## Il caso coniugato: Beta-Binomiale
+* Con una *prior piatta*, prevalgono i dati.
+* Con una *prior vincolante*, le ipotesi iniziali dominano.
+* Con una *prior moderata*, otteniamo un equilibrio realistico.
 
-Un esempio classico in cui i calcoli diventano semplici è il modello *Beta-Binomiale*. La distribuzione Beta è coniugata alla Binomiale: ciò significa che la forma della posteriori rimane una Beta.
+Il modello *Beta–Binomiale* è uno dei migliori strumenti per capire *come funziona Bayes “dentro”*.
+È semplice, visivamente chiaro e ha un significato diretto per molte ricerche psicologiche:
+stimare una proporzione, una probabilità di successo o un tasso di risposta.
+
+### 1. Il contesto psicologico
+
+Supponiamo di voler stimare la probabilità $\theta$ che una persona risponda correttamente a un compito cognitivo.
+In un test di memoria composto da 9 domande, osserviamo 6 risposte corrette.
+
+Vogliamo aggiornare le nostre convinzioni su $\theta$ alla luce di questi dati.
+La prior rappresenta ciò che pensiamo *prima* di osservare le risposte, la likelihood ciò che dicono *i dati*, e la posterior la loro combinazione.
+
+### 2. Il modello coniugato
+
+La distribuzione Beta è “coniugata” alla Binomiale:
+
+$$
+\begin{aligned}
+\text{Prior: } & \theta \sim \text{Beta}(\alpha, \beta) \
+\text{Dati: } & y \sim \text{Binomiale}(n, \theta) \
+\text{Posterior: } & \theta \mid y \sim \text{Beta}(\alpha + y,; \beta + n - y)
+\end{aligned}
+$$
+
+La *posterior* è ancora una Beta: cambia solo la forma, non la famiglia.
+Questo consente di visualizzare l’effetto dei dati sulla distribuzione in modo immediato.
+
+### 3. Visualizziamo l’aggiornamento
 
 ```{r}
 plot_beta_binomial <- function(alpha, beta, y, n) {
   theta <- seq(0, 1, length.out = 100)
-  prior_density <- dbeta(theta, alpha, beta)
+  prior <- dbeta(theta, alpha, beta)
   likelihood <- dbinom(y, n, theta)
-  scaled_likelihood <- likelihood / max(likelihood)
-  posterior_density <- dbeta(theta, alpha + y, beta + n - y)
+  posterior <- dbeta(theta, alpha + y, beta + n - y)
   
-  data <- tibble(
-    theta = theta,
-    Prior = prior_density,
-    Likelihood = scaled_likelihood,
-    Posterior = posterior_density
-  ) |> 
-    pivot_longer(cols = c(Prior, Likelihood, Posterior), 
-                 names_to = "distribution", 
-                 values_to = "density")
-  
-  ggplot(data, aes(x = theta, y = density, color = distribution)) +
+  tibble(
+    theta,
+    Prior = prior / max(prior),
+    Likelihood = likelihood / max(likelihood),
+    Posterior = posterior / max(posterior)
+  ) |>
+    pivot_longer(-theta, names_to = "Distribuzione", values_to = "Densità") |>
+    ggplot(aes(x = theta, y = Densità, color = Distribuzione)) +
     geom_line(size = 1.2) +
-    labs(x = expression(theta), y = "Densità") +
-    theme(plot.title = element_text(hjust = 0.5))
+    labs(
+      title = "Aggiornamento Beta–Binomiale (6 successi su 9)",
+      x = expression(theta),
+      y = "Densità (scala normalizzata)"
+    ) +
+    theme(legend.position = "top")
 }
 ```
 
-*Prior* uniforme:
+### 4. Tre esempi a confronto
 
-```{r, fig.fullwidth = TRUE}
+#### (A) Prior uniforme — completa incertezza
+
+```{r, fig.fullwidth=TRUE}
 plot_beta_binomial(alpha = 1, beta = 1, y = 6, n = 9)
 ```
 
-*Prior* informativo:
+**Interpretazione:**
 
-```{r, fig.fullwidth = TRUE}
+- la prior è piatta (uguale probabilità per tutti i valori);
+- la posterior coincide quasi con la likelihood: i dati dominano;
+- è l’equivalente bayesiano di un’analisi “senza pregiudizi”.
+
+#### (B) Prior moderatamente informativa — conoscenze pregresse vaghe
+
+```{r, fig.fullwidth=TRUE}
 plot_beta_binomial(alpha = 2, beta = 2, y = 6, n = 9)
 ```
 
-*Prior* fortemente informativo:
+**Interpretazione:**
 
-```{r, fig.fullwidth = TRUE}
+- la prior riflette una credenza che $\theta$ sia intorno a 0.5, ma non troppo rigida;
+- dopo l’aggiornamento, la posterior si sposta verso i dati (0.67), ma resta leggermente più “cauta”: la media a posteriori è circa 0.62;
+- la prior “stabilizza” la stima, evitando eccessiva fiducia.
+
+#### (C) Prior fortemente informativa — convinzione quasi “teorica”
+
+```{r, fig.fullwidth=TRUE}
 plot_beta_binomial(alpha = 2, beta = 5, y = 6, n = 9)
 ```
 
-Con un *prior* uniforme, i dati (6 su 9) guidano quasi interamente la stima. Con un *prior* più informativo, la *posterior* si sposta nella direzione suggerita dalle credenze pregresse.
+**Interpretazione:** 
 
-*In sintesi,* le simulazioni mostrano due punti chiave:
+- qui partivamo convinti che $\theta$ fosse bassa (media a priori = 0.29);
+- anche se i dati suggeriscono 0.67, la posterior resta prudente (intorno a 0.45);
+- la prior “resiste” ai dati — e questo è esattamente ciò che deve fare se crediamo fortemente nella nostra ipotesi iniziale.
 
-1. *Il peso della prior dipende dalla quantità di dati.* Con pochi dati (come i 9 tentativi del nostro studente), la prior può influenzare molto la stima. Con tanti dati, la verosimiglianza tende a prevalere.
-2. *Le scelte di prior hanno senso solo se motivate.* In psicologia, una prior può derivare da ricerche precedenti (es. meta-analisi), da conoscenze teoriche (es. aspettarci che un trattamento riduca e non aumenti i sintomi) o da ipotesi ragionevoli.
+### 5. Cosa mostra questo esperimento
 
-L’approccio bayesiano ci permette quindi di integrare flessibilmente dati e conoscenze pregresse, arrivando a inferenze che sono al tempo stesso empiricamente fondate e teoricamente sensate.
+| Situazione         | Prior              | Effetto della posterior | Significato psicologico    |
+| ------------------ | ------------------ | ----------------------- | -------------------------- |
+| Nessuna conoscenza | $\text{Beta}(1,1)$ | I dati dominano         | Analisi puramente empirica |
+| Credenze moderate  | $\text{Beta}(2,2)$ | Compromesso equilibrato | Incertezza realistica      |
+| Credenze forti     | $\text{Beta}(2,5)$ | Prior prevalente        | Teoria molto rigida        |
 
+### 6. Il significato psicologico del peso del prior
+
+La prior agisce come un “numero di osservazioni fittizie”. Nel caso Beta–Binomiale, il termine $\alpha + \beta$ rappresenta *quanta fiducia* abbiamo nelle nostre convinzioni precedenti:
+
+* con $\alpha + \beta = 2$, la prior equivale a circa due osservazioni precedenti;
+* con $\alpha + \beta = 20$, equivale a venti osservazioni: serve molta evidenza per cambiarla.
+
+Questo spiega intuitivamente perché, in psicologia, *priors troppo forti* possono “schiacciare” l’evidenza empirica: si comportano come se avessimo già accumulato un’enorme quantità di dati, anche quando non è vero.
+
+### 7. L’equilibrio ottimale
+
+Il valore atteso della distribuzione a posteriori può essere riscritto come:
+
+$$
+E[\theta \mid D] =
+\frac{\alpha+\beta}{\alpha+\beta+n} \underbrace{\frac{\alpha}{\alpha+\beta}}*{\text{media a priori}} +
+\frac{n}{\alpha+\beta+n} \underbrace{\frac{y}{n}}*{\text{media dei dati}}.
+$$
+
+È una *media ponderata* tra ciò che pensavamo prima e ciò che abbiamo osservato.
+I pesi dipendono dalla quantità di dati $n$ rispetto alla “forza” del prior $(\alpha+\beta)$:
+
+* con *molti dati*, il peso dei dati domina;
+* con *pochi dati*, la prior stabilizza e riduce l’incertezza.
+
+### 8. Analogia cognitiva
+
+È lo stesso meccanismo che usiamo nella vita quotidiana: quando abbiamo poche osservazioni, ci affidiamo molto alle nostre convinzioni iniziali; quando l’esperienza aumenta, le convinzioni si aggiornano e perdono peso.
+
+In psicologia, questo parallelo rende l’approccio bayesiano particolarmente intuitivo: la mente stessa sembra aggiornare le sue “prior” in modo simile a un sistema bayesiano.
+
+### 9. In sintesi
+
+* Il modello Beta–Binomiale è una *palestra concettuale* per capire l’inferenza bayesiana.
+* Mostra chiaramente *come i dati aggiornano le credenze*,
+  e *come la quantità di informazione controlla il peso del prior*.
+* È il miglior punto di partenza per comprendere modelli più complessi
+  (per esempio, regressioni binomiali o modelli gerarchici).
 
 ## Connessione tra intuizioni e teoria
 
-L’equilibrio tra ciò che crediamo *prima* (la distribuzione a priori) e ciò che osserviamo *dopo* (i dati) non è solo una metafora utile: è una vera e propria necessità matematica. Questo diventa evidente guardando al caso della distribuzione *Beta-Binomiale*, uno dei modelli più semplici e didattici.
+L’equilibrio tra *ciò che crediamo prima* (la distribuzione *a priori*) e *ciò che osserviamo dopo* (i dati) è il cuore dell’approccio bayesiano. Non si tratta solo di un compromesso filosofico: è un *meccanismo matematico preciso* che regola quanto i nuovi dati possono modificare le nostre convinzioni.
 
-Il valore atteso della distribuzione a posteriori può essere riscritto in questa forma:
+### 1. Come Bayes costruisce il compromesso
+
+Nel caso Beta–Binomiale, la media a posteriori può essere scritta come:
 
 $$
-\begin{aligned}
-\mathbb{E}_{\text{post}}[\theta] &= \frac{\alpha + y}{\alpha + \beta + n} \\[6pt]
-&= \underbrace{\frac{\alpha+\beta}{\alpha+\beta+n}}_{\text{peso del priore}} \cdot 
-\underbrace{\frac{\alpha}{\alpha+\beta}}_{\text{media a priori}}
-\;+\;
-\underbrace{\frac{n}{\alpha+\beta+n}}_{\text{peso dei dati}} \cdot 
-\underbrace{\frac{y}{n}}_{\text{media osservata}} .
-\end{aligned}
+E[\theta \mid D] =
+\frac{\alpha+\beta}{\alpha+\beta+n} \underbrace{\frac{\alpha}{\alpha+\beta}}*{\text{media a priori}} +
+\frac{n}{\alpha+\beta+n} \underbrace{\frac{y}{n}}*{\text{media osservata}} .
 $$
-Questa equazione ci mostra che il valore atteso a posteriori è sempre una *media ponderata* di due elementi:
 
-1. la *media a priori* ($\alpha/(\alpha+\beta)$), cioè ciò che pensavamo prima di raccogliere i dati;
-2. la *proporzione osservata* ($y/n$), cioè ciò che i dati suggeriscono.
+Questa formula ci dice tutto:
 
-I pesi che regolano il compromesso dipendono dal rapporto tra il numero di osservazioni $n$ e la somma $\alpha+\beta$ (che misura quanto “forte” è l’informazione contenuta nella prior).
+* la stima finale è *una media ponderata* tra la credenza iniziale e la proporzione osservata;
+* i *pesi* dipendono dalla forza della prior ($\alpha+\beta$) e dalla quantità di dati ($n$).
 
-* Se $n$ è molto grande, prevalgono i dati: la posteriori riflette quasi esclusivamente le osservazioni empiriche.
-* Se $n$ è piccolo, prevale la prior: la stima finale risente molto delle convinzioni iniziali.
+In altre parole:
+
+> la prior è come un insieme di “osservazioni immaginarie” che contano sempre meno man mano che accumuliamo dati reali.
+
+### 2. Un’analogia psicologica
+
+Immagina uno psicologo che osserva il comportamento di uno studente in un test di attenzione.
+
+* Se ha visto *centinaia di prove*, la sua valutazione si baserà quasi interamente sui dati empirici.
+* Se ha visto *solo poche risposte*, tenderà a fidarsi molto di più delle sue conoscenze pregresse (per esempio, “di solito questo studente è attento”).
+
+Il comportamento di Bayes è analogo: con pochi dati, la prior pesa molto; con molti dati, la prior “svanisce”.
+
+### 3. Lo shrinkage: una virtù, non un difetto
+
+Quando la quantità di informazione è bassa o rumorosa, le stime classiche tendono a *sovrastimare* l’effetto osservato.
+È il fenomeno chiamato *winner’s curse*: i risultati più “eclatanti” in piccoli campioni sono spesso esagerati.
+
+Un prior informativo — ad esempio su $\beta/s$, il rapporto segnale/rumore — introduce un *effetto di contrazione* (*shrinkage*):
+spinge le stime verso 0 (o verso il valore medio atteso) quando i dati sono deboli, ma lascia libertà quando i dati sono solidi.
+
+In termini pratici:
+
+| Situazione             | Effetto sullo shrinkage   | Interpretazione           |
+| ---------------------- | ------------------------- | ------------------------- |
+| Pochi dati o SNR basso | Forte contrazione verso 0 | “Meglio essere prudenti”  |
+| Molti dati o SNR alto  | Contrazione minima        | “Lasciamo parlare i dati” |
+
+Questo meccanismo *riduce le sovrastime* e *migliora la replicabilità* — due problemi centrali nella psicologia empirica contemporanea.
+
+### 4. Un esempio intuitivo
+
+Supponiamo che in un piccolo studio un intervento mostri una riduzione dell’ansia di 0.8 deviazioni standard ($z = 2$).
+Se lo studio è piccolo e il rumore alto, un prior informativo su $\beta/s$ (ad esempio Cauchy(0,1)) ridurrà la stima verso circa 0.6.
+Non è “sfiducia” nei dati, ma *correzione sistematica per la variabilità attesa*.
+
+Se invece osserviamo lo stesso effetto in uno studio con campione molto grande, il prior praticamente non interviene: la stima resta vicina a 0.8.
+
+### 5. Effetto del prior come funzione dei dati
+
+L’effetto della prior non è fisso:
+cresce quando i dati sono incerti, diminuisce quando la verosimiglianza è stretta.
+Questo è un tratto distintivo dell’approccio bayesiano rispetto a quello classico, dove il peso dei dati è “tutto o nulla”.
+
+In Bayes, il peso del prior si adatta automaticamente alla quantità di informazione disponibile:
+una forma di *“intelligenza statistica”* che riduce errori di tipo M (errori di magnitudo) e produce inferenze più stabili.
+
+### 6. Una visione cognitiva dell’inferenza bayesiana
+
+Dal punto di vista psicologico, il comportamento del modello bayesiano rispecchia bene i processi di apprendimento umano:
+
+* *Incertezza iniziale alta →* forte influenza delle credenze precedenti.
+* *Esperienza crescente →* maggiore fiducia nei dati.
+* *Rumore elevato →* tendenza a restare cauti (shrinkage).
+
+Questo parallelo con i modelli cognitivi rende il bayesianesimo non solo un metodo statistico, ma anche una *metafora del pensiero inferenziale umano*.
+
+### 7. Messaggio da portare a casa
+
+> L’approccio bayesiano non sceglie tra prior e dati:
+> li combina in modo adattivo e coerente con la quantità di informazione disponibile.
+
+Con pochi dati, la prior guida; con molti, i dati prevalgono.
+Il risultato non è mai una “distorzione”, ma un *bilanciamento razionale* tra conoscenza e osservazione. In psicologia, questo è esattamente ciò che serve per affrontare la variabilità, la scarsità di dati e la complessità dei fenomeni mentali.
 
 
-### Un’analogia psicologica
-
-Pensiamo a uno psicologo che vuole stimare la probabilità che uno studente ricordi correttamente un concetto dopo una lezione.
-
-* Se ha già osservato *centinaia di risposte* di quello studente, i dati domineranno l’inferenza, e la sua idea iniziale (la prior) conterà poco.
-* Se invece ha visto solo *poche risposte*, tenderà ad affidarsi molto di più alle convinzioni iniziali (per esempio, che lo studente abbia in generale una buona memoria).
 
 
-### Come scegliere i parametri
 
-* Se vogliamo esprimere *completa incertezza*, possiamo usare $\alpha = \beta = 1$, che assegna la stessa probabilità a tutti i valori possibili di $\theta$ (da 0 a 1).
-* Se abbiamo *informazioni pregresse* (es. da studi precedenti o da esperienza clinica), scegliamo $\alpha/(\alpha+\beta)$ in modo che coincida con il valore atteso a priori desiderato.
-* La quantità $\alpha+\beta$ regola invece “quanto ci crediamo”: più è grande, più dati serviranno per spostare la nostra convinzione iniziale.
 
-In sintesi, questa formulazione mostra in modo chiaro che l’approccio bayesiano è una combinazione bilanciata tra teoria e dati. Il risultato non è mai solo la nostra ipotesi iniziale, né solo l’evidenza empirica, ma un’integrazione delle due. Questo rende l’inferenza bayesiana particolarmente adatta alle scienze psicologiche, dove spesso lavoriamo con campioni piccoli e dove le conoscenze accumulate in precedenza sono preziose per guidare l’interpretazione dei dati.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## La distribuzione a priori
+
+La distribuzione a priori traduce in forma probabilistica le nostre aspettative plausibili riguardo a un fenomeno prima di osservare i dati. Più che un'opinione personale, essa costituisce una sintesi strutturata delle conoscenze disponibili, integrando risultati empirici consolidati, principi teorici, vincoli del dominio applicativo e regolarità metodologiche che intendiamo preservare, come l'esclusione di effetti di grandezza irrealistica in contesti con dati limitati.
+
+### Tre principi fondamentali
+
+1.  **Plausibilità pre-dati**  
+    La distribuzione a priori deve concentrare la massa probabilistica attorno a valori realistici, assegnando densità trascurabile a esiti implausibili. Per garantire robustezza, è preferibile operare su scale adimensionali (come $\beta/s$), immuni da arbitrii di misurazione.
+
+2.  **Trasparenza operativa**  
+    Ogni scelta priorica va esplicitata in modo chiaro, accompagnata da una giustificazione concisa — sia essa di natura teorica, empirica o metodologica — e convalidata mediante un *prior predictive check* per valutarne le implicazioni empiriche.
+
+3.  **Informatività bilanciata**  
+    In contesti psicologici, una prior “debole ma informativa” svolge un ruolo protettivo: riduce il rischio di stime estreme quando l’evidenza è ambigua (SNR basso), senza però opporre una resistenza significativa quando i dati forniscono un segnale chiaro e consistente ($|z|$ elevato).
+    
+
+::: {.callout-note title="Prior gerarchici e *partial pooling*"}
+Nei modelli gerarchici gli effetti specifici (p.es. soggetto, scuola, task) condividono informazione: 
+$$
+\beta*j* \sim \mathcal{N}(\mu,\tau),\qquad \tau \sim \text{half-}t\nu(0,\sigma\_\tau).$$ 
+Questo produce *shrinkage*: stime estreme si avvicinano a (\mu) quando l’incertezza è alta. Scelte pratiche: 
+
+- $\tau \sim \text{half-}t_3(0, 0.5\text{–}1.5)$ su predittori/risposte standardizzati;
+- $\mu \sim \text{Normal}(0,1)$ (o prior su $\xi$) per coerenza di scala;
+- sempre *prior predictive check* a livello di gruppo e individuale.
+:::
+
+### Guida pratica alla scelta
+
+1. **Identifica la scala e i suoi vincoli**  
+   Inizia chiedendoti: qual è l'unità di misura del parametro? Esistono limiti naturali (ad esempio, ≥0 per una deviazione standard, [0,1] per una probabilità)? È possibile trasformarlo in una scala adimensionale, come il rapporto segnale-rumore?
+
+2. **Stima l'ordine di grandezza plausibile**  
+   Quale intervallo di valori ha un senso sostantivo per il tuo fenomeno?  
+   *Esempio concreto:* se la variabile dipendente ha una deviazione standard di circa 1, allora effetti di regressione con $|\beta|$ compreso tra 1 e 2 possono già essere considerati di entità sostanziale.
+
+3. **Attingi alla letteratura consolidata**  
+   Meta-analisi e studi precedenti forniscono un prezioso punto di riferimento. Utilizzale per ancorare la tua distribuzione a priori a intervalli di valori empiricamente plausibili, riducendo l'arbitrarietà della scelta.
+
+4. **Calibra con cura il grado di informatività**  
+   Decidi quanto "peso" assegnare all'ipotesi di assenza di effetto. Distribuzioni a code pesanti, come la $t$ di Student, offrono un buon compromesso, permettendo di regolarizzare le stime senza escludere la possibilità di effetti inattesi e di grande entità.
+
+> **Regola empirica:** in assenza di una solida letteratura pregressa, la scelta più sicura è spesso una *distribuzione $t$ (o una Cauchy) sul rapporto $\beta/s$*. Questa scelta applica una regolarizzazione *adattiva*, che corregge le sovrastime quando l'evidenza è ambigua, senza però soffocare i segnali forti e ben supportati dai dati.
+
+#### Priori nei GLM: la scala del link è fondamentale
+
+Nei modelli lineari generalizzati (GLM), è fondamentale specificare la distribuzione a priori *sulla scala del link* (logit, log, identità, ecc.), non sulla scala della risposta. Ecco alcune scelte robuste, particolarmente indicate in un contesto didattico:
+
+- **Regressione logistica (link logit):**  
+  $\beta_{\text{logit}} \sim \text{Normal}(0, 2.5)$ oppure $\text{Student-}t_3(0, 2.5)$  
+  *Nota:* questa scelta è appropriata quando i predittori sono standardizzati. In alternativa, per una soluzione più generale, specifica la prior sulla quantità adimensionale $\xi = \beta/s$.
+
+- **Modelli di conteggio (link logaritmico):**  
+  $\beta_{\text{log}} \sim \text{Normal}(0, 1)$  
+  *Nota:* assume che i predittori siano standardizzati. Una prior così specificata implica che un cambiamento di una deviazione standard in un predittore è associato a una variazione moltiplicativa moderata nel conteggio atteso.
+
+**Raccomandazione essenziale:** collega sempre la scelta della scala del link alla sua plausibilità nello spazio osservabile dei dati, utilizzando sistematicamente un *prior predictive check*. Questo passaggio ti permette di verificare che, sotto la prior specificata, le simulazioni producano risultati (es. probabilità, conteggi) realistici per il tuo dominio di ricerca.
+
+### Verifica fondamentale: *Prior Predictive Check*
+
+Prima di analizzare i dati reali, immagina di generare un mondo possibile basato esclusivamente sulle tue assunzioni a priori: "Quali dati potrei ragionevolmente osservare se le mie distribuzioni a priori rispecchiassero la realtà?" Questo esercizio di simulazione, chiamato "prior predictive check", ti aiuta a verificare che le tue scelte probabilistiche siano coerenti con la conoscenza empirica del dominio psicologico in esame.
+
+Attraverso questa procedura, puoi:
+
+- individuare specificazioni problematiche che assegnano probabilità eccessiva a valori di parametro irrealistici;
+- valutare la coerenza sostanziale tra le tue assunzioni iniziali e le regolarità osservate nella letteratura;
+- scartare specificazioni che genererebbero pattern di dati incompatibili con l'esperienza consolidata.
+
+Esempio applicativo: modello normale con media $\mu$ (incognita) e deviazione standard nota $\sigma=1$.
+
+```{r}
+set.seed(1)
+n <- 30                    # dimensione del campione
+mu_prior_sd <- 1.0         # dispersione a priori per la media
+S <- 2000                  # numero di simulazioni
+
+# Campionamento dei valori della media dalla distribuzione a priori
+mu_samp <- rnorm(S, mean = 0, sd = mu_prior_sd)
+
+# Simulazione dei dati: per ogni mu, genera un campione e calcola la media
+ybar_rep <- sapply(mu_samp, function(m) mean(rnorm(n, mean = m, sd = 1)))
+
+# Intervallo di credibilità predittivo al 95%
+quantile(ybar_rep, c(.025, 0.5, .975))
+```
+
+**Interpretazione dei risultati:** con un campione di $n=30$ e $\sigma=1$, una distribuzione a priori $\mu \sim \text{Normal}(0,1)$ genera medie campionarie per lo più comprese tra -0.7 e 0.7. Se il tuo fenomeno di studio tipicamente produce effetti con medie attorno a $\pm 1.5$ (ad esempio, differenze standardizzate di media entità), questa prior potrebbe essere *troppo restrittiva*. In tal caso, considera di aumentare la dispersione a priori (`mu_prior_sd`) per adattarla all'ampiezza degli effetti suggeriti dalla letteratura.
+
+### Errori comuni da evitare
+
+- **L'illusione della neutralità:** le distribuzioni uniformi sono spesso scelte nella convinzione che siano "oggettive" o "neutrali". In realtà, non sono invarianti rispetto alle trasformazioni di scala (ad esempio, passando da una scala lineare a una logaritmica) e tendono a concentrare la massa probabilistica in regioni di parametri del tutto implausibili per il fenomeno in esame.
+
+- **Incoerenza con la realtà empirica:** specificare distribuzioni a priori che assegnano una probabilità non trascurabile a esiti impossibili (come tempi di reazione negativi o probabilità al di fuori dell'intervallo [0,1]) mina la credibilità dell'intero modello. La prior deve sempre rispettare i vincoli naturali del dominio di ricerca.
+
+- **Asimmetrie concettualmente ingiustificate:** se l'interpretazione dei risultati cambia radicalmente semplicemente ricodificando una variabile (per esempio, scambiando i livelli A e B di un fattore), ciò indica che la distribuzione a priori non è stata definita su una scala appropriata (per esempio, una scala adimensionale o di link). Le inferenze dovrebbero essere sostanzialmente invarianti rispetto a tali scelte puramente operative.
+
+### Trasparenza metodologica
+
+- [ ] Scala del parametro chiaramente specificata.
+- [ ] Giustificazione concisa della scelta (letteratura, plausibilità).
+- [ ] Prior predictive check* con statistiche rilevanti.
+- [ ] Analisi di sensibilità con prior alternative.
+
+## Tipologie di distribuzioni a priori
+
+Una distribuzione a priori ben specificata tiene conto di tre elementi fondamentali:
+
+1. la **scala del parametro** (illimitata, positiva, o compresa tra 0 e 1?);
+2. il **contesto psicologico** (effetti di grande entità sono plausibili? Esistono limiti teorici?);
+3. la **quantità di informazione disponibile** (campione ampio o ridotto?).
+
+Esaminiamo le quattro categorie principali.
+
+### 1. Priori non informative
+
+**Scopo:** minimizzare l'influenza delle convinzioni preesistenti e lasciare che sia l'evidenza empirica a guidare completamente l'inferenza.
+
+**Esempio psicologico:**
+immagina di voler indagare per la prima volta la relazione tra l'arousal fisiologico e i pensieri intrusivi. In assenza di letteratura pregressa, potresti adottare una prior uniforme che considera tutte le correlazioni come ugualmente probabili:
+$$
+\rho \sim \text{Uniform}(-1, 1)
+$$
+
+**Avvertenza:**
+il termine "non informativa" può essere fuorviante: una prior uniforme su una scala non è necessariamente uniforme su un'altra (ad esempio, una trasformazione non lineare). In psicologia, questo approccio rischia inoltre di attribuire probabilità non trascurabili a valori estremi che, nella realtà dei fenomeni mentali, si manifestano raramente.
+
+### 2. Priori debolmente informative
+
+**Scopo:** imporre dei vincoli di plausibilità di buon senso, evitando stime irrealistiche senza però precludere ai dati di esprimersi.
+
+**Esempio:** in uno studio sull'efficacia di un breve intervento di mindfulness per l'ansia, ci si aspetta un effetto positivo ma contenuto. Una prior debolmente informativa potrebbe essere:
+$$
+\beta \sim \text{Normal}(0, 1)
+$$
+Questa scelta comunica: "riteniamo più probabile un effetto nullo o modesto, ma non escludiamo del tutto effetti più sostanziali ($|\beta| \approx 2$), se i dati li supporteranno chiaramente".
+
+**Vantaggio:** funge da stabilizzatore statistico, soprattutto in campioni piccoli, prevenendo la sovrastima di effetti spurii dovuta al rumore campionario.
+
+### 3. Priori informative
+
+**Scopo:** incorporare esplicitamente evidenze consolidate derivate da studi precedenti, meta-analisi o conoscenza teorica.
+
+**Esempio:** Una solida meta-analisi indica che la terapia cognitivo-comportamentale produce una riduzione media dei sintomi depressivi pari a $d = 0.5$. Possiamo formalizzare questa conoscenza come:
+$$
+\beta \sim \text{Normal}(0.5, 0.2)
+$$
+Questa distribuzione esprime una convinzione ragionevolmente forte intorno al valore atteso, pur ammettendo un margine di incertezza.
+
+**Vantaggio:** nei campioni di piccole dimensioni, questa strategia sfrutta la saggezza cumulata della letteratura per produrre stime più robuste e generalizzabili.
+
+### 4. Priori empiriche (o da corpus)
+
+**Scopo:** calibrare la distribuzione a priori direttamente sui dati quantitativi di un insieme di studi affini, creando un valore predefinito basato sull'evidenza per un determinato dominio di ricerca.
+
+**Esempio:** analizzando la distribuzione degli z-score ($z = b/s$) riportati in decine di studi che utilizzano l'*Experience Sampling Method* (ESM), è possibile stimare una distribuzione empirica che rappresenti il tipico rapporto segnale-rumore in questo ambito. Questa distribuzione diventa quindi una prior informata dai dati per un nuovo studio ESM.
+
+**Prossimi passi:** esploreremo questo approccio nella sezione successiva, mostrando come costruire prior di default specifiche per diversi ambiti (ad esempio, modelli di apprendimento per rinforzo o compiti cognitivi computerizzati).
+
+### Visualizzare le differenze
+
+Per apprezzare concretamente l'influenza delle diverse tipologie di prior sulle nostre assunzioni iniziali, è utile visualizzarne le forme a confronto. Il codice seguente traccia tre distribuzioni a priori per il coefficiente di regressione $\beta$, ciascuna rappresentativa di una delle categorie discusse in precedenza:
+
+*   **Uniforme** (non informativa),
+*   **Normale(0, 1)** (debolmente informativa),
+*   **Normale(0.5, 0.2)** (informativa).
+
+```{r, fig.width=7, fig.asp=0.5, out.width="100%"}
+beta_grid <- seq(-3, 3, length.out = 500)
+priors <- tibble(
+  beta = rep(beta_grid, 3),
+  tipo = rep(c("Uniforme", "Normal(0,1)", "Normal(0.5,0.2)"), each = length(beta_grid)),
+  dens = c(
+    dunif(beta_grid, -3, 3),
+    dnorm(beta_grid, 0, 1),
+    dnorm(beta_grid, 0.5, 0.2)
+  )
+)
+
+ggplot(priors, aes(x = beta, y = dens, color = tipo)) +
+  geom_line(linewidth = 1.2) +
+  labs(
+    title = "Confronto tra distribuzioni a priori per un coefficiente β",
+    x = expression(beta),
+    y = "Densità",
+    color = "Tipo di Prior"
+  ) +
+  theme(legend.position = "bottom")
+```
+
+**Interpretazione della figura:**
+
+*   La prior **uniforme** assegna densità costante a tutti i valori nell'intervallo, senza esprimere alcuna preferenza predefinita.
+*   La prior **Normal(0,1)** esprime uno *scetticismo moderato*, concentrando la probabilità attorno all'ipotesi di assenza di effetto ($\beta=0$), ma ammettendo una plausibilità non trascurabile per effetti di moderata entità.
+*   La prior **Normal(0.5,0.2)** incorpora un'**aspettativa precisa**, che l'effetto positivo di modesta entità ($\beta \approx 0.5$) sia il più plausibile e assegnando probabilità molto basse ai valori lontani da questo punto.
+
+### In sintesi
+
+| Tipo di prior              | Quando usarla                      | Vantaggi                   | Rischi / limiti                                                   |
+| -------------------------- | ---------------------------------- | -------------------------- | ----------------------------------------------------------------- |
+| **Non informativa**        | Nessuna conoscenza pregressa       | Lascia parlare i dati      | Instabile con campioni piccoli                                    |
+| **Debolmente informativa** | Effetti plausibili ma incerti      | Regolarizza, evita outlier | Può sembrare arbitraria                                           |
+| **Informativa**            | Evidenze forti da studi precedenti | Integra conoscenza teorica | Può “spingere” troppo la stima se i dati sono pochi o discordanti |
+
+## Priori informativi basati su *corpora* (scala SNR)
+
+### Il problema: perché servono approcci robusti
+
+In psicologia, la combinazione di campioni piccoli e misure intrinsecamente rumorose produce sistematicamente *sovrastime* degli effetti quando l'evidenza empirica è debole - un fenomeno noto come *winner's curse* o errore di tipo M. La soluzione pratica consiste nel costruire distribuzioni a priori di riferimento sulla *scala adimensionale* del rapporto segnale-rumore (SNR), definito come $\xi = \beta/s$. Questo approccio garantisce che le inferenze siano *comparabili* tra studi diversi e *invarianti* rispetto a cambiamenti nell'unità di misura.
+
+### La soluzione: una miscela di componenti
+
+@zwet2022proposal propongono l'uso di distribuzioni a priori informative basate su *corpora*, specificamente mediante miscele di distribuzioni. A scopo illustrativo, consideriamo una distribuzione a priori costituita da una *miscela simmetrica* di due componenti normali centrate sullo zero:
+
+* **Pesi** ($\pi_1, \pi_2$): rappresentano la proporzione relativa di effetti "piccoli" rispetto a quelli "più sostanziali" presenti in letteratura;
+* **Scale** ($\tau_1, \tau_2$): catturano l'ampiezza tipica degli effetti per ciascuna componente, espressa nella scala SNR.
+
+I *valori numerici* specifici (ad esempio, $\pi_1 = 0.6$, $\pi_2 = 0.4$, $\tau_1 = 0.7$, $\tau_2 = 4.0$) si ottengono mediante *calibrazione su un corpus di studi metodologicamente affini* — studi che condividono disegno sperimentale, outcome e scale di misura simili. Tecnicamente, si adatta una miscela di distribuzioni alla distribuzione osservata degli z-score ($z = b/s$) nella letteratura esistente.
+
+In sintesi, il corpus fornisce una stima empirica della frequenza e dell'ampiezza degli effetti in un determinato dominio di ricerca. Tale informazione funge da nostra distribuzione a priori di riferimento per $\beta/s$.
+
+### Esempio concreto: interpretazione del risultato
+
+Consideriamo uno studio che riporta una stima $b = 0.30$ con errore standard $s = 0.20$ ($z = 1.5$). Applicando la distribuzione a priori di riferimento descritta, la *stima regolarizzata* dell'effetto risulta approssimativamente:
+$$
+\hat{\beta}_{\text{reg}} \approx 0.22
+$$
+corrispondente a una *riduzione del 25-30%* rispetto alla stima classica di 0.30.
+
+**Interpretazione:** quando il segnale osservato è *debole* ($|z| \approx 1-2$), la prior "da corpus" *modera* la stima verso valori più plausibili, riducendo gli *errori di grandezza*. Al contrario, quando il segnale è *forte* ($|z|$ elevato), la regolarizzazione diventa trascurabile e prevale l'evidenza empirica.
+
+### Implementazione pratica (linee guida generali)
+
+1.  **Costruzione del corpus:** per l'area di interesse, si raccolgono dagli studi disponibili i valori di $z = b/s$, avendo cura di evitare duplicati e considerando la dipendenza tra outcome multipli.
+2.  **Stima della miscela:** si adatta una miscela di distribuzioni normali centrate sullo zero per determinare i *pesi* ($\pi$) e le *scale* ($\tau$) delle componenti.
+3.  **Applicazione della prior:** nel nuovo studio, lo z-score osservato viene *combinato automaticamente* con la miscela stimata, producendo una *regolarizzazione adattiva* — più intensa per segnali deboli, più lieve per segnali forti.
+
+### Vantaggi e ambiti di applicazione
+
+*   La scala *adimensionale* ($\beta/s$) assicura *coerenza metodologica* e *comparabilità* tra studi.
+*   *Mitiga gli errori di tipo M* in contesti con campioni limitati, rispettando pienamente l'evidenza quando l'informazione è abbondante.
+*   Particolarmente utile come *standard disciplinare* quando esiste un *corpus omogeneo* di studi su compiti e outcome simili.
+
+### Avvertenze metodologiche
+
+*   Il corpus deve essere *metodologicamente omogeneo* (stessi costrutti, disegni sperimentali, scale) e il più possibile *rappresentativo* (include repliche e registered reports, non solo risultati statisticamente significativi).
+*   La prior "da corpus" *non sostituisce* i *prior predictive check*: è necessario verificare sempre la compatibilità delle assunzioni con lo spazio dei dati osservabili.
+
+### Strategia in assenza di evidenza pregressa
+
+Quando non si dispone di un corpus consolidato (mancanza di meta-analisi rilevanti o studi sufficientemente analoghi), è raccomandabile adottare una *distribuzione a code pesanti* per lo SNR, come:
+$$
+\frac{\beta}{s} \sim \mathrm{Cauchy}(0, 1)
+$$
+
+La distribuzione di Cauchy presenta code più marcate rispetto alla Normale, implementando un profilo di regolarizzazione ottimale:
+
+- *regolarizzazione marcata* per effetti di modesta entità ($|z| < 2$);
+- *interferenza minima* per effetti sostanziali ($|z| > 3$).
+
+Questa caratteristica rende il Cauchy(0,1) un *prior di riferimento ideale* — offre robustezza metodologica, trasparenza operativa e funzionalità automatica senza richiedere specifiche personalizzate.
+
+### Nota pratica — Code pesanti sì, ma con giudizio
+
+La scelta $\xi \sim \text{Cauchy}(0,1)$ è un *default robusto*; in modelli complessi o con MCMC faticosi, valuta *troncamenti ragionevoli* (p.es. $\|\xi\|\le 10)$ o $t\_\nu$ con $\nu\in[3,7]$: proteggi dai valori estremi senza compromettere l’esplorazione.
+
+### Un piccolo esperimento R (shrinkage su $z$)
+
+Per visualizzare l’effetto dello *shrinkage*, confrontiamo la stima classica $b$ con quella shrinked $\hat{\beta}_{\text{shrink}}$ per diversi valori di $z$.
+
+```{r, fig.width=7, fig.asp=0.5, out.width="100%"}
+#| label: shrinkage-z
+#| fig-cap: "Effetto dello shrinkage sullo SNR per prior Normal su ξ con scale diverse."
+shrinkage <- function(z, tau) (tau^2 / (1 + tau^2)) * z
+
+z_grid <- seq(-5, 5, length.out = 200)
+tau1 <- 0.7
+tau2 <- 4.0
+
+data_sh <- tibble(
+  z = rep(z_grid, 2),
+  shrinked = c(shrinkage(z_grid, tau1), shrinkage(z_grid, tau2)),
+  prior = rep(c("Effetti piccoli (τ=0.7)", "Effetti grandi (τ=4.0)"), each = length(z_grid))
+)
+
+ggplot(data_sh, aes(x = z, y = shrinked, color = prior)) +
+  geom_line(linewidth = 1.1) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  labs(
+    title = "Effetto dello shrinkage sul rapporto segnale/rumore",
+    x = "z osservato (b/s)",
+    y = "z shrinked\n(posterior mean)"
+  ) +
+  theme(legend.position = "right")
+```
+
+**Interpretazione:**
+
+* la linea tratteggiata indica l’identità (nessuno shrinkage);
+* le linee colorate mostrano che, per $|z|$ piccoli, la stima viene “tirata” verso 0, ma per $|z|$ grandi converge alla linea nera → l’inferenza classica.
+
+### In sintesi
+
+Una prior "da corpus" sulla scala SNR implementa una *regola di regolarizzazione automatica e trasparente*: *protegge* dalle sovrastime quando l'evidenza è fragile, *preserva* il segnale quando l'evidenza è solida, e mantiene le inferenze *coerenti* attraverso il panorama della ricerca.
+
+| Situazione                    | Prior consigliata su $\beta/s$ | Effetto pratico               |
+| ----------------------------- | ------------------------------ | ----------------------------- |
+| Nessun corpus disponibile     | Cauchy(0,1)                    | Default robusto, heavy-tailed |
+| Corpus di studi simili        | Miscela simmetrica di Normali  | Shrinkage adattivo            |
+| Effetti noti molto piccoli    | Normal(0,1) o Normal(0,0.5)    | Riduce sovrastime             |
+| Effetti potenzialmente grandi | t₃(0,2) o Cauchy(0,2)          | Permette code più ampie       |
+
+## L’importanza della prior in base all'informazione disponibile
+
+L'influenza della distribuzione a priori non è costante, ma varia in modo dinamico in base a due fattori cruciali: la *quantità di dati* a disposizione e la loro *qualità informativa*. Questo rappresenta una delle differenze più evidenti rispetto all'approccio inferenziale classico.
+
+Quando disponiamo di dati abbondanti e precisi, la *verosimiglianza* domina il processo inferenziale: le stime finali risultano robuste rispetto a scelte prioriche ragionevolmente diverse. Al contrario, in situazioni di dati limitati o rumorosi — una condizione frequente nella ricerca psicologica — la prior acquisisce un peso decisivo, diventando, se ben specificata, uno strumento di *stabilizzazione benefica*.
+
+### Due scenari emblematici a confronto
+
+Consideriamo uno studio volto a valutare l'efficacia di un intervento di mindfulness sulla riduzione dello stress.
+
+1. **Campione di dimensioni ridotte:** 15 partecipanti, elevata variabilità individuale.
+   La stima del coefficiente è $b = -0.4$ con un errore standard $s = 0.3$.
+   → Il segnale è debole ($z = -1.33$): i dati, da soli, forniscono un'evidenza ambigua.
+   In questo contesto, una prior debolmente informativa (ad esempio, $\beta \sim \text{Normal}(0, 1)$) eserciterà una notevole regolarizzazione, attirando la stima verso lo zero e impedendo una sovrastima dell'efficacia dell'intervento.
+
+2. **Campione ampio:** 500 partecipanti, stessa stima puntuale.
+   In questo caso l'errore standard si riduce drasticamente ($s = 0.04$), portando a $z = -10$.
+   La verosimiglianza è ora estremamente concentrata e domina incontrastata: l'impatto della distribuzione a priori sulla stima finale diventa trascurabile, anche adottando prior differenti.
+
+Il principio fondamentale che emerge è tanto semplice quanto potente: *l'influenza della prior è inversamente proporzionale all'informazione contenuta nei dati*. Con dati ricchi e precisi, la prior perde rilevanza; con dati scarsi o ambigui, essa diventa un ingrediente essenziale per inferenze credibili e replicabili.
+
+### Mini-simulazione concettuale
+
+Nel codice seguente si mostra come la varianza della distribuzione a posteriori diminuisca con l’aumentare del numero di osservazioni, e come il “peso” del prior si riduca progressivamente.
+
+```{r, fig.width=7, fig.asp=0.5, out.width="100%"}
+# Parametri "veri"
+theta_true <- 0.6
+
+# Prior: Beta(2,2) - mediamente informativa (centrata su 0.5)
+alpha <- 2; beta <- 2
+
+# Tre campioni di diversa dimensione
+n_values <- c(10, 50, 500)
+
+# Inizializza una lista vuota per memorizzare i risultati
+posterior_list <- list()
+
+# Calcola le densità posteriori per ogni valore di n
+for (i in seq_along(n_values)) {
+  n <- n_values[i]
+  
+  # simuliamo dati binomiali (successi)
+  k <- round(theta_true * n)
+  
+  # posteriori Beta(a+k, b+n-k)
+  theta <- seq(0, 1, length.out = 400)
+  dens <- dbeta(theta, alpha + k, beta + n - k)
+  
+  # Aggiungi alla lista
+  posterior_list[[i]] <- data.frame(theta = theta, dens = dens, n = n)
+}
+
+# Combina tutti i dataframe in uno solo
+posterior_densities <- do.call(rbind, posterior_list)
+
+ggplot(posterior_densities, aes(x = theta, y = dens, color = factor(n))) +
+  geom_line(size = 1.2) +
+  labs(
+    title = "Effetto della numerosità campionaria\nsulla distribuzione a posteriori",
+    x = expression(theta),
+    y = "Densità",
+    color = "n (campione)"
+  ) +
+  theme(legend.position = "right")
+```
+
+**Interpretazione:**
+
+* con **n = 10**, la distribuzione a posteriori è larga: i dati contengono poca informazione e la prior (centrata su 0.5) “tira” leggermente la stima in quella direzione.
+* con **n = 50**, la posteriori è più concentrata: i dati iniziano a dominare.
+* con **n = 500**, la posteriori è stretta e centrata vicino a $\theta = 0.6$: la prior è ormai irrilevante.
+
+### Un'analogia con l'apprendimento umano
+
+Questo comportamento statistico trova un preciso riscontro nel modo in cui la conoscenza umana si evolve.
+
+- di fronte a esperienze limitate o ambigue, tendiamo a fare affidamento sulle nostre convinzioni preesistenti (prior cognitivi);
+- man mano che accumuliamo evidenze numerose e coerenti, le nostre convinzioni iniziali si aggiornano progressivamente, perdendo gradualmente la loro influenza relativa.
+
+L'inferenza bayesiana formalizza questo stesso principio: la distribuzione a priori incarna la conoscenza consolidata derivante dalla teoria e dalla letteratura, mentre i dati rappresentano la nuova evidenza empirica. Man mano che le osservazioni aumentano, le nostre conclusioni statistiche, proprio come le convinzioni personali, diventano sempre più fondate sull'evidenza fattuale, riducendo l'influenza delle assunzioni iniziali.
+
+### Regolarizzazione adattiva e rapporto segnale-rumore
+
+Il fenomeno di riduzione ("shrinkage") osservato in precedenza può essere interpretato chiaramente in questa cornice: quando il rapporto segnale-rumore (SNR) è basso, a causa di una ridotta numerosità campionaria o di un'elevata variabilità, la distribuzione a priori riduce l'ampiezza delle stime per evitare sovrastime sistematiche. Al contrario, quando l'SNR è elevato, la prior cede il passo all'evidenza empirica, interferendo in modo minimo con le stime. Questo meccanismo rappresenta un modo automatico e trasparente di mediare tra la conoscenza pregressa e le nuove osservazioni, ottimizzando il compromesso tra stabilità statistica e aderenza ai dati.
+
+### In sintesi
+
+| Situazione                      | Influenza del prior | Effetto pratico              | Analogia psicologica       |
+| ------------------------------- | ------------------- | ---------------------------- | -------------------------- |
+| Campione piccolo, dati rumorosi | Alta                | Stabilizza, evita sovrastime | Convinzioni iniziali forti |
+| Campione medio                  | Moderata            | Compromesso equilibrato      | Aggiornamento parziale     |
+| Campione grande                 | Bassa               | I dati dominano              | Conoscenza appresa         |
+
+## Trasformazioni e scala dei parametri
+
+Un aspetto cruciale, spesso sottovalutato, è che le distribuzioni a priori non sono invarianti rispetto alle trasformazioni di scala. Affermare di "utilizzare una distribuzione a priori uniforme" non significa non esprimere alcuna opinione preliminare: il comportamento della stessa distribuzione a priori può cambiare radicalmente se modifichiamo l'unità di misura o ricodifichiamo una variabile.
+
+### Un esempio concreto
+
+Consideriamo uno studio sulla soddisfazione lavorativa, misurata su una scala da 1 a 10. Un ricercatore potrebbe assegnare una prior uniforme all'effetto β, assumendo che tutti i valori compresi tra –10 e +10 abbiano la stessa probabilità.
+
+Supponiamo ora di ricodificare la variabile dipendente su una scala da 0 a 100. Se manteniamo la stessa prior uniforme senza adattarne i parametri, il suo impatto sull'inferenza cambia sostanzialmente: l'intervallo copre ora valori di ordine di grandezza superiore, rendendo la prior implicitamente molto più diffusa.
+
+La lezione è fondamentale: una distribuzione a priori non può essere "piatta" su tutte le scale contemporaneamente. Essa è "piatta" solo rispetto alla scala specifica sulla quale è stata definita.
+
+### Perché la scala è cruciale in psicologia?
+
+Numerosi parametri nei modelli psicologici, come le differenze tra le medie, i coefficienti di regressione o i loadings fattoriali, dipendono intrinsecamente dalla scala di misura del costrutto. Un coefficiente $\beta = 0.5$ assume significati diversi a seconda che la variabile sia espressa in punti grezzi, in punteggi z o in percentili. Per questo motivo, quando possibile, è preferibile specificare le prior su quantità adimensionali, come:
+
+- il rapporto segnale-rumore $\beta/s$;
+- coefficienti standardizzati, espressi in unità di deviazione standard.
+
+Queste grandezze sono direttamente confrontabili tra studi diversi e rimangono invariate al variare della scala di misura.
+
+### Illustrazione mediante un esempio
+
+Supponiamo di osservare un effetto $b = 4$ con errore standard $s = 2$ su una scala da 0 a 10. Se riscaliamo la variabile a 0–100 (moltiplicando tutto per 10), otteniamo $b' = 40$ e $s' = 20$. Lo *z-score* rimane identico:
+
+$$
+z = \frac{b}{s} = \frac{4}{2} = 2, \quad
+z' = \frac{b'}{s'} = \frac{40}{20} = 2.
+$$
+
+**Conclusione:**
+
+- se la prior è definita su $\beta/s$ (SNR), l'inferenza bayesiana rimane *invariante*;
+- se invece utilizziamo una prior uniforme definita direttamente su $\beta$, i risultati cambiano drasticamente, poiché il supporto e la densità della prior non si adattano automaticamente alla nuova scala.
+
+### Visualizzazione dell'effetto
+
+```{r, fig.width=7, fig.asp=0.5, out.width="100%"}
+# Likelihood su due scale (0–10 e 0–100)
+b <- 4; s <- 2; a <- 10
+grid1 <- seq(-20, 20, length.out = 1000)
+grid2 <- seq(-200, 200, length.out = 1000)
+
+like1 <- dnorm(grid1, mean = b, sd = s)
+like2 <- dnorm(grid2, mean = a*b, sd = a*s)
+
+# Uniforme e Cauchy su β/s
+prior_unif1 <- dunif(grid1, -20, 20)
+prior_unif2 <- dunif(grid2, -200, 200)
+prior_cauchy1 <- dcauchy(grid1 / s)
+prior_cauchy2 <- dcauchy(grid2 / (a*s))
+
+tibble(
+  beta = c(grid1, grid2/a),
+  density = c(like1 * prior_unif1, like2 * prior_unif2),
+  prior = rep(c("Uniforme (cambiata di scala)", "Uniforme (non cambiata)"), each = length(grid1))
+) |>
+  ggplot(aes(x = beta, y = density, color = prior)) +
+  geom_line(size = 1.1) +
+  labs(
+    title = "Effetto del cambio di scala su una prior uniforme",
+    x = expression(beta),
+    y = "Densità (likelihood × prior)"
+  ) +
+  theme(legend.position = "top")
+```
+
+**Osservazione:**
+
+- quando la prior viene *trasformata coerentemente* con il cambio di scala, l'inferenza bayesiana produce risultati invarianti;
+- se la prior non viene adattata, il risultato dell'inferenza si modifica: la stima puntuale e l'incertezza associata cambiano in modo sostanziale.
+
+### L'approccio metodologicamente corretto: priorità alle quantità adimensionali.
+
+Per garantire coerenza e comparabilità tra studi che utilizzano scale di misura diverse, è fondamentale adottare il seguente approccio:
+
+1.  specificare la prior sul rapporto segnale-rumore: definire la distribuzione a priori direttamente sulla quantità adimensionale $\beta/s$, anziché sul parametro $\beta$ nella sua scala originaria;
+2.  utilizzare distribuzioni simmetriche, come la normale con media 0 e deviazione standard 1, la t di Student con $\nu$ piccolo (es. 3-7) o la Cauchy con media 0 e deviazione standard 1;
+3.  assumere l'indipendenza dalla scala: considerare $\beta/s$ come indipendente, o almeno non sistematicamente correlato, con $s$. Ciò garantisce che l'inferenza sia robusta rispetto a cambiamenti di scala o all'inversione del contrasto.
+
+Questo approccio garantisce che operazioni apparentemente innocue, come l'inversione della codifica di un contrasto (per esempio, passare da "condizione sperimentale vs. controllo" a "controllo vs. condizione sperimentale"), producano un semplice cambio di segno nella stima dell'effetto senza alterare la sostanza delle conclusioni inferenziali o la loro incertezza.
+
+### In sintesi
+
+| Tipo di trasformazione | Esempio                   | Effetto su una prior uniforme | Effetto su una prior su β/s |
+| ---------------------- | ------------------------- | ----------------------------- | --------------------------- |
+| Cambio unità           | 0–10 → 0–100              | Cambia la forma e la densità  | Nessuna differenza          |
+| Inversione segno       | A–B → B–A                 | Cambia il centro della prior  | Solo inversione del segno   |
+| Standardizzazione      | Punteggi grezzi → z-score | Cambia la scala numerica      | Nessuna differenza          |
+
+**Sintesi conclusiva:**
+
+- le distribuzioni a priori non possiedono una "neutralità" intrinseca: acquisiscono un significato sostantivo solo quando definite *su una scala in cui il parametro risulta psicologicamente interpretabile*;
+- l'utilizzo di scale adimensionali o standardizzate (come il rapporto $\beta/s$) conferisce alle inferenze le proprietà essenziali di *robustezza metodologica, coerenza interna e comparabilità* attraverso differenti contesti di ricerca.
+
+### Esempio in R: prior uniforme e cambio di scala
+
+Il seguente esperimento mostra che una *prior uniforme su $\beta$* non è invariante al cambio di scala, mentre una *prior definita su $\beta/s$* (cioè sullo SNR) produce la stessa inferenza anche se cambiamo unità di misura.
+
+Immaginiamo di stimare un effetto $b=4$ con errore standard $s=2$ su una scala 0–10,
+e di ricodificare poi tutto su una scala 0–100 (cioè moltiplicando per 10).
+
+### Passo 1 – Impostazione
+
+```{r}
+# Stima e incertezza (scala 0–10)
+b <- 4; s <- 2
+# Fattore di riscalamento: da 0–10 → 0–100
+a <- 10
+b2 <- a * b; s2 <- a * s
+
+# Griglie dei possibili valori di β nelle due scale
+grid1 <- seq(-20, 20, length.out = 1001)
+grid2 <- seq(-200, 200, length.out = 1001)
+
+# Likelihood in ciascuna scala
+like1 <- dnorm(grid1, mean = b,  sd = s)
+like2 <- dnorm(grid2, mean = b2, sd = s2)
+```
+
+### Passo 2 – Prior e posteriori
+
+```{r}
+# (A) Prior uniforme su β (non invariante)
+prior_unif1 <- rep(1/length(grid1), length(grid1))
+prior_unif2 <- rep(1/length(grid2), length(grid2))
+
+post_unif1 <- like1 * prior_unif1; post_unif1 <- post_unif1 / sum(post_unif1)
+post_unif2 <- like2 * prior_unif2; post_unif2 <- post_unif2 / sum(post_unif2)
+
+# (B) Prior Cauchy su β/s (invariante)
+prior_cauchy1 <- dcauchy(grid1 / s) / s
+prior_cauchy2 <- dcauchy(grid2 / s2) / s2
+
+post_cauchy1 <- like1 * prior_cauchy1; post_cauchy1 <- post_cauchy1 / sum(post_cauchy1)
+post_cauchy2 <- like2 * prior_cauchy2; post_cauchy2 <- post_cauchy2 / sum(post_cauchy2)
+```
+
+### Passo 3 – Confronto delle medie a posteriori
+
+```{r}
+# Medie posteriori (riportate alla scala originale)
+m_unif1 <- sum(grid1 * post_unif1)
+m_unif2 <- sum(grid2 * post_unif2) / a
+m_cauchy1 <- sum(grid1 * post_cauchy1)
+m_cauchy2 <- sum(grid2 * post_cauchy2) / a
+
+tibble(
+  Prior = c("Uniforme su β", "Cauchy su β/s"),
+  Media_orig = c(m_unif1, m_cauchy1),
+  Media_rescaled = c(m_unif2, m_cauchy2)
+)
+```
+
+### Cosa osservare
+
+| Prior             | Media (scala 0–10) | Media dopo rescaling (riportata a 0–10) | Conclusione                     |
+| ----------------- | ------------------ | --------------------------------------- | ------------------------------- |
+| **Uniforme su β** | cambia             | cambia sensibilmente                    | L’inferenza dipende dalla scala |
+| **Cauchy su β/s** | coincide           | coincide                                | L’inferenza è invariata         |
+
+### Messaggio conclusivo
+
+* La prior *uniforme* sembra “neutra”, ma in realtà cambia con l’unità di misura.
+* La prior *su $\beta/s$*, invece, è *equivariante*: lo stesso risultato vale qualunque sia la scala o la ricodifica lineare usata.
+
+In pratica, *definire la prior sul rapporto segnale/rumore* garantisce risultati coerenti, confrontabili e indipendenti da convenzioni arbitrarie di scala.
+
+## Priors nel flusso di lavoro moderno: principi pratici essenziali
+
+Storicamente, la scelta delle distribuzioni a priori è stata spesso dettata più da esigenze di calcolabilità che da considerazioni sostanziali, privilegiando forme "congiunte" che consentissero soluzioni analitiche. Oggi, gli algoritmi computazionali moderni, come HMC/MCMC, hanno rivoluzionato questa pratica, consentendoci di definire prior che riflettano la plausibilità del fenomeno studiato, piuttosto che la convenienza matematica. Questo cambiamento epistemologico sposta l'attenzione dalla ricerca di una famiglia di distribuzioni "chiusa" all'identificazione della scala concettualmente appropriata e dalla trattabilità analitica alla coerenza sostanziale.
+
+Nella pratica operativa, tre principi fondamentali guidano le scelte.
+
+1. La scala è prioritaria: le inferenze devono essere robuste rispetto a scelte arbitrarie di codifica o di unità di misura. Pertanto, è preferibile definire la prior su quantità adimensionali, come il rapporto segnale-rumore ($\xi=\beta/s$). Su questa scala, una distribuzione simmetrica e a code pesanti (come la Cauchy o la t con pochi gradi di libertà) realizza una "regolarizzazione adattiva": mitiga le sovrastime quando l'evidenza è debole, mentre interferisce minimamente con le stime ben supportate dai dati. Nei GLM, è cruciale ricordare che la prior opera sulla scala del link (logit, log, identità, ecc.). La standardizzazione dei predittori facilita l'interpretazione immediata delle ipotesi e rende i risultati più facilmente confrontabili.
+
+2. Default robusti, ma dichiarati. Quando non si dispone di un corpus solido, è necessario fare scelte di buon senso, esplicite e difendibili. Una prior heavy-tailed su (Cauchy(0,1) o $t_{\nu}(0,1)$ con $\nu \in \{3,7\}$ è un buon punto di partenza; per i coefficienti logit dei predittori standardizzati, una Normal(0, 2.5) funziona bene, mentre per i link log, una Normal(0, 1) mantiene effetti ragionevoli. Nei modelli gerarchici, scale come la half-t moderata producono il parziale pooling desiderabile: gli estremi sono attenuati quando l’incertezza è alta e le differenze sono preservate quando l’evidenza è presente.
+
+3. Verifiche predittive e sensibilità: l'ABC della trasparenza. Prima di analizzare i dati, è opportuno porsi la seguente domanda: "Con queste prior, che mondo genererei?". Il prior predictive check risponde esattamente a questa domanda e smaschera le specificazioni che producono dati implausibili. Dopo l'analisi, una rapida analisi di sensibilità (una prior un po' più stretta, una un po' più larga) chiarisce quanto le conclusioni dipendano dalle ipotesi iniziali. Non si tratta di un orpello metodologico, ma di ciò che rende il lavoro replicabile e comunicabile.
+
+In sintesi, le distribuzioni coniugate conservano un valore essenzialmente didattico per la comprensione dei meccanismi formali dell'inferenza bayesiana. Nella pratica metodologica contemporanea, l'approccio si è evoluto verso principi operativi distinti, che non richiedono la restrizione alle famiglie coniugate. Tali principi si articolano secondo una precisa gerarchia operativa: la preferenza per scale adimensionali, ove sostenibile dalla natura del costrutto; l'impiego di distribuzioni a code pesanti per implementare una regolarizzazione conservativa; e l'adozione sistematica di verifiche predittive come requisito minimo di trasparenza metodologica.
+
 
 
 ## Conflitto tra prior e verosimiglianza
 
-Consideriamo un esempio discusso da McElreath, che mette in luce un punto importante: anche in situazioni semplici, la combinazione tra distribuzione a priori e verosimiglianza può produrre risultati poco intuitivi.
+Finora abbiamo visto come la distribuzione a priori e la verosimiglianza si combinano armoniosamente per produrre la posterior. Ma cosa succede quando non sono d’accordo? Quando cioè la prior assegna alta probabilità a una regione del parametro, mentre i dati “spingono” da un’altra parte?
 
-> Lesson: Don't trust intuition, for even simple prior+likelihood scenarios defy it. Four examples below, each producing radically different posteriors. Can you guess what each does?
+Questo tipo di conflitto è molto istruttivo: mostra fino a che punto il modello è coerente con le nostre ipotesi e quanta “resistenza” offrono i dati nel modificarle.
 
-Nella prima figura McElreath invita a riflettere su quattro diversi casi:
+### 1. Il problema dell’intuizione
+
+Il punto centrale, come sottolinea McElreath, è che non possiamo fidarci dell’intuizione: anche combinazioni semplici di prior e likelihood possono produrre posteriori molto diverse da come ce le aspetteremmo.
+
+Per illustrare questo, McElreath propone quattro piccoli esperimenti mentali, riportati in queste due figure.
 
 ![](../../figures/mcelreath_post_1.png){width="80%"}
 
-Nella seconda figura mostra i risultati effettivi delle combinazioni di prior e likelihood:
+Nella prima figura si vedono quattro coppie di prior e likelihood: in apparenza simili, ma con esiti molto diversi. La seconda figura mostra le corrispondenti posteriori risultanti.
 
 ![](../../figures/mcelreath_post_2.png){width="80%"}
 
-L’idea centrale è confrontare il comportamento della distribuzione normale (con code sottili) e della distribuzione di Student-t con 2 gradi di libertà (con code molto più spesse). Le code indicano quanto la distribuzione attribuisce ancora una certa plausibilità a valori estremi.
+### 2. I quattro scenari a confronto
 
-1. *In Alto a Sinistra: Prior Normale, Likelihood Normale*
+#### (A) Prior Normale, Likelihood Normale — il caso “armonioso”
 
-   - `y ~ Normal(mu,1)`
-   - `mu ~ Normal(10,1)`
+* $y \sim \text{Normal}(\mu,1)$
+* $\mu \sim \text{Normal}(10,1)$
 
-   Questo è lo scenario “classico”. La posteriori si colloca a metà strada tra prior e likelihood, bilanciando le due informazioni. L’aggiornamento è regolare e prevedibile: i dati spostano la nostra convinzione iniziale, ma senza sorprese.
+Qui prior e likelihood hanno la *stessa forma* (campane gaussiane) e lo *stesso grado di concentrazione*. Il risultato è prevedibile: la posterior si colloca *a metà strada* tra prior e dati, con una varianza ridotta. È la situazione ideale — quella che tutti immaginano quando pensano a Bayes come a un “compromesso”.
 
-2. *In Alto a Destra: Prior Student, Likelihood Student (df=2)*
+→ **Interpretazione psicologica:** i dati e la teoria “parlano la stessa lingua”. Le convinzioni si aggiornano senza attriti.
 
-   - `y ~ Student(2,mu,1)`
-   - `mu ~ Student(2,10,1)`
+#### (B) Prior Student-t, Likelihood Student-t — entrambi con code spesse
 
-   Qui entrambe le distribuzioni hanno code spesse. Ciò significa che attribuiscono alta plausibilità anche a valori molto lontani dal centro. Il risultato è che la posteriori diventa più incerta e “larga”, con un compromesso meno definito. Non esiste un punto centrale netto, ma piuttosto una distribuzione che riflette la forte apertura a valori estremi.
+* $y \sim \text{Student}(2,\mu,1)$
+* $\mu \sim \text{Student}(2,10,1)$
 
-3. *In Basso a Sinistra: Prior Student, Likelihood Normale*
+Le code spesse della distribuzione *t* attribuiscono **alta plausibilità anche a valori estremi**. Sia la prior che la likelihood “accettano” deviazioni grandi.
+La posterior è quindi ampia e incerta: non si concentra da nessuna parte, ma lascia aperte molte possibilità.
 
-   - `y ~ Normal(mu,1)`
-   - `mu ~ Student(2,10,1)`
+→ **Messaggio:** quando entrambe le fonti sono “tolleranti”, il risultato è una grande incertezza. Non è un errore: riflette davvero la debole informazione disponibile.
 
-   In questo caso, la likelihood normale (con code sottili) è molto rigida: penalizza i valori lontani. Il prior Student-t, invece, non è sorpreso da valori estremi. Il risultato è che la posteriori viene guidata soprattutto dalla likelihood normale, con un effetto limitato del prior.
+→ **Analogia psicologica:** se sia i dati sia le convinzioni teoriche sono vaghi, non possiamo pretendere una conclusione precisa.
 
-4. *In Basso a Destra: Prior Normale, Likelihood Student*
+#### (C) Prior Student-t, Likelihood Normale — prior “larga”, dati “stretti”
 
-   - `y ~ Student(2,mu,1)`
-   - `mu ~ Normal(10,1)`
-   
-   Qui accade l’opposto: il prior normale, con le sue code sottili, esercita un’influenza dominante. La likelihood Student-t, che accetterebbe valori estremi, viene “corretta” dal prior, che restringe la plausibilità attorno al proprio centro.
+* $y \sim \text{Normal}(\mu,1)$
+* $\mu \sim \text{Student}(2,10,1)$
 
-In sintesi, questo esercizio mostra come il comportamento della posteriori dipenda in modo cruciale dalla forma relativa di prior e likelihood. Con prior e likelihood gaussiane, l’aggiornamento è intuitivo. Appena introduciamo distribuzioni con code spesse (Student-t), la dinamica cambia: a volte prevale la prior, a volte la likelihood, e il risultato può essere molto diverso da quello che ci aspetteremmo a intuito.
+La likelihood normale ha code sottili e penalizza molto i valori lontani.
+La prior t(2), invece, è aperta e lascia spazio a valori estremi.
 
-**Morale:** nell'analisi bayesiana non basta “affidarsi al buon senso”. Quando prior e likelihood hanno forme diverse, il risultato dell’aggiornamento può essere sorprendente. Per questo è sempre necessario eseguire i calcoli, non solo ragionare intuitivamente.
+Risultato: la *posterior* è dominata dai dati, perché la likelihood è molto più concentrata. Il prior, pur essendo heavy-tailed, conta poco.
 
+→ **Messaggio:** quando i dati sono precisi, la prior si adegua.
+Bayes “sa” che l’evidenza è forte.
+
+→ **Analogia psicologica:** è come quando osserviamo un effetto molto chiaro — la nostra convinzione iniziale si aggiorna facilmente, anche se era vaga.
+
+#### (D) Prior Normale, Likelihood Student-t — prior “stretta”, dati “rumorosi”
+
+* $y \sim \text{Student}(2,\mu,1)$
+* $\mu \sim \text{Normal}(10,1)$
+
+Questa è la situazione opposta alla precedente. La likelihood Student-t ha code spesse, cioè accetta anche osservazioni lontane, rumorose o anomale. La prior, invece, è rigida e “sfiduciata” verso i valori estremi. La *posterior* resta quindi vicina al centro della prior: i dati, pur ampi, non riescono a spostarla molto.
+
+→ **Messaggio:** una prior troppo stretta può **dominare** i dati, specialmente quando questi sono rumorosi.
+In pratica, l’analisi diventa “cieca” rispetto a deviazioni inaspettate.
+
+→ **Analogia psicologica:** è come quando uno schema teorico molto rigido impedisce di vedere risultati fuori dagli schemi.
+
+### 3. La lezione di fondo
+
+Questi esempi ci mostrano che il comportamento di Bayes **dipende dalla forma relativa** di prior e likelihood, non solo dai loro centri o medie.
+
+| Prior     | Likelihood | Esito                           | Diagnosi           |
+| --------- | ---------- | ------------------------------- | ------------------ |
+| Normale   | Normale    | Posterior regolare, prevedibile | equilibrio         |
+| Student-t | Student-t  | Posterior larga e incerta       | bassa informazione |
+| Student-t | Normale    | I dati vincono                  | dati forti         |
+| Normale   | Student-t  | Il prior domina                 | teoria rigida      |
+
+### 4. Implicazioni pratiche
+
+* Un **prior troppo stretto** può soffocare l’informazione dei dati.
+* Un **prior troppo vago** può rendere la stima inutilmente incerta.
+* Un **prior flessibile** (ad esempio heavy-tailed) offre un compromesso robusto: protegge dalle outlier, ma lascia spazio ai dati quando sono chiari.
+
+### 5. Morale per il ricercatore
+
+> Non basta “avere una prior”: bisogna verificarne la compatibilità con i dati.
+
+Questo è il senso delle **analisi di sensibilità** e dei **prior predictive checks**: vedere come le nostre assunzioni interagiscono con la verosimiglianza *prima* di guardare i risultati.
+
+Nel mondo psicologico, questo equivale a chiedersi: “Le mie aspettative teoriche e i dati che posso raccogliere sono coerenti tra loro?” Se la risposta è no, non è un fallimento — è una scoperta preziosa.
+
+## Limiti e buone pratiche
+
+L’uso delle distribuzioni *a priori* è uno degli aspetti più potenti — ma anche più delicati — dell’inferenza bayesiana. Come in ogni strumento potente, il rischio non è “sbagliare i conti”, ma *interpretare male* il significato delle scelte fatte. Questa sezione raccoglie alcune buone pratiche che aiutano a mantenere l’analisi rigorosa e trasparente.
+
+### 1. Costruire un corpus “onesto”
+
+Quando si usa un corpus di studi precedenti per definire un prior (ad esempio per l’SNR $\beta/s$), è essenziale che i dati di riferimento siano *rappresentativi* e *non distorti*:
+
+* includere repliche e *registered reports*, non solo studi pubblicati;
+* evitare la selezione dei soli risultati “positivi” (bias di pubblicazione);
+* documentare chiaramente da quali studi e con quali criteri è costruito il corpus.
+
+→ *In psicologia, un corpus ben costruito vale più di qualsiasi prior sofisticato.*
+Rende le analisi cumulative e riproducibili, invece di perpetuare stime gonfiate o inaffidabili.
+
+### 2. L’assunzione “s noto” e il suo ruolo pratico
+
+Nel costruire un prior sull’SNR, si assume spesso che l’errore standard $s$ sia noto o stimato con buona approssimazione. Questo è un compromesso utile, che permette di definire priors in termini di grandezze comparabili tra studi. Successivamente, il modello completo può rilassare questa ipotesi, trattando $s$ come parametro stimato.
+
+→ *Regola pratica:* trattare $s$ come “dato” è accettabile nella fase di costruzione del prior, ma non deve diventare un vincolo rigido nella modellazione successiva.
+
+### 3. Dipendenza dal numero di osservazioni
+
+Poiché l’errore standard $s$ dipende dal numero di casi $n$, il prior costruito sull’SNR è *indirettamente legato a $n$*. Questo significa che se si aggiornano i dati in più fasi (analisi sequenziale), il prior può non essere perfettamente coerente.
+
+→ *Soluzione pragmatica:* in psicologia, dove i campioni sono spesso piccoli, questa incoerenza è trascurabile rispetto ai vantaggi della regolarizzazione adattiva. Meglio un prior “pratico ma realistico” che una neutralità fittizia.
+
+### 4. Specificare chiaramente l’ambito del prior
+
+Un prior non è universale: vale solo all’interno di un *ambito concettuale e metodologico definito*. Ad esempio:
+
+* un prior per studi EMA sulla self-compassion non è adatto a esperimenti di decisione con rinforzo;
+* un prior per l’SNR in studi su tempi di reazione non è adatto per scale Likert.
+
+→ *Regola aurea:* indicare sempre *per cosa* è stato pensato un prior — tipo di disegno, variabile dipendente, scala di misura. Questo aumenta la trasparenza e previene inferenze fuori contesto.
+
+### 5. Verificare sempre la sensibilità
+
+Dopo aver specificato un prior, è fondamentale verificare *quanto i risultati dipendono da esso*:
+
+* confrontare la posterior con prior alternativi (più stretti, più larghi, o centrati altrove);
+* controllare come cambiano media e intervalli credibili;
+* discutere apertamente eventuali differenze.
+
+→ *In termini psicologici:* se la conclusione cambia drasticamente quando cambiamo prior, significa che i dati da soli non sono ancora convincenti. Questo è un risultato utile, non un errore.
+
+### 6. Prior heavy-tailed come default robusto
+
+In assenza di conoscenze pregresse solide, una prior *heavy-tailed* (ad esempio una Cauchy su $\beta/s$) rappresenta una scelta prudente:
+
+* protegge dalle sovrastime con pochi dati;
+* lascia che i dati dominino quando l’informazione cresce;
+* garantisce coerenza di scala tra studi diversi.
+
+→ *È il “default-del-default”:* una strategia di regolarizzazione semplice, comprensibile e applicabile in molti contesti psicologici.
+
+### 7. Pensare al prior come a un modello teorico
+
+Un buon prior non è solo una “forma di distribuzione”: è un’*ipotesi teorica esplicita*. Specificarlo significa dichiarare cosa riteniamo plausibile, e quanto siamo disposti a lasciarci sorprendere dai dati.
+
+→ *In psicologia questo è un vantaggio epistemologico:* i modelli diventano luoghi di dialogo tra teoria e dati, e le assunzioni non sono più implicite o nascoste nei test frequentisti.
+
+### In sintesi
+
+| Principio               | Cosa implica in pratica                      |
+| ----------------------- | -------------------------------------------- |
+| Corpus onesto           | Basi empiriche trasparenti                   |
+| $s$ trattato come noto  | Compromesso utile per costruire prior su SNR |
+| Dipendenza da $n$       | Incoerenza minima, vantaggio alto            |
+| Ambito definito         | Evita l’uso improprio del prior              |
+| Analisi di sensibilità  | Verifica della robustezza delle conclusioni  |
+| Prior heavy-tailed      | Default prudente e coerente                  |
+| Prior = modello teorico | Connessione esplicita tra ipotesi e dati     |
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-Il tema dell’equilibrio tra priori e dati tocca il cuore dell’approccio bayesiano. Una delle critiche più frequenti al bayesianesimo è che i risultati dipenderebbero “troppo” dai priori. Come abbiamo visto, questa affermazione è vera solo in parte: il peso relativo del prior e dei dati dipende dalla situazione.
+L’inferenza bayesiana non è un meccanismo automatico, ma un *dialogo tra teoria ed esperienza*. Ogni prior rappresenta un frammento di conoscenza accumulata — esplicita, criticabile e migliorabile — che i dati contribuiscono ad aggiornare.
 
-Con pochi dati, i priori hanno un’influenza maggiore, ed è giusto che sia così: in condizioni di scarsità informativa, le nostre assunzioni teoriche forniscono una guida essenziale. Con molti dati, al contrario, l’influenza dei priori tende a ridursi, e i posteriori riflettono quasi interamente l’evidenza empirica. In entrambi i casi, il vantaggio dell’approccio bayesiano è che questo equilibrio è reso *esplicito e trasparente*, e non nascosto dietro formule o procedure automatiche.
+### 1. Il peso relativo di prior e dati {.unnumbered .unlisted}
 
-Dal punto di vista psicologico, questo è un aspetto particolarmente rilevante. In un campo in cui i campioni sono spesso piccoli e le misure rumorose, i priori non sono un “problema”, ma una risorsa: permettono di incorporare conoscenze accumulate, di stabilizzare le stime e di ridurre il rischio di interpretazioni fuorvianti. Allo stesso tempo, l’analisi di sensibilità — cioè il confronto tra posteriori ottenuti con priori diversi — ci aiuta a verificare quanto i risultati dipendano dalle scelte iniziali.
+Con pochi dati, i priori hanno un’influenza maggiore: in condizioni di incertezza, le teorie o esperienze passate guidano. Con molti dati, la verosimiglianza domina e la prior tende a “svanire”. L’approccio bayesiano *esplicita il peso dell’informazione*, rendendo trasparente quanto la nostra conoscenza dipende dalle assunzioni di partenza.
 
-Questo capitolo mostra quindi che la forza dell’inferenza bayesiana non sta nel dare tutto il potere ai dati o tutto ai priori, ma nel bilanciare i due in modo coerente. Nei capitoli successivi vedremo come questo equilibrio giochi un ruolo decisivo anche nella costruzione di modelli più complessi e, soprattutto, nella loro valutazione comparativa.
+### 2. La virtù dello shrinkage {.unnumbered .unlisted}
 
+Regolarizzare verso valori plausibili — soprattutto quando l’evidenza è debole — è *rigore epistemico*. Riduce l’errore di magnitudine e aumenta la replicabilità.
+
+### 3. Il prior come parte della teoria {.unnumbered .unlisted}
+
+Ogni prior è, in ultima analisi, un’*ipotesi teorica*: dichiara ciò che riteniamo plausibile e quanto siamo aperti a risultati imprevisti. Così l’analisi statistica diventa parte integrante del ragionamento scientifico.
+
+### 4. Un nuovo equilibrio {.unnumbered .unlisted}
+
+Il bayesianesimo non sceglie tra *fidarsi dei dati* e *credere nella teoria*: li combina in modo coerente, proporzionato e trasparente.
+
+### 5. In sintesi {.unnumbered .unlisted}
+
+> **La forza dell’inferenza bayesiana sta nella sua onestà epistemologica.** Non presume di essere neutrale, ma esplicita esplicitamente il punto di partenza e la disponibilità a rivedere le proprie convinzioni alla luce dell'evidenza empirica.
 
 ::: {.callout-important title="Problemi" collapse="true"}
 L'obiettivo di questo esercizio è comprendere come la distribuzione a priori influenzi la distribuzione a posteriori a seconda della grandezza del campione. Utilizzeremo dati raccolti della *Satisfaction With Life Scale (SWLS)*, categorizzandoli in base a una soglia e analizzando la proporzione di risposte che superano tale soglia con un approccio bayesiano.
