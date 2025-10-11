@@ -45,6 +45,7 @@ conflict_prefer("rhat", "posterior")
 conflict_prefer("ess_bulk", "posterior")
 conflict_prefer("ess_tail", "posterior")
 conflict_prefer("theme_void", "ggplot2")
+conflict_prefer("extract", "tidyr")
 
 options(
   brms.backend = "cmdstanr",
@@ -100,8 +101,9 @@ palette_discrete <- c(
 # -------- Font di sistema (sans moderni) --------
 locate_sans_family <- function() {
   prefer <- c(
-    "Inter",
+    "Helvetica",
     "Source Sans 3",
+    "Inter",
     "Source Sans Pro",
     "Roboto",
     "Helvetica Neue",
