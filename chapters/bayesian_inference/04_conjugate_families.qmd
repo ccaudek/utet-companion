@@ -2,20 +2,17 @@
 
 ## Introduzione {.unnumbered .unlisted}
 
-Nei capitoli precedenti abbiamo visto in azione l’aggiornamento bayesiano in un caso concreto: la stima della proporzione di successi con il modello *Beta-Binomiale*. Lì abbiamo osservato come la distribuzione *a priori* (Beta) e la verosimiglianza (Binomiale) si combinino attraverso il teorema di Bayes per produrre una distribuzione *a posteriori* che appartiene alla stessa famiglia della prior. Questo ci ha permesso di seguire passo dopo passo l’evoluzione delle nostre credenze in modo intuitivo e matematicamente elegante.
+Nei capitoli precedenti abbiamo visto l'aggiornamento bayesiano in azione in un caso concreto: la stima della proporzione di successi con il modello *Beta-Binomiale*. Abbiamo osservato come la distribuzione a priori *a priori* (Beta) e la verosimiglianza (Binomiale) si combinino attraverso il teorema di Bayes per produrre una distribuzione *a posteriori* che appartiene alla stessa famiglia della prior. Questo ci ha permesso di seguire passo dopo passo l'evoluzione delle nostre credenze in modo intuitivo e matematicamente elegante.
 
-In questo capitolo generalizziamo questa idea e introduciamo il concetto di *distribuzioni coniugate*. Due distribuzioni sono dette coniugate quando, combinando una prior con la corrispondente verosimiglianza, otteniamo un posterior che appartiene alla stessa famiglia della prior. In altre parole, la forma della distribuzione rimane stabile, e a cambiare sono soltanto i parametri.
+In questo capitolo, generalizzeremo questa idea e introdurremo il concetto di "distribuzioni coniugate". Due distribuzioni sono dette "coniugate" quando, combinando una distribuzione a priori con la corrispondente verosimiglianza, si ottiene una distribuzione a posteriori che appartiene alla stessa famiglia della distribuzione a priori. In altre parole, la forma della distribuzione rimane invariata e a cambiare sono solo i parametri.
 
-Questa proprietà, apparentemente tecnica, ha in realtà un grande valore didattico e pratico. Dal punto di vista concettuale, ci aiuta a visualizzare con chiarezza come i dati modifichino le nostre credenze: i parametri della distribuzione si aggiornano in modo diretto e cumulativo. Dal punto di vista operativo, rende il calcolo immediato, senza dover ricorrere a metodi di approssimazione numerica.
+Questa proprietà, apparentemente tecnica, ha in realtà un grande valore didattico e pratico. Dal punto di vista concettuale, ci aiuta a visualizzare chiaramente come i dati modifichino le nostre credenze: i parametri della distribuzione si aggiornano in modo diretto e cumulativo. Dal punto di vista operativo, rende il calcolo immediato, senza dover ricorrere a metodi di approssimazione numerica.
 
-Naturalmente, sappiamo già dai capitoli precedenti che il mondo reale è spesso più complesso: non sempre abbiamo a disposizione una coppia coniugata, e per modelli più articolati ricorriamo a metodi computazionali come il campionamento MCMC. Ma prima di affrontare quei casi, è utile familiarizzare con le famiglie coniugate, che costituiscono il laboratorio ideale per comprendere a fondo la logica dell’aggiornamento bayesiano.
-
+Naturalmente, come abbiamo già visto nei capitoli precedenti, il mondo reale è spesso più complesso: non sempre abbiamo a disposizione una coppia coniugata e, per modelli più articolati, ricorriamo a metodi computazionali come il campionamento MCMC. Tuttavia, prima di affrontare questi casi, è utile familiarizzare con le famiglie coniugate che costituiscono il laboratorio ideale per comprendere a fondo la logica dell'aggiornamento bayesiano.
 
 ### Panoramica del capitolo {.unnumbered .unlisted}
 
-- Introduzione del modello beta-binomiale.
-- Analisi della distribuzione Beta e del suo ruolo come distribuzione a priori.
-- Aescrizione del processo di aggiornamento bayesiano e dei vantaggi derivanti dall'uso di distribuzioni coniugate.
+In questo capitolo approfondiremo il modello Beta-Binomiale, che rappresenta il caso paradigmatico delle distribuzioni coniugate. Esamineremo in dettaglio la derivazione matematica dell'aggiornamento e chiariremo il significato dei parametri aggiornati. Successivamente, esploreremo il modello Normale-Normale, di fondamentale importanza nelle applicazioni pratiche, e discuteremo brevemente altre famiglie di distribuzioni coniugate per comprenderne il significato concettuale senza addentrarci nei dettagli tecnici.
 
 ::: {.callout-tip collapse=true}
 ## Prerequisiti
@@ -36,69 +33,43 @@ pacman::p_load(mice)
 :::
 
 
-## Il modello Beta-Binomiale 
+## Il modello Beta-Binomiale: un'analisi approfondita
 
-Il *modello beta-binomiale* è un esempio classico per analizzare una proporzione $\theta$, ossia la probabilità di successo in una sequenza di prove binarie (ad esempio, successo/fallimento). Supponiamo di osservare $y$ successi su $n$ prove, dove ogni prova è indipendente e con la stessa probabilità di successo $\theta$, che appartiene all'intervallo $[0,1]$.
+Il modello Beta-Binomiale rappresenta uno dei casi più eleganti e istruttivi nell'inferenza bayesiana. Nel capitolo precedente abbiamo visto come questo modello permetta di aggiornare le nostre credenze sulla proporzione $\theta$, ovvero la probabilità di successo in una sequenza di prove binarie. Ora approfondiremo la struttura matematica di questo modello, con un'attenzione particolare al meccanismo di aggiornamento dei parametri.
 
-La funzione di verosimiglianza, basata sulla distribuzione binomiale, è espressa come:
+Riprendiamo la struttura del modello. Supponiamo di osservare $y$ successi in $n$ prove indipendenti, ciascuna con la stessa probabilità di successo $\theta$, che appartiene all'intervallo $[0,1]$. La funzione di verosimiglianza è data dalla distribuzione binomiale:
 
 $$
 \mathcal{Binomial}(y \mid n, \theta) = \binom{n}{y} \theta^y (1 - \theta)^{n - y},
 $$
-dove $\binom{n}{y}$ è il coefficiente binomiale che conta il numero di modi in cui $y$ successi possono verificarsi in $n$ prove.
 
-Per modellare la nostra conoscenza preliminare su $\theta$, scegliamo una distribuzione a priori *Beta*, che rappresenta un'ampia gamma di credenze iniziali con parametri flessibili.
-
-## La distribuzione Beta
-
-La distribuzione Beta è definita come:
+dove $\binom{n}{y}$ è il coefficiente binomiale che conta il numero di modi in cui $y$ successi possono verificarsi in $n$ prove. Per rappresentare la nostra conoscenza preliminare su $\theta$, scegliamo una distribuzione a priori Beta, definita come:
 
 $$
 \mathcal{Beta}(\theta \mid \alpha, \beta) = \frac{1}{B(\alpha, \beta)} \theta^{\alpha - 1} (1 - \theta)^{\beta - 1}, \quad \text{con } \theta \in (0, 1),
 $$
-dove:
 
-* $\alpha > 0$ e $\beta > 0$ sono i *parametri* che determinano la forma della distribuzione,
-* $B(\alpha, \beta)$ è la *funzione Beta di Eulero*, calcolata come:
+dove $\alpha > 0$ e $\beta > 0$ sono i parametri che determinano la forma della distribuzione, e $B(\alpha, \beta)$ è la funzione Beta di Eulero, calcolata come:
 
-    $$
-    B(\alpha, \beta) = \frac{\Gamma(\alpha)\Gamma(\beta)}{\Gamma(\alpha + \beta)},
-    $$
+$$
+B(\alpha, \beta) = \frac{\Gamma(\alpha)\Gamma(\beta)}{\Gamma(\alpha + \beta)},
+$$
 
-    dove $\Gamma(x)$ è la funzione Gamma, una generalizzazione del fattoriale.
+dove $\Gamma(x)$ è la funzione Gamma, una generalizzazione del fattoriale.
 
-In termini bayesiani, possiamo pensare a questi parametri nel modo seguente:
+### La derivazione del posterior Beta-Binomiale
 
-* $\alpha -1$ rappresenta il numero ipotetico di "successi" a priori,
-* $\beta -1$ rappresenta il numero ipotetico di "fallimenti" a priori.
-
-Ad esempio:
-
-- una distribuzione *Beta(1, 1)* è uniforme (0 successi a priori e 0 fallimenti), indicando totale incertezza iniziale (assenza di credenze informate);
-- una distribuzione *Beta(10, 20)* rappresenta una conoscenza a priori basata su 9 successi e 19 fallimenti ipotizzati, indicando una convinzione iniziale relativamente solida, poiché deriva da un totale di 28 osservazioni virtuali che riflettono le nostre credenze precedenti.
-
-Questa interpretazione consente di calibrare le credenze a priori in base all'evidenza disponibile o alla fiducia nella stima.
-
-La distribuzione Beta è estremamente versatile:
-
-- valori diversi di $\alpha$ e $\beta$ producono distribuzioni simmetriche, asimmetriche o uniformi;
-- valori elevati di $\alpha$ e $\beta$ riducono la varianza, riflettendo credenze più forti.
-
-Questa flessibilità rende la distribuzione Beta una scelta ideale per rappresentare credenze iniziali sulle proporzioni.
-
-
-## Aggiornamento bayesiano
-
-L'aggiornamento bayesiano combina le informazioni iniziali (distribuzione a priori) con i dati osservati (verosimiglianza) per produrre una nuova distribuzione delle nostre credenze (distribuzione a posteriori). Nel caso del modello beta-binomiale, questo processo è particolarmente semplice grazie alla "coniugazione": il prior Beta e la verosimiglianza Binomiale producono una distribuzione a posteriori che appartiene ancora alla famiglia Beta. 
+Il teorema fondamentale che governa l'aggiornamento bayesiano in questo contesto stabilisce che, a partire da una distribuzione a priori Beta e osservando dati binomiali, si ottiene una distribuzione a posteriori ancora Beta. Formalizziamo questo risultato:
 
 ::: {#thm-beta-binomial}
-Sia $Y\sim\mathrm{Binomial}(n,\theta)$ il numero di successi $y$ in $n$ prove indipendenti con probabilità di successo $\theta$, e sia la nostra distribuzione a priori su $\theta$ una Beta$\bigl(\alpha,\beta\bigr).$ Allora la distribuzione a posteriori di $\theta$ dato l’osservazione $Y=y$ è
+Supponiamo che $Y\sim\mathrm{Binomial}(n,\theta)$ sia il numero di successi $y$ in $n$ prove indipendenti con probabilità di successo $\theta$ e che la nostra distribuzione a priori su $\theta$ sia una distribuzione Beta con parametri $\alpha$ e $\beta$. Allora, la distribuzione a posteriori di $\theta$ data l'osservazione $Y=y$ è
 
 $$
 \theta \mid Y=y 
 \;\sim\;
-\mathrm{Beta}\bigl(\alpha + y,\;\beta + (n - y)\bigr),
+\mathrm{Beta}(\alpha + y,\;\beta + n - y),
 $$ {#eq-beta-binom-post}
+
 ovvero i parametri si aggiornano come
 
 $$
@@ -108,140 +79,145 @@ $$
 $$ {#eq-beta-binom-post-params}
 :::
 
-
-::: {.callout-note collapse="true"}
-## Derivazione.
-
-**Obiettivo.** Mostrare che, con prior $\theta \sim \mathrm{Beta}(\alpha,\beta)$ e dati $Y\sim\mathrm{Binomiale}(n,\theta)$, la posteriori è
-
-$$
-\theta \mid Y=y \;\sim\; \mathrm{Beta}\bigl(\alpha+y,\;\beta+n-y\bigr).
-$$
-
-**1) Formula di Bayes (forma proporzionale).** Per qualunque $\theta\in(0,1)$:
+Per comprendere appieno questo risultato, procediamo con una derivazione dettagliata. Il punto di partenza è la formula di Bayes in forma proporzionale. Per qualunque valore di $\theta$ nell'intervallo $(0,1)$, possiamo scrivere:
 
 $$
 p(\theta\mid y)\;\propto\; p(y\mid\theta)\, p(\theta),
 $$
-dove “$\propto$” significa “uguale a una costante (che non dipende da $\theta$) per…”. Quella costante verrà ripristinata alla fine.
 
-**2) Verosimiglianza binomiale (parte che dipende da $\theta$).**
+dove il simbolo $\propto$ indica una proporzionalità: le due quantità sono uguali a meno di una costante moltiplicativa che non dipende da $\theta$. Questa costante verrà determinata alla fine tramite la normalizzazione.
 
-$$
-p(y\mid\theta) \;=\; \binom{n}{y}\,\theta^{\,y}\,(1-\theta)^{\,n-y}.
-$$
-Poiché $\binom{n}{y}$ *non* dipende da $\theta$, ai fini di “$\propto$” possiamo scrivere:
+Esaminiamo ora la verosimiglianza binomiale. Possiamo scrivere:
 
 $$
-p(y\mid\theta)\;\propto\; \theta^{\,y}\,(1-\theta)^{\,n-y}.
+p(y\mid\theta) \;=\; \binom{n}{y}\,\theta^{y}\,(1-\theta)^{n-y}.
 $$
 
-**3) Prior Beta (parte che dipende da $\theta$).**
+Il coefficiente binomiale $\binom{n}{y}$ è una costante che non dipende da $\theta$. Pertanto, ai fini della proporzionalità, possiamo ignorarlo e scrivere:
 
 $$
-p(\theta) \;=\; \frac{1}{B(\alpha,\beta)}\,\theta^{\,\alpha-1}\,(1-\theta)^{\,\beta-1},
-$$
-e dunque, ignorando la costante $B(\alpha,\beta)$:
-
-$$
-p(\theta)\;\propto\;\theta^{\,\alpha-1}\,(1-\theta)^{\,\beta-1}.
+p(y\mid\theta)\;\propto\; \theta^{y}\,(1-\theta)^{n-y}.
 $$
 
-**4) Prodotto “prior × verosimiglianza”.** Moltiplichiamo i soli termini che dipendono da $\theta$:
+Analogamente, la distribuzione a priori Beta può essere espressa come:
+
+$$
+p(\theta) \;=\; \frac{1}{B(\alpha,\beta)}\,\theta^{\alpha-1}\,(1-\theta)^{\beta-1}.
+$$
+
+Anche qui, la costante di normalizzazione $1/B(\alpha,\beta)$ non dipende da $\theta$, quindi possiamo scrivere:
+
+$$
+p(\theta)\;\propto\;\theta^{\alpha-1}\,(1-\theta)^{\beta-1}.
+$$
+
+Il passo cruciale consiste nel moltiplicare questi due termini. Otteniamo:
 
 $$
 \begin{aligned}
 p(\theta\mid y)
-&\;\propto\; \bigl[\theta^{\,y}(1-\theta)^{\,n-y}\bigr]\;\bigl[\theta^{\,\alpha-1}(1-\theta)^{\,\beta-1}\bigr] \\
-&\;=\; \theta^{\,(\alpha-1)+y}\; (1-\theta)^{\,(\beta-1)+(n-y)}.
+&\;\propto\; \bigl[\theta^{y}(1-\theta)^{n-y}\bigr]\;\bigl[\theta^{\alpha-1}(1-\theta)^{\beta-1}\bigr] \\
+&\;=\; \theta^{(\alpha-1)+y}\; (1-\theta)^{(\beta-1)+(n-y)}.
 \end{aligned}
 $$
 
-**5) Riconoscere la forma Beta (matching degli esponenti).** La *forma non normalizzata* di una $\mathrm{Beta}(a,b)$ è:
+Osserviamo ora attentamente la forma di questa espressione. Ricordiamo che la densità non normalizzata di una distribuzione $\mathrm{Beta}(a,b)$ ha la forma:
 
 $$
-\theta^{\,a-1}\,(1-\theta)^{\,b-1}.
+\theta^{a-1}\,(1-\theta)^{b-1}.
 $$
-Confrontando gli esponenti otteniamo:
+
+Confrontando gli esponenti nella nostra espressione con questa forma canonica, possiamo identificare:
 
 $$
 a-1 = (\alpha-1)+y \;\;\Rightarrow\;\; a = \alpha + y,
 $$
+
 $$
 b-1 = (\beta-1)+(n-y) \;\;\Rightarrow\;\; b = \beta + (n-y).
 $$
-Quindi la *densità non normalizzata* della distribuzione a posteriori è
+
+Quindi la densità non normalizzata della distribuzione a posteriori è:
 
 $$
-p(\theta\mid y)\;\propto\;\theta^{\,(\alpha+y)-1}\,(1-\theta)^{\,(\beta+n-y)-1}.
+p(\theta\mid y)\;\propto\;\theta^{(\alpha+y)-1}\,(1-\theta)^{(\beta+n-y)-1}.
 $$
 
-**6) Ripristino della costante di normalizzazione.** Per essere una densità, $p(\theta\mid y)$ deve integrare a 1 su $\theta\in(0,1)$. La costante corretta è l’inverso della funzione Beta con i nuovi parametri:
+Per completare la derivazione, dobbiamo ripristinare la costante di normalizzazione. Una distribuzione di probabilità deve integrarsi a uno sull'intero dominio. Nel nostro caso, la costante corretta è l'inverso della funzione Beta con i nuovi parametri:
 
 $$
 p(\theta\mid y)
 \;=\;
 \frac{1}{B(\alpha+y,\;\beta+n-y)}\;
-\theta^{\,(\alpha+y)-1}\,(1-\theta)^{\,(\beta+n-y)-1}.
+\theta^{(\alpha+y)-1}\,(1-\theta)^{(\beta+n-y)-1}.
 $$
 
-**7) Conclusione (forma parametrica della posteriori).** 
+Questo ci permette di concludere che:
 
 $$
-\boxed{
-\;\theta\mid Y=y \;\sim\; \mathrm{Beta}\bigl(\alpha+y,\;\beta+n-y\bigr).\;
-}
+\theta\mid Y=y \;\sim\; \mathrm{Beta}(\alpha+y,\;\beta+n-y).
 $$
 
 
-**Intuizione in termini di “pseudocontenuti di informazione”.**
+### L'interpretazione dei parametri aggiornati
 
-* La Beta$(\alpha,\beta)$ può essere interpretata in termini di *pseudoconteggi*: $\alpha-1$ “successi” e $\beta-1$ “insuccessi” precedenti ai dati.
-* Dopo aver osservato $y$ successi e $n-y$ insuccessi, *si sommano* i conteggi:
+La bellezza di questo risultato risiede nella sua semplicità interpretativa. I parametri della distribuzione a posteriori si ottengono semplicemente aggiungendo ai parametri della distribuzione a priori le informazioni contenute nei dati osservati: il numero di successi $y$ si aggiunge ad $\alpha$, mentre il numero di insuccessi $n-y$ si aggiunge a $\beta$.
 
-  $$
-  \alpha \to \alpha+y,\qquad \beta \to \beta+(n-y).
-  $$
-* Questa additività spiega la *conjugatezza*: prior e posterior appartengono alla stessa famiglia.
+Questo aggiornamento lineare è intuitivo: ciò che sapevamo in precedenza (il prior) viene "corretto" da ciò che abbiamo osservato (i dati). Tuttavia, per comprendere il motivo per cui l'aggiornamento assume proprio questa forma, è utile riflettere sul significato dei parametri $\alpha$ e $\beta$ nella distribuzione Beta.
 
+Nella densità Beta, i parametri compaiono come esponenti nella forma:
+$$
+f(\theta) \propto \theta^{\alpha - 1}(1 - \theta)^{\beta - 1}.
+$$
+Ciò implica che $\alpha$ e $\beta$ *non rappresentano direttamente il numero di successi e insuccessi attesi*, ma che i termini $\alpha - 1$ e $\beta - 1$ possono essere interpretati come *pseudo-conteggi*: rispettivamente pseudo-successi e pseudo-insuccessi che sintetizzano la nostra conoscenza a priori.
 
-**Controllo rapido della normalizzazione.** Usiamo la definizione di $B(a,b)$:
+Alla luce di questa interpretazione, il meccanismo di aggiornamento diventa estremamente trasparente. Quando osserviamo $y$ successi su $n$ prove, aggiungiamo questi conteggi reali ai “conteggi virtuali” del prior:
+$$
+\begin{aligned}
+\alpha_{\text{post}} &= \alpha + y,\
+\beta_{\text{post}} &= \beta + (n - y).
+\end{aligned}
+$$
+I nuovi esponenti nella distribuzione a posteriori diventano dunque:
+$$
+(\alpha + y) - 1 \quad \text{e} \quad (\beta + n - y) - 1,
+$$
+che corrispondono al totale dei (pseudo + reali) successi e insuccessi.
+
+Il modello Beta-Binomiale può quindi essere letto come una **procedura di conteggio cumulativo**.
+
+* La distribuzione *a priori* rappresenta un insieme di $\alpha + \beta$ osservazioni virtuali: $\alpha$ successi e $\beta$ insuccessi immaginari.
+* I dati empirici aggiungono $y$ successi e $n - y$ insuccessi reali.
+
+La distribuzione *a posteriori* riflette la combinazione di queste due fonti di informazione: la conoscenza pregressa e l’evidenza dei dati. In questo modo, il modello fornisce una rappresentazione coerente e cumulativa dell’apprendimento bayesiano: ogni nuova osservazione aggiorna in modo incrementale l'incertezza su $\theta$, arricchendo il bagaglio informativo già disponibile.
+
+### Proprietà della distribuzione a posteriori
+
+Una volta ottenuta la distribuzione a posteriori $\mathrm{Beta}(\alpha+y,\;\beta+n-y)$, possiamo calcolare diverse quantità riassuntive che ci aiutano a interpretare i risultati. La media a posteriori è data da:
 
 $$
-B(a,b) \;=\; \int_0^1 \theta^{a-1}(1-\theta)^{b-1}\,d\theta.
+\mathbb{E}[\theta\mid y] \;=\; \frac{\alpha+y}{\alpha+\beta+n}.
 $$
-Con $a=\alpha+y$ e $b=\beta+n-y$, l’integrale della nostra forma non normalizzata è $B(\alpha+y,\beta+n-y)$; moltiplicando per $1/B(\alpha+y,\beta+n-y)$ otteniamo dunque una densità che integra a 1.
-:::
 
-::: {.callout-note collapse="true"}
-## Alcune quantità riassuntive utili.
+Questa espressione rivela una caratteristica fondamentale dell'aggiornamento bayesiano: la media a posteriori è una media ponderata tra la media a priori, data dal rapporto $\alpha/(\alpha+\beta)$, e la proporzione osservata nei dati, data dal rapporto $y/n$. I pesi di questa media sono determinati dalla "forza" relativa dell'informazione a priori, quantificata da $\alpha+\beta$, e dall'informazione fornita dai dati, quantificata da $n$.
 
-Per $\theta\mid y \sim \mathrm{Beta}(\alpha+y,\beta+n-y)$:
+La moda della distribuzione a posteriori, quando i parametri aggiornati sono entrambi maggiori di uno, è data da:
 
-* *Media posteriori*:
+$$
+\text{Moda}[\theta\mid y] \;=\; \frac{\alpha+y-1}{\alpha+\beta+n-2}.
+$$
 
-  $$
-  \mathbb{E}[\theta\mid y] \;=\; \frac{\alpha+y}{\alpha+\beta+n}.
-  $$
-* *Moda* (se parametri $>1$):
+La moda rappresenta il valore più probabile del parametro $\theta$ secondo la distribuzione a posteriori ed è spesso utilizzata come stima puntuale dello stesso.
 
-  $$
-  \frac{\alpha+y-1}{\alpha+\beta+n-2}.
-  $$
-* *Varianza*:
 
-  $$
-  \mathrm{Var}(\theta\mid y) \;=\; 
-  \frac{(\alpha+y)(\beta+n-y)}{(\alpha+\beta+n)^2\,(\alpha+\beta+n+1)}.
-  $$
-:::
+La varianza a posteriori è:
 
-### Vantaggi del modello Beta-Binomiale
+$$
+\mathrm{Var}(\theta\mid y) \;=\; 
+\frac{(\alpha+y)(\beta+n-y)}{(\alpha+\beta+n)^2\,(\alpha+\beta+n+1)}.
+$$
 
-1. *Semplicità analitica*: la coniugatezza della distribuzione Beta-Binomiale semplifica i calcoli, rendendo immediato l'aggiornamento dei parametri.
-2. *Interpretazione intuitiva*: l'aggiornamento dei parametri $\alpha$ e $\beta$ mostra in modo trasparente come i dati influenzino le credenze.
-
-In sintesi, il modello Beta-Binomiale è un esempio didattico fondamentale per comprendere l'inferenza bayesiana e rappresenta un punto di partenza ideale per approcci più avanzati.
+La varianza quantifica l'incertezza residua su $\theta$ dopo l'osservazione dei dati. Una caratteristica importante è che la varianza diminuisce all'aumentare di $n$: più dati osserviamo, più le nostre credenze si concentrano attorno alla vera proporzione di successi.
 
 
 ::: {.callout-note collapse="true"}
@@ -711,30 +687,87 @@ cat("Bayesian p-value:", round(p_value, 4), "\n")
 In sintesi, il posterior predictive checking ci offre un modo flessibile per diagnosticare *diverse* violazioni del modello, scegliendo test‐quantities adatte (media, varianza, max, autocorrelazione, …). Come scrivono Gelman et al. (2013), “i p-valori posteriori … possono essere calcolati per varie test-quantities per valutare più modi in cui un modello può fallire”.
 :::
 
+## Il modello Normale-Normale
 
-## Principali distribuzioni coniugate
+Dopo aver esaminato in dettaglio il modello Beta-Binomiale, rivolgiamo ora la nostra attenzione a un altro caso fondamentale di coniugazione: il modello Normale-Normale. Questo modello è di importanza cruciale nelle applicazioni pratiche, in quanto molte variabili psicologiche possono essere approssimate in modo ragionevole da distribuzioni normali e la sua struttura matematica offre preziose intuizioni sul modo in cui l'informazione a priori e l'evidenza empirica si combinano nell'inferenza bayesiana.
 
-Esistono altre combinazioni di verosimiglianza e distribuzione a priori che producono una distribuzione a posteriori con la stessa forma della distribuzione a priori. Ecco alcune delle più note coniugazioni tra modelli statistici e distribuzioni a priori:
+Supponiamo di osservare $n$ dati indipendenti $y_1, \ldots, y_n$ provenienti da una distribuzione normale con media $\mu$ (incognita) e varianza $\sigma^2$ (nota). Il nostro obiettivo è fare inferenza sulla media $\mu$. Supponiamo che la nostra conoscenza a priori su $\mu$ possa essere rappresentata da una distribuzione normale con media $\mu_0$ e varianza $\tau_0^2$:
 
-- Nel modello *Normale-Normale* $\mathcal{N}(\mu, \sigma^2_0)$, la distribuzione a priori è $\mathcal{N}(\mu_0, \tau^2)$ e la distribuzione a posteriori è $\mathcal{N}\left(\frac{\mu_0\sigma^2 + \bar{y}n\tau^2}{\sigma^2 + n\tau^2}, \frac{\sigma^2\tau^2}{\sigma^2 + n\tau^2} \right)$.
+$$
+\mu \sim \mathcal{N}(\mu_0, \tau_0^2).
+$$
 
-- Nel modello *Poisson-gamma* $\text{Po}(\theta)$, la distribuzione a priori è $\Gamma(\lambda, \delta)$ e la distribuzione a posteriori è $\Gamma(\lambda + n \bar{y}, \delta +n)$.
+La verosimiglianza dei dati, date le assunzioni di normalità e indipendenza, è proporzionale a una distribuzione normale centrata sulla media campionaria $\bar{y} = \frac{1}{n}\sum_{i=1}^n y_i$. La proprietà di coniugazione garantisce che la distribuzione a posteriori di $\mu$ sia ancora normale:
 
-- Nel modello *Esponenziale* $\text{Exp}(\theta)$, la distribuzione a priori è $\Gamma(\lambda, \delta)$ e la distribuzione a posteriori è $\Gamma(\lambda + n, \delta +n\bar{y})$.
+$$
+\mu \mid y \sim \mathcal{N}(\mu_n, \tau_n^2),
+$$
 
-- Nel modello *Uniforme-Pareto* $\text{U}(0, \theta)$, la distribuzione a priori è $\text{Pa}(\alpha, \varepsilon)$ e la distribuzione a posteriori è $\text{Pa}(\alpha + n, \max(y_{(n)}, \varepsilon))$.
+dove i parametri aggiornati hanno una forma particolarmente illuminante.
 
+La varianza a posteriori è data da:
+
+$$
+\tau_n^2 = \frac{1}{\frac{1}{\tau_0^2} + \frac{n}{\sigma^2}}.
+$$
+
+Questa espressione rivela un principio generale: la precisione a posteriori, definita come l'inverso della varianza $1/\tau_n^2$, è la somma della precisione a priori $1/\tau_0^2$ e della precisione fornita dai dati $n/\sigma^2$. In altre parole, l'informazione si accumula in modo additivo quando viene misurata in termini di precisione. Più dati osserviamo, o più piccola è la varianza dei dati, maggiore sarà la precisione della nostra stima finale. Allo stesso modo, se la nostra conoscenza a priori è molto precisa (cioè se $\tau_0^2$ è piccolo), essa contribuisce in modo rilevante alla precisione finale.
+
+La media a posteriori è data da:
+
+$$
+\mu_n = \tau_n^2 \left(\frac{\mu_0}{\tau_0^2} + \frac{n\bar{y}}{\sigma^2}\right).
+$$
+
+Anche se questa formula può sembrare complessa,  in realtà nasconde una struttura molto intuitiva. Possiamo riscriverla come una media ponderata:
+
+$$
+\mu_n = w_0 \mu_0 + w_d \bar{y},
+$$
+
+dove i pesi sono definiti come:
+
+$$
+w_0 = \frac{\frac{1}{\tau_0^2}}{\frac{1}{\tau_0^2} + \frac{n}{\sigma^2}}, \quad w_d = \frac{\frac{n}{\sigma^2}}{\frac{1}{\tau_0^2} + \frac{n}{\sigma^2}}.
+$$
+
+Questi pesi sommano a uno, e ciascuno di essi rappresenta la proporzione di informazione totale fornita rispettivamente dalla distribuzione a priori e dai dati. Se la nostra conoscenza a priori è molto precisa (alta precisione a priori), il peso $w_0$ sarà elevato, e la media a posteriori rimarrà vicina a $\mu_0$. Se invece osserviamo molti dati, o se i dati hanno bassa varianza, il peso $w_d$ dominerà, e la media a posteriori si avvicinerà alla media campionaria $\bar{y}$.
+
+Questa struttura di media ponderata è una caratteristica fondamentale dell'inferenza bayesiana e riflette il modo in cui le diverse fonti di informazione vengono bilanciate in modo ottimale. Nel caso in cui la conoscenza a priori sia debole (cioè se $\tau_0^2$ è molto grande), il peso della prior tende a zero e la stima bayesiana converge verso la stima frequentista basata esclusivamente sui dati. Al contrario, quando i dati sono scarsi o molto rumorosi, la distribuzione a priori esercita un effetto di regolarizzazione, impedendo che la stima finale sia eccessivamente influenzata dalla variabilità campionaria.
+
+Un aspetto importante del modello Normale-Normale è che permette di quantificare in modo trasparente l'incertezza della stima. L'intervallo di credibilità al 95%, ad esempio, può essere calcolato facilmente come:
+
+$$
+[\mu_n - 1.96 \tau_n, \; \mu_n + 1.96 \tau_n].
+$$
+
+Questo intervallo si restringe man mano che si raccolgono più dati, riflettendo la riduzione dell'incertezza epistemica. Inoltre, il modello consente di rispondere in modo naturale a domande come: "Qual è la probabilità che la vera media sia superiore a un certo valore?" semplicemente calcolando l'area sotto la curva della distribuzione a posteriori.
+
+## Altre famiglie coniugate: panoramica concettuale
+
+Oltre ai modelli Beta-Binomiale e Normale-Normale, esistono altre coppie di distribuzioni coniugate che trovano applicazione in diversi contesti. Non entreremo nei dettagli tecnici di queste derivazioni, ma è utile comprenderne il significato concettuale e le situazioni in cui possono essere rilevanti.
+
+Il modello Poison-Gamma, per esempio, è comunemente utilizzato quando si analizzano i conteggi di eventi rari che si verificano in un intervallo di tempo o spazio fisso. Un esempio potrebbe essere la stima del numero medio di errori commessi da un partecipante in un compito cognitivo nell'arco di un minuto. In questo caso, la distribuzione di Poisson descrive il processo di generazione dei dati, caratterizzato da un parametro $\lambda$ che rappresenta il tasso medio di occorrenza degli eventi. La distribuzione a priori Gamma è coniugata con la verosimiglianza di Poisson e l'aggiornamento bayesiano produce una distribuzione a posteriori ancora Gamma. L'osservazione dei dati sposta la distribuzione a posteriori verso il tasso osservato, mantenendo però una certa influenza della conoscenza a priori. La forza di questa influenza dipende dai parametri della distribuzione Gamma iniziale: parametri più grandi corrispondono a una conoscenza a priori più forte che richiede un numero maggiore di dati per essere significativamente modificata.
+
+Nel modello Esponenziale-Gamma, la situazione è simile, ma il focus è sui tempi di attesa tra gli eventi. La distribuzione esponenziale descrive il tempo che intercorre tra due eventi successivi in un processo di Poisson ed è caratterizzata da un parametro di tasso. Anche in questo caso, la distribuzione Gamma funge da prior coniugato. Questo modello può essere utile, ad esempio, per l'analisi dei tempi di reazione in esperimenti psicologici, in cui si desidera stimare il tempo medio necessario per completare un compito. L'aggiornamento bayesiano in questo contesto consente di combinare le aspettative iniziali sui tempi di reazione con le osservazioni empiriche, producendo una stima che tiene conto di entrambe le fonti di informazione.
+
+Un altro caso interessante è il modello Uniforme-Pareto, che trova applicazione quando si studia il valore massimo di una variabile osservata. Supponiamo, ad esempio, di voler stimare il punteggio massimo ottenibile in un test cognitivo, basandoci sui punteggi osservati in un campione. Se si assume che i punteggi siano distribuiti uniformemente tra 0 e un valore massimo sconosciuto $\theta$, la distribuzione di Pareto costituisce un prior naturale e coniugato per $\theta$. La distribuzione a posteriori rimane nella famiglia di Pareto e i parametri incorporano l'informazione fornita dal punteggio massimo osservato nel campione. Questo modello è particolarmente utile quando si desidera fare inferenza su quantità estreme o su limiti superiori di variabili osservate.
+
+In tutti questi casi, la proprietà di coniugazione facilita notevolmente i calcoli e l'interpretazione dei risultati. La forma matematica della distribuzione a posteriori rimane nella stessa famiglia di quella a priori e i parametri si aggiornano seguendo regole semplici e intuitive. Ciò permette di comprendere chiaramente come l'informazione a priori e l'evidenza empirica si combinino e come la forza relativa di queste due fonti influenzi la stima finale.
+
+È importante sottolineare, tuttavia, che la scelta di una distribuzione a priori coniugata non dovrebbe essere dettata esclusivamente dalla convenienza computazionale. In molti casi, la distribuzione a priori coniugata rappresenta effettivamente una scelta ragionevole e interpretabile per codificare la conoscenza preliminare. Ad esempio, una distribuzione Beta è naturale per esprimere credenze su una proporzione e una distribuzione Gamma è appropriata per rappresentare conoscenze su tassi o scale positive. Tuttavia, quando la conoscenza a priori suggerisce una forma di distribuzione che non è coniugata con la verosimiglianza, è preferibile utilizzare un prior che rifletta meglio le nostre credenze, anche se ciò comporta l'uso di metodi computazionali più complessi per ottenere la distribuzione a posteriori.
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-In questo capitolo abbiamo approfondito l’idea di *famiglia coniugata*, mostrando come, in certi casi, il teorema di Bayes mantenga invariata la forma della distribuzione a priori. L’esempio del modello Beta-Binomiale, già incontrato in precedenza, ci ha offerto l’occasione di vedere con chiarezza come i dati modifichino le nostre credenze in modo semplice e cumulativo: basta aggiornare i parametri della distribuzione, senza cambiare la sua struttura.
+n questo capitolo abbiamo approfondito il concetto di famiglie coniugate, mostrando come, in certi casi fortunati, il teorema di Bayes mantenga invariata la forma della distribuzione a priori quando viene combinato con i dati. L'esempio del modello Beta-Binomiale ci ha permesso di osservare chiaramente, dal punto di vista matematico, come i dati modifichino le nostre credenze in modo semplice e cumulativo: è sufficiente aggiornare i parametri della distribuzione senza alterarne la struttura fondamentale.
 
-Questa proprietà, apparentemente tecnica, riveste una grande importanza concettuale. Le distribuzioni coniugate costituiscono il *laboratorio ideale* per comprendere a fondo la logica dell’inferenza bayesiana: permettono di seguire con trasparenza il passaggio da prior a posterior, di vedere come ogni nuova osservazione si traduca in un aggiornamento dei parametri e di cogliere in maniera intuitiva la natura dinamica del processo.
+Questa proprietà, apparentemente tecnica, ha una grande importanza concettuale. Le distribuzioni coniugate costituiscono il laboratorio ideale per comprendere a fondo la logica dell'inferenza bayesiana, permettendo di seguire con trasparenza il passaggio da prior a posterior e di vedere come ogni nuova osservazione si traduca in un aggiornamento dei parametri, cogliendo in maniera intuitiva la natura dinamica del processo di apprendimento. La derivazione dettagliata del caso Beta-Binomiale ha mostrato come la matematica dell'aggiornamento bayesiano possa essere interpretata come un meccanismo di accumulo di pseudo-osservazioni, in cui la conoscenza a priori e l'evidenza empirica si fondono in modo naturale.
 
-Naturalmente, sappiamo che la coniugazione è un caso speciale. Nella maggior parte dei problemi reali, soprattutto quando i modelli diventano complessi e includono più parametri o strutture gerarchiche, non esiste una coppia prior–verosimiglianza coniugata che semplifichi i calcoli. È in questi casi che entrano in gioco metodi computazionali più generali, come il campionamento MCMC, che ci permettono di affrontare situazioni realistiche senza rinunciare alla coerenza dell’approccio bayesiano [@Johnson2022bayesrules].
+Il modello Normale-Normale ha poi mostrato come questi principi si possano applicare a contesti diversi, mantenendo la stessa logica di fondo. La struttura a media ponderata e l'additività della precisione nella distribuzione a posteriori rivelano un principio fondamentale dell'inferenza bayesiana: la combinazione ottimale dell'informazione che bilancia automaticamente l'incertezza delle diverse fonti di conoscenza. Questa proprietà è particolarmente preziosa nelle applicazioni pratiche, dove spesso dobbiamo integrare i risultati di studi precedenti con nuovi dati sperimentali.
 
-In questo senso, le famiglie coniugate non rappresentano un punto di arrivo, ma un passaggio fondamentale: ci insegnano i principi dell’aggiornamento bayesiano in un contesto semplice, che prepara la strada verso strumenti più potenti e flessibili.
+Naturalmente, siamo consapevoli che la coniugazione è un caso speciale. Nella maggior parte dei problemi reali, soprattutto quando i modelli diventano complessi e includono più parametri o strutture gerarchiche, non esiste una coppia prior-verosimiglianza coniugata che semplifichi i calcoli. In questi casi entrano in gioco metodi computazionali più generali, come il campionamento MCMC, che affronteremo nei capitoli successivi. Tuttavia, anche quando si ricorre a questi strumenti più potenti, i principi fondamentali rimangono gli stessi: si tratta sempre di combinare la conoscenza a priori con l'evidenza empirica per ottenere una distribuzione a posteriori che sintetizzi tutta l'informazione disponibile.
 
+In questo senso, le famiglie coniugate non rappresentano un punto d'arrivo, ma un passaggio fondamentale nel percorso di comprensione dell'inferenza bayesiana. Ci insegnano i principi dell'aggiornamento in un contesto in cui la matematica è trasparente e i risultati sono interpretabili in modo diretto. Questa comprensione profonda ci prepara ad affrontare situazioni più complesse, fornendoci gli strumenti concettuali necessari per interpretare correttamente i risultati, anche quando la derivazione analitica non è più possibile e dobbiamo affidarci a metodi numerici.
 
 ::: {.callout-important title="Problemi 1" collapse="true"}
 Si consideri lo studio "*An excess of positive results: Comparing the standard psychology literature with registered reports*" di @scheel2021excess. In questo lavoro, gli autori confrontano il tasso di risultati positivi $\theta$ ottenuti in studi psicologici pubblicati senza preregistrazione con quelli pubblicati con preregistrazione. Si utilizzi il tasso di successo riportato negli studi preregistrati per costruire una distribuzione a priori per il parametro $\theta$.
