@@ -1,0 +1,222 @@
+# Dilemma del treno
+
+## Introduzione
+
+In questo approfondimento mettiamo in pratica il processo di *aggiornamento bayesiano* applicandolo a un caso psicologico: la stima di una proporzione di successi in un campione.  
+L’obiettivo è mostrare, passo dopo passo, come si passi da una distribuzione *a priori* alla *a posteriori*, utilizzando sia un approccio discreto (*metodo su griglia*) sia un approccio continuo (modello *Beta-Binomiale*).
+
+## 1. Il contesto psicologico
+
+Nel celebre *dilemma del treno*, si chiede ai partecipanti se sia moralmente accettabile deviare un treno per salvare cinque persone sacrificandone una.  
+Immaginiamo di avere un campione di 30 adulti, di cui 22 rispondono che l’azione è accettabile.  
+Il nostro obiettivo è stimare la probabilità $\theta$ che un individuo della popolazione generale dia questa risposta.
+
+## 2. Metodo su griglia
+
+Il *metodo su griglia* rappresenta la forma più intuitiva dell’inferenza bayesiana.  
+Dividiamo lo spazio dei parametri in valori discreti, calcoliamo prior, verosimiglianza e posterior, e visualizziamo l’aggiornamento.
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(ggplot2)
+library(dplyr)
+```
+
+### 2.1 Definizione della griglia e del prior
+
+```{r}
+theta <- seq(0, 1, by = 0.1)
+prior_informativo <- c(0, 0.05, 0.05, 0.05, 0.175, 0.175, 0.175, 0.175, 0.05, 0.05, 0.05)
+
+tibble(theta, prior_informativo)
+```
+
+Visualizziamo la distribuzione a priori:
+
+```{r}
+ggplot(data.frame(theta, prior_informativo),
+       aes(x = theta, y = prior_informativo)) +
+  geom_col(width = 0.08, fill = "#2c7fb8", alpha = 0.6) +
+  labs(x = expression(theta), y = "Densità", 
+       title = "Distribuzione a priori discreta")
+```
+
+### 2.2 Calcolo della verosimiglianza
+
+```{r}
+y <- 22
+n <- 30
+verosimiglianza <- dbinom(y, size = n, prob = theta)
+```
+
+Visualizziamo la verosimiglianza:
+
+```{r}
+ggplot(data.frame(theta, verosimiglianza),
+       aes(x = theta, y = verosimiglianza)) +
+  geom_col(width = 0.08, fill = "#2c7fb8", alpha = 0.6) +
+  labs(x = expression(theta), y = "Densità", 
+       title = "Verosimiglianza discreta")
+```
+
+
+### 2.3 Calcolo della distribuzione a posteriori
+
+```{r}
+posteriori_non_norm <- verosimiglianza * prior_informativo
+posteriori <- posteriori_non_norm / sum(posteriori_non_norm)
+```
+
+Visualizziamo la distribuzione a posteriori:
+
+```{r}
+ggplot(data.frame(theta, posteriori),
+       aes(x = theta, y = posteriori)) +
+  geom_col(width = 0.08, fill = "#2c7fb8", alpha = 0.6) +
+  labs(x = expression(theta), y = "Densità", 
+       title = "Distribuzione a posteriori discreta")
+```
+
+### 2.4 Statistiche riassuntive
+
+```{r}
+media_post <- sum(theta * posteriori)
+var_post   <- sum((theta - media_post)^2 * posteriori)
+moda_post  <- theta[which.max(posteriori)]
+
+c(media = media_post, varianza = var_post, moda = moda_post)
+```
+
+### 2.5 Visualizzazione congiunta
+
+```{r}
+dati_plot <- tibble(
+  theta = theta,
+  Prior = prior_informativo / sum(prior_informativo),
+  Verosimiglianza = verosimiglianza / sum(verosimiglianza),
+  Posterior = posteriori
+) |> 
+  tidyr::pivot_longer(-theta, names_to = "Distribuzione", values_to = "Densità")
+
+ggplot(dati_plot, aes(x = theta, y = Densità, color = Distribuzione)) +
+  geom_line(linewidth = 1.2) +
+  scale_color_manual(values = c("Prior" = "gray50", 
+                                "Verosimiglianza" = "#E69F00", 
+                                "Posterior" = "#0072B2")) +
+  labs(
+    x = expression(theta),
+    y = "Densità normalizzata",
+    title = "Aggiornamento bayesiano con metodo su griglia",
+    subtitle = "Prior (grigio), Verosimiglianza (arancione), Posterior (blu)"
+  ) 
+```
+
+## 3. Metodo continuo: modello Beta–Binomiale
+
+Nel modello coniugato *Beta–Binomiale*, l’aggiornamento è espresso in forma chiusa.
+Se $\theta \sim \mathrm{Beta}(\alpha,\beta)$ e $Y \sim \mathrm{Binomiale}(n, \theta)$, allora:
+
+$$
+\theta \mid y \sim \mathrm{Beta}(\alpha + y, ; \beta + n - y).
+$$
+
+### 3.1 Esempio numerico
+
+```{r}
+alpha <- 2
+beta  <- 2
+
+alpha_post <- alpha + y
+beta_post  <- beta + n - y
+
+alpha_post; beta_post
+```
+
+### 3.2 Visualizzazione dell’aggiornamento
+
+```{r}
+theta_vals <- seq(0, 1, length.out = 200)
+df <- tibble(
+  theta = rep(theta_vals, 2),
+  densita = c(dbeta(theta_vals, alpha, beta),
+              dbeta(theta_vals, alpha_post, beta_post)),
+  tipo = rep(c("Prior Beta(2,2)", "Posterior Beta(24,10)"), each = length(theta_vals))
+)
+
+ggplot(df, aes(x = theta, y = densita, color = tipo, linetype = tipo)) +
+  geom_line(linewidth = 1.1) +
+  scale_color_manual(values = c("gray60", "#2c7fb8")) +
+  scale_linetype_manual(values = c("dashed", "solid")) +
+  labs(
+    x = expression(theta),
+    y = "Densità",
+    title = "Aggiornamento continuo (modello Beta–Binomiale)",
+    subtitle = "Prior Beta(2,2) → Posterior Beta(24,10)"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "top")
+```
+
+## 4. Interpretazione psicologica
+
+Nel contesto del dilemma morale:
+
+* **Prima dei dati**, la prior Beta(2,2) riflette una convinzione equilibrata ($m=0.5$).
+* **Dopo i dati (22/30)**, la posterior Beta(24,10) concentra la plausibilità intorno a $\theta \approx 0.7$.
+* La varianza si riduce: la conoscenza si affina ma non scompare.
+
+Questo esempio illustra il principio dell’apprendimento bayesiano:
+
+> Ogni nuova evidenza aggiorna le credenze preesistenti, restringendo lo spazio dell’incertezza senza eliminarlo.
+
+
+## 5. Esercizio: riconoscimento di emozioni
+
+Un partecipante osserva 10 volti arrabbiati e risponde correttamente 7 volte.
+Supponiamo un prior Beta(4,6), che riflette aspettative moderate ($m=0.4$).
+Calcola la distribuzione a posteriori con una griglia fine.
+
+```{r}
+theta <- seq(0, 1, length.out = 1000)
+prior <- dbeta(theta, 4, 6)
+likelihood <- dbinom(7, size = 10, prob = theta)
+
+posterior <- prior * likelihood
+posterior <- posterior / sum(posterior)
+
+post_mean <- sum(theta * posterior)
+hdi <- quantile(sample(theta, 10000, replace = TRUE, prob = posterior),
+                probs = c(0.03, 0.97))
+
+c(media_posteriori = post_mean, intervallo_credibile_94 = hdi)
+```
+
+Visualizzazione:
+
+```{r}
+df <- tibble(
+  theta,
+  Prior = prior / sum(prior),
+  Likelihood = likelihood / sum(likelihood),
+  Posterior = posterior
+) |>
+  tidyr::pivot_longer(-theta, names_to = "Distribuzione", values_to = "Densità")
+
+ggplot(df, aes(x = theta, y = Densità, color = Distribuzione)) +
+  geom_line(linewidth = 1.1) +
+  scale_color_manual(values = c("Prior" = "gray50", "Likelihood" = "#E69F00", "Posterior" = "#2c7fb8")) +
+  labs(
+    title = "Aggiornamento bayesiano: riconoscimento di volti arrabbiati",
+    x = expression(theta), y = "Densità normalizzata"
+  ) 
+```
+
+## 6. Messaggio chiave
+
+L’aggiornamento bayesiano *non elimina l’incertezza*, ma la *organizza*.
+Le distribuzioni (a priori, verosimiglianza, a posteriori) rappresentano il processo di apprendimento come accumulo coerente di informazione. Questo principio, mostrato qui per un semplice parametro binomiale, è lo stesso che verrà applicato nei modelli psicologici più complessi dei capitoli successivi.
+
+
