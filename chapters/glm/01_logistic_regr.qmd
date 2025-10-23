@@ -1,15 +1,14 @@
 # Regressione logistica con Stan {#sec-reg-logistic-stan}
 
-
 ## Introduzione {.unnumbered .unlisted}
 
-La *regressione logistica* è un’estensione del modello lineare che consente di analizzare esiti dicotomici, cioè variabili che assumono soltanto due valori (ad esempio: successo/insuccesso, presente/assente, risposta corretta/errata). Situazioni di questo tipo sono molto frequenti nella ricerca psicologica: pensiamo alle risposte a item vero/falso, alla presenza o assenza di un sintomo clinico, oppure alla scelta tra due alternative in un compito sperimentale.
+La regressione logistica è un'estensione del modello lineare che consente di analizzare esiti dicotomici, ovvero variabili che assumono soltanto due valori (per esempio: successo/insuccesso, presenza/assenza, risposta corretta/errata). Situazioni di questo tipo sono molto frequenti nella ricerca psicologica: si pensi alle risposte a domande con risposta "vero" o "falso", alla presenza o assenza di un sintomo clinico o alla scelta tra due alternative in un compito sperimentale.
 
-A differenza della regressione lineare, non modelliamo direttamente la probabilità di successo, ma il suo *logit*, ossia il logaritmo del rapporto tra odds di successo e odds di insuccesso. Questo passaggio ha due vantaggi fondamentali: da un lato mantiene la struttura lineare del modello, dall’altro assicura che le probabilità restino confinate tra 0 e 1, rispettando così la natura del fenomeno da descrivere.
+A differenza della regressione lineare, non si modella direttamente la variabile dipendente, ma una trasformazione della probabilità di successo attraverso la funzione logit, definita come il logaritmo naturale del rapporto tra la probabilità di successo e quella di insuccesso. Questa parametrizzazione presenta due vantaggi: conserva la linearità nella relazione tra predittori e risultato trasformato e garantisce che le probabilità stimate rimangano nell'intervallo [0, 1], rispettando i vincoli probabilistici intrinseci al fenomeno in esame.
 
-In questo capitolo ci concentreremo sulla *regressione logistica bivariata*, cioè con un solo predittore, continuo o categoriale. L’obiettivo è duplice: da un lato, imparare a stimare i coefficienti del modello in un’ottica *bayesiana* utilizzando *Stan*; dall’altro, capire come interpretare questi coefficienti su scale diverse: in termini di probabilità, di *odds ratio* e di *risk ratio*. Vedremo in particolare come un coefficiente unico possa assumere significati diversi a seconda della scala di lettura, e come il caso di un predittore dicotomico (dummy) sia in realtà una specializzazione del modello con variabile continua.
+In questo capitolo ci concentreremo sulla regressione logistica bivariata, caratterizzata dall'inclusione di un singolo predittore di natura continua o categoriale. L'obiettivo è duplice: da un lato, acquisire familiarità con la stima bayesiana dei parametri del modello mediante l'utilizzo di Stan; dall'altro, sviluppare la capacità di interpretare i coefficienti stimati attraverso diverse scale metriche: probabilistica, odds ratio e risk ratio. In particolare, vedremo come un coefficiente unico possa assumere significati diversi a seconda della scala di lettura adottata e come il caso del predittore dicotomico costituisca una specializzazione del modello con variabile continua.
 
-La regressione logistica rappresenta dunque un primo passo importante nel percorso dei *modelli lineari generalizzati (GLM)*, ampliando le possibilità dell’analisi statistica ben oltre il caso della regressione lineare e preparandoci ad affrontare dati e domande di ricerca più vari e realistici.
+La regressione logistica rappresenta dunque un primo passo nell'ambito dei *modelli lineari generalizzati* (GLM), estendendo le possibilità dell'analisi statistica oltre i confini della regressione lineare tradizionale e gettando le basi per l'analisi di scenari di ricerca più complessi.
 
 ### Panoramica del capitolo {.unnumbered .unlisted}
 
@@ -39,36 +38,35 @@ pacman::p_load(brms, cmdstanr, posterior, brms, bayestestR, insight)
 ```
 :::
 
-
-
 ## Il modello di regressione logistica
 
-Supponiamo di osservare $n$ individui, ciascuno con un esito binario $y_i \in \{0,1\}$ e un predittore continuo $x_i$. La regressione logistica specifica che
+Consideriamo un campione di $n$ unità sperimentali, ciascuna caratterizzata da un esito binario $y_i \in \{0,1\}$ e un predittore continuo $x_i$. Il modello di regressione logistica assume la seguente forma:
 
 $$
-y_i \sim \text{Bernoulli}(p_i), \qquad
-\text{logit}(p_i) = \alpha + \beta x_i .
+\begin{aligned}
+y_i &\sim \mathrm{Bernoulli}(p_i), \\
+\mathrm{logit}(p_i) &= \alpha + \beta x_i.
+\end{aligned}
 $$
-Qui $p_i$ è la probabilità di successo per l’individuo $i$. L’intercetta $\alpha$ è il log-odds di successo quando $x_i=0$, mentre il coefficiente $\beta$ rappresenta il cambiamento nei log-odds per ogni unità di incremento in $x$.  
 
-Sulla scala degli odds questo significa che
+In questa parametrizzazione, $p_i$ rappresenta la probabilità di successo per dell'$i$-esima osservazione. Il parametro $\alpha$ corrisponde al log-odds di successo quando $x_i = 0$, mentre $\beta$ quantifica la variazione attesa del log-odds per ogni incremento unitario del predittore $x$.
 
-$$
-\text{odds}(x) = \frac{p(x)}{1-p(x)} = \exp(\alpha + \beta x).
-$$
-Confrontando due valori consecutivi, $x=a$ e $x=a+1$, otteniamo
+Trasformando sulla scala degli odds, si ottiene:
 
 $$
-\frac{\text{odds}(a+1)}{\text{odds}(a)} = e^{\beta}.
+\mathrm{odds}(x) = \frac{p(x)}{1-p(x)} = \exp(\alpha + \beta x).
 $$
-Quindi l’esponenziale di $\beta$ è l’*odds ratio (OR)*: il fattore moltiplicativo con cui cambiano gli odds per un incremento unitario in $x$. Ad esempio, se $\beta=1.0$, allora $OR \approx 2.7$: ogni unità in più di $x$ rende gli odds di successo circa 2.7 volte maggiori.  
 
+Il confronto tra due valori consecutivi del predittore, $x=a$ e $x=a+1$, rivela che:
 
-::: {.callout-note collapse="true"}
+$$
+\frac{\mathrm{odds}(a+1)}{\mathrm{odds}(a)} = e^{\beta}.
+$$
 
-## Perché $e^{\beta}$ è l’odds ratio
+Pertanto, l'esponenziale di $\beta$ corrisponde all'*odds ratio (OR)*: il fattore moltiplicativo che descrive la variazione degli odds associata a un incremento unitario di $x$. Ad esempio, un coefficiente $\beta = 1.0$ produce un OR di circa $2.7$, indicando che ogni unità aggiuntiva di $x$ moltiplica gli odds di successo per $2.7$.
 
-Nel modello logistico $\log\!\big(\tfrac{p(x)}{1-p(x)}\big)=\alpha+\beta x$, l’odds a livello $x$ è $\tfrac{p(x)}{1-p(x)}=\exp(\alpha+\beta x)$. Consideriamo due valori qualsiasi del predittore, $x=a$ e $x=b$. L’*odds ratio* che confronta $b$ con $a$ è definito come
+::: {.callout-note collapse="true" title="Perché $e^{\beta}$ è l’odds ratio"}
+Nel modello logistico $\log\!\big(\tfrac{p(x)}{1-p(x)}\big)=\alpha+\beta x$, gli odds in corrispondenza di un valore $x$ sono dati da $\tfrac{p(x)}{1-p(x)}=\exp(\alpha+\beta x)$. Confrontando due valori distinti del predittore, $x=a$ e $x=b$, l'*odds ratio* che confronta $b$ rispetto ad $a$ è definito come
 
 $$
 OR(b\,\text{vs}\,a)
@@ -77,74 +75,74 @@ OR(b\,\text{vs}\,a)
 =\exp\!\big(\beta(b-a)\big).
 $$
 
-Se la variazione è unitaria ($b=a+1$), segue immediatamente che
+Nel caso specifico di una variazione unitaria ($b=a+1$), si ottiene
 
 $$
 OR(a+1\,\text{vs}\,a)=\exp(\beta).
 $$
 
-Questa identità mostra due fatti chiave. Primo, l’odds ratio dipende solo dalla *differenza* $b-a$ e non dal livello di partenza $a$: in un modello logistico bivariato l’OR per un incremento fissato è *costante* lungo l’asse di $x$. Secondo, la scala di misura di $x$ determina l’interpretazione di $\beta$: se $x$ è una *dummy* $\{0,1\}$, $\beta$ è il log-odds ratio tra i due gruppi e $\exp(\beta)$ è l’OR gruppi; se $x$ aumenta di 10 unità, allora $\exp(10\beta)$ è l’OR per un incremento di dieci unità; se $x$ è standardizzato (ad es. z-score), $\exp(\beta)$ è l’OR per un incremento di *una* deviazione standard.
+Questa relazione mette in luce due proprietà fondamentali del modello. In primo luogo, l'odds ratio dipende esclusivamente dalla *differenza* $b-a$, risultando indipendente dal livello base $a$. In un modello logistico bivariato, l'OR associato a un incremento fisso rimane *costante* lungo tutto l'asse delle ascisse. In secondo luogo, l'interpretazione di $\beta$ è strettamente legata alla scala di misurazione di $x$: quando $x$ è una variabile dummy $\{0,1\}$, $\beta$ rappresenta il log-odds ratio tra i due gruppi e $\exp(\beta)$ l'OR corrispondente; se $x$ subisce un incremento di 10 unità, $\exp(10\beta)$ esprime l'OR per tale variazione; se $x$ è standardizzato (ad esempio in punteggi z), $\exp(\beta)$ rappresenta l'OR associato a un incremento di *una* deviazione standard.
 :::
-
-
 
 ## Risk difference, odds ratio e risk ratio
 
-Consideriamo due valori qualsiasi del predittore, $x=a$ e $x=b$. Indichiamo con
+Consideriamo due valori distinti del predittore, $x=a$ e $x=b$, e indichiamo con
 
 $$
 p_a = \text{logit}^{-1}(\alpha + \beta a), \qquad
 p_b = \text{logit}^{-1}(\alpha + \beta b)
 $$
-le probabilità corrispondenti. Possiamo descrivere la differenza fra i due livelli in tre modi:  
+le probabilità di successo corrispondenti. La differenza tra i due livelli può essere quantificata attraverso tre misure distinte ma coerenti.
 
-- *Risk difference (RD):*  
-  $$
-  RD = p_b - p_a .
-  $$
-  È la differenza assoluta fra le due probabilità.  
+La *risk difference (RD)*, o differenza assoluta di rischio, è definita come
+$$
+RD = p_b - p_a .
+$$
+Questa misura esprime la variazione assoluta nella probabilità di successo tra i due livelli del predittore.
 
-- *Odds ratio (OR):*  
-  $$
-  OR = \frac{p_b/(1-p_b)}{p_a/(1-p_a)} = \exp\!\bigl(\beta(b-a)\bigr).
-  $$
-  Mostra come gli odds cambiano passando da $a$ a $b$.  
+L'*odds ratio (OR)* è dato da
+$$
+OR = \frac{p_b/(1-p_b)}{p_a/(1-p_a)} = \exp\!\bigl(\beta(b-a)\bigr).
+$$
+Questo rapporto descrive la variazione relativa negli odds di successo associata al passaggio da $a$ a $b$.
 
-- *Risk ratio (RR):*  
-  $$
-  RR = \frac{p_b}{p_a}.
-  $$
-  È il rapporto diretto fra probabilità, usato spesso in ambito epidemiologico.  
+Il *risk ratio (RR)*, o rapporto di rischio, è definito come
+$$
+RR = \frac{p_b}{p_a}.
+$$
+Questa misura, particolarmente utilizzata in epidemiologia, esprime il rapporto diretto tra le probabilità di successo ai due livelli del predittore.
 
-Le tre misure sono modi diversi, ma coerenti, di esprimere l’effetto del predittore.
+Ciascuna di queste misure fornisce una prospettiva diversa ma complementare sull'effetto del predittore, con proprietà matematiche e campi di applicazione specifici.
 
+### Scala delle probabilità e la regola del "dividere per 4"
 
-### Scala delle probabilità e la regola del “dividere per 4”
-
-La funzione logistica che lega $x$ a $p(x)$ è
+La relazione funzionale tra il predittore $x$ e la probabilità $p(x)$ è data dalla curva logistica:
 
 $$
 p(x) = \frac{e^{\alpha + \beta x}}{1 + e^{\alpha + \beta x}}.
 $$
-Se consideriamo la variazione di probabilità per un incremento unitario in $x$,
+
+La variazione nella probabilità associata a un incremento unitario di $x$,
 
 $$
 \Delta p = p(x+1) - p(x),
 $$
-vediamo che l’effetto non è costante ma dipende dal livello di $x$. Ai margini della curva, quando $p$ è vicino a 0 o 1, la variazione è minima; nella zona centrale, quando $p \approx 0.5$, la curva è più ripida e l’effetto massimo.  
 
-La derivata della funzione logistica è
+non è costante ma dipende dal valore iniziale di $x$. Questa variazione risulta minima nelle regioni estreme della curva, quando $p$ si avvicina a 0 o 1, mentre raggiunge il suo massimo nella regione centrale, in corrispondenza di $p \approx 0.5$, dove la curva presenta la massima pendenza.
+
+Analiticamente, la derivata della funzione logistica è data da
 
 $$
 \frac{dp}{dx} = \beta \, p(x)\,[1 - p(x)].
 $$
-Il termine $p(x)(1-p(x))$ è massimo quando $p=0.5$, e in quel punto vale $0.25$. Quindi la massima variazione di probabilità per unità di $x$ è
+
+Il termine $p(x)(1-p(x))$, che rappresenta la varianza della distribuzione Bernoulli sottostante, assume il valore massimo di $0.25$ quando $p=0.5$. Di conseguenza, la massima variazione istantanea della probabilità per unità di $x$ risulta
 
 $$
 \max \frac{dp}{dx} = \frac{\beta}{4}.
 $$
-Questa è la cosiddetta *regola del dividere per 4*: un metodo semplice per stimare, in prima approssimazione, l’effetto massimo di $\beta$ sulla scala delle probabilità. Ad esempio, se $\beta=1.0$, il massimo incremento di probabilità per unità di $x$ è circa 0.25, cioè 25 punti percentuali, quando $p=0.5$. Questa regola non è esatta in generale, ma fornisce un’intuizione immediata dell’ordine di grandezza dell’effetto di $\beta$ sulla probabilità.
 
+Questo risultato costituisce la *regola del dividere per 4*: un'euristica che fornisce una stima approssimata dell'effetto massimo di $\beta$ sulla scala probabilistica. Ad esempio, con $\beta=1.0$, l'incremento massimo di probabilità per unità di $x$ è circa 0.25 (25 punti percentuali), osservabile quando $p=0.5$. Sebbene questa approssimazione non sia esatta per tutti i valori di $x$, offre un'intuizione immediata sull'ordine di grandezza dell'effetto del coefficiente $\beta$ sulla probabilità di successo.
 
 ### Sintesi
 
@@ -159,7 +157,7 @@ Queste interpretazioni non sono alternative ma complementari: lo stesso coeffici
 
 ### Visualizzazione delle tre scale
 
-Per fissare meglio le idee, possiamo rappresentare graficamente l’effetto del coefficiente $\beta$ sulle tre scale: logit, odds e probabilità. Useremo valori simulati, così da confrontare direttamente i tre casi.
+Per fissare meglio le idee, possiamo rappresentare graficamente l’effetto del coefficiente $\beta$ sulle tre scale: logit, odds e probabilità. Useremo valori simulati per poter confrontare direttamente i tre casi.
 
 ```{r}
 #| echo: false
@@ -220,31 +218,24 @@ g3
 #### Come leggere i tre grafici
 
 * *Scala logit*: la relazione con $x$ è lineare. Ogni unità in più di $x$ aumenta i log-odds di $\beta$.
-* *Scala odds*: la crescita è esponenziale. Qui $\exp(\beta)$ indica di quanto si moltiplicano gli odds per ogni unità aggiuntiva di $x$.
-* *Scala probabilità*: la curva è sigmoide e rimane sempre tra 0 e 1. L’effetto di $\beta$ non è costante: è massimo quando $p \approx 0.5$, e minimo ai margini (quando la curva è piatta).
-
+* *Scala odds*: la crescita è esponenziale. In questo caso, $\exp(\beta)$ indica di quanto si moltiplicano gli odds per ogni unità aggiuntiva di $x$.
+* *Scala probabilità*: la curva è sigmoide e rimane sempre compresa tra 0 e 1. L’effetto di $\beta$ non è costante: è massimo quando $p \approx 0.5$, e minimo ai margini, quando la curva è piatta.
 
 ### Interpretazione didattica
 
-La regressione logistica descrive una relazione *non lineare* fra il predittore $x$ e la probabilità di successo $p(x)$. La curva che ne risulta è una sigmoide: per valori molto bassi di $x$ la probabilità si avvicina a 0, per valori molto alti tende a 1, e nella zona centrale varia rapidamente.
+La regressione logistica cattura una relazione *non lineare* tra il predittore $x$ e la probabilità di successo $p(x)$, generando una caratteristica curva sigmoide. Questa presenta un andamento asintotico: per valori estremamente bassi di $x$ la probabilità converge a 0, mentre per valori elevati tende a 1, con la transizione più marcata nella regione centrale dove la curva manifesta la massima pendenza.
 
-Il segno del coefficiente $\beta$ determina la direzione dell’effetto. Se $\beta > 0$, all’aumentare di $x$ crescono log-odds, odds e probabilità: la curva ha pendenza positiva. Se $\beta < 0$, accade il contrario e la curva decresce.  
+Il segno del coefficiente β determina la direzionalità dell'effetto. Un valore di $\beta > 0$ indica che, con l'aumentare di $x$, crescono sistematicamente i log-odds, gli odds e la probabilità di successo, producendo una curva monotona crescente. Al contrario, un valore di $\beta$ inferiore a 0 segnala una relazione inversa, con la curva che assume un andamento decrescente.
 
-Lo stesso effetto può essere letto su scale diverse, che offrono prospettive complementari:  
+La medesima relazione può essere interpretata anche attraverso scale metriche alternative che offrono una prospettiva complementare. Sulla scala delle probabilità, si osserva la variazione assoluta di p(x), che dipende dal punto di partenza lungo la curva. Sulla scala degli odds, l'effetto si manifesta attraverso un moltiplicatore costante, $OR = e^{\beta}$, per ogni incremento unitario di $x$. Sulla scala logit, la relazione assume invece una forma linearmente additiva, con $\beta$ che rappresenta il cambiamento costante nei log-odds.
 
-- sulla *scala delle probabilità*, si osserva la variazione assoluta di $p(x)$;  
-- sulla *scala degli odds*, l’effetto è un moltiplicatore costante $OR = e^{\beta}$ per ogni incremento unitario di $x$;  
-- sulla *scala logit*, l’effetto si traduce in un incremento lineare costante di $\beta$ nei log-odds.  
+A completare il quadro interpretativo ci sono la risk difference (RD), che quantifica la differenza assoluta di probabilità tra due livelli di x, e il risk ratio (RR), che ne esprime il rapporto relativo. Sebbene queste misure non derivino direttamente dal coefficiente β come l'odds ratio, costituiscono metriche di immediata comprensione in numerosi contesti applicativi, in particolare in ambito epidemiologico e clinico.
 
-Un ulteriore strumento utile è la *risk difference* (RD), cioè la differenza di probabilità fra due livelli di $x$, e il *risk ratio* (RR), cioè il loro rapporto. Queste misure, pur non derivando direttamente dal coefficiente come l’odds ratio, offrono un linguaggio più immediato in molti contesti applicativi (per esempio in epidemiologia o psicologia clinica).  
-
-La forza della regressione logistica sta proprio in questa unificazione: un unico modello produce tre chiavi di lettura — logit, odds e probabilità — che, se usate insieme, permettono di descrivere in modo chiaro e coerente l’impatto di una variabile indipendente su un esito binario.
-
+La potenza euristica della regressione logistica risiede proprio nella sua capacità di unificazione: un unico modello matematico genera simultaneamente tre diverse chiavi di lettura - logit, odds e probabilità - che, se integrate sinergicamente, consentono di caratterizzare in modo completo e coerente l'influenza di una variabile indipendente su un esito binario.
 
 ## Esempio numerico
 
-Simuliamo dati con un predittore discreto $X$ e una variabile dicotomica $Y$, in cui la probabilità di successo cresce con $X$. Applichiamo quindi la regressione logistica e tracciamo la curva stimata, confrontandola con le proporzioni empiriche osservate.
-
+Simuliamo dei dati con un predittore discreto $X$ e una variabile dicotomica $Y$, in cui la probabilità di successo cresce con $X$. Applichiamo quindi la regressione logistica e tracciamo la curva stimata, confrontandola con le proporzioni empiriche osservate.
 
 ```{r}
 # Fissiamo il seme per riproducibilità
@@ -308,13 +299,11 @@ ggplot(df, aes(x = X, y = Y)) +
 
 In questo esempio i punti blu rappresentano la proporzione empirica di successi per ciascun valore di $X$, mentre la linea rossa mostra la curva logistica stimata dal modello. La forma sigmoide emerge naturalmente e garantisce che le probabilità rimangano sempre comprese tra 0 e 1. 
 
-
 ## Stima bayesiana con Stan
 
-Finora abbiamo stimato i coefficienti $\alpha$ e $\beta$ con `glm()`, ottenendo valori puntuali secondo il metodo della massima verosimiglianza. Con Stan possiamo costruire lo stesso modello in chiave bayesiana, specificando priori debolmente informativi. Questo ci consente di ottenere l’intera distribuzione a posteriori dei parametri, invece di un singolo punto stima, e di quantificare direttamente l’incertezza.  
+Finora abbiamo stimato i coefficienti $\alpha$ e $\beta$ con la funzione `glm()`, ottenendo valori puntuali secondo il metodo della massima verosimiglianza. Con Stan possiamo costruire lo stesso modello in chiave bayesiana, specificando priori debolmente informativi. Ciò ci permette di ottenere l'intera distribuzione a posteriori dei parametri, invece di un singolo valore di stima, e di quantificare direttamente l'incertezza.
 
-Un dettaglio importante è che i risultati di Stan possono differire leggermente da quelli di `glm()`. La ragione è proprio la presenza dei priori: anche se scelti molto larghi (qui `normal(0, 2.5)`), essi esercitano un piccolo “effetto di contrazione” verso lo zero, soprattutto con campioni finiti. In assenza di priori (o con dati molto abbondanti), le due stime coincidono. Questa differenza è didatticamente preziosa, perché mostra come l’approccio frequentista si possa vedere come un caso limite del bayesiano.
-
+Un dettaglio importante è che i risultati di Stan possono differire leggermente da quelli di `glm()`. La ragione è proprio la presenza dei priori: anche se scelti molto larghi (qui, per esempio, `normal(0, 2.5)`), essi esercitano un piccolo “effetto di contrazione” verso lo zero, soprattutto con campioni finiti. In assenza di priori (o con dati molto abbondanti), le due stime coincidono. Questa differenza è preziosa dal punto di vista didattico, perché mostra come l'approccio frequentista possa essere considerato un caso limite di quello bayesiano.
 
 ### Il modello in Stan
 
@@ -344,7 +333,9 @@ generated quantities {
 }
 '
 ```
-Questo modello assume gli stessi dati simulati nell’esempio precedente. Prepariamo i dati in R:
+
+Questo modello assume gli stessi dati simulati nell’esempio precedente. Prepariamo i dati:
+
 ```{r}
 stan_data <- list(
   N = nrow(df),
@@ -352,7 +343,9 @@ stan_data <- list(
   x = df$X
 )
 ```
-Compiliamo e stimiamo:
+
+Compiliamo e eseguiamo il campionamento:
+
 ```{r}
 #| output: false
 
@@ -377,22 +370,21 @@ Esaminiamo ora i coefficienti stimati dal modello bayesiano:
 ```{r}
 fit$summary(variables = c("alpha","beta","OR"))
 ```
-In uscita otteniamo per ciascun parametro la media posteriore, la deviazione standard e un intervallo credibile. Ad esempio, il coefficiente $\beta$ ha un intervallo interamente positivo, coerente con la costruzione dei dati, e l’odds ratio risulta ben al di sopra di 1: segno che all’aumentare di $X$ cresce la probabilità di successo.
 
+L'output fornisce per ciascun parametro la media posteriore, la deviazione standard e gli intervalli di credibilità. Il coefficiente $\beta$ presenta un intervallo di credibilità interamente positivo, in linea con la struttura generativa dei dati, mentre l'odds ratio stimato si colloca completamente al di sopra di 1. Questo risultato suggerisce una relazione positiva tra il predittore e l'outcome: all'aumentare di $X$ si osserva un incremento sistematico della probabilità di successo.
 
 ### Interpretazione sulle tre scale
 
-Le distribuzioni posteriori di $\alpha$ e $\beta$ possono essere tradotte nelle tre scale discusse in precedenza.
+Le distribuzioni posteriori dei parametri $\alpha$ e $\beta$ possono essere interpretate attraverso le tre scale metriche precedentemente introdotte.
 
-*Scala dei logit.*
-L’intercetta $\alpha$ rappresenta i log-odds quando $x=0$. Supponiamo, ad esempio, che la posteriore dia $\alpha \approx -2$ con CrI 95% \[-2.2, -1.8]. Significa che al livello di riferimento la probabilità è bassa. Il coefficiente $\beta$, centrato intorno a 1 con CrI 95% \[0.9, 1.1], indica che ogni unità in più di $x$ aumenta i log-odds di circa un punto.
+**Scala dei logit**  
+L'intercetta $\alpha$ rappresenta i log-odds quando $x=0$. Una stima posteriore di $\alpha \approx -2$ con CrI 95% \[-2.2, -1.8] indica che al valore di riferimento del predittore la probabilità di successo è marcatamente bassa. Il coefficiente $\beta$, con valore centrale di 1 e CrI 95% \[0.9, 1.1], segnala che ogni incremento unitario di $x$ determina un aumento di circa un punto nei log-odds di successo.
 
-*Scala degli odds.*
-Esponenziando $\beta$ otteniamo l’odds ratio. Con $\beta \approx 1$, la distribuzione posteriore di $OR$ è centrata su 2.7, con CrI ad esempio \[2.5, 3.0]. Questo significa che, con altissima probabilità, un incremento unitario di $x$ moltiplica gli odds di successo di circa 2.5–3 volte.
+**Scala degli odds**  
+Mediante l'esponenziazione di $\beta$ si ottiene l'odds ratio. Con $\beta \approx 1$, la distribuzione posteriore di $OR$ risulta centrata attorno a 2.7, con CrI 95% \[2.5, 3.0]. Questo intervallo di credibilità indica che, con elevata probabilità, un incremento unitario di $x$ moltiplica gli odds di successo per un fattore compreso tra 2.5 e 3.
 
-*Scala delle probabilità.*
-Applicando la trasformazione logistica, otteniamo $p(x) = \text{logit}^{-1}(\alpha + \beta x)$. Per ogni draw posteriore possiamo calcolare una curva sigmoide: ne risulta un ventaglio di curve plausibili che descrivono l’incertezza. Intorno a $p=0.5$, la pendenza è massima e vale circa $\beta/4$. Con $\beta \approx 1$, ciò corrisponde a un incremento massimo di probabilità di circa 25 punti percentuali per unità di $x$.
-
+**Scala delle probabilità**  
+Applicando la trasformazione logistica si ricava $p(x) = \text{logit}^{-1}(\alpha + \beta x)$. Campionando dalla distribuzione congiunta a posteriori dei parametri è possibile generare un insieme di curve sigmoidi plausibili, che rappresentano l'incertezza inferenziale in modo completo. Nella regione centrale della curva, dove $p \approx 0.5$, la pendenza raggiunge il suo massimo teorico di circa $\beta/4$. Con $\beta \approx 1$, questo si traduce in un incremento massimo di probabilità di circa 25 punti percentuali per ogni unità aggiuntiva di $x$.
 
 ### Quantità derivate: RD, OR, RR
 
@@ -427,12 +419,12 @@ posterior_summary <- tibble(
 
 posterior_summary
 ```
-Qui $p_a$ e $p_b$ sono le probabilità predette per i due valori di $x$, la *risk difference* è la loro differenza assoluta, l’*odds ratio* corrisponde a $e^\beta$, e il *risk ratio* è il rapporto fra probabilità. Tutte queste quantità hanno ora distribuzioni posteriori con i rispettivi intervalli credibili.
 
+In questa rappresentazione, $p_a$ e $p_b$ indicano le probabilità predette corrispondenti a due diversi valori del predittore $x$. La risk difference costituisce la differenza assoluta tra queste probabilità, mentre l'odds ratio corrisponde a $e^\beta$, e il risk ratio esprime il rapporto diretto tra $p_b$ e $p_a$. Ciascuna di queste quantità, essendo derivata dalla distribuzione posteriore dei parametri, possiede a sua volta una distribuzione di probabilità completa, caratterizzata da propri intervalli di credibilità che ne quantificano l'incertezza inferenziale.
 
 ### Visualizzazione dell’incertezza
 
-Per rendere più chiara la variabilità delle predizioni, possiamo tracciare alcune curve campionate dalla posteriore, insieme alla curva media:
+Per rappresentare adeguatamente la variabilità predittiva del modello, è possibile visualizzare un campione di curve estratte dalla distribuzione a posteriori, affiancandole alla curva media:
 
 ```{r}
 x_grid <- seq(0, 9, length.out = 100)
@@ -457,14 +449,14 @@ ggplot() +
     x = "X", y = "Probabilità stimata"
   )
 ```
-Il grafico mostra come i dati sostengano un’intera famiglia di curve logistiche compatibili: la linea nera è la media posteriore, mentre le linee grigie rendono visibile l’incertezza.
 
+La visualizzazione risultante evidenzia come i dati supportino un'intera famiglia di relazioni logistiche plausibili. La curva nera rappresenta la relazione media posteriore, mentre il ventaglio di curve grigie rende tangibile l'incertezza inferenziale, mostrando l'intero spettro di andamenti compatibili con l'evidenza empirica.
 
 ### Sintesi
 
-Rispetto a `glm()`, l’approccio bayesiano con Stan fornisce un quadro più ricco e trasparente. Non abbiamo solo un punto stima e un errore standard, ma distribuzioni posteriori per tutti i parametri e le quantità derivate. Ciò ci permette di dire, ad esempio, che *con il 95% di probabilità posteriore l’odds ratio si colloca tra 2.5 e 3.0*, o che *l’incremento massimo di probabilità per unità di $x$ è di circa 25 punti percentuali*.
+Rispetto all'approccio tradizionale tramite la funzione `glm()`, il framework bayesiano implementato con Stan offre una rappresentazione inferenziale più completa e trasparente. Oltre alle stime puntuali e agli errori standard, fornisce distribuzioni posteriori complete per tutti i parametri del modello e per qualsiasi quantità derivabile da essi. Questa ricchezza informativa consente di fare affermazioni probabilisticamente fondate, come l'asserzione che "con probabilità posteriore del 95%, l'odds ratio è compreso tra 2,5 e 3,0" o che "l'effetto massimo sulla scala probabilistica ammonta a circa 25 punti percentuali per ogni unità incrementale di $x$".
 
-In sintesi, la regressione logistica bayesiana non solo replica quanto già visto con l’approccio frequentista, ma lo arricchisce con una rappresentazione completa dell’incertezza e con inferenze direttamente interpretabili in termini probabilistici.
+In definitiva, la regressione logistica in ottica bayesiana non si limita a riprodurre i risultati dell'approccio frequentista, ma li potenzia attraverso una caratterizzazione completa dell'incertezza e inferenze direttamente interpretabili in termini di probabilità soggettive, offrendo un quadro più solido per le decisioni scientifiche.
 
 ```{r}
 #| echo: false
@@ -537,11 +529,9 @@ kable(tab, align = c("l","l","c"),
       caption = "Riassunto delle stime posteriori sulle tre scale: logit (α, β), odds (OR), probabilità (p ai due livelli scelti, RD e RR), con intervalli credibili al 95%.")
 ```
 
-
-
 ## Collegamento con il caso a due gruppi
 
-Se il predittore $x$ è una variabile dummy, che assume valore 0 in un gruppo e 1 nell’altro, il modello con predittore continuo si riduce esattamente al caso del confronto tra due proporzioni discusso nel capitolo successivo. In quel contesto avevamo:
+Quando il predittore $x$ assume la forma di una variabile dicotomica, codificata come 0 per un gruppo di riferimento e 1 per il gruppo sperimentale, il modello di regressione logistica si riduce esattamente al caso del confronto tra due proporzioni.  In questo scenario specifico otteniamo:
 
 $$
 p_{\text{ref}} = \text{logit}^{-1}(\alpha), \qquad
@@ -554,18 +544,17 @@ RD = p_{\text{work}} - p_{\text{ref}}, \qquad
 OR = \exp(\gamma), \qquad
 RR = \frac{p_{\text{work}}}{p_{\text{ref}}}.
 $$
-Il confronto fra due gruppi, dunque, non è un modello separato ma un’applicazione particolare della regressione logistica generale. Questo ponte concettuale è importante perché mostra come il caso elementare delle due proporzioni si inserisca nello stesso quadro teorico della regressione logistica con predittori continui. Questo collegamento prepara il terreno per il prossimo capitolo, dove il confronto fra due proporzioni sarà analizzato in dettaglio.
-
+Il confronto fra due gruppi, dunque, non è un modello a sé stante, ma un caso particolare all'interno del quadro generale della regressione logistica. Questo ponte concettuale è importante perché mostra come il caso elementare del confronto tra due proporzioni si inserisca nello stesso quadro teorico della regressione logistica con predittori continui. Questa continuità metodologica getta le basi per il successivo capitolo, che sarà interamente dedicato all'approfondimento analitico del confronto tra proporzioni nel contesto bayesiano.
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-In questo capitolo abbiamo introdotto la *regressione logistica* come estensione naturale del modello lineare ai casi in cui l’esito è dicotomico. Abbiamo visto come il passaggio dal parametro probabilistico al logit consenta di mantenere la struttura lineare del modello, pur rispettando i vincoli logici delle probabilità comprese tra 0 e 1.
+La regressione logistica estende in modo naturale il modello lineare agli esiti binari: linearizza la relazione tramite il *logit*, mantiene l’interpretabilità dei coefficienti e rispetta i vincoli probabilistici. Il medesimo coefficiente può essere letto su *tre scale complementari*: come variazione dei log-odds (logit), come *odds ratio* tramite esponenziazione, e come cambiamento della *probabilità* (massimo ≈ $\beta/4$ attorno a $p=0.5$). Questa tripla lettura non duplica l'informazione, ma la completa, permettendo di rispondere a domande diverse con lo stesso modello.
 
-La stima bayesiana dei coefficienti, implementata in *Stan*, ci ha permesso di ottenere una rappresentazione completa dell’incertezza sulle relazioni tra predittori ed esiti. Abbiamo imparato a interpretare i coefficienti su scale diverse — probabilità, odds ratio, risk ratio — cogliendo così la flessibilità del modello e la sua capacità di adattarsi a molteplici domande di ricerca.
+L’inferenza *bayesiana* (via Stan) aggiunge ciò che spesso manca nelle stime puntuali: una descrizione esplicita dell’incertezza sui parametri e sulle quantità derivate (OR, RD, RR, predizioni). Le distribuzioni a posteriori, insieme ai posterior predictive checks, rendono trasparenti robustezza inferenziale e l'adeguatezza del modello.
 
-La regressione logistica è particolarmente rilevante in psicologia, dove esiti binari o dicotomici sono frequenti: dalle risposte corrette/errate in compiti cognitivi, alla presenza o assenza di sintomi clinici, fino alle scelte tra due alternative in contesti decisionali. Comprendere questo modello significa quindi dotarsi di uno strumento fondamentale, capace di connettere le nostre ipotesi teoriche con la natura concreta dei dati raccolti.
+Per la psicologia, dove abbondano gli esiti 0/1 (corretto/errato, presenza/assenza, scelta A/B), la regressione logistica offre un ponte chiaro tra ipotesi teoriche e dati osservati, consentendo di quantificare gli effetti, confrontare le condizioni e formulare previsioni interpretabili dal punto di vista applicativo (sia in ambito clinico che sperimentale).
 
-Ma la regressione logistica rappresenta anche un punto di partenza. Essa appartiene alla più ampia famiglia dei *modelli lineari generalizzati (GLM)*, che consentono di modellare variabili di natura diversa attraverso la combinazione di una distribuzione della famiglia esponenziale e di una funzione di collegamento (*link*). Nei prossimi capitoli esploreremo altri casi di GLM, consolidando così l’idea che regressione lineare, regressione logistica e ANOVA non siano strumenti separati, ma variazioni di un unico quadro metodologico, flessibile e coerente.
+Più che un punto d’arrivo, è una porta d’accesso ai GLM: lo stesso impianto si può generalizzare a più predittori, interazioni, predittori categorici/continui e si può arrivare fino a estensioni gerarchiche e a modelli con link e distribuzioni diverse. Nei capitoli successivi useremo questo quadro unificato per affrontare scenari più complessi, mantenendo coerenza formale e leggibilità dei risultati.
 
 ::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
 ```{r}

@@ -2,11 +2,11 @@
 
 ## Introduzione {.unnumbered .unlisted}
 
-Questo capitolo introduce il *modello di Rescorla–Wagner (RW)* con *regola di scelta Softmax* [@rescorla1972theory], come naturale estensione del modello di revisione degli obiettivi discusso nel capitolo precedente. Nel modello precedente l’aggiornamento era un *termine additivo* guidato da una discrepanza osservata; qui l’aggiornamento diventa esplicitamente *guidato dall’errore di predizione del rinforzo* (*reward prediction error*, RPE), ossia la differenza tra rinforzo ottenuto e rinforzo atteso. Questa formulazione è più *psicologicamente plausibile* e allineata all’evidenza in psicologia e neuroscienze: *si impara proporzionalmente a quanto l’esito sorprende le aspettative*.
+Questo capitolo approfondisce la discussione del *modello di Rescorla–Wagner (RW)* con *regola di scelta Softmax* [@rescorla1972theory; cfr. capitolo 24 del manuale], come naturale estensione del modello di revisione degli obiettivi discusso nel capitolo precedente. Nel modello precedente l’aggiornamento era un *termine additivo* guidato da una discrepanza osservata; qui, invece, l’aggiornamento è esplicitamente *guidato dall’errore di predizione del rinforzo* (*reward prediction error*, RPE), ovvero la differenza tra il rinforzo ottenuto e quello attese. Questa formulazione è più *psicologicamente plausibile* e allineata all’evidenza in psicologia e nelle neuroscienze: *si impara proporzionalmente a quanto l’esito sorprende le aspettative*.
 
-Accanto al livello di *apprendimento* (aggiornamento dei valori associativi $Q$), introduciamo il livello *decisionale*: le scelte non sono deterministiche, ma riflettono un compromesso fra *sfruttamento* dell’opzione migliore ed *esplorazione* di alternative. Con due opzioni, la Softmax si riduce a una *logistica della differenza* $Q_B-Q_A$, modulata dal parametro di *inverse temperature* $\tau$: valori alti di $\tau$ rendono le scelte più coerenti con $Q$, valori bassi più esplorative.
+Accanto al livello di *apprendimento* (aggiornamento dei valori associativi $Q$), introduciamo il livello *decisionale*: le scelte non sono deterministiche, ma riflettono un compromesso tra *sfruttamento* dell’opzione migliore ed *esplorazione* di alternative. Con due opzioni, la Softmax si riduce a una *logistica della differenza* $Q_B-Q_A$, modulata dal parametro di *inverse temperature* $\tau$: valori alti di $\tau$ rendono le scelte più coerenti con $Q$, mentre valori bassi le rendono più esplorative.
 
-Questa distinzione *apprendimento–decisione* è cruciale: consente di *separare* il meccanismo che aggiorna le aspettative (parametro $lr$) dal meccanismo che le traduce in *probabilità di scelta* (parametro $\tau$). Nei paragrafi successivi mostreremo come *simulare* dati (es. *probabilistic reversal learning*), *stimare* i parametri con *Stan* e *interpretare* i profili individuali e di gruppo. 
+Questa distinzione *apprendimento–decisione* è cruciale: consente di *separare* il meccanismo che aggiorna le aspettative (parametro $lr$) da quello che le traduce in probabilità di scelta (parametro $\tau$). Nei paragrafi successivi mostreremo come *simulare* dati (ad esempio, il  *probabilistic reversal learning*), *stimare* i parametri con *Stan* e *interpretare* i profili individuali e di gruppo. 
 
 ::: {.callout-caution collapse=true title="Preparazione del Notebook"}
 ```{r}
@@ -19,13 +19,11 @@ library(cmdstanr)
 ```
 :::
 
+## Il modello di Rescorla–Wagner
 
-## Il Modello di Rescorla–Wagner
+Il modello di *Rescorla–Wagner (RW)* è uno dei modelli più influenti nello studio dell’apprendimento associativo. Esso descrive come gli individui aggiornino le proprie aspettative in base all’esperienza, introducendo un meccanismo semplice ma potente che spiega fenomeni quali l’acquisizione, l’estinzione e il blocking.
 
-Il modello di *Rescorla–Wagner (RW)* è uno dei modelli più influenti nello studio dell’apprendimento associativo. Esso descrive come gli individui aggiornino le proprie aspettative in base all’esperienza, introducendo un meccanismo semplice ma potente che spiega fenomeni come acquisizione, estinzione e *blocking*.
-
-L’idea di fondo è che l’apprendimento si realizzi attraverso l’aggiornamento della *forza associativa* $Q_t(s)$ di uno stimolo $s$ al tempo $t$, in funzione della discrepanza tra ciò che ci si aspettava e ciò che si è effettivamente osservato.
-
+L’idea di fondo è che l’apprendimento si realizzi attraverso l’aggiornamento della *forza associativa* $Q_t(s)$ di uno stimolo $s$ al tempo $t$, in funzione della discrepanza tra ciò che ci si aspettava e ciò che è stato effettivamente osservato.
 
 ### Aggiornamento delle aspettative
 
@@ -41,30 +39,27 @@ $$
 $$
 è l’*errore di previsione* (*prediction error*), cioè la differenza tra la ricompensa ottenuta $R_t$ e l’aspettativa precedente $Q_t(s)$.
 
-* Se $\delta_t > 0$: la ricompensa è stata migliore del previsto → l’associazione si rafforza.
-* Se $\delta_t < 0$: la ricompensa è stata peggiore del previsto → l’associazione si indebolisce.
-* Se $\delta_t = 0$: ciò che si è osservato coincide con l’attesa → nessun aggiornamento.
+Quando l'errore di previsione $\delta_t$ assume valori positivi, indica una ricompensa superiore alle attese, determinando così un rafforzamento dell'associazione appresa. Al contrario, un valore negativo di $\delta_t$ segnala una ricompensa inferiore al previsto, con conseguente indebolimento dell'associazione. Nel caso in cui $\delta_t$ sia nullo, l'esito corrisponde esattamente all'aspettativa, e non si verifica quindi alcun aggiornamento delle credenze.
 
 Il parametro $ \alpha \in [0,1] $ rappresenta il tasso di apprendimento (qui lo indichiamo con `lr`). Con `lr` alto l’aggiornamento è rapido; con `lr` basso è lento e più “conservativo”.
 
 ::: {.callout-note collapse=true title="Variante (facoltativa): tassi distinti per PE positivo/negativo"}
-In alcune applicazioni si usano due tassi distinti $\alpha^+$ e $\alpha^-$ per apprendere diversamente da buone e cattive notizie. Questa distinzione consente di modellare la diversa sensibilità di individui o gruppi alle ricompense inattese rispetto alle punizioni o ai premi. Nel presente tutorial adottiamo **un unico `lr`** per semplicità e coerenza con il codice Stan.
+In alcune applicazioni si usano due tassi distinti $\alpha^+$ e $\alpha^-$ per apprendere diversamente da buone e cattive notizie. Questa distinzione consente di modellare la diversa sensibilità di individui o gruppi alle ricompense inattese rispetto alle punizioni o ai premi. Nel contesto del presente tutorial, al fine di privilegiare la chiarezza espositiva, viene mantenuto un unico parametro `lr` che aggrega entrambe le componenti di apprendimento.
 :::
-
 
 ### Dalla valutazione alla decisione
 
-Avere valori $Q_t(A)$ e $Q_t(B)$ diversi non implica che la scelta sia sempre deterministica. Gli individui possono alternare tra *sfruttamento* (scegliere l’opzione con valore atteso maggiore) ed *esplorazione* (provare opzioni alternative).
+La differenziazione nei valori attesi $Q_t(A)$ e $Q_t(B)$ non determina necessariamente un comportamento puramente deterministico. Gli individui mostrano infatti una caratteristica alternanza tra *sfruttamento* - selezione dell'opzione dal valore atteso più elevato - ed *esplorazione* - campionamento di alternative potenzialmente subottimali.
 
-Con due opzioni (A, B), la scelta è modellata come logistica della differenza di valore:
+In uno scenario decisionale binario ($A$ vs. $B$), questa dinamica viene formalizzata attraverso una funzione logistica applicata alla differenza di valore:
 
 $$
 P(\text{scegliere B}) = \text{inv\_logit}\!\big(\tau \,[Q_t(B)-Q_t(A)]\big).
 $$
-All’aumentare di $\tau$, anche piccole differenze $Q_t(B)-Q_t(A)$ producono scelte quasi deterministiche; con $\tau$ bassa il comportamento è più esplorativo.
 
-In sintesi, il modello di Rescorla–Wagner fornisce una descrizione formale e compatta di come gli individui apprendono in modo flessibile dalle proprie esperienze, adattando le aspettative e le decisioni in risposta ai cambiamenti dell’ambiente.
+Il parametro $\tau$ (temperatura) regola il bilanciamento tra esplorazione e sfruttamento: valori elevati di $\tau$ producono scelte quasi deterministiche anche in presenza di minime differenze di valore, mentre valori bassi di $\tau$ generano comportamenti più esplorativi e stocastici.
 
+In definitiva, il modello di Rescorla-Wagner fornisce una descrizione formale e compatta di come gli individui imparano in modo flessibile dalle proprie esperienze, adattando aspettative e decisioni in risposta ai cambiamenti dell'ambiente.
 
 ::: {.callout-caution collapse=true title="Approfondimento: esplorazione vs. sfruttamento (logit a 2 opzioni)"}
 Con due opzioni, la *Softmax* si riduce a una *logistica* sulla differenza di valore. Useremo quindi $\Delta Q = Q_B - Q_A$ e modelleremo la probabilità di scegliere *B* come
@@ -118,31 +113,19 @@ ggplot(df, aes(x = dq, y = prob_B, color = tau)) +
 Questo esempio mostra come $\tau$ controlli la transizione tra esplorazione e sfruttamento nel *caso binario* (logit), coerente con il modello Stan usato nel tutorial.
 :::
 
-
 ### Identificabilità e scaling
 
-Nella funzione Softmax conta solo la *differenza* tra i valori $Q$. Se aggiungiamo la stessa costante $c$ a entrambi (cioè $Q_t(s) + c$), le probabilità di scelta non cambiano.  
+Nella funzione Softmax conta solo la *differenza* tra i valori di $Q$. Se aggiungiamo la stessa costante $c$ a entrambi, le  probabilità di scelta rimangono invariate. Per questo motivo, il livello assoluto dei valori $Q$ non è identificabile: solo le differenze relative influenzano le scelte.
 
-Per questo motivo:  
+Per evitare ambiguità si adottano convenzioni di *scaling*, come inizializzare i valori di $Q$ in modo simmetrico (ad esempio $Q_0(A) = Q_0(B) = 0.5$), mantenere i rinforzi nell'intervallo ${0,1}$ o fissare un valore di riferimento o un vincolo su $\beta$. Queste scelte non modificano il comportamento del modello, ma lo rendono ben definito dal punto di vista matematico.
 
-- si inizializzano di solito i valori in modo simmetrico (ad esempio $Q_0(A) = Q_0(B) = 0.5$);  
-- si mantengono i rinforzi nel range $\{0,1\}$;  
-- oppure si fissa un valore iniziale di riferimento, o si pongono vincoli su $\beta$.  
-
-Queste scelte servono solo a rendere il modello *ben definito*, senza influenzare il comportamento osservato.
-
-Nel presente tutorial il rinforzo è codificato come $R_t \in \{0,1\}$. In questo caso i valori $Q$ convergono a stime di probabilità di ricompensa e risultano naturalmente in $[0,1]$. Con codifiche $\{-1,+1\}$, i $Q$ convergono a valori attesi in $[-1,+1]$ e occorre tenerne conto nell’interpretazione.
-
-
+Nel presente tutorial il rinforzo è codificato come $R_t \in {0,1}$, pertanto i valori $Q$ convergono naturalmente verso stime di probabilità di ricompensa comprese tra 0 e 1. Se invece i rinforzi fossero codificati come ${-1,+1}$, i valori $Q$ si collocherebbero nell’intervallo $[-1,+1]$, e l'interpretazione dovrebbe essere adeguata di conseguenza.
 
 ## Simulazione
 
-Simuliamo i dati in un compito di *Probabilistic Reversal Learning* (PRL). In questo compito il partecipante deve scegliere ripetutamente tra due stimoli:
+Simuliamo i dati di un compito di "Probabilistic Reversal Learning" (PRL), in cui il partecipante deve scegliere ripetutamente tra due stimoli. Uno degli stimoli, detto "ricco", fornisce una ricompensa con probabilità $p = 0.7$, mentre l'altro, detto "povero", ha una probabilità di ricompensa di $1 - p = 0.3$.
 
-* uno *ricco*, con probabilità di ricompensa $p=0.7$;
-* uno *povero*, con probabilità $1-p=0.3$.
-
-A metà esperimento le probabilità vengono invertite (*reversal*): lo stimolo che prima era ricco diventa povero e viceversa. Il partecipante deve quindi adattarsi al cambiamento per massimizzare le ricompense.
+A metà dell'esperimento, le probabilità si invertono (*reversal*): lo stimolo inizialmente ricco diventa povero e quello povero diventa ricco. Il compito del partecipante è riconoscere questo cambiamento e adattare le proprie scelte per ottenere il maggior numero possibile di ricompense.
 
 ```{r}
 # Simulatore PRL (RW + logit) allineato al modello Stan (choice in 0/1)
@@ -204,9 +187,6 @@ simulate_prl_rw_binary <- function(
 sim <- simulate_prl_rw_binary()
 ```
 
-*Nota.* La probabilità simulata coincide con quella dello Stan: $P(B)=\text{inv\_logit}\!\big(\tau [Q(B)-Q(A)]\big)$. Anche l’aggiornamento usa **lo stesso** `lr`.
-
-
 Visualizziamo l’evoluzione dei valori associativi $Q$:
 
 ```{r echo=FALSE}
@@ -234,43 +214,31 @@ ggplot(sim_long, aes(x = trial, y = Q, color = stimolo)) +
 
 ### Interpretazione del grafico
 
-Nella *prima fase* (trial 1–80), lo stimolo ricco (linea blu) riceve più ricompense e quindi accumula un valore $Q$ più alto rispetto allo stimolo povero (linea verde).
+Nella prima parte dell'esperimento (trial 1-80), lo stimolo "ricco", rappresentato dalla linea blu, riceve ricompense più frequenti e accumula progressivamente un valore $Q$ più alto rispetto allo stimolo "povero", rappresentato dalla linea verde.
 
-Al momento del *reversal* (linea verticale tratteggiata), le probabilità si invertono. Lo stimolo blu smette di essere vantaggioso e il suo valore $Q$ scende, mentre lo stimolo verde cresce.
+Quando si verifica il *reversal* (linea verticale tratteggiata), le probabilità di rinforzo si invertono: lo stimolo blu smette di essere vantaggioso e il suo valore $Q$ diminuisce, mentre quello verde aumenta man mano che diventa la scelta più remunerativa.
 
-Questo andamento riflette il principio base del modello di *Rescorla–Wagner*:
-
-* i valori associativi $Q$ non sono fissi,
-* vengono aggiornati *trial per trial* con una regola di apprendimento molto semplice:
+Questo andamento illustra il principio fondamentale del modello di Rescorla–Wagner, secondo cui i valori associativi $Q$ vengono aggiornati prova per prova in base all’errore di previsione (*prediction error*, PE):
 
 $$
 Q_{\text{nuovo}} = Q_{\text{vecchio}} + lr \times (reward - Q_{\text{vecchio}}).
 $$
-Il termine $reward - Q_{\text{vecchio}}$ è il *prediction error* (PE): la differenza tra ciò che si è osservato e ciò che ci si aspettava.
 
-* Se il feedback è migliore del previsto (PE>0), il valore $Q$ aumenta.
-* Se è peggiore del previsto (PE<0), il valore diminuisce.
-* Il *learning rate* `lr` regola di quanto il valore cambia a ogni prova.
-* Il parametro `tau` controlla invece quanto le scelte sono “guidate” dai valori Q:
+Il termine $(reward - Q_{\text{vecchio}})$ rappresenta la differenza tra il risultato ottenuto e quello atteso.
+Quando il feedback è migliore del previsto (PE > 0), il valore $Q$ aumenta; quando è peggiore (PE < 0), diminuisce. L'entità dell'aggiornamento dipende dal parametro di apprendimento "learning rate" (`lr`): un valore alto porta a un adattamento rapido ma instabile, mentre un valore basso produce aggiustamenti graduali e stabili.
 
-  * se `tau` è grande → scelte più deterministiche (si sceglie quasi sempre lo stimolo con Q maggiore);
-  * se `tau` è piccolo → scelte più esplorative o rumorose.
+Il parametro `tau` controlla invece la sensibilità delle scelte alle differenze tra i valori $Q$. Con un valore di tau grande, le scelte diventano più deterministiche (si tende a preferire quasi sempre lo stimolo con il valore più alto), mentre con un valore di `tau` piccolo, prevale un comportamento più esplorativo o rumoroso.
 
+## Stima bayesiana con Stan
 
-## Stima Bayesiana con Stan
+Nella simulazione conoscevamo i parametri generativi (`lr = 0.15`, `tau = 2`). Nella pratica, invece, disponiamo soltanto dei *dati osservati*: per ogni trial sappiamo quale scelta è stata effettuata (`choice = 0` per A, `choice = 1` per B) e se il feedback ricevuto è stato positivo o negativo (`reward = 1` oppure `0`).
 
-Nella simulazione conoscevamo i parametri generativi (`lr=0.15`, `tau=2`). Nella realtà, però, abbiamo *solo i dati osservati*:
+I valori interni del modello — i $Q$ associati agli stimoli e i parametri che li governano — non sono direttamente osservabili: devono essere *inferiti* a partire dal comportamento.
 
-* per ogni trial sappiamo quale scelta è stata fatta (`choice=0` per A, `choice=1` per B),
-* e se il feedback è stato positivo o negativo (`reward=1` oppure `0`).
+L’ipotesi di base è che le scelte derivino da un processo di tipo *Rescorla–Wagner* combinato con una regola di scelta logistica (*softmax*). L’obiettivo dell’analisi è stimare, usando i soli dati comportamentali, due parametri fondamentali:
 
-I valori interni $Q$ e i parametri del modello non sono osservabili: dobbiamo *inferirli*.
-
-L’ipotesi è che i dati derivino da un processo di tipo *Rescorla–Wagner con regola di scelta logistica*. L’obiettivo è quindi stimare, a partire dai soli dati:
-
-* il *learning rate* `lr`, che regola la velocità di aggiornamento dei valori;
-* l’*inverse temperature* `tau`, che controlla quanto le scelte sono coerenti con i valori Q.
-
+* il *learning rate* `lr`, che determina la rapidità con cui i valori $Q$ si aggiornano dopo ciascun feedback;
+* l’*inverse temperature* `tau`, che quantifica quanto le scelte seguono i valori $Q$ in modo coerente (valori alti implicano scelte più deterministiche, valori bassi scelte più esplorative).
 
 ### Codice Stan
 
@@ -316,59 +284,46 @@ model {
 
 I prior scelti sono debolmente informativi ma coerenti con compiti PRL tipici (apprendimento moderato e scelte non eccessivamente rumorose). Possono essere resi più o meno conservativi in base al compito.
 
-
 ### Commento al codice Stan
 
-1. **Inizializzazione.** All’inizio i due valori $Q[1]$ e $Q[2]$ (per A e B) sono fissati a 0.
-   Rappresentano l’aspettativa iniziale: “nessuna preferenza”.
+All’inizio dell’esecuzione, i due valori $Q[1]$ e $Q[2]$ (associati agli stimoli A e B) sono fissati a zero: rappresentano l’aspettativa iniziale del partecipante, cioè una condizione di indifferenza tra le due opzioni.
 
-2. **Probabilità della scelta.**
-   Al trial $t$, confrontiamo i due valori:
-
-   $$
-   p(B) = \text{inv\_logit}\big(\tau \cdot (Q_B - Q_A)\big).
-   $$
-
-   Questo significa che se $Q_B > Q_A$, aumenta la probabilità di scegliere B.
-   Il parametro `tau` regola la “determinazione”:
-
-   * se `tau` è grande, basta una piccola differenza tra i due Q per portare a scelte quasi certe;
-   * se `tau` è piccolo, anche differenze grandi lasciano spazio all’esplorazione.
-
-3. **Valutazione della scelta osservata.**
-   La riga `choice[t] ~ bernoulli(p)` confronta la scelta osservata con la probabilità prevista.
-   Questa è la *verosimiglianza*: se la scelta osservata è coerente con i Q correnti, il modello “ottiene credito”; se è incoerente, viene “penalizzato”.
-
-4. **Osservazione dell’esito e prediction error.**
-   Dopo aver osservato il feedback, calcoliamo:
-
-   $$
-   PE = reward[t] - Q[\text{scelta}],
-   $$
-
-   ossia la differenza tra il risultato ricevuto e quello atteso.
-
-5. **Aggiornamento dei valori.**
-   Solo il Q corrispondente all’opzione scelta viene aggiornato:
-
-   $$
-   Q_{\text{nuovo}} = Q_{\text{vecchio}} + lr \cdot PE.
-   $$
-
-   * Se il feedback è migliore del previsto (PE>0), il valore cresce.
-   * Se è peggiore del previsto (PE<0), il valore diminuisce.
-   * Il learning rate `lr` determina di quanto cambia il valore a ogni trial.
-
-### Esempio intuitivo
-
-Immagina di avere $Q_A = 0.6$, $Q_B = 0.3$ e `tau=2`. La differenza $Q_B - Q_A = -0.3$. Il logit vale $-0.6$, e quindi:
+Al trial $t$, il modello calcola la probabilità di scegliere B confrontando i due valori di $Q$:
 
 $$
-p(B) = \text{inv\_logit}(-0.6) \approx 0.35.
+p(B) = \text{inv\_logit}\big(\tau \cdot (Q_B - Q_A)\big).
 $$
-Quindi, il modello si aspetta che A venga scelto nel 65% dei casi.
 
-Se il soggetto sceglie effettivamente A, la verosimiglianza è alta. Se sceglie B, è possibile ma meno probabile: il modello aggiorna i valori interni in base al feedback ricevuto.
+Quando $Q_B$ supera $Q_A$, la probabilità di scegliere B aumenta. Il parametro `tau` controlla quanto questa differenza incide sulle scelte: con valori elevati, anche piccole differenze tra i due Q portano a decisioni quasi certe; con valori bassi, le scelte restano più esplorative e meno determinate.
+
+La riga `choice[t] ~ bernoulli(p)` specifica la *verosimiglianza*: confronta la scelta osservata con la probabilità prevista dal modello. Se la scelta è coerente con le aspettative derivanti dai $Q$, la probabilità (e quindi il “credito” del modello) aumenta; se è incoerente, diminuisce.
+
+Dopo la scelta, si osserva il feedback e si calcola l'errore di previsione (*prediction error*, PE):
+
+$$
+PE = reward[t] - Q[\text{scelta}],
+$$
+
+ovvero, la differenza tra il risultato ottenuto e quello atteso.
+
+Infine, solo il valore $Q$ corrispondente all’opzione scelta viene aggiornato secondo la regola di apprendimento di Rescorla–Wagner:
+
+$$
+Q_{\text{nuovo}} = Q_{\text{vecchio}} + lr \cdot PE.
+$$
+
+Se il feedback è migliore del previsto (PE > 0), il valore aumenta; se è peggiore (PE < 0), diminuisce. L’entità dell’aggiornamento dipende dal *learning rate* `lr`: un valore alto produce cambiamenti rapidi, uno basso genera un apprendimento più graduale.
+
+::: {.callout-note collapse=true title="Esempio intuitivo"}
+Supponiamo che in un certo momento i valori stimati siano $Q_A = 0.6$ e $Q_B = 0.3$, con `tau = 2`. La differenza tra i due è $Q_B - Q_A = -0.3$, quindi l’argomento della funzione logit è $-0.6$. Ne consegue:
+
+$$
+p(B) = \text{inv_logit}(-0.6) \approx 0.35.
+$$
+Il modello prevede dunque che il partecipante scelga lo stimolo $A$ con una probabilità di circa il 65%.
+
+Se il partecipante sceglie effettivamente $A$, l’osservazione è coerente con le aspettative del modello e la verosimiglianza risulta elevata. Se invece sceglie $B$, l’evento è meno probabile ma comunque possibile: in tal caso, dopo aver osservato il feedback, il modello aggiorna i valori interni $Q$ per ridurre la discrepanza tra previsione e risultato.
+:::
 
 In questo tutorial useremo i dati simulati in precedenza:
 
@@ -397,7 +352,7 @@ fit_rw <- mod_rw$sample(
 )
 ```
 
-Eseguiamo le diagnostiche di campionamento:
+Calcoliamo le diagnostiche di campionamento:
 
 ```{r}
 fit_rw$cmdstan_diagnose()  # controlli rapidi cmdstan
@@ -409,28 +364,13 @@ Esaminiamo la distribuzione a posteriori dei parametri:
 fit_rw$summary(c("lr","tau"))
 ```
 
-
 ## Interpretazione dei risultati
 
-Le distribuzioni a posteriori stimano quanto bene il modello è riuscito a recuperare i parametri generativi usati nella simulazione (`lr = 0.15`, `tau = 2`).
+Le distribuzioni a posteriori mostrano quanto bene il modello è riuscito a recuperare i parametri generativi utilizzati nella simulazione (`lr = 0.15`, `tau = 2`).
 
-* `lr` (learning rate) regola la rapidità con cui il soggetto aggiorna le proprie aspettative dopo ogni feedback.
+Il parametro `lr` (*learning rate*) determina la velocità con cui il soggetto aggiorna le proprie aspettative dopo ogni feedback. Valori elevati indicano un apprendimento rapido: anche un singolo esito può modificare sensibilmente la stima del valore di uno stimolo. Valori bassi, invece, producono un apprendimento più lento e conservativo: le esperienze passate continuano a influenzare a lungo le scelte, rendendo l’adattamento ai cambiamenti più graduale.
 
-  * Valori alti → aggiornamenti rapidi: anche un singolo feedback può cambiare molto la stima del valore associato a uno stimolo.
-  * Valori bassi → aggiornamenti lenti: il soggetto “conserva” più a lungo le esperienze passate, adattandosi solo gradualmente ai cambiamenti.
-
-* `tau` (inverse temperature) controlla la coerenza delle scelte rispetto ai valori $Q$.
-
-  * Con `tau` alto → le scelte sono quasi deterministiche: basta una piccola differenza tra $Q_A$ e $Q_B$ per indurre una preferenza netta.
-  * Con `tau` basso → il comportamento appare più esplorativo o rumoroso: anche se uno stimolo ha un valore più alto, non sempre viene scelto.
-
-Nei grafici delle distribuzioni posteriori:
-
-* le *linee tratteggiate* rappresentano i valori “veri” usati per simulare i dati,
-* le *distribuzioni stimate* mostrano l’incertezza del modello sulle possibili soluzioni.
-
-Quando la distribuzione è ben centrata sulla linea tratteggiata e piuttosto stretta, significa che il modello ha recuperato bene il parametro. Distribuzioni più larghe o spostate indicano maggiore incertezza o possibili *trade-off* tra parametri (ad esempio: un `lr` leggermente diverso può essere compensato da un `tau` più basso o più alto producendo previsioni simili).
-
+Il parametro `tau` (*inverse temperature*) controlla invece quanto le scelte seguono in modo coerente i valori stimati $Q$. Con un valore alto di `tau`, il comportamento è quasi deterministico: basta una piccola differenza tra $Q_A$ e $Q_B$ per generare una preferenza netta. Con un valore basso di `tau`, le scelte appaiono più esplorative o rumorose: anche stimoli con un valore inferiore vengono scelti occasionalmente.
 
 ```{r}
 draws_df <- fit_rw$draws(c("lr","tau")) |>
@@ -457,89 +397,56 @@ p_lr  + geom_vline(xintercept = true_vals["lr"],  linetype = 2)
 p_tau + geom_vline(xintercept = true_vals["tau"], linetype = 2)
 ```
 
-Attenzione ai possibili *trade-off*: in dataset brevi o con scarsa esplorazione, combinazioni diverse di `lr` e `tau` possono produrre predizioni simili (identificabilità parziale). Conviene sempre ispezionare tracce, R-hat, ESS e, se possibile, condurre *posterior predictive checks*.
+Nei grafici delle distribuzioni posteriori, le linee tratteggiate rappresentano i valori reali utilizzati nella simulazione, mentre le distribuzioni colorate riflettono l'incertezza del modello riguardo alle possibili stime dei parametri. Quando una distribuzione è centrata sulla linea tratteggiata e risulta concentrata, significa che il modello ha recuperato il parametro in modo accurato. Distribuzioni più ampie o spostate indicano invece una maggiore incertezza o relazioni di compensazione tra i parametri: ad esempio, un `lr` leggermente diverso può essere controbilanciato da un `tau` più alto o più basso, producendo previsioni simili.
 
+Questo fenomeno di *trade-off* è comune nei dataset brevi o con bassa variabilità nelle scelte, in cui più combinazioni di parametri possono descrivere in modo equivalente i dati osservati. È quindi importante verificare la qualità del campionamento (ad esempio, tramite le statistiche R-hat e ESS) e valutare l'adattamento del modello con analisi predittive posteriori (*posterior predictive checks*).
 
 ## Dal parametro allo stile cognitivo
 
-I parametri del modello non sono soltanto numeri: possono essere interpretati come *indicatori di stili di apprendimento e decisione*.
+I parametri del modello non rappresentano solo grandezze numeriche, ma descrivono diverse modalità di apprendimento e di presa di decisioni.
 
-* **Learning rate (`lr`)**
+Il learning rate (`lr`) riflette la rapidità con cui una persona aggiorna le proprie aspettative in base ai risultati ricevuti. Un individuo con un valore di learning rate alto è molto sensibile ai singoli feedback: reagisce prontamente agli esiti e può adattarsi rapidamente a un cambiamento delle contingenze (*reversal*). Per esempio, bastano pochi esiti negativi perché abbandoni lo stimolo che in precedenza sembrava più vantaggioso. Al contrario, un valore basso di `lr` indica un apprendimento più cauto e conservativo: l'individuo integra lentamente le nuove informazioni e tende a mantenere le proprie scelte abituali anche di fronte a segnali contrari, modificando il proprio comportamento solo dopo un'evidenza più consistente.
 
-  * Un soggetto con `lr` alto è molto sensibile ai singoli feedback: aggiorna le proprie aspettative in modo rapido e può adattarsi velocemente a un *reversal*.
-    *Esempio*: basta un paio di esiti negativi perché abbandoni l’opzione che prima sembrava migliore.
-  * Un soggetto con `lr` basso aggiorna più lentamente: dà più peso all’esperienza accumulata e tende a mantenere le proprie scelte anche di fronte a segnali contrari.
-    *Esempio*: continua a scegliere lo stimolo “vecchio ricco” anche dopo alcuni esiti negativi, adattandosi solo gradualmente.
-
-* **Inverse temperature (`tau`)**
-
-  * Un soggetto con `tau` alto si comporta in modo *deterministico*: sceglie quasi sempre l’opzione con il valore Q più alto. Questo corrisponde a uno stile “sfruttatore” (*exploiter*), focalizzato sul massimizzare subito i guadagni.
-  * Un soggetto con `tau` basso mostra un comportamento più *esplorativo o rumoroso*: anche se una delle due opzioni è chiaramente più vantaggiosa, di tanto in tanto sceglie l’altra. Questo stile può sembrare “incoerente”, ma in certi contesti favorisce l’esplorazione di alternative.
+L'*inverse temperature* (`tau`) descrive invece quanto le scelte siano coerenti con i valori stimati $Q$. Con un valore di `tau` alto, il comportamento diventa quasi deterministico: lo stimolo con il valore più alto viene scelto quasi sempre. Questo profilo corrisponde a uno stile orientato allo sfruttamento, volto a massimizzare subito i guadagni. Con un valore di `tau` basso, invece, le scelte appaiono più esplorative o rumorose: anche quando una delle due opzioni è chiaramente migliore, il soggetto talvolta opta per l'altra. Questo stile, apparentemente "incoerente", può però rivelarsi vantaggioso in ambienti incerti o mutevoli, in quanto favorisce l'esplorazione di alternative potenzialmente più redditizie.
 
 ### Messaggio chiave
 
-L’approccio bayesiano permette di stimare, per ogni individuo, un profilo fatto di *apprendimento* (quanto velocemente aggiorna le proprie aspettative) e *decisione* (quanto coerentemente agisce in base a quelle aspettative).
+L’approccio bayesiano consente di stimare, per ciascun individuo, un profilo che integra due dimensioni fondamentali: *apprendimento*, cioè la velocità con cui aggiorna le proprie aspettative, e *decisione*, ovvero quanto coerentemente agisce in base a tali aspettative.
 
-Differenze sistematiche nei parametri tra *gruppi sperimentali* (es. stimoli emozionanti vs. neutri) o tra *popolazioni cliniche e di controllo* possono rivelare *stili cognitivi distintivi*:
+Differenze sistematiche nei parametri tra gruppi sperimentali (ad esempio, tra stimoli emotivi e stimoli neutri) o tra popolazioni cliniche e di controllo possono rivelare *stili cognitivi distinti*. Un *learning rate* basso (`lr`) può indicare difficoltà nell’adattarsi a nuovi feedback, mentre valori estremi di *inverse temperature* (`tau`) possono riflettere scelte eccessivamente rigide o, al contrario, troppo esplorative.
 
-* difficoltà nell’adattarsi a nuovi feedback (lr basso),
-* oppure scelte troppo rigide o troppo esplorative (tau troppo alto o troppo basso).
+In questa prospettiva, anche un modello computazionale essenziale come quello di *Rescorla–Wagner* con regola di scelta logistica non si limita a descrivere il comportamento osservato, ma offre una *chiave di lettura psicologica* per comprendere i meccanismi cognitivi che lo generano.
 
-In questo modo, un modello computazionale semplice come il Rescorla–Wagner con regola logistica non solo descrive i dati, ma fornisce anche una *chiave di lettura psicologica* dei processi sottostanti.
+## Contextual bandits 
 
+Nel modello di *Rescorla–Wagner* con regola logistica, come visto nel tutorial, i parametri principali, ovvero il learning rate (`lr`), che regola la velocità con cui i valori $Q$ vengono aggiornati, e l’inverse temperature (`tau`), che governa la coerenza delle scelte rispetto a tali valori, sono assunti come stabili per tutto il compito.
 
-## Contextual Bandits e compiti *food* vs. *neutral*
+La famiglia dei *banditi contestuali* (*contextual bandits*) estende questo schema introducendo la possibilità che i parametri varino in funzione del *contesto sperimentale*. Lo stesso meccanismo di apprendimento e decisione (RW + logit) viene quindi applicato separatamente a condizioni diverse, come nel caso di stimoli *food* e *neutral* in un campione di pazienti con anoressia, oppure a gruppi differenti, come pazienti clinici e controlli.
 
-Il modello di Rescorla–Wagner con regola logistica, come visto nel tutorial, assume due parametri stabili per tutto il compito:
+Questa estensione si è rivelata particolarmente utile nello studio dei disturbi alimentari. Analisi recenti hanno mostrato che i *deficit di apprendimento in anoressia nervosa non sono generalizzati*, ma *specifici del contesto alimentare*: nelle prove con stimoli legati al cibo, le persone con anoressia tendono a mostrare un *learning rate* più basso, cioè aggiornano più lentamente le proprie aspettative; negli stessi compiti con stimoli neutri, invece, i parametri risultano simili a quelli dei controlli [@colpizzi2025food].
 
-* `lr`, che regola la velocità con cui i valori $Q$ vengono aggiornati,
-* `tau`, che governa la coerenza delle scelte rispetto a tali valori.
+Questi risultati indicano che la vulnerabilità non riguarda un deficit globale nei meccanismi di apprendimento, ma un'alterazione selettiva e dipendente dal contesto che contribuisce al mantenimento del disturbo.
 
-La famiglia dei *banditi contestuali* rappresenta un’estensione naturale: i parametri non sono più fissi, ma possono *variare in funzione del contesto*. In pratica, lo stesso schema RW + logit viene applicato separatamente a diverse condizioni sperimentali (es. stimoli *food* vs. stimoli *neutral*, per un campione di pazienti anoressiche) o a diversi gruppi di partecipanti (es. clinici vs. controlli).
+Formalmente, per ciascun contesto $c \in {\text{food}, \text{neutral}}$, il modello è espresso come:
 
-Questa estensione è stata applicata con successo nello studio dei disturbi alimentari. Analisi recenti hanno mostrato che i *deficit di apprendimento* in anoressia nervosa non sono globali, ma *specifici del contesto alimentare*:
-
-* di fronte a stimoli legati al cibo, le persone con anoressia tendono a mostrare un *learning rate più basso*, cioè aggiornano le aspettative più lentamente;
-* negli stessi compiti con stimoli neutri, invece, i parametri risultano simili a quelli dei controlli [@colpizzi2025food].
-
-Questa evidenza suggerisce che la vulnerabilità non consista in un deficit generale dei processi di apprendimento, ma in un’alterazione *selettiva e contestuale*, che contribuisce al mantenimento del disturbo.
-
-Formalmente, per il contesto $c \in \{\text{food},\text{neutral}\}$ si stima:
 $$
-P_c(B_t)=\text{inv\_logit}\!\big(\tau_c [Q_{c,t}(B)-Q_{c,t}(A)]\big), 
+P_c(B_t)=\text{inv\_logit}!\big(\tau_c [Q_{c,t}(B)-Q_{c,t}(A)]\big),
 $$
+
 $$
-Q_{c,t+1}(s)=Q_{c,t}(s)+lr_c \,[R_{c,t}-Q_{c,t}(s)].
+Q_{c,t+1}(s)=Q_{c,t}(s)+lr_c ,[R_{c,t}-Q_{c,t}(s)].
 $$
-Il confronto tra $lr_{\text{food}}$ e $lr_{\text{neutral}}$ (e analogamente per $\tau$) quantifica le differenze contestuali.
+Il confronto tra $lr_{\text{food}}$ e $lr_{\text{neutral}}$ (e, analogamente, tra $\tau_{\text{food}}$ e $\tau_{\text{neutral}}$) consente di quantificare con precisione le differenze legate al contesto.
 
-### Limiti e varianti minime
+## Riflessioni conclusive {.unlisted .unnumbered}
 
-Il modello di *Rescorla–Wagner* estende la semplice dinamica di aggiornamento introducendo un *livello decisionale*, che trasforma i valori appresi (*Q-values*) in probabilità di scelta. Questo ci permette di distinguere due componenti fondamentali del comportamento:
+Il modello di Rescorla-Wagner con regola logistica separa chiaramente l'apprendimento dalla decisione: il parametro `lr` governa la velocità con cui le aspettative si aggiornano in base all'errore di previsione, mentre il parametro `tau` controlla quanto le scelte seguono in modo coerente i valori appresi. Questa distinzione permette di spiegare lo stesso comportamento con meccanismi diversi (apprendimento rapido ma scelte esplorative, oppure apprendimento lento ma scelte deterministiche), evitando letture unidimensionali della "prestazione".
 
-1.  **Apprendimento dagli esiti** (*learning*), controllato dal parametro `lr` (*learning rate*), che determina quanto rapidamente il soggetto aggiorna le proprie aspettative in base all'errore di predizione (la differenza tra quanto atteso e quanto effettivamente ottenuto).
+La scomposizione fornisce anche informazioni utili dal punto di vista clinico. Nel caso dell'anoressia nervosa, ad esempio, i deficit non sono globali, ma dipendono dal contesto: di fronte a stimoli "food" si osserva un `lr` ridotto, mentre con stimoli "neutral" i parametri sono allineati ai controlli [@colpizzi2025food]. In altre parole, il problema non è quanto si impara in generale, ma da cosa e quando le scelte sfruttano ciò che si è appreso.
 
-    *  Un valore basso di `lr` corrisponde a un apprendimento più lento e stabile, ma meno reattivo ai cambiamenti.
-    *  Un valore alto di `lr` corrisponde a un adattamento veloce, ma a una maggiore sensibilità al rumore.
+Operativamente, il modello RW permette di: (i) quantificare le differenze nei meccanismi di apprendimento (`lr`) tra condizioni o gruppi; (ii) valutare le eventuali variazioni nello stile decisionale (`tau`); (iii) collegare queste differenze a ipotesi psicologiche e cliniche mirate (es. sensibilità al feedback, equilibrio esplorazione-sfruttamento). L'inferenza bayesiana rende questi confronti espliciti e trasferibili da uno studio all'altro, tramite stime a posteriori, incertezze e *posterior predictive checks*.
 
-2.  **Politica decisionale** (*decision policy*), governata dal parametro `tau` (*inverse temperature*), che regola la coerenza tra le scelte e i valori appresi.
-    *   `tau` alto: scelte deterministiche e coerenti con l'opzione migliore (alto sfruttamento).
-    *   `tau` basso: comportamento più esplorativo e meno prevedibile.
-
-Questa distinzione è cruciale in ambito clinico. In uno studio sull'anoressia nervosa e l'apprendimento, ad esempio, abbiamo osservato che le difficoltà non sono generalizzate, ma *specifiche del contesto alimentare*: le pazienti presentano un tasso di apprendimento ridotto (`lr` più basso) quando gli stimoli sono legati al cibo, mentre il loro comportamento è simile a quello dei controlli in contesti neutri [@colpizzi2025food].
-
-Il modello RW offre quindi un'analisi più ricca della semplice prestazione media:
-
-*   consente di identificare differenze nei *meccanismi di apprendimento* (`lr`) tra diverse condizioni;
-*   permette di verificare se a queste diffeerenze si associano anche differenze nello *stile decisionale* (`tau`).
-
-Per uno psicologo, questo si traduce in due vantaggi concreti:
-
-*   **Chiarezza teorica:** permette di formulare ipotesi precise e separate sui processi di apprendimento e sulle strategie decisionali, andando oltre le semplici misure di accuratezza.
-*   **Rilevanza clinica:** distinguere un deficit nell'apprendimento da uno nella scelta ha implicazioni dirette per la progettazione di interventi mirati (es., potenziare la sensibilità al feedback o riequilibrare l'esplorazione e lo sfruttamento).
-
-In sintesi, il modello Rescorla-Wagner non è solo uno strumento computazionale: è un *ponte fra comportamento osservato e processi mentali*, fondamentale per isolare deficit contestuali specifici e comprendere come le strategie decisionali varino tra individui e gruppi clinici.
-
+In sintesi, il modello RW non si limita a descrivere matematicamente le curve di apprendimento, ma propone una *teoria verificabile* sui processi cognitivi che le generano. Esso funge da ponte esplicativo tra il comportamento osservato e i meccanismi mentali ipotizzati, consentendo di individuare alterazioni contestuali specifiche. Questa formalizzazione è ciò che trasforma un pattern comportamentale in un'ipotesi precisa e falsificabile su *come* si apprende e *come* si decide, gettando le basi per interventi che distinguono sistematicamente tra le due componenti.
 
 ::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
 ```{r}
