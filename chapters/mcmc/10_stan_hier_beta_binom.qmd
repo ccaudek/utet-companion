@@ -2,30 +2,18 @@
 
 ## Introduzione {.unnumbered .unlisted}
 
-In molti contesti di ricerca psicologica, i dati sperimentali consistono in serie di successi e insuccessi registrati per ciascun partecipante su un numero definito di prove. Questo scenario solleva tre interrogativi fondamentali:
+Questo capitolo introduce il concetto di struttura gerarchica nell'inferenza bayesiana, utilizzando il modello beta-binomiale come ponte concettuale verso i successivi modelli gaussiani a effetti misti. La scelta risponde a precise finalità didattiche: la coniugazione Beta-Binomiale garantisce trasparenza analitica, interpretabilità immediata e un controllo diretto sui meccanismi inferenziali fondamentali. In questo contesto, concetti chiave come scambiabilità, iperparametri, concentrazione e shrinkage possono essere osservati in modo particolarmente chiaro, prima di affrontare il caso gaussiano che, pur condividendo la medesima logica sottostante, richiede strumenti computazionali più sofisticati e meno trasparenti dal punto di vista analitico.
 
-- **(Q1)** Qual è la probabilità di successo di ogni singolo individuo?
-- **(Q2)** Come variano queste probabilità all'interno della popolazione, in termini di valore centrale e dispersione?
-- **(Q3)** Data la limitatezza del numero di prove per partecipante, come è possibile evitare stime individuali estreme e instabili?
+Nella ricerca psicologica risulta frequente la situazione in cui per ciascun partecipante viene registrata una sequenza di esiti binari (successi/insuccessi) in un numero definito di prove. Le domande analitiche tipiche riguardano la stima della probabilità di successo individuale, l'identificazione della tendenza centrale a livello di popolazione e la quantificazione dell'eterogeneità tra soggetti, specialmente quando il numero limitato di prove per partecipante rende le stime empiriche instabili. Il modello gerarchico beta-binomiale offre una soluzione integrata a queste esigenze, regolarizzando le stime individuali attraverso un meccanismo di shrinkage e quantificando simultaneamente la variabilità presente a livello di popolazione.
 
-Un quadro di riferimento efficace per rispondere a queste domande è offerto dal *modello gerarchico beta-binomiale*. Questo approccio introduce un livello superiore (la "popolazione") che regolarizza le stime individuali attraverso un meccanismo di *shrinkage*, quantificando al contempo la variabilità tra i soggetti.
+Per orientare il lettore attraverso un percorso didattico strutturato, è utile anticipare la traiettoria argomentativa. In questo capitolo, le probabilità individuali vengono concettualizzate come realizzazioni scambiabili da una distribuzione Beta comune, i conteggi di successi sono modellati secondo distribuzioni binomiali condizionate a tali probabilità, e gli iperparametri della Beta vengono stimati direttamente dai dati. Nel successivo capitolo dedicato ai modelli gaussiani a effetti misti, la medesima struttura concettuale riemergerà in una veste differente: i parametri individuali saranno trattati come estrazioni da una distribuzione Normale, la verosimiglianza assumerà forma gaussiana, e la concentrazione sarà espressa attraverso la deviazione standard degli effetti casuali. Il principio unificante rimane costante: i singoli individui condividono caratteristiche comuni pur conservando la propria specificità, e la condivisione di informazione tra unità produce naturalmente un partial pooling delle stime.
 
-La struttura del modello si articola su tre livelli:
-
-1.  **Livello dei Dati:** Le osservazioni di ciascun partecipante sono modellate come variabili casuali binomiali, dove il numero di successi dipende da una probabilità sottostante e da un numero fisso di prove.
-2.  **Livello Individuale:** Le probabilità di successo dei singoli partecipanti non sono trattate come valori fissi, bensì come estrazioni da una distribuzione Beta comune all'intera popolazione.
-3.  **Livello di Popolazione:** I parametri della distribuzione Beta, che ne definiscono la forma, sono a loro volta considerati incerti e vengono stimati dai dati, utilizzando distribuzioni a priori che riflettono l'incertezza del ricercatore.
-
-Un'interpretazione particolarmente intuitiva degli iperparametri della Beta si ottiene utilizzando una *parametrizzazione in termini di media e concentrazione*. La media rappresenta la probabilità di successo tipica nella popolazione, mentre la concentrazione indica il grado di omogeneità tra gli individui. Alti valori di concentrazione suggeriscono che le probabilità individuali sono molto vicine alla media del gruppo; valori bassi, al contrario, segnalano una sostanziale eterogeneità. Questa riformulazione non solo facilita la scelta di distribuzioni a priori sensate, ma rende anche l'interpretazione dei risultati immediatamente pertinente e ricca di senso sul piano psicologico.
-
-Dal punto di vista inferenziale, il modello fornisce stime simultanee a livello individuale e di popolazione. Le *stime individuali* beneficiano del fenomeno dello *shrinkage*: invece di essere calcolate in isolamento, le probabilità di ciascun partecipante vengono "attratte" verso la media di popolazione. L'entità di questa regolarizzazione è inversamente proporzionale alla quantità di dati disponibili per l'individuo, un meccanismo che previene efficacemente stime estreme e inaffidabili quando il numero di prove è esiguo. Le *stime di popolazione*, d'altro canto, offrono una sintesi della distribuzione delle abilità, permettendo ad esempio di stabilire se la prestazione media del campione sia credibilmente diversa da un benchmark teorico, come il puro caso.
-
-In questo capitolo, illustreremo la costruzione e la stima di un modello gerarchico beta-binomiale utilizzando *Stan*, applicandolo a un set di dati reali tratto dalla letteratura. L'analisi mostrerà non solo l'implementazione tecnica del modello, ma anche come interpretare in modo integrato gli output, evidenziando il ruolo cruciale della struttura gerarchica nel gestire la variabilità intrinseca dei dati psicologici in modo coerente.
+In sintesi, il modello beta-binomiale rappresenta l’equivalente discreto del modello gaussiano a effetti misti. La probabilità individuale $p_i$ gioca lo stesso ruolo del parametro individuale $\theta_j$ nei modelli continui; la distribuzione Beta funge da analogo della distribuzione Normale per gli effetti casuali; e il parametro di concentrazione $\kappa$ svolge la funzione che, nel caso gaussiano, è assunta dalla deviazione standard degli effetti casuali. In questo senso, il modello beta-binomiale costituisce un laboratorio concettuale per comprendere, in forma trasparente, i meccanismi di pooling e di regolarizzazione che saranno poi estesi ai modelli lineari gerarchici [si vedano @gelman1995bayesian; @McElreath_rethinking].
 
 ### Panoramica del capitolo {.unnumbered .unlisted}
 
 * Specificare un modello beta–binomiale gerarchico.
-* Spiegare il ruolo di media di popolazione (μ) e concentrazione (κ).
+* Spiegare il ruolo della probabilità media nella popolazione $\mu$ e concentrazione $\kappa$.
 * Interpretare lo shrinkage e collegarlo al numero di prove per soggetto.
 * Leggere le principali diagnostiche MCMC.
 * Confrontare la prestazione media con un valore di riferimento (es. 0.5).
@@ -45,99 +33,40 @@ conflicts_prefer(posterior::ess_tail)
 ```
 :::
 
-
 ## Motivazione per i modelli gerarchici bayesiani
 
-Quando si lavora con dati psicologici raccolti da più individui, occorre bilanciare l’attenzione alle *differenze individuali* con la necessità di trarre *conclusioni valide a livello di popolazione*. I modelli gerarchici bayesiani offrono un quadro naturale per farlo, perché *stimano simultaneamente* i parametri dei singoli partecipanti e quelli che *descrivono l’intera popolazione*.
+L'analisi di dati psicologici raccolti su più individui richiede di bilanciare due esigenze complementari: da un lato la necessità di cogliere le specificità individuali, dall'altro l'obiettivo di trarre conclusioni generali a livello di popolazione. I modelli gerarchici consentono di integrare questi due piani in un quadro inferenziale coerente.
 
-L’idea di fondo è che ogni individuo fornisca informazioni non solo sul proprio comportamento, ma anche su *come i comportamenti si distribuiscono* in un gruppo più ampio. Così, ad esempio, se un partecipante ha *poche prove*, la stima della sua probabilità di successo non si basa soltanto sui suoi dati, ma viene *informata anche* dalle prestazioni degli altri. Questo meccanismo *riduce il rischio* di sovrainterpretare fluttuazioni casuali e *produce stime più stabili*. Allo stesso tempo, i dati di ciascun individuo *migliorano la conoscenza* dei parametri di popolazione, che a loro volta diventano un *punto di riferimento* per le inferenze sui singoli.
+In questa prospettiva, ciascun individuo contribuisce con i propri dati alla stima del proprio parametro individuale, ma partecipa simultaneamente alla definizione del profilo di popolazione, che a sua volta esercita un'azione di regolarizzazione sulle stime dei singoli. Quando le osservazioni disponibili per un soggetto sono limitate, la stima tende ad avvicinarsi alla tendenza centrale del gruppo; quando invece le prove sono numerose, prevale l'evidenza empirica specifica del singolo. Questo comportamento, noto come *shrinkage*, non costituisce un artificio statistico ma emerge naturalmente dalla struttura gerarchica del modello.
 
-Dal punto di vista concettuale, i modelli gerarchici si distinguono dai modelli semplici perché la *distribuzione a priori dei parametri individuali* non è fissata una volta per tutte, ma è definita da *iperparametri* che descrivono l’intera popolazione. Si crea così una *catena di inferenza*: prima si apprende sui parametri di popolazione, poi si usano queste informazioni per *affinare le stime individuali*. La gerarchia riflette quindi una visione coerente con la realtà psicologica, in cui gli individui sono *simili ma non identici*, e le loro differenze sono interpretate alla luce di una *struttura comune*.
+Il fondamento concettuale di questo approccio risiede nel principio di scambiabilità. In assenza di covariate in grado di segmentare il campione in sottogruppi sistematicamente differenti, risulta metodologicamente appropriato trattare i parametri individuali come realizzazioni provenienti da una distribuzione comune. In termini psicologici, questo equivale a riconoscere che gli individui appartengono alla stessa popolazione di riferimento, pur manifestando differenze individuali che vengono modellate all'interno di una cornice probabilistica condivisa. Quando si rendono disponibili covariate rilevanti o si identificano sottogruppi teoricamente significativi, l'evoluzione naturale consiste nell'estendere il modello gerarchico includendo predittori, mantenendo però inalterata la logica strutturale di base.
 
-Questo *duplice livello di inferenza* è cruciale perché consente di *distinguere* tra variazioni casuali attribuibili al singolo partecipante e *tendenze generali* che riflettono caratteristiche della popolazione. Sapere, ad esempio, che le probabilità individuali di successo *variano attorno a una media comune* permette di collocare ogni individuo in un contesto più ampio, evitando interpretazioni basate solo sulle sue risposte.
+Ad esempio, se analizziamo la precisione con cui diversi partecipanti identificano espressioni emotive, e non abbiamo motivo di credere che alcuni soggetti appartengano a gruppi sistematicamente differenti (ad esempio per età o formazione), allora possiamo considerare le loro probabilità di successo come scambiabili. In tal caso, il modello gerarchico permette di rappresentare l’idea che tutti i partecipanti condividano un livello medio di abilità, pur mantenendo differenze individuali attorno a tale valore.
 
-Un vantaggio decisivo dei modelli gerarchici è che l’inferenza a livello di popolazione *va oltre* i partecipanti effettivamente osservati: conoscere i parametri che governano la *distribuzione delle abilità, preferenze o probabilità di risposta* consente di *prevedere nuovi soggetti* non inclusi nello studio, ampliando la portata delle conclusioni. In questo senso, i parametri di popolazione diventano *strumenti predittivi*: indicano quale *variabilità aspettarsi* in futuri studi e offrono un quadro generale delle prestazioni nel dominio indagato.
+## Struttura gerarchica e parametrizzazione
 
-Dal punto di vista pratico, questo approccio ha un valore evidente. I ricercatori sono spesso interessati non solo a “questi” partecipanti, ma alla *popolazione di provenienza*. Un modello gerarchico risponde a questa esigenza fornendo *stime dei parametri superiori* su cui basare *generalizzazioni affidabili*. In sintesi, la motivazione per l’uso dei modelli gerarchici bayesiani risiede nella loro capacità di *sfruttare l’informazione condivisa tra individui*, *migliorare la precisione* delle stime individuali, *ridurre la sensibilità al rumore* campionario e, allo stesso tempo, fornire una *descrizione generale* della popolazione di interesse—integrando in un unico quadro coerente informazione *individuale* e *collettiva* e arricchendo sia l’interpretazione teorica sia la rilevanza applicativa dei risultati.
+Il processo generativo del modello si articola in due livelli. Per ciascun partecipante $i$ si osserva il numero di successi $y_i$ su $n_i$ prove, secondo una distribuzione binomiale: $y_i \sim \mathrm{Binomiale}(n_i, p_i)$. Le probabilità individuali $p_i$ sono a loro volta realizzazioni indipendenti e scambiabili da una distribuzione Beta di parametri $\alpha$ e $\beta$: $p_i \sim \mathrm{Beta}(\alpha,\beta)$. Gli iperparametri $\alpha$ e $\beta$, che descrivono le caratteristiche a livello di popolazione, ricevono distribuzioni a priori debolmente informative.
 
-## Struttura gerarchica dei dati
+Dal punto di vista interpretativo risulta preferibile adottare una parametrizzazione alternativa, espressa in termini di media e concentrazione. Definendo $\mu=\alpha/(\alpha+\beta)$ come la probabilità media di successo nella popolazione e $\kappa=\alpha+\beta$ come parametro di concentrazione, si ottiene una rappresentazione più intuitiva: $\mu$ rappresenta il livello tipico di performance, mentre $\kappa$ regola il grado di omogeneità tra i partecipanti. Valori elevati di $\kappa$ concentrano le probabilità individuali attorno alla media $\mu$, mentre valori piccoli consentono una maggiore eterogeneità.
 
-Per comprendere meglio il funzionamento di un modello gerarchico, è utile considerare come i dati psicologici siano spesso organizzati in più livelli. Prendiamo come esempio lo studio di Rosa e colleghi del 1998, dedicato alla cosiddetta “terapia tattile”. In quell’esperimento gli operatori erano chiamati a identificare, senza alcun contatto visivo, quale mano fosse stata “selezionata” da un esaminatore. Ogni operatore ha affrontato dieci prove e le risposte sono state registrate come corrette o errate.
+Quando i parametri $\alpha$ e $\beta$ sono noti, la proprietà di coniugazione Beta-Binomiale fornisce una distribuzione a posteriori per $p_i$ che corrisponde a una media pesata tra la proporzione empirica $\hat p_i=y_i/n_i$ e la media di popolazione $\mu$. Il peso attribuito al dato osservato, $w_i=n_i/(n_i+\kappa)$, rende esplicito il meccanismo di shrinkage: un numero maggiore di prove aumenta l'aderenza alla proporzione individuale osservata, mentre una concentrazione più elevata intensifica l'attrazione verso la media di popolazione. Il peso $w_i$ traduce, in forma quantitativa, il grado di fiducia che il modello assegna ai dati individuali rispetto alle informazioni di gruppo. Se un soggetto ha poche osservazioni (piccolo $n_i$), la stima si “fida” di più della media di popolazione ($\mu$); se invece ha molte prove, la stima si appoggia principalmente sull’evidenza empirica del singolo. Questo meccanismo automatico di bilanciamento è il cuore dello *shrinkage* bayesiano.
 
-La struttura dei dati emerge con immediatezza. Al livello più basso si trovano le singole prove, cioè le osservazioni binarie di ciascun operatore. Queste osservazioni sono naturalmente raggruppate per individuo, costituendo un livello intermedio che riflette le prestazioni di ciascun partecipante. Infine, tutti gli operatori appartengono a una popolazione più ampia di praticanti della terapia, che rappresenta il livello superiore della gerarchia.
+## Esempio applicativo: lo studio sulla "terapia tattile"
 
-Questa organizzazione a più livelli non è un artificio statistico, ma una caratteristica intrinseca della ricerca psicologica. L’analisi dei dati deve dunque tener conto sia delle differenze individuali sia di ciò che accomuna i partecipanti. Un modello gerarchico permette di descrivere entrambi gli aspetti contemporaneamente: da un lato fornisce stime delle abilità dei singoli operatori, dall’altro stima i parametri che governano la distribuzione complessiva delle abilità nella popolazione.
+Per illustrare il funzionamento del modello gerarchico consideriamo lo studio di @rosa1998close sulla cosiddetta "terapia tattile". In questa ricerca, gli operatori dovevano identificare quale mano fosse stata selezionata da un esaminatore in condizioni di controllo sensoriale. Ciascun partecipante ha completato dieci prove, con esito binario (successo/insuccesso). L'obiettivo inferenziale riguarda sia la stima della probabilità di successo individuale per ciascun operatore, sia la probabilità media a livello di popolazione, entrambe da confrontare con il valore 0.5 corrispondente alla prestazione casuale [@doing_bayesian_data_an].
 
-Grazie a questa prospettiva multilivello, diventa possibile rispondere a domande che non riguardano solo la prestazione di un partecipante specifico, ma che coinvolgono l’intero gruppo. Ad esempio, possiamo chiederci se, nel complesso, gli operatori abbiano mostrato un’abilità superiore a quella attesa dal puro caso, e allo stesso tempo possiamo esplorare quanto le prestazioni differiscano da un individuo all’altro. In questo modo, la struttura gerarchica dei dati diventa la chiave per un’analisi capace di integrare differenze individuali e generalizzazioni di popolazione in un quadro coerente e informativo.
-
-**Assunzione chiave – scambiabilità:** trattiamo le probabilità individuali come scambiabili a priori (estrazioni dalla stessa Beta). È un’ipotesi sensata quando i partecipanti sono reclutati con criteri omogenei e non ci sono covariate che distinguono sottogruppi. Se emergono sottogruppi o predittori, il passo naturale è passare a un modello con predittori (logit-Beta o regressione logistica gerarchica).
-
-
-## Modelli gerarchici bayesiani: una panoramica tecnica
-
-Dal punto di vista tecnico, un modello gerarchico bayesiano si distingue perché i parametri individuali non hanno una distribuzione a priori fissa e predeterminata, ma dipendono da parametri di livello superiore, detti iperparametri. In questo modo la struttura del modello riflette una catena di dipendenze: prima si apprendono i parametri che descrivono la popolazione, e successivamente queste informazioni vengono utilizzate per affinare le stime dei singoli partecipanti.
-
-Se consideriamo un modello semplice e non gerarchico, potremmo assegnare a ciascun parametro individuale una distribuzione a priori autonoma, ad esempio una Gaussiana con media e varianza fissate. Un approccio di questo tipo, però, tratta ogni individuo come completamente separato dagli altri, ignorando il fatto che tutti provengono dalla stessa popolazione e che quindi le loro prestazioni sono verosimilmente correlate. Al contrario, in un modello gerarchico i parametri individuali sono visti come estrazioni da una distribuzione comune, governata dagli iperparametri. Questi ultimi hanno a loro volta delle distribuzioni a priori, che rappresentano il livello più alto della gerarchia.
-
-Formalmente, possiamo pensare a tre passaggi. I dati osservati dipendono dai parametri individuali attraverso la verosimiglianza. I parametri individuali sono distribuiti secondo una legge che dipende dagli iperparametri. Infine, gli iperparametri sono regolati da distribuzioni a priori che esprimono le nostre conoscenze iniziali. Questa stratificazione permette di far dialogare i dati dei singoli con la conoscenza di gruppo, creando un meccanismo di inferenza che unisce livelli diversi di informazione.
-
-Un vantaggio importante di questa impostazione è che la variabilità individuale non viene ignorata, ma anzi modellata in modo esplicito. I parametri di popolazione agiscono come un collante che unisce le stime dei partecipanti, permettendo alle informazioni di fluire tra individui e migliorando la precisione complessiva. Dal punto di vista psicologico, ciò riflette l’idea che i soggetti siano tra loro simili ma non identici, e che le loro differenze possano essere comprese soltanto all’interno di una cornice condivisa.
-
-In questo senso, i modelli gerarchici bayesiani offrono una prospettiva potente e flessibile. Consentono di trattare simultaneamente i dati individuali e collettivi, garantiscono inferenze più stabili soprattutto quando il numero di osservazioni è limitato e, soprattutto, rendono possibile generalizzare oltre il campione osservato, cogliendo l’essenza di un fenomeno a livello di popolazione senza perdere di vista la ricchezza delle differenze tra persone.
-
-
-::: {.callout-note title="Parametrizzazioni equivalenti"}
-**Forma (α, β)**: $p_i \sim \text{Beta}(\alpha,\beta)$.
-**Forma (μ, κ)**: con $\mu=\alpha/(\alpha+\beta)$ e $\kappa=\alpha+\beta$.
-
-Con (μ, κ) la *media di popolazione* è μ e la *concentrazione* è κ (più grande → meno eterogeneità).
-
-**Shrinkage (intuizione)**: se (α,β) fossero noti,
-
-$$
-\mathbb{E}[p_i \mid y_i] \;=\; \frac{\alpha+y_i}{\alpha+\beta+n_i}
-\;=\; (1 - w_i)\,\mu \;+\; w_i\,\hat p_i,\quad
-w_i = \frac{n_i}{n_i+\kappa},\ \ \hat p_i=\frac{y_i}{n_i}.
-$$
-Cioè la stima a posteriori è una *media pesata* tra μ e la proporzione empirica $\hat p_i$.
-:::
-
-## Analisi bayesiana della "terapia tattile"
-
-Per rendere concreti i principi esposti finora, ci concentriamo su un esperimento che ha avuto un’ampia risonanza: lo studio di @rosa1998close sulla cosiddetta “terapia tattile”. In questa pratica, alcuni operatori sostenevano di percepire un presunto “campo energetico” attorno al corpo umano. L’esperimento mirava a verificare in maniera rigorosa questa capacità. Agli operatori veniva chiesto di identificare quale mano fosse stata selezionata da un esaminatore, senza alcun contatto visivo e senza possibilità di ricevere indizi sensoriali. Ogni operatore ha completato dieci prove, e per ciascuna la risposta è stata classificata come corretta oppure errata.
-
-Il nostro obiettivo è stimare, per ciascun operatore, la probabilità di dare una risposta corretta, confrontando queste stime con l’ipotesi nulla di puro caso, che corrisponde a una probabilità di successo del cinquanta per cento. Oltre a questo, vogliamo anche valutare se, a livello di gruppo, esistano prove credibili a favore di una prestazione superiore rispetto al caso e quanto varino le abilità tra i diversi operatori.
-
-Per affrontare queste domande, i dati vengono aggregati in modo da calcolare il numero di risposte corrette su dieci per ciascun partecipante. Si ottiene così, per ogni operatore, una coppia di valori che rappresenta il numero di successi e il numero totale di prove. Questa organizzazione dei dati riflette perfettamente la struttura del modello gerarchico: a livello individuale le osservazioni sono descritte da una distribuzione binomiale, mentre a livello di popolazione le probabilità di successo dei singoli sono modellate come estrazioni da una distribuzione Beta comune.
-
-Gli iperparametri di questa Beta, che descrivono la tendenza centrale e la variabilità tra gli operatori, sono a loro volta trattati come incerti e stimati dai dati. Una volta eseguita l’analisi bayesiana, possiamo quindi ottenere non solo la stima della probabilità di successo per ogni operatore, ma anche la distribuzione a posteriori della probabilità media di successo nel gruppo. Questo permette di valutare se la prestazione collettiva differisce davvero da quella che ci aspetteremmo in condizioni di puro caso.
-
-L’analisi di questo esperimento diventa così un esempio paradigmatico dell’utilità dei modelli gerarchici. Da un lato mostra come sia possibile stimare e confrontare le prestazioni individuali, dall’altro evidenzia come l’approccio bayesiano consenta di integrare queste informazioni in un quadro più ampio, capace di descrivere la popolazione e di formulare previsioni per nuovi individui.
-
-### I dati
-
-Per prima cosa importiamo i dati forniti da @doing_bayesian_data_an. È utile dare un’occhiata alle variabili disponibili e verificare che ogni operatore abbia lo stesso numero di prove.
+Procediamo innanzitutto all'importazione e all'ispezione dei dati.
 
 ```{r}
-# Definisci l'URL del file CSV su GitHub
+# Definisci l'URL del CSV
 url <- "https://raw.githubusercontent.com/boboppie/kruschke-doing_bayesian_data_analysis/master/2e/TherapeuticTouchData.csv"
 
-# Leggi direttamente il CSV dall'URL
+# Importa e ispeziona
 tt_dat <- read.csv(url)
-glimpse(tt_dat)
+tt_dat %>% glimpse()
 ```
 
-Nel dataset la colonna `y` codifica l’esito binario della prova, con 1 per risposta corretta e 0 per risposta errata; la colonna `s` identifica l’operatore. Prima di aggregare, conviene verificare che la numerosità di prove per operatore sia quella attesa e che non vi siano soggetti con un numero di osservazioni anomalo. Se l’esperimento prevede dieci prove per operatore, un controllo immediato chiarisce eventuali discrepanze.
-
-```{r}
-checks <- tt_dat %>%
-  dplyr::count(s, name = "n_trials") %>%
-  arrange(s)
-
-checks
-```
-
-Una volta confermata la struttura, calcoliamo per ciascun operatore i successi totali e il numero di prove, ottenendo i sufficient statistics per la verosimiglianza binomiale. Da qui si ricava anche la proporzione empirica di risposte corrette, utile come benchmark descrittivo ma non ancora regolarizzata dal modello gerarchico.
+Aggreghiamo quindi i dati per operatore, calcolando le statistiche sufficienti per la verosimiglianza binomiale e la proporzione empirica come riferimento descrittivo.
 
 ```{r}
 by_subject <- tt_dat %>%
@@ -150,78 +79,82 @@ by_subject <- tt_dat %>%
   ) %>%
   arrange(s)
 
-by_subject
+by_subject |> head()
 ```
 
-Il passo successivo è la specificazione del modello probabilistico. Per ogni operatore $i$ denotiamo con $y_i$ il numero di successi su $n_i$ prove e con $p_i$ la probabilità di successo. La verosimiglianza è binomiale, $y_i \sim \text{Binomiale}(n_i, p_i)$. Le probabilità individuali non sono fissate a priori, ma modellate come estrazioni indipendenti e scambiabili da una stessa distribuzione Beta, $p_i \sim \text{Beta}(\alpha,\beta)$. Questa scelta crea il livello di popolazione del modello: $\alpha$ e $\beta$ regolano, rispettivamente, la tendenza centrale e la dispersione delle $p_i$ nella popolazione.
+## Verifica predittiva a priori
 
-Quando $\alpha$ e $\beta$ sono noti, la coniugatezza Beta–Binomiale implica che la distribuzione a posteriori di $p_i$ è ancora Beta, $p_i \mid y_i \sim \text{Beta}(\alpha + y_i,\, \beta + n_i - y_i)$. Nel caso realistico in cui $\alpha$ e $\beta$ siano incogniti, assegniamo dei prior anche a questi iperparametri. È importante essere espliciti sulla parametrizzazione della Gamma, poiché in letteratura compaiono sia convenzioni *shape–rate* sia *shape–scale*. Qui adotteremo la forma *shape–rate*, indicata come $\text{Gamma}(k,\ r)$, dove $E[X]=k/r$. Scelte ragionevoli e poco informative possono essere, ad esempio, $\alpha \sim \text{Gamma}(2,\,2)$ e $\beta \sim \text{Gamma}(2,\,2)$, che corrispondono a media uguale a 1 per ciascun iperparametro e varianza moderata; in alternativa, si può lavorare nella parametrizzazione $(\mu,\kappa)$, con $\mu=\alpha/(\alpha+\beta)$ e $\kappa=\alpha+\beta$, scegliendo prior direttamente su media di popolazione e concentrazione. In ogni caso, la scelta dei prior va motivata rispetto al dominio psicologico e alla scala delle probabilità attese.
-
-Per passare alla stima con Stan, prepariamo una lista compatta con gli oggetti necessari. È pratica comune ordinare i soggetti, convertire in interi e verificare le lunghezze coerenti. La lista minima contiene il numero di soggetti $N$, il vettore dei successi `y` e il vettore delle prove `n_trials`.
+Un'esplorazione predittiva preliminare consente di valutare se le distribuzioni a priori selezionate generano previsioni compatibili con il dominio di applicazione. Utilizziamo prior Gamma debolmente informative per i parametri $\alpha$ e $\beta$ nella parametrizzazione shape-rate, permettendo un'ampia gamma di scenari plausibili senza favorire valori estremi.
 
 ```{r}
+set.seed(1)
+a_draw <- rgamma(2000, shape = 2, rate = 2)
+b_draw <- rgamma(2000, shape = 2, rate = 2)
+mu_draw <- a_draw / (a_draw + b_draw)
+kappa_draw <- a_draw + b_draw
+
+tibble(mu = mu_draw, kappa = kappa_draw) %>%
+  ggplot(aes(x = mu)) +
+  geom_density(linewidth = 0.6) +
+  labs(x = "Media di popolazione (μ)", y = "Densità", 
+       subtitle = "Distribuzione predittiva a priori per la media di popolazione")
+```
+
+La distribuzione a priori per la media di popolazione risulta sufficientemente ampia e non vincolante, mentre la concentrazione implicita indotta dai prior Gamma(2,2) non forza né omogeneità estrema né variabilità eccessiva. Qualora necessario, è possibile adottare prior definiti direttamente sui parametri (μ,κ) per un controllo più esplicito sulla parametrizzazione.
+
+# Implementazione del modello in Stan
+
+Traduco la struttura generativa del modello in codice Stan. Il blocco `data` contiene il numero di operatori, i successi e le prove per ciascuno. I parametri includono gli iperparametri $\alpha$ e $\beta$ e le probabilità individuali pᵢ, vincolate all'intervallo [0,1]. Le distribuzioni a priori per $\alpha$ e $\beta$ sono Gamma debolmente informative nella parametrizzazione shape-rate. Nel blocco `generated quantities` calcolo la media di popolazione $\alpha/(\alpha + \beta)$, utile per il confronto con la soglia 0.5 corrispondente alla prestazione casuale.
+
+```{r}
+# Definiamo il modello Stan
+stan_code <- "
+data {
+  int<lower=1> N;                  // numero di operatori
+  array[N] int<lower=0> y;         // successi per operatore
+  array[N] int<lower=1> n_trials;  // prove per operatore
+}
+parameters {
+  real<lower=0> alpha;             // parametro shape della Beta
+  real<lower=0> beta;              // parametro shape della Beta
+  array[N] real<lower=0, upper=1> p; // probabilità individuali
+}
+model {
+  alpha ~ gamma(2, 2);             // prior su alpha
+  beta  ~ gamma(2, 2);             // prior su beta
+  for (i in 1:N) {
+    p[i] ~ beta(alpha, beta);      // modello delle probabilità individuali
+  }
+  for (i in 1:N) {
+    y[i] ~ binomial(n_trials[i], p[i]); // verosimiglianza
+  }
+}
+generated quantities {
+  real overall_p = alpha / (alpha + beta); // media di popolazione
+}
+"
+```
+
+Compilazione del modello:
+
+```{r}
+#| output: false
+mod <- cmdstanr::cmdstan_model(write_stan_file(stan_code))
+```
+
+
+```{r}
+# Preparazione dei dati per Stan
 stan_data <- list(
   N        = nrow(by_subject),
   y        = as.integer(by_subject$y),
   n_trials = as.integer(by_subject$n_trials)
 )
-
-str(stan_data)
 ```
-
-A questo punto i dati sono pronti per l’inferenza. La modellazione gerarchica introdurrà regolarizzazione sulle stime individuali $p_i$, attenuando la variabilità spuriosa dovuta a pochi tentativi e consentendo, contemporaneamente, di apprendere la media e l’eterogeneità delle probabilità di successo a livello di popolazione. In seguito mostreremo come questa struttura si traduce in codice Stan e perché la scelta di prior su $(\alpha,\beta)$ oppure su $(\mu,\kappa)$ può incidere sulla stabilità computazionale e sulla leggibilità interpretativa dei risultati.
-
-
-## Modello Stan
-
-Arrivati a questo punto, i dati sono pronti per essere analizzati con un modello gerarchico in Stan. La struttura matematica che abbiamo descritto in precedenza si traduce in un programma che segue fedelmente la storia generativa dei dati. Per ogni operatore introduciamo una probabilità di successo $p_i$, modellata come estrazione da una distribuzione Beta comune, mentre i conteggi osservati di risposte corrette vengono trattati come variabili binomiali condizionate su $p_i$. Gli iperparametri della Beta, $\alpha$ e $\beta$, vengono stimati a loro volta, con distribuzioni a priori che riflettono le nostre assunzioni iniziali.
-
-In Stan, il modello può essere scritto in questo modo:
-
-```r
-data {
-  int<lower=1> N;                  // numero di operatori
-  int<lower=0> y[N];               // successi per operatore
-  int<lower=1> n_trials[N];        // prove per operatore
-}
-parameters {
-  real<lower=0> alpha;             // parametro della Beta
-  real<lower=0> beta;              // parametro della Beta
-  vector<lower=0, upper=1>[N] p;   // probabilità individuali
-}
-model {
-  alpha ~ gamma(2, 2);             // prior su alpha (shape-rate)
-  beta  ~ gamma(2, 2);             // prior su beta (shape-rate)
-  p     ~ beta(alpha, beta);       // distribuzione gerarchica delle p_i
-  y     ~ binomial(n_trials, p);   // verosimiglianza dei dati
-}
-generated quantities {
-  real overall_p = alpha / (alpha + beta); // media di popolazione
-}
-```
-
-Il blocco `data` definisce le informazioni osservate: il numero di partecipanti, i successi e i tentativi per ciascun soggetto. Nel blocco `parameters` compaiono i parametri da stimare: gli iperparametri $\alpha$ e $\beta$, entrambi vincolati a valori positivi, e le probabilità individuali $p_i$, che per costruzione devono trovarsi nell’intervallo compreso tra zero e uno.
-
-Nel blocco `model` vengono specificate le distribuzioni a priori e la relazione tra parametri e dati. Le prior su $\alpha$ e $\beta$ sono state scelte come distribuzioni Gamma poco informative, capaci di lasciare spazio a un ampio spettro di configurazioni possibili. Le probabilità individuali vengono modellate come estrazioni da una Beta con parametri $\alpha$ e $\beta$. Infine, i conteggi di risposte corrette sono legati alle rispettive probabilità tramite la verosimiglianza binomiale.
-
-Il blocco `generated quantities` calcola la probabilità media di successo nella popolazione, che corrisponde al rapporto $\alpha / (\alpha+\beta)$. Questo valore è spesso di grande interesse, perché riassume la prestazione collettiva e consente di confrontarla con il valore teorico atteso in condizioni di puro caso.
-
-La scrittura del modello in Stan non è solo una traduzione meccanica della teoria, ma un’occasione per riflettere sulle scelte modellistiche. Le distribuzioni a priori, la parametrizzazione degli iperparametri e la presenza del blocco generativo aggiuntivo non sono dettagli tecnici marginali: rappresentano decisioni che influiscono sulla stabilità dell’inferenza, sulla leggibilità dei risultati e sulla possibilità di formulare risposte precise alle domande psicologiche poste dallo studio.
-
-
-## Compilazione e sampling
-
-Una volta definito il modello, il passo successivo consiste nel compilarlo e avviare il campionamento MCMC con `cmdstanr`. La compilazione traduce il codice Stan in un eseguibile ottimizzato; è un’operazione che si esegue una volta per modello, dopodiché il binario può essere riutilizzato. Conviene mantenere una struttura di progetto ordinata, salvando il file `.stan` in una cartella dedicata e richiamandolo tramite un percorso esplicito. L’oggetto `CmdStanModel` restituito dalla compilazione espone il metodo `sample()`, che gestisce l’intera esecuzione delle catene, il warmup, la fase di adattamento e la produzione dei draw posteriori.
 
 ```{r}
 #| output: false
-# Percorso del modello .stan (adatta al tuo progetto)
-stan_file <- here::here("stan", "h_beta_binom_model.stan")
-
-# Compilazione del modello
-mod <- cmdstan_model(stan_file)
-
-# Impostazioni di sampling: scelte ragionevoli per un modello leggero come questo
+# Campionamento MCMC
 set.seed(84735)
 fit <- mod$sample(
   data = stan_data,
@@ -231,210 +164,116 @@ fit <- mod$sample(
   iter_sampling = 2000,
   adapt_delta = 0.9,
   max_treedepth = 12,
-  refresh = 200
+  refresh = 0
 )
 ```
 
-Nel codice la scelta di quattro catene parallele velocizza l’esecuzione e facilita la diagnosi di convergenza. Una lunghezza totale di tremila iterazioni per catena, con un terzo destinato al warmup e due terzi al campionamento, è in genere adeguata per un modello beta–binomiale gerarchico con pochi parametri. Il controllo fine di `adapt_delta` e `max_treedepth` aiuta a prevenire divergenze e saturazioni dell’algoritmo di Hamiltonian Monte Carlo: un valore di `adapt_delta` pari a 0.9 è spesso un buon compromesso tra stabilità e velocità, mentre una profondità massima di dodici consente traiettorie sufficientemente lunghe senza penalizzare eccessivamente i tempi. Se dovessero comparire divergenze nei messaggi a schermo, aumentare gradualmente `adapt_delta` verso 0.95–0.99 è la prima mossa sensata; qualora il sampler segnalasse ripetutamente “maximum treedepth exceeded”, estendere `max_treedepth` può essere utile, sebbene la causa vada interpretata anche alla luce di possibili problemi di parametrizzazione o di prior troppo stretti.
 
-Al termine dell’esecuzione, l’oggetto `fit` contiene i draw posteriori, le metriche di adattamento e il riepilogo delle diagnostiche essenziali. È buona pratica iniziare con un controllo sintetico usando `fit$summary()` per esaminare R̂ e dimensione campionaria efficace; qualsiasi valore di R̂ distante da 1 indica problemi di mescolamento tra catene, mentre valori molto bassi di ESS suggeriscono autocorrelazione elevata e quindi una minore informazione campionaria di quanto il numero di iterazioni lasci intendere.
+Al termine del campionamento, verifichiamo le diagnostiche di convergenza esaminando gli indici $\hat{R}$ e le dimensioni campionarie efficaci per gli iperparametri e per un sottoinsieme delle probabilità individuali.
 
 ```{r}
-sum_tbl <- fit$summary()
-sum_tbl %>% 
-  dplyr::filter(variable %in% c("alpha", "beta", "overall_p") | grepl("^p\\[", variable)) %>%
-  print(n = 10)
+posterior::summarise_draws(
+  fit$draws(variables = c("alpha","beta","overall_p","p[1]","p[2]","p[3]")),
+  "mean","sd","rhat","ess_bulk","ess_tail"
+)
 ```
 
-Un’ispezione iniziale delle diagnostiche globali può essere condotta anche con le funzioni di `posterior`. La conversione a `draws_array` o `draws_df` permette di utilizzare strumenti flessibili per ulteriori controlli. Quando l’obiettivo è verificare rapidamente che non vi siano problemi sistematici, un’occhiata a R̂ e all’ESS dei parametri di popolazione e di un sottoinsieme di $p_i$ è spesso sufficiente per decidere se proseguire con analisi più approfondite.
+## Analisi dello *shrinkage* e interpretazione
+
+Estraiamo le stime a posteriori delle probabilità individuali e confronto graficamente le proporzioni empiriche con le medie a posteriori, evidenziando l'entità della contrazione verso la media di popolazione.
 
 ```{r}
-dr <- fit$draws(variables = c("alpha","beta","overall_p","p[1]","p[2]","p[3]"))
-posterior::summarise_draws(dr, "mean","sd","rhat","ess_bulk","ess_tail")
-```
+# Estrazione delle distribuzioni a posteriori
+draws_p  <- fit$draws("p")
+draws_mu <- fit$draws("overall_p")
+mu_hat   <- posterior::summarise_draws(draws_mu, "mean")$mean
 
-Se le diagnostiche di convergenza confermano un'adeguata esplorazione della distribuzione a posteriori, si può procedere con l'analisi sostantiva. In caso contrario, è opportuno valutare opportuni riparametrizzazioni o altri aggiustamenti del modello. Un aumento del parametro `adapt_delta` è generalmente efficace nell'eliminare le divergenze, sebbene a scapito di una velocità di campionamento leggermente ridotta. Qualora si riscontri un'elevata autocorrelazione, un incremento di `iter_sampling` consente di migliorare l'*Effective Sample Size* (ESS). Per problemi più ostinati, legati alla geometria della distribuzione a posteriori, è spesso vantaggioso ricorrere a una riparametrizzazione alternativa del modello. Nel caso specifico qui trattato, la parametrizzazione basata sulla media della popolazione ($\mu$) e sul parametro di concentrazione (κ) rappresenta una soluzione praticabile, in grado di regolarizzare la geometria dello spazio dei parametri, come si avrà modo di illustrare nella sezione dedicata all'implementazione.
-
-Una volta conclusa questa fase diagnostica, il modello è pronto per l'esplorazione delle distribuzioni a posteriori. L'obiettivo primario diventa quindi collegare le quantità di interesse psicologico—le probabilità individuali $p_i$ e la media di popolazione—alle domande di ricerca che hanno motivato l'analisi. Nei prossimi paragrafi ci dedicheremo all'interpretazione delle distribuzioni a posteriori, illustreremo le modalità per visualizzare il fenomeno dello *shrinkage* e presenteremo metodi per quantificare l'evidenza a supporto o a sfavore dell'ipotesi che la prestazione sia riconducibile al puro caso.
-
-### Controlli predittivi essenziali
-
-**Verifica predittiva a priori.** Prima di includere i dati osservati, è necessario valutare se le distribuzioni a priori specificate per le coppie (α, β) o (μ, κ) generino una distribuzione plausibile delle probabilità individuali $p_i$ e dei conteggi predetti $y_i$. Un prior che assegni massa elevata a scenari non realistici—come prestazioni prossime a 0 o 1 in un contesto di alta concentrazione—va considerato incoerente con le conoscenze di dominio e deve essere pertanto rivisto.
-
-**Verifica predittiva a posteriori.** Dopo la stima del modello, si simula la generazione di nuovi dati replicati basati sulla distribuzione a posteriori. La loro coerenza con i dati empirici osservati va valutata confrontando metriche chiave, quali la distribuzione delle proporzioni individuali, la media gruppale e la varianza tra i soggetti. Discrepanze sistematiche in questi confronti possono indicare una cattiva specificazione del parametro di concentrazione κ o una violazione dell'ipotesi di scambiabilità degli effetti individuali. 
-
-## Shrinkage bayesiano
-
-Lo *shrinkage* è esattamente la media pesata $\mathbb{E}[p_i \mid y_i]=(1-w_i)\mu + w_i\hat p_i$, con $w_i=\frac{n_i}{n_i+\kappa}$: *più prove* → $w_i$ grande → la stima segue $\hat p_i$; *κ grande* → $w_i$ piccolo → le stime collassano verso μ. I grafici che seguono mostrano proprio questo comportamento.
-
-Per comprendere l’idea, immaginiamo due operatori nello studio della *therapeutic touch*. Il primo ha ottenuto 9 risposte corrette su 10, il secondo soltanto 1 su 10. Se prendessimo queste proporzioni alla lettera, potremmo concludere che il primo è straordinariamente abile e il secondo del tutto incapace. Tuttavia, con soli dieci tentativi ciascuno, questi risultati estremi possono riflettere più la variabilità casuale che una reale differenza di abilità. Il modello gerarchico affronta questo problema facendo “dialogare” le stime individuali con la distribuzione di popolazione. Le probabilità di successo dei singoli non sono stimate in isolamento, ma vengono attratte verso la media collettiva.
-
-Questo spostamento non è uguale per tutti. Chi ha molti dati fornisce un’evidenza solida, e quindi la sua probabilità stimata rimane più vicina al valore empirico osservato. Chi ha pochi dati, invece, viene corretto maggiormente e la sua stima viene spinta più decisamente verso la media del gruppo. In questo modo, i partecipanti con campioni piccoli o con esiti estremi non vengono interpretati in modo sproporzionato, ma ricevono una stima più prudente e credibile.
-
-Lo shrinkage non è un difetto, bensì un vantaggio del modello. Esso riduce il rischio di sovrainterpretare il rumore dei dati, stabilizza le stime e consente di ottenere inferenze più robuste. In termini psicologici, riflette l’idea che gli individui siano diversi tra loro, ma comunque simili a sufficienza da condividere un contesto comune. L’effetto pratico è che le probabilità individuali stimate non ricalcano pedissequamente le proporzioni empiriche, ma si collocano in un punto intermedio tra l’esperienza del singolo e l’informazione collettiva.
-
-Questo fenomeno diventa evidente quando si confrontano le proporzioni empiriche di successo con le stime bayesiane. In un grafico in cui per ciascun operatore si rappresentano entrambe le quantità, le proporzioni osservate tendono a variare in modo ampio, mentre le stime posteriori appaiono più contenute e ravvicinate tra loro. I valori estremi vengono moderati, e tutti gli operatori mostrano una certa attrazione verso la media di popolazione. È proprio in questa dinamica che si manifesta lo shrinkage, il cuore dell’approccio gerarchico bayesiano.
-
-Passiamo ora alla parte pratica su come visualizzare lo *shrinkage* nei dati della *therapeutic touch*. Iniziamo con il recuperare le stime a posteriori di  `alpha` e `beta`.
-
-```{r}
-# Estrazione dei draw di p[i] e della media di popolazione
-draws_p  <- fit$draws(variables = "p")                 # draws_array
-draws_mu <- fit$draws(variables = "overall_p")         # draws_array
-
-# Riassunto con media, mediana, sd e diagnostiche
-sum_p <- posterior::summarise_draws(
-  draws_p,
-  "mean", "median", "sd", "rhat", "ess_bulk", "ess_tail"
-) %>%
-  mutate(s = as.integer(str_extract(variable, "\\d+"))) %>%
+# Calcolo degli intervalli di credibilità al 90%
+sum_p <- posterior::summarise_draws(draws_p, "mean", "median", "sd") %>%
+  mutate(s = as.integer(stringr::str_extract(variable, "\\d+"))) %>%
   arrange(s)
 
-# Calcolo dei quantili 5% e 95% a parte
 qs <- posterior::summarise_draws(draws_p, ~ quantile2(.x, probs = c(0.05, 0.95))) %>%
-  mutate(s = as.integer(str_extract(variable, "\\d+"))) %>%
+  mutate(s = as.integer(stringr::str_extract(variable, "\\d+"))) %>%
   arrange(s)
 
-# Unione
-sum_p <- sum_p %>%
-  left_join(qs %>% dplyr::select(s, q5 = `q5`, q95 = `q95`), by = "s")
+sum_p <- sum_p %>% left_join(qs %>% select(s, q5 = `q5`, q95 = `q95`), by = "s")
 
-head(sum_p)
-```
-
-```{r}
-# Riassunto per la media di popolazione
-sum_mu <- posterior::summarise_draws(draws_mu)
-
-# Porta gli ID soggetto su un indice numerico coerente con p[1], p[2], ...
-by_subject <- by_subject %>%
-  mutate(s_idx = as.integer(stringr::str_extract(s, "\\d+"))) %>%
-  arrange(s_idx)
-
-# Anche sum_p ha s come intero già pronto (estratto da "p[i]")
-# Se in sum_p la colonna si chiama 's', lasciamo così
-
-# Integrazione con le proporzioni empiriche usando l'indice numerico
+# Integrazione con i dati osservati
 df_shrink <- by_subject %>%
+  mutate(s_idx = as.integer(stringr::str_extract(s, "\\d+"))) %>%
+  arrange(s_idx) %>%
   select(s, s_idx, prop_emp, n_trials) %>%
-  inner_join(
-    sum_p %>%
-      dplyr::select(s,              # questo è l'indice numerico 1..N
-                    post_mean = mean,
-                    post_med  = median,
-                    post_q05  = `q5`,
-                    post_q95  = `q95`),
-    by = join_by(s_idx == s)
-  ) %>%
+  inner_join(sum_p %>% select(s, post_mean = mean, post_med = median, post_q05 = q5, post_q95 = q95),
+             by = join_by(s_idx == s)) %>%
   arrange(prop_emp) %>%
   mutate(s_ord = factor(s, levels = s))
 
-# Controllo rapido
-dplyr::glimpse(df_shrink)
-```
-
-Il primo grafico mette in fila gli operatori ordinati per proporzione empirica e, per ciascuno, disegna un segmento che va dalla proporzione osservata alla stima a posteriori. Il segmento mostra visivamente la contrazione verso la media di popolazione, mentre la barra orizzontale rappresenta l’intervallo di credibilità della stima bayesiana.
-
-```{r}
-#| fig.width: 8
-#| out.width: "100%"
-# Media di popolazione stimata (posterior mean)
-mu_hat <- sum_mu$mean
-
-# Grafico “lollipop” di shrinkage con IC al 90%
-gg_shrink <- ggplot(df_shrink, aes(x = s_ord)) +
+# Visualizzazione dello shrinkage
+ggplot(df_shrink, aes(x = s_ord)) +
   geom_segment(aes(xend = s_ord, y = prop_emp, yend = post_mean), linewidth = 0.4, alpha = 0.7) +
-  geom_point(aes(y = prop_emp), size = 2, alpha = 0.8) +
-  geom_point(aes(y = post_mean), size = 2) +
+  geom_point(aes(y = prop_emp), size = 2, alpha = 0.8, color = "darkred") +
+  geom_point(aes(y = post_mean), size = 2, color = "darkblue") +
   geom_errorbar(aes(ymin = post_q05, ymax = post_q95), width = 0.15, alpha = 0.7) +
-  geom_hline(yintercept = mu_hat, linetype = "dashed") +
-  labs(
-    x = "Operatore (ordinato per proporzione empirica)",
-    y = "Probabilità di successo",
-    subtitle = sprintf("Linea tratteggiata = media di popolazione a posteriori ≈ %.3f", mu_hat)
-  ) +
-  theme(panel.grid.minor = element_blank(),
-        axis.text.x = element_text(angle = 0, vjust = 0.5))
-gg_shrink
+  geom_hline(yintercept = mu_hat, linetype = "dashed", alpha = 0.7) +
+  labs(x = "Operatore (ordinato per proporzione empirica)", y = "Probabilità di successo",
+       subtitle = sprintf("Linea tratteggiata: media di popolazione ≈ %.3f", mu_hat)) +
+  theme(panel.grid.minor = element_blank(), axis.text.x = element_text(angle = 0, vjust = 0.5))
 ```
 
-Per una lettura complementare, un diagramma di dispersione mette a confronto, per ciascun operatore, la proporzione empirica con la stima a posteriori. La diagonale rappresenta l’assenza di contrazione; gli scostamenti verso il basso o verso l’alto visualizzano l’entità dello shrinkage. A parità di numero di prove per soggetto, la contrazione dipende soprattutto dalla dispersione di popolazione: intervalli posteriori stretti si traducono in una trazione più decisa verso la media.
+L'effetto di shrinkage risulta evidente, particolarmente marcato per gli operatori con proporzioni empiriche più estreme. Con soli dieci prove per partecipante, la regolarizzazione operata dal modello gerarchico appare sostanziale ma appropriata, coerentemente con una concentrazione di popolazione moderata.
+
+## Verifica predittiva a posteriori
+
+Valutiamo l'adeguatezza del modello confrontando statistiche sintetiche dei dati osservati con repliche simulate dalla distribuzione predittiva a posteriori. Esaminiamo in particolare la distribuzione delle proporzioni individuali e la media complessiva.
 
 ```{r}
-#| fig.width: 8
-#| out.width: "100%"
-gg_scatter <- ggplot(df_shrink, aes(x = prop_emp, y = post_mean)) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dotted") +
-  geom_point(size = 2, alpha = 0.85) +
-  geom_errorbar(aes(ymin = post_q05, ymax = post_q95), width = 0.01, alpha = 0.6) +
-  geom_vline(xintercept = 0.5, linetype = "dashed") +
-  geom_hline(yintercept = mu_hat, linetype = "dashed") +
-  labs(
-    x = "Proporzione empirica (successi / prove)",
-    y = "Stima bayesiana\na posteriori di p_i",
-    subtitle = "Linea diagonale: nessuno shrinkage;\nlinee tratteggiate: 0.5 e media di popolazione"
-  ) +
-  coord_equal() +
-  theme(panel.grid.minor = element_blank())
-gg_scatter
+set.seed(123)
+draws <- posterior::as_draws_df(fit$draws(c("alpha","beta")))
+S <- 1000
+idx <- sample(seq_len(nrow(draws)), S, replace = TRUE)
 
+yrep_mean <- numeric(S)
+yobs_mean <- mean(by_subject$y / by_subject$n_trials)
+
+for (s in seq_len(S)) {
+  a  <- draws$alpha[idx[s]]
+  b  <- draws$beta[idx[s]]
+  p_ <- rbeta(nrow(by_subject), a, b)
+  y_ <- rbinom(nrow(by_subject), size = by_subject$n_trials, prob = p_)
+  yrep_mean[s] <- mean(y_ / by_subject$n_trials)
+}
+
+tibble(yrep_mean = yrep_mean) %>%
+  ggplot(aes(x = yrep_mean)) +
+  geom_density(linewidth = 0.6, fill = "lightblue", alpha = 0.5) +
+  geom_vline(xintercept = yobs_mean, linetype = "dashed", color = "darkred") +
+  labs(x = "Media delle proporzioni replicate", y = "Densità",
+       subtitle = sprintf("Linea tratteggiata: media osservata ≈ %.3f", yobs_mean))
 ```
 
-Quando tutti hanno lo stesso numero di prove, come nel dataset originale, l’effetto dipende poco dal campione per soggetto e molto dalla struttura gerarchica. 
+Quando la distribuzione delle medie replicate include coerentemente il valore osservato, il modello appare adeguato nel riprodurre la tendenza centrale dei dati. Eventuali discrepanze sistematiche potrebbero suggerire la necessità di rivedere le assunzioni sulla concentrazione o considerare l'inclusione di predittori per modellare eventuali eterogeneità non catturate dall'ipotesi di scambiabilità semplice.
 
-La stessa logica vale a livello di popolazione. La quantità overall_p sintetizza la probabilità media di successo nell’insieme degli operatori. È utile quantificare l’evidenza contro il puro caso calcolando la probabilità a posteriori che overall_p superi 0.5; allo stesso tempo, un intervallo di credibilità permette di valutare la compatibilità dei dati con la soglia del cinquanta per cento. La domanda di gruppo è: “*la prestazione media supera il caso?*”. Operazionalizziamo con $\Pr(\text{overall\_p} > 0.5 \mid \text{dati})$. In contesti applicativi è possibile fissare una *soglia decisionale* (es. 0.95) per concludere a favore di “oltre il caso”.
+## Dalla Beta-Binomiale ai modelli gaussiani gerarchici
 
-```{r}
-mu_draws <- as_draws_df(draws_mu)$overall_p
-prob_mu_gt_half <- mean(mu_draws > 0.5)
-ci_mu <- quantile(mu_draws, c(0.025, 0.975))
+La transizione verso i modelli gaussiani a effetti misti ripropone, in una diversa formalizzazione matematica, la medesima struttura concettuale esaminata nel caso beta-binomiale. Le probabilità individuali pᵢ vengono sostituite da effetti casuali $\theta_j$ distribuiti normalmente; la verosimiglianza binomiale cede il posto a una distribuzione Normale per variabili risposta continue; il parametro di concentrazione $\kappa$ viene rimpiazzato dalla deviazione standard degli effetti casuali, che regola l'intensità del partial pooling.
 
-list(
-  media_posteriori_di_popolazione = mean(mu_draws),
-  P_mu_maggiore_di_0_5 = prob_mu_gt_half,
-  CI95_mu = ci_mu
-)
+Il principio fondamentale rimane invariato: il modello stima simultaneamente i parametri individuali e le caratteristiche di popolazione, mentre il fenomeno dello shrinkage emerge naturalmente come conseguenza della struttura gerarchica, regolando automaticamente il bilanciamento tra evidenza individuale e informazione di gruppo.
 
-```
+La tabella seguente riassume le analogie strutturali tra il modello beta-binomiale e il modello gaussiano a effetti misti:
 
-```{r}
-df_mu <- tibble(mu = mu_draws)
-
-gg_mu <- ggplot(df_mu, aes(x = mu)) +
-  geom_density(adjust = 1.2, linewidth = 0.6) +
-  geom_vline(xintercept = 0.5, linetype = "dashed") +
-  annotate("segment", x = ci_mu[[1]], xend = ci_mu[[2]],
-           y = 0, yend = 0, linewidth = 2, alpha = 0.8) +
-  labs(
-    x = "Probabilità media di successo (overall_p)",
-    y = "Densità a posteriori",
-    subtitle = sprintf("P(overall_p > 0.5) ≈ %.3f; CI95 ≈ [%.3f, %.3f]",
-                       prob_mu_gt_half, ci_mu[[1]], ci_mu[[2]])
-  ) +
-  theme(panel.grid.minor = element_blank())
-gg_mu
-```
-
-Queste visualizzazioni mostrano l’essenza dello shrinkage: le proporzioni individuali non vengono accettate acriticamente, ma regolarizzate verso una tendenza condivisa, con una forza che dipende dalla struttura gerarchica e, nei casi con numerosità diverse, dal numero di prove per soggetto. Negli esiti di gruppo, la distribuzione a posteriori della media consente di esprimere l’evidenza in termini probabilistici rispetto a una soglia teorica, evitando conclusioni basate su un unico punto stimato.
+ | Aspetto                      | Modello Beta-Binomiale               | Modello Gaussiano gerarchico                     |
+ | ---------------------------- | ------------------------------------ | ------------------------------------------------ |
+ | Parametri individuali        | (p_i) (probabilità di successo)      | $\theta_j$ (effetti casuali)                     |
+ | Distribuzione di popolazione | Beta($\alpha,\beta$)                 | Normale($\mu,\sigma$)                            |
+ | Parametro di concentrazione  | (\kappa = \alpha+\beta)              | Deviazione standard $\sigma$                     |
+ | Dati osservati               | (y_i \sim \text{Binomiale}(n_i,p_i)) | $y_{ij} \sim \text{Normale}(\theta_j, \sigma_y)$ |
+ | Effetto dello shrinkage      | Regolato da $n_i/(n_i+\kappa)$       | Regolato da $\sigma_\theta$                      |
 
 
-In sintesi, lo *shrinkage* ci ha permesso di ottenere stime più credibili delle probabilità individuali di successo, evitando di lasciarci ingannare da valori estremi che possono emergere quando il numero di prove è limitato. La distribuzione a posteriori della media di popolazione ha mostrato che la probabilità media di dare una risposta corretta si aggira attorno a 0.44, con un intervallo di credibilità al 95% [0.371, 0.515] che comprende il valore 0.5. Ciò significa che, collettivamente, le prestazioni degli operatori non forniscono evidenza credibile di un’abilità superiore a quella che ci si aspetterebbe dal puro caso.
+## Riflessioni conclusive
 
-Dal punto di vista inferenziale, non vi sono basi per concludere che gli operatori siano in grado di percepire il cosiddetto “campo energetico” meglio di quanto farebbe un soggetto che risponde casualmente. In altre parole, l’analisi bayesiana conferma che l’ipotesi nulla di prestazioni casuali rimane del tutto plausibile.
-
-L’esempio è istruttivo anche sul piano metodologico. Mostra infatti come un modello gerarchico non solo aiuti a stabilizzare le stime individuali, ma consenta anche di trarre conclusioni a livello di gruppo più solide e resistenti al rumore campionario. In un contesto controverso come quello della terapia tattile, questa forma di analisi permette di andare oltre le impressioni aneddotiche, fornendo un quadro quantitativo trasparente della compatibilità dei dati con le affermazioni oggetto di verifica.
-
-
-## Riflessioni conclusive {.unnumbered .unlisted}
-
-In questo capitolo abbiamo esplorato l’approccio gerarchico bayesiano come strumento per analizzare dati organizzati su più livelli. Per comprenderne l’utilità, può essere d’aiuto un’analogia semplice. Stimare la proporzione di palline blu in un’urna è un classico problema statistico. Ma la realtà psicologica è più complessa: spesso non abbiamo una sola urna, bensì molte urne più piccole contenute in un’urna grande, ciascuna con la propria proporzione di blu e rosse. Considerare ogni urna piccola come indipendente dalle altre significherebbe ignorare che appartengono a un contesto comune; al contrario, concentrarsi soltanto sull’urna grande farebbe perdere le peculiarità dei singoli contenitori.
-
-Il modello gerarchico supera questo falso dilemma. Permette infatti di stimare contemporaneamente le caratteristiche individuali e la distribuzione complessiva, integrando così informazione a livello micro e macro. Applicato al nostro esempio con verosimiglianza binomiale, questo approccio ha reso possibile stimare le probabilità di successo di ciascun operatore e, al tempo stesso, la probabilità media e la variabilità di popolazione.
-
-Dal punto di vista pratico, i vantaggi sono evidenti. Le stime individuali risultano più stabili, perché informate anche dai dati degli altri; la variabilità tra operatori viene quantificata in modo trasparente; la distribuzione di popolazione fornisce un punto di partenza per predizioni su nuovi individui. L’analisi della *therapeutic touch* ha mostrato con chiarezza questo doppio guadagno: da un lato, lo *shrinkage* ha ridimensionato le proporzioni empiriche estreme, dall’altro, la distribuzione a posteriori della media ha permesso di valutare se le prestazioni collettive si discostassero dal caso. La risposta, in questo caso, è stata negativa: non vi sono evidenze credibili che gli operatori fossero in grado di percepire un “campo energetico”.
-
-Più in generale, l’approccio gerarchico bayesiano rappresenta un pilastro dell’analisi moderna dei dati psicologici. Consente di modellare esplicitamente la struttura multilivello delle osservazioni, rafforzando la robustezza delle inferenze e migliorando la capacità di generalizzare oltre il campione osservato. Per questo motivo, costituisce uno strumento indispensabile per affrontare la complessità e la ricchezza dei dati reali nella ricerca psicologica contemporanea.
-
+L'impiego del modello gerarchico beta-binomiale come ponte concettuale presenta un evidente vantaggio didattico. La proprietà di coniugazione e la parametrizzazione in termini di $\mu, \kappa$ rendono trasparente il meccanismo dello shrinkage e chiariscono come la struttura gerarchica rappresenti la soluzione metodologicamente più appropriata per bilanciare la tensione tra specificità individuale e generalizzazione a livello di popolazione. Una volta consolidata questa intuizione fondamentale, il lettore sarà in grado di riconoscere gli stessi principi operativi nel caso gaussiano, trasferendo l'attenzione dall'analisi di dati discreti a variabili continue senza modificare la prospettiva inferenziale di base.
 
 ::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
 ```{r}

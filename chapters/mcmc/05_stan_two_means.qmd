@@ -2,24 +2,26 @@
 
 ## Introduzione {.unnumbered .unlisted}
 
-Immagina uno studio in cui confrontiamo il punteggio medio di *affetto negativo* settimanale tra un gruppo che segue un breve training di mindfulness e un gruppo di controllo. La domanda sostantiva non è “c’è *qualche* differenza?” ma “*di quanto* differiscono i gruppi e *quanto siamo incerti* su questa differenza?”. È questa la prospettiva che adottiamo qui: invece di ridurre il problema a un verdetto sì/no, stimiamo l’intera *distribuzione a posteriori* della differenza tra le medie e traduciamo tale distribuzione in affermazioni pratiche rilevanti per la psicologia.
+Nel manuale didattico il *confronto tra due medie* viene introdotto nel quadro della *regressione lineare con un predittore dicotomico* (0 = controllo, 1 = intervento): lì si mostra che la differenza tra le medie di due gruppi coincide con il coefficiente associato al predittore e che l’incertezza su tale differenza si ottiene dalla varianza stimata del coefficiente.
 
-In un confronto tra due gruppi, c’è anche un aspetto spesso trascurato ma cruciale: *la variabilità*. I due gruppi possono avere la stessa dispersione oppure no. Se, per esempio, il training riduce l’affetto negativo medio ma produce anche risposte più eterogenee (alcuni migliorano molto, altri poco), allora la differenza tra *deviazioni standard* è informativa tanto quanto la differenza tra medie. L’approccio bayesiano rende naturale stimare congiuntamente entrambe le quantità e la loro incertezza, offrendo un quadro più ricco di quello fornito dal t-test tradizionale [@kruschke2013bayesian].
+In questo capitolo riprendiamo lo stesso problema ma lo affrontiamo in chiave *generativa-bayesiana con Stan*, così da (i) rendere esplicite le assunzioni stocastiche sul processo che genera i dati, (ii) specificare prior debolmente informative coerenti con una variabile standardizzata, (iii) stimare *congiuntamente* la differenza tra le medie e — quando serve — la differenza tra le varianze, e (iv) scegliere tra modelli in base alla capacità predittiva (ELPD con PSIS-LOO).
 
-Per stabilizzare le stime e semplificare le scelte di prior, *standardizziamo* la variabile di esito $y$ sull’intero campione (media 0, deviazione standard 1). La standardizzazione non altera le relazioni tra i gruppi, ma rende più trasparenti le ipotesi: a priori è ragionevole attendersi medie di gruppo non lontane da 0 e dispersioni dell’ordine dell’unità. Lavoreremo con due modelli semplici e didatticamente utili: un modello con *varianza comune* ai gruppi e un modello con *varianze distinte*. In entrambi useremo *prior* debolmente informative sulle medie (normali centrate in 0) e sulle deviazioni standard (esponenziali), coerenti con la variabile standardizzata.
+Immaginiamo uno studio in cui confrontiamo il punteggio medio di affetto negativo settimanale tra un gruppo che segue un breve training di mindfulness e un gruppo di controllo. La domanda sostantiva non è “c’è *qualche* differenza?” ma “*di quanto* differiscono i gruppi e *quanto siamo incerti* su questa differenza?”. È questa la prospettiva che adottiamo qui: invece di ridurre il problema a un verdetto sì/no, stimiamo l’intera distribuzione a posteriori della differenza tra le medie e traduciamo tale distribuzione in affermazioni pratiche rilevanti per la psicologia.
 
-La domanda metodologica non è quale ipotesi sia “vera”, ma *quale modello predice meglio* dati simili a quelli osservati mantenendo la massima parsimonia. Useremo quindi la *densità predittiva logaritmica attesa* (ELPD) stimata con PSIS-LOO per confrontare i due modelli: se il guadagno predittivo del modello più complesso (varianze distinte) è minimo rispetto alla sua incertezza, conviene preferire il modello con varianza comune; se invece il vantaggio è chiaro e stabile, scegliamo il modello più flessibile.
+Un aspetto spesso trascurato è la *variabilità*: i due gruppi possono avere dispersioni diverse. Se, per esempio, il training riduce l’affetto negativo medio ma produce risposte più eterogenee, allora la *differenza tra deviazioni standard* è informativa quanto la differenza tra medie. L’impostazione bayesiana consente di stimare entrambe le quantità e la loro incertezza in modo naturale.
 
-Il cuore dell’analisi rimane comunque *la distribuzione a posteriori della differenza tra le medie*. È questa distribuzione che risponde alla domanda scientifica, ed è su di essa che riportiamo intervalli di credibilità e probabilità a posteriori di scenari di interesse (per esempio, la probabilità che la differenza sia inferiore a −0.2 SD, una soglia che potremmo considerare rilevante in termini clinici).
+Per stabilizzare le stime e semplificare le scelte di prior, standardizziamo l’esito sull’intero campione (media 0, deviazione standard 1). Lavoreremo con due modelli didatticamente complementari: uno a *varianza comune* e uno a *varianze distinte*. In entrambi useremo prior Normali centrate in 0 per le medie e prior Esponenziali per le deviazioni standard, coerenti con la scala standardizzata.
 
-Rispetto al *t-test di Student*, l’approccio bayesiano offre tre vantaggi pratici per la ricerca psicologica. Primo, fornisce *stima e incertezza* di tutte le quantità rilevanti (differenza di medie, differenza di varianze, grandezza dell’effetto), invece di un unico p-value. Secondo, consente di *valutare l’equivalenza pratica* attraverso una *region of practical equivalence* (*ROPE*): se quasi tutta la posteriore ricade entro una piccola regione attorno a zero, possiamo *accettare l’irrilevanza pratica* dell’effetto, cosa che il t-test non permette in modo diretto. Terzo, l’impostazione è *robusta ed estendibile*: quando i dati mostrano code pesanti o outlier, possiamo descriverli con una distribuzione *t* e stimarne anche il grado di “normalità”, mantenendo una lettura sostantiva chiara delle differenze tra gruppi [@kruschke2013bayesian].
+La domanda metodologica non è quale ipotesi sia “vera”, ma *quale modello predice meglio* dati simili ai nostri con la massima parsimonia. Useremo quindi l’ELPD stimata con PSIS-LOO per confrontare i due modelli. Il cuore dell’analisi rimane comunque la distribuzione a posteriori della differenza tra le medie: su di essa riportiamo intervalli di credibilità e probabilità a posteriori per scenari di interesse (ad es., la probabilità che la differenza sia inferiore a −0.2 SD, soglia ritenuta clinicamente rilevante). Inoltre, quando l’obiettivo applicativo è dimostrare l’irrilevanza pratica, useremo una *ROPE* attorno a zero per quantificare la plausibilità di effetti trascurabili.
 
-In sintesi, in questo capitolo useremo *Stan* per stimare due modelli semplici e confrontarli sul piano predittivo, ma terremo sempre lo sguardo sulle *conclusioni sostantive*: nel nostro esempio, “di quanto” il training modifica l’affetto negativo medio, “quanto” è plausibile una differenza nulla o trascurabile, e “come” cambia l’eterogeneità delle risposte tra i partecipanti.
+**Obiettivo dell’approfondimento in Stan.** Rispetto alla trattazione tramite regressione lineare con predittore dicotomico, questo capitolo ha l’obiettivo di:
 
-### Transizione al codice {.unnumbered .unlisted}
+1. mostrare l’*equivalenza concettuale* tra “differenza tra medie” e *coefficiente* del predittore (e come ciò emerga in un modello generativo);
+2. fornire un *workflow completo in Stan* (modello, prior, diagnostiche MCMC, PPC) per passare da stime puntuali a *distribuzioni posteriori* interpretabili;
+3. introdurre il *confronto predittivo* tra modelli (ELPD/PSIS-LOO) come criterio operativo di scelta tra varianza comune e varianze distinte;
+4. integrare la lettura sostantiva con *ROPE* ed eventuali *estensioni robuste* (es. likelihood $t$) quando la distribuzione empirica lo suggerisce.
 
-Nei prossimi paragrafi genereremo un piccolo dataset simulato per il caso mindfulness vs controllo, *standardizzeremo* l’esito, specificheremo in *Stan* un modello con *varianza comune* e uno con *varianze distinte*, quindi confronteremo le due specificazioni con *PSIS-LOO* e riporteremo la *posteriore della differenza tra le medie* con intervallo di credibilità e, dove appropriato, una *valutazione ROPE* per l’equivalenza pratica. L’obiettivo didattico è duplice: dare un codice leggibile a chi non è esperto e mostrare come le scelte modellistiche si traducano in *interpretazioni psicologiche* chiare.
-
+In sintesi, useremo Stan per stimare due modelli semplici e confrontarli sul piano predittivo, mantenendo il focus sulle conclusioni sostantive: “di quanto” il training modifica l’affetto negativo medio, “quanto” è plausibile una differenza nulla o trascurabile, e “come” cambia l’eterogeneità delle risposte tra i partecipanti.
 
 ### Panoramica del capitolo {.unnumbered .unlisted}
 
@@ -28,12 +30,6 @@ Nei prossimi paragrafi genereremo un piccolo dataset simulato per il caso mindfu
 * Implementare in *Stan* un modello con varianza comune e uno con varianze distinte.
 * Valutare la capacità predittiva dei modelli attraverso PSIS-LOO.
 * Interpretare la distribuzione a posteriori della differenza tra le medie e le verifiche predittive.
-
-::: {.callout-tip collapse=true}
-## Prerequisiti
-* Nozioni di base su Bernoulli/Binomiale, odds e odds ratio.
-* Concetto di prior e posteriore.
-:::
 
 ::: {.callout-caution collapse=true title="Preparazione del Notebook"}
 
@@ -52,10 +48,9 @@ conflicts_prefer(posterior::ess_tail)
 
 ## Codice R 
 
-```{r}
-# Simuliamo i dati di un piccolo studio psicologico
-# Gruppo A = controllo, Gruppo B = training mindfulness
+Simuliamo i dati di un piccolo studio psicologico: Gruppo A = controllo, Gruppo B = training mindfulness.
 
+```{r}
 set.seed(123)  # per rendere i risultati riproducibili
 
 n_A <- 80   # numero partecipanti controllo
@@ -94,13 +89,11 @@ stan_data <- list(
 glimpse(stan_data)
 ```
 
-### Nota didattica
-
 In questo esempio, la variabile `score` rappresenta il livello di affetto negativo. Abbiamo simulato una piccola differenza: in media, il gruppo mindfulness ha punteggi più bassi (cioè minore affetto negativo) rispetto al gruppo controllo. Standardizzando la variabile, lavoriamo sempre in “unità di deviazione standard”, semplificando l’interpretazione delle priors e delle stime.
 
 ### Differenza di medie e ROPE
 
-Prima ancora di stimare i modelli in *Stan*, possiamo calcolare la differenza empirica tra le medie e confrontarla con una *regione di irrilevanza pratica (ROPE)*. Per esempio, supponiamo che differenze inferiori a 0.1 SD non abbiano rilevanza psicologica. Questo ci permette di introdurre un confronto diretto con il test t: il t-test risponde solo alla domanda “la differenza è zero?”, mentre l’approccio bayesiano ci consente di valutare “la differenza è psicologicamente importante?”.
+Prima ancora di stimare i modelli in Stan, possiamo calcolare la differenza empirica tra le medie e confrontarla con una *regione di irrilevanza pratica (ROPE)*. Per esempio, supponiamo che differenze inferiori a 0.1 SD non abbiano rilevanza psicologica. Questo ci permette di introdurre un confronto diretto con il test t: il t-test risponde solo alla domanda “la differenza è zero?”, mentre l’approccio bayesiano ci consente di valutare “la differenza è psicologicamente importante?”.
 
 ```{r}
 # Differenza empirica tra le medie
@@ -118,7 +111,6 @@ cat("Differenza osservata =", round(mean_diff, 3),
 ```
 
 Naturalmente, la vera potenza del metodo bayesiano emergerà quando stimiamo la distribuzione a posteriori della differenza di medie. Allora potremo calcolare direttamente la *probabilità a posteriori che la differenza ricada dentro o fuori dalla ROPE*, ottenendo un’informazione più ricca e interpretabile rispetto al semplice p-value.
-
 
 ## Modello a varianza comune 
 
@@ -163,14 +155,17 @@ generated quantities {
   diff_mu = mu[2] - mu[1];
 }
 "
+```
 
-# Scrittura su disco e compilazione
-if (!dir.exists(here::here("stan"))) dir.create(here::here("stan"), recursive = TRUE)
-writeLines(stan_equal_var, here::here("stan", "two_means_equal_var.stan"))
+```{r}
+#| output: false
+mod_eq <- cmdstanr::cmdstan_model(write_stan_file(stan_equal_var))
+```
 
-mod_eq <- cmdstan_model(here::here("stan", "two_means_equal_var.stan"))
+Eseguiamo il campionaento dalla distribuzione a posteriori:
 
-# Campionamento dalla posteriore
+```{r}
+#| output: false
 fit_eq <- mod_eq$sample(
   data = stan_data,                    # creato nella sezione precedente
   seed = 2025,
@@ -179,6 +174,7 @@ fit_eq <- mod_eq$sample(
   refresh = 0
 )
 ```
+
 
 Dopo l’esecuzione, verifichiamo a colpo d’occhio che i diagnostici principali siano buoni. Se R-hat è vicino a 1 e gli effective sample size sono adeguati, passiamo all’interpretazione. Usiamo direttamente le quantità generate nel blocco `generated quantities`, così lo studente vede continuità tra il modello e l’analisi a valle.
 
@@ -258,22 +254,27 @@ generated quantities {
   diff_sigma = sigma[2] - sigma[1];
 }
 "
+```
 
-# Scrittura su disco e compilazione
-if (!dir.exists(here::here("stan"))) dir.create(here::here("stan"), recursive = TRUE)
-writeLines(stan_unequal_var, here::here("stan", "two_means_unequal_var.stan"))
+Compilazione:
 
-mod_neq <- cmdstan_model(here::here("stan", "two_means_unequal_var.stan"))
+```{r}
+#| output: false
+mod_neq <- cmdstanr::cmdstan_model(write_stan_file(stan_unequal_var))
+```
 
-# Campionamento
+Campionamento:
+
+```{r}
 fit_neq <- mod_neq$sample(
-  data = stan_data,    # come definito nella sezione precedente
+  data = stan_data, 
   seed = 2025,
   chains = 4, parallel_chains = 4,
   iter_warmup = 1000, iter_sampling = 1000,
   refresh = 0
 )
 ```
+
 
 ### Lettura sostantiva dei parametri
 
@@ -380,73 +381,63 @@ bayesplot::ppc_dens_overlay(y = stan_data$y, yrep = yrep_neq[1:50, ])
 
 2. **Differenza tra varianze**. La posteriore di *diff_sigma* chiarisce se l’intervento modifica l’eterogeneità delle risposte: informazione spesso ignorata, ma importante in psicologia applicata.
 
-3. **Capacità predittiva**. Il *confronto PSIS-LOO* ci guida nella scelta del livello di complessità. Se ΔELPD è *piccolo e incerto*, preferiamo la *parsimonia* (varianza comune); se il vantaggio è *stabile e sostanziale*, ha senso adottare il modello con varianze distinte.
+3. **Capacità predittiva**. Il confronto PSIS-LOO ci guida nella scelta del livello di complessità. Se ΔELPD è piccolo e incerto, preferiamo la parsimonia (varianza comune); se il vantaggio è stabile e sostanziale, ha senso adottare il modello con varianze distinte.
 
 ## Dalle medie di gruppo all’analisi idiografica
 
-Finora ci siamo concentrati sulle *medie* di gruppo, chiedendoci quanto l’intervento mindfulness modifichi, in media, l’affetto negativo. Ma due gruppi con medie simili possono nascondere storie individuali molto diverse: c’è chi migliora nettamente, chi peggiora, chi non cambia. Per restituire queste differenze, spostiamo l’attenzione sul *singolo partecipante*.
+L'obiettivo di questo approfondimento è di sposatare l'attenzione dagli effetti medi tra gruppi alla valutazione del cambiamento nel singolo partecipante.
 
-In psicologia clinica, uno strumento tradizionale per valutare il cambiamento individuale è il *Reliable Change Index (RCI)*: si guarda la differenza tra post e pre e la si rapporta all’errore atteso della differenza. Se la differenza “supera la soglia”, il cambiamento è detto affidabile [@jacobson1991clinical]. È un’idea semplice e utile, ma lascia fuori due elementi che per noi sono centrali: *l’incertezza* e la *rilevanza pratica* del cambiamento. In termini bayesiani, invece di un verdetto sì/no, vogliamo stimare *quanto è plausibile* che il cambiamento di un individuo sia nullo, trascurabile, o clinicamente rilevante.
+### Il modello di misurazione del cambiamento individuale
 
-Lavoreremo quindi con una piccola estensione bayesiana dell’RCI: per un singolo soggetto, consideriamo la differenza $\Delta = \text{post} - \text{pre}$ e, nota l’incertezza di misura del test (che riassumiamo tramite lo *standard error of measurement*, *SEM*), costruiamo la *distribuzione a posteriori* di $\Delta$. Da quella distribuzione potremo leggere quantità davvero utili: la probabilità che $\Delta$ sia *trascurabile* (dentro una *ROPE*) oppure *rilevante* (oltre una soglia clinica $\tau$).
+L'obiettivo consiste nel stimare il cambiamento vero di un individuo a partire dalla differenza osservata tra due misurazioni dello stesso test, tipicamente in contesti pre- e post-intervento. Indichiamo con $D = X_{\text{post}} - X_{\text{pre}}$ la differenza osservata per una persona. Questo dato apparentemente semplice nasconde in realtà una distinzione fondamentale: mentre $D$ rappresenta il dato "di superficie", il cambiamento psicologico vero che vogliamo inferire è $\Delta$, che risulta contaminato dall'inevitabile errore di misura.
 
-La logica è la stessa usata a livello di gruppo con la differenza tra medie: là guardavamo $\mu_2 - \mu_1$ e una ROPE attorno a zero; qui guardiamo $\Delta$ per una persona, con una ROPE e una soglia $\tau$ espresse nella *stessa metrica* che abbiamo usato in precedenza in questo capitolo (unità di deviazione standard).
+### La quantificazione dell'errore di misura
 
-### Un modello bayesiano minimale per la stima del cambiamento individuale (RCI bayesiano)
+La base concettuale per trattare l'incertezza di misura proviene dalla teoria classica dei test [@lord2008statistical], secondo cui ogni punteggio osservato $X$ può essere scomposto in componente vera $T$ ed errore casuale $E$: $X = T + E$. L'affidabilità ($r$) del test è definita come il rapporto tra varianza vera e varianza osservata: $r = \mathrm{Var}(T) / \mathrm{Var}(X)$. Da questa relazione discende che la varianza d'errore è $\mathrm{Var}(E) = \mathrm{Var}(X)(1-r)$, e quindi lo *standard error of measurement* (SEM) risulta $\mathrm{SEM} = SD_X \sqrt{1-r}$, dove $SD_X$ è la deviazione standard campionaria del test.
 
-Il modello che presentiamo rappresenta una versione volutamente semplificata del *reliable change index* (RCI) in chiave bayesiana. L’obiettivo è introdurre lo studente a questi concetti attraverso un esempio trasparente e computazionalmente immediato. La scelta di un modello Normale–Normale in forma chiusa permette infatti di preservare la chiarezza espositiva senza rinunciare alla completezza concettuale.
+Per la varianza della differenza tra due misurazioni, il caso più semplice assume che gli errori di pre e post siano indipendenti e con la stessa deviazione standard SEM. Allora la varianza della differenza $D = X_{\text{post}} - X_{\text{pre}}$ è la somma delle varianze d’errore: $\mathrm{Var}(D) = \mathrm{Var}(E_{\text{post}}) + \mathrm{Var}(E_{\text{pre}}) = \mathrm{SEM}^2 + \mathrm{SEM}^2 = 2\mathrm{SEM}^2$. La sua deviazione standard è perciò $\mathrm{SEdiff} = \sqrt{2}\,\mathrm{SEM}$. 
 
-#### Struttura del modello
+### Il modello bayesiano per il cambiamento individuale
 
-L’input del modello è costituito dai punteggi pre-test e post-test del singolo partecipante, insieme alla deviazione standard e all’affidabilità dello strumento. L’output è la distribuzione a posteriori del cambiamento individuale Δ, dalla quale possiamo derivare tre probabilità clinicamente rilevanti. Tutti i calcoli vengono condotti nella stessa metrica standardizzata (unità di deviazione standard) adottata per le analisi di gruppo.
+Il modello probabilistico che collega il dato osservato $D$ al cambiamento vero $\Delta$ assume una verosimiglianza normale:
 
-La specificazione è la seguente:
+$$
+D \mid \Delta \sim \mathcal{N}(\Delta,\mathrm{SEdiff}^2).
+$$
 
-* *Verosimiglianza*: la differenza osservata tra post e pre (D) è distribuita come
+Questa specificazione implica che, condizionatamente al cambiamento vero $\Delta$, le differenze osservate si distribuiscono normalmente attorno a $\Delta$ con varianza determinata dall'errore di misura.
 
-  $$
-  D \sim \mathcal{N}(\Delta, \text{SEdiff}^2)
-  $$
-  dove SEdiff è l’errore standard della differenza.
+Completiamo il modello con una distribuzione a priori per $\Delta$, scegliendo una normale centrata sull'assenza di effetto:
 
-* *Prior*: il vero cambiamento Δ segue una distribuzione Normale centrata in 0 con deviazione standard pari a `prior_sd_delta`, a esprimere l’incertezza iniziale sulla sua entità:
+$$
+\Delta \sim \mathcal{N}(0, \sigma_0^2),
+$$
 
-  $$
-  \Delta \sim \mathcal{N}(0, \text{prior\_sd\_delta}^2).
-  $$
-Per combinazione coniugata, la distribuzione a posteriori di Δ risulta ancora Normale, con parametri calcolabili tramite le formule standard di aggiornamento bayesiano.
+dove $\sigma_0^2$ rappresenta la varianza a priori. La scelta di centrare il prior sullo zero riflette l'assunzione di equiprobabilità tra piccoli miglioramenti e peggioramenti in assenza di dati, mentre $\sigma_0$ definisce la scala dei cambiamenti considerati plausibili a priori.
 
-#### Lo standard error della differenza
+### L'inferenza e la sua interpretazione clinica
 
-Elemento centrale del modello è il calcolo dello *standard error della differenza (SEdiff)*, che riflette l’incertezza nella stima del cambiamento individuale tenendo conto dell’affidabilità del test. Si procede così:
+La combinazione di prior normale e verosimiglianza normale produce una distribuzione a posteriori normale per $\Delta$ con parametri:
 
-1. si calcola l’errore standard di misura (SEM) come
+$$
+\sigma_{\text{post}}^2 = \left( \frac{1}{\sigma_0^2} + \frac{1}{\mathrm{SEdiff}^2} \right)^{-1}, \quad \mu_{\text{post}} = \left( \frac{\sigma_{\text{post}}^2}{\mathrm{SEdiff}^2} \right) D.
+$$
 
-   $$
-   \text{SEM} = SD \times \sqrt{1 - \text{reliability}},
-   $$
-   dove *SD* è la deviazione standard del test;
+Queste formule rivelano il meccanismo di regolarizzazione (*shrinkage*) tipico dell'inferenza bayesiana: la stima finale rappresenta un compromesso ponderato tra il dato osservato e il centro del prior, con pesi determinati dalle rispettive incertezze.
 
-2. si ottiene quindi
+La distribuzione a posteriori permette di rispondere a domande clinicamente rilevanti attraverso il calcolo di probabilità direttamente interpretabili:
 
-   $$
-   \text{SEdiff} = \sqrt{2} \times \text{SEM},
-   $$
-   assumendo che pre e post abbiano la stessa metrica e affidabilità.
+- **Probabilità di cambiamento trascurabile**: area della posteriori nell'intervallo $[-\rho, +\rho]$, dove $\rho$ definisce la regione di irrilevanza pratica.
+- **Probabilità di miglioramento rilevante**: area della coda destra oltre la soglia clinica $\tau > 0$.
+- **Probabilità di peggioramento rilevante**: area della coda sinistra sotto $-\tau$.
 
-#### Probabilità di interesse clinico
+### Considerazioni metodologiche
 
-Dalla distribuzione a posteriori di Δ si ricavano tre probabilità sostantive:
-
-* la probabilità che Δ cada nella *ROPE* (es. ±0.10 SD), cioè che il cambiamento sia trascurabile;
-* la probabilità che Δ superi una soglia positiva τ (es. +0.30 SD), indicativa di un miglioramento clinicamente rilevante;
-* la probabilità che Δ sia minore di –τ, indicativa di un peggioramento rilevante.
-
-Queste probabilità si ottengono integrando la distribuzione a posteriori sugli intervalli corrispondenti.
+Tutta questa costruzione resta volutamente minimale per scopi didattici. In contesti reali possiamo rilassare alcune ipotesi. Se l’affidabilità non è nota con precisione, possiamo trattarla come parametro incerto e propagare questa incertezza nel modello. Se i punteggi hanno outlier o code pesanti, possiamo sostituire la normale con una *t di Student* per descrivere meglio i dati. Se abbiamo molti soggetti, possiamo passare a un *modello gerarchico* in Stan in cui i cambiamenti individuali condividono una distribuzione comune: in questo modo le stime idiografiche fanno pooling e risultano più stabili, e al contempo restano coerenti con la stima della differenza media tra gruppi presentata nella prima parte del capitolo. Il punto cruciale, a ogni livello, è che le quantità che interessano davvero — cambiamento individuale, irrilevanza pratica, rilevanza clinica — vengono espresse come *probabilità* su intervalli nella metrica del problema, con ipotesi esplicite e controllabili.
 
 #### Esempio numerico
 
-Applichiamo il modello a un soggetto del gruppo sperimentale in uno studio sull’intervento mindfulness. I suoi punteggi sono: pre = 0.40, post = 0.05 (espressi in SD). Assumiamo SD = valore campionario dell’intero dataset e un’affidabilità del test pari a 0.85.
+Applichiamo il modello a un soggetto del gruppo sperimentale in uno studio sull'intervento mindfulness. I punteggi, espressi in deviazioni standard rispetto alla media normativa, sono: pre = 0.40, post = 0.05. Assumiamo un'affidabilità del test pari a 0.85 e utilizziamo la deviazione standard campionaria dell'intero dataset come metrica di riferimento.
 
 ```{r}
 # ------------------------------------------------------------
@@ -525,39 +516,39 @@ cat(sprintf(
 ))
 ```
 
-Il modello produce:
+**Probabilità inferite:**  
 
-* differenza osservata: –0.350 SD;
-* SEM = 0.384, SEdiff = 0.543;
-* distribuzione a posteriori di Δ \~ Normal(–0.192, 0.403²).
+- cambiamento trascurabile: 17.5%;
+- peggioramento clinicamente rilevante: 11.1%;
+- **miglioramento clinicamente rilevante: 39.5%**.
 
-In termini clinici:
+**Interpretazione clinica.**
 
-* P(Δ in ROPE) = 0.175 → cambiamento probabilmente non trascurabile;
-* P(Δ > 0.30) = 0.111 → miglioramento poco plausibile;
-* P(Δ < –0.30) = 0.395 → peggioramento moderato plausibile.
+L'analisi bayesiana delinea un profilo di cambiamento probabilistico che supera le semplici classificazioni dicotomiche. I risultati indicano che il soggetto ha mostrato un miglioramento nell'affetto negativo corrispondente a -0.350 SD, che l'inferenza bayesiana regolarizza a -0.192 SD, integrando l'incertezza di misura con le aspettative a priori.
 
-#### Interpretazione
+Il quadro probabilistico risultante evidenzia che il miglioramento clinicamente rilevante è l'ipotesi più plausibile, con una probabilità del 39.5% che il vero cambiamento superi la soglia di rilevanza clinica. Contemporaneamente, la possibilità di un peggioramento sostanziale appare remota (11.1%), mentre l'ipotesi di stabilità risulta poco convincente (17.5%).
 
-La stima bayesiana attenua la differenza osservata, portandola da –0.350 a –0.192 SD: un effetto di regolarizzazione tipico dell’approccio bayesiano, che combina dati e informazione a priori. Le probabilità a posteriori rendono chiaro che il cambiamento del soggetto non è facilmente classificabile come miglioramento o stabilità: la possibilità di un peggioramento moderato risulta la più consistente, ma non esclusiva.
+Questa caratterizzazione sfumata consente di apprezzare appieno il valore aggiunto dell'approccio bayesiano: non un verdetto assoluto sul cambiamento, ma una mappa probabilistica che quantifica direttamente le ipotesi clinicamente rilevanti. La trasparenza metodologica consente inoltre di valutare criticamente l'influenza dei parametri scelti, quali l'affidabilità dello strumento, l'ampiezza della regione di equivalenza pratica e la soglia di rilevanza clinica, i quali devono essere motivati alla luce della letteratura scientifica e della pratica clinica consolidata.
 
-Questo esempio mette in evidenza il valore dell’approccio bayesiano: non un singolo verdetto, ma una mappa probabilistica delle ipotesi clinicamente rilevanti. La trasparenza del modello consente anche di riflettere criticamente sulla scelta dei parametri (affidabilità, SD, ampiezza della ROPE e soglia τ), che devono essere motivati in base a evidenze empiriche e convenzioni cliniche. In questo modo, lo stesso schema logico che abbiamo applicato ai gruppi diventa disponibile anche per l’analisi del singolo: non un verdetto dicotomico, ma una distribuzione di probabilità che rende esplicita l’incertezza e la rilevanza clinica del cambiamento.
+L'analisi bayesiana del cambiamento individuale non è quindi solo uno strumento statistico, ma una metodologia decisionale che preserva e quantifica sistematicamente l'incertezza, supportando il clinico in valutazioni più articolate e basate sulle evidenze effettive.
 
-#### Prospettive
+**Prospettive metodologiche.**
 
-La versione proposta ha finalità introduttive. In un contesto di ricerca avanzato, il modello in forma chiusa può essere sostituito da implementazioni in linguaggio *Stan*, che consentono di modellare esplicitamente gli errori di misura e di passare a modelli gerarchici capaci di integrare stime individuali e differenze di gruppo. La coerenza concettuale dell’approccio bayesiano si manifesta così su più livelli: stimare differenze tra gruppi e stimare cambiamenti individuali seguono lo stesso schema logico, garantendo un quadro inferenziale unificato e potente per la ricerca psicologica.
+La versione dell'analisi idiografica qui presentata, sebbene efficace dal punto di vista didattico, può essere estesa in contesti di ricerca avanzata attraverso implementazioni nel linguaggio Stan. Questa evoluzione metodologica consentirebbe di modellare esplicitamente gli errori di misura - attualmente trattati come quantità fisse - e di sviluppare architetture gerarchiche in grado di integrare le stime individuali con le differenze di gruppo.
+
+L'approccio bayesiano manifesta qui la sua piena coerenza concettuale: sia la stima delle differenze tra gruppi che la valutazione del cambiamento individuale seguono lo stesso schema logico inferenziale. Questa uniformità metodologica garantisce un quadro analitico unificato e robusto per la ricerca psicologica, permettendo di transitare tra analisi di gruppo e valutazioni individuali senza modificare i principi epistemologici di base.
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-L’analisi sviluppata in questo capitolo mette in evidenza i punti di forza dell’approccio bayesiano al confronto tra gruppi e, più in generale, alla valutazione del cambiamento psicologico. La quantità centrale non è più un singolo numero o un p-value, ma l’intera *distribuzione a posteriori* delle differenze che ci interessano. È questa distribuzione che racconta la storia sostantiva: nel nostro esempio, di quanto il gruppo mindfulness differisce, in media, dal gruppo di controllo. Non otteniamo soltanto una stima puntuale, ma anche l’incertezza che accompagna ogni possibile valore della differenza. Questo ci consente di andare oltre il verdetto dicotomico “c’è / non c’è differenza” e di ragionare invece in termini di *gradazioni di plausibilità*.
+L’analisi sviluppata in questo capitolo mette in evidenza i punti di forza dell’approccio bayesiano applicato al confronto tra gruppi e, più in generale, alla valutazione del cambiamento psicologico. La quantità centrale non è più rappresentata da un singolo numero o da un valore-$p$, ma dall'intera distribuzione a posteriori delle differenze che ci interessano. È questa distribuzione che racconta la storia sostanziale: nel nostro esempio, di quanto il gruppo di mindfulness differisca, in media, da quello di controllo. Non si ottiene soltanto una stima puntuale, ma anche l’incertezza che accompagna ogni possibile valore della differenza. Ciò ci permette di andare oltre il verdetto dicotomico "c'è/non c'è differenza" e di ragionare invece in termini di "gradazioni di plausibilità".
 
-Un secondo aspetto riguarda la possibilità di valutare la *rilevanza pratica* degli effetti. Introdurre una *region of practical equivalence* (ROPE) ci permette di distinguere tra differenze che, pur statisticamente rilevabili, sono trascurabili dal punto di vista psicologico e differenze che invece hanno un impatto sostantivo. In questo modo possiamo rispondere a domande clinicamente significative, come “quanto è probabile che l’effetto sia non solo diverso da zero, ma anche sufficientemente grande da essere rilevante?”.
+Un ulteriore vantaggio consiste nella possibilità di valutare la rilevanza pratica degli effetti. L'introduzione di una region of practical equivalence (ROPE) permette di distinguere tra differenze statisticamente rilevanti ma psicologicamente irrilevanti e differenze che invece presentano un impatto sostanziale. Questo approccio consente di rispondere a domande sostanziali per la pratica clinica, quali: "Qual è la probabilità che l'effetto non sia solo diverso da zero, ma anche di entità sufficiente per essere considerato rilevante?"
 
-Il confronto tra modelli con varianza comune e modelli con varianze distinte ci ha mostrato inoltre come ogni assunzione statistica vada valutata *in termini predittivi*. Grazie al criterio ELPD stimato con PSIS-LOO abbiamo potuto verificare se la maggiore complessità introdotta dal modello con varianze distinte migliorasse davvero la capacità di predire dati simili ai nostri. Quando il guadagno è minimo, la parsimonia suggerisce di mantenere il modello più semplice; quando invece il vantaggio predittivo è chiaro, si giustifica la maggiore complessità. Questo modo di ragionare è più trasparente e più vicino alla logica scientifica rispetto all’alternativa frequentista, in cui le scelte modellistiche sono spesso delegate a test poco interpretabili.
+Il confronto tra modelli con varianza comune e modelli con varianze distinte ci ha mostrato, inoltre, come ogni assunzione statistica vada valutata in termini predittivi. Grazie al criterio ELPD, stimato con PSIS-LOO, abbiamo potuto verificare se la maggiore complessità introdotta dal modello con varianze distinte migliorasse davvero la capacità di predire dati simili ai nostri. Quando il guadagno è minimo, la parsimonia suggerisce di mantenere il modello più semplice, mentre quando il vantaggio predittivo è evidente, si può giustificare la maggiore complessità. Questo modo di ragionare è più trasparente e vicino alla logica scientifica rispetto all'alternativa frequentista, in cui le scelte modellistiche sono spesso delegate a test poco interpretabili.
 
-Il passaggio all’analisi ideografica, con la versione bayesiana del *Reliable Change Index*, amplia ulteriormente la prospettiva. Se l’analisi di gruppo ci dice cosa accade *in media*, l’analisi del cambiamento individuale ci mostra quanto un intervento sia stato efficace per ciascun partecipante. Qui il vantaggio del ragionamento bayesiano è evidente: invece di un verdetto rigido (“cambiamento affidabile sì/no”), possiamo stimare la probabilità che un miglioramento sia trascurabile o clinicamente rilevante per il singolo individuo. In questo modo, i due livelli di analisi — collettivo e individuale — non sono più separati, ma si integrano in un quadro unitario.
+Il passaggio all'analisi ideografica, con la versione bayesiana del *Reliable Change Index*, amplia ulteriormente la prospettiva. Se l’analisi di gruppo ci dice cosa accade in media, l’analisi del cambiamento individuale ci mostra quanto un intervento sia stato efficace per ciascun partecipante. In questo caso, il vantaggio del ragionamento bayesiano è evidente: invece di un verdetto rigido ("cambiamento affidabile sì/no"), è possibile stimare la probabilità che un miglioramento sia trascurabile o clinicamente rilevante per il singolo individuo. In questo modo, i due livelli di analisi, collettivo e individuale, non sono più separati, ma si integrano in un quadro unitario.
 
-In sintesi, l’approccio bayesiano ci insegna che l’inferenza non riguarda tanto il respingere o meno un’ipotesi nulla, quanto il descrivere la *plausibilità di diversi scenari* e collegarla al significato psicologico dei dati. Ciò vale tanto per le differenze tra gruppi quanto per i cambiamenti nei singoli individui. Questa prospettiva porta la statistica più vicina alle domande reali della psicologia: non solo “esiste un effetto?”, ma “quanto è grande?”, “quanto è incerto?”, “quanto è rilevante per la pratica clinica o applicativa?”, e perfino “quanto è plausibile che questo singolo paziente abbia beneficiato dell’intervento?”. È qui che l’approccio bayesiano mostra il suo valore aggiunto, trasformando l’analisi dei dati in uno strumento flessibile, trasparente e sostantivamente informativo.
+In sintesi, l’approccio bayesiano ci insegna che l’inferenza non riguarda tanto l’accettazione o il rifiuto di un’ipotesi nulla, quanto piuttosto la descrizione della plausibilità di diversi scenari e il loro collegamento al significato psicologico dei dati. Ciò vale sia per le differenze tra gruppi che per i cambiamenti nei singoli individui. Questo approccio  allinea la statistica alle autentiche domande della psicologia. La ricerca non si limita a stabilire se un effetto esista, ma ne indaga l'entità, ne quantifica l'incertezza, ne valuta la rilevanza clinica e arriva a stimare la probabilità che un singolo paziente abbia tratto beneficio dall'intervento. È qui che l’approccio bayesiano mostra il suo valore aggiunto, trasformando l’analisi dei dati in uno strumento flessibile, trasparente e in grado di fornire informazioni sostanziali.
 
 ::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
 ```{r}

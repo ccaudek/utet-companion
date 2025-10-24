@@ -1,10 +1,12 @@
-# Costruzione di prior informativi da corpora di studi: un esempio con dati di meta-analisi
+# Costruzione di prior informativi da corpora di studi {#sec-corpora-informative-priors}
 
 ## Introduzione {.unnumbered .unlisted}
 
-Il presente capitolo introduce una metodologia avanzata ma concettualmente accessibile per la costruzione di distribuzioni a priori informative nell'analisi bayesiana. L'approccio qui presentato si basa sull'utilizzo sistematico di conoscenze accumulate attraverso un corpus di studi precedenti, seguendo la proposta metodologica di @zwet2022proposal. 
+Nel manuale didattico, le distribuzioni a priori sono state presentate come componente fondamentale del processo di aggiornamento bayesiano della conoscenza. È stata evidenziata la distinzione tra prior debolmente informative, che hanno una funzione prevalentemente regolarizzante, e prior informative, che incorporano invece conoscenze sostanziali sul fenomeno in esame, basate sulla letteratura scientifica disponibile.
 
-Per rendere concreta questa procedura, applicheremo il metodo ai dati empirici provenienti dalla meta-analisi di @vanagteren2021systematic, che ha esaminato l'efficacia degli interventi psicologici finalizzati al miglioramento del benessere mentale. Questa applicazione pratica ci permetterà di comprendere non solo gli aspetti teorici del metodo, ma anche le sue implicazioni concrete per la ricerca psicologica.
+Questo capitolo introduce una metodologia avanzata, ma concettualmente accessibile, per la costruzione sistematica di distribuzioni a priori informative. L'approccio si basa sull'utilizzo strutturato delle evidenze accumulate nella letteratura scientifica, seguendo la proposta metodologica di @zwet2022proposal per derivare prior empiricamente fondati.
+
+Per illustrare concretamente questa procedura, applicheremo il metodo ai dati della meta-analisi di @vanagteren2021systematic, che ha sintetizzato l'efficacia degli interventi psicologici sul benessere mentale. Questa applicazione pratica consentirà di comprendere non solo i fondamenti teorici del metodo, ma anche le sue implicazioni operative per la ricerca psicologica, mostrando come tradurre risultati di studi precedenti in distribuzioni a priori formalmente giustificate.
 
 ::: {.callout-caution collapse=true title="Preparazione del Notebook"}
 
@@ -29,7 +31,7 @@ pacman::p_load(
 
 ### Comprendere la differenza tra direzione e grandezza dell'effetto
 
-Prima di addentrarci negli aspetti tecnici, è fondamentale chiarire una distinzione concettuale che spesso viene trascurata nella ricerca empirica: la differenza tra stimare *se* un effetto esiste (la sua direzione) e stimare *quanto è grande* questo effetto (la sua magnitudine). Questa distinzione, apparentemente sottile, ha conseguenze profonde per l'interpretazione dei risultati della ricerca.
+Prima di addentrarci negli aspetti tecnici, è fondamentale chiarire una distinzione concettuale che spesso viene trascurata nella ricerca empirica: la differenza tra stimare *se* un effetto esiste (la sua direzione) e stimare *quanto è grande* questo effetto (la sua magnitudine). Questa distinzione ha conseguenze profonde per l'interpretazione dei risultati della ricerca.
 
 Consideriamo uno stimatore statistico $b$ che utilizziamo per stimare un parametro vero della popolazione $\beta$. Supponiamo, ad esempio, che $\beta$ rappresenti la differenza media nel benessere psicologico tra un gruppo che ha ricevuto un intervento di mindfulness e un gruppo di controllo. Lo stimatore $b$ è costruito in modo tale che, se potessimo replicare il nostro studio infinite volte con campioni sempre diversi, la media di tutte queste stime $b$ coinciderebbe esattamente con il  valore vero $\beta$. In termini tecnici, diciamo che $b$ è uno *stimatore non distorto* (*unbiased*) di $\beta$.
 
@@ -43,36 +45,36 @@ Come illustrato da @gelman2014beyond, questo fenomeno è particolarmente accentu
 
 ### Il ruolo del rapporto segnale-rumore
 
-Per comprendere più profondamente questo meccanismo, introduciamo il concetto di *rapporto segnale-rumore* (Signal-to-Noise Ratio, SNR), definito come:
+Per comprendere più profondamente questo meccanismo, introduciamo il concetto di *rapporto segnale-rumore* (*Signal-to-Noise Ratio*, SNR), definito come:
 
 $$
-\text{SNR} = \frac{|\beta|}{s}
+\text{SNR} = \frac{|\beta|}{s},
 $$
 dove $|\beta|$ rappresenta la grandezza del vero effetto e $s$ è l'errore standard della stima. Questo rapporto quantifica essenzialmente quanto il "segnale" (l'effetto reale che vogliamo rilevare) emerge chiaramente rispetto al "rumore" (la variabilità casuale intrinseca nei nostri dati).
 
-Quando il rapporto segnale-rumore è basso – situazione tipica degli studi con campioni piccoli o con misure imprecise – la variabilità casuale diventa predominante. In queste condizioni, solo le stime che, per pura fluttuazione statistica, appaiono particolarmente ampie riescono a superare la soglia di significatività statistica e vengono quindi selezionate per la pubblicazione.
+Quando il rapporto segnale-rumore è basso – situazione tipica degli studi con campioni piccoli o con misure imprecise – la variabilità casuale diventa predominante. In queste condizioni, solo le stime che, per pura fluttuazione statistica, assumono un valore particolarmente elevato riescono a superare la soglia di significatività statistica e vengono quindi selezionate per la pubblicazione.
 
-Il risultato di questo processo di selezione è una *distorsione sistematica verso l'alto* degli *effect size* riportati nella letteratura scientifica. La soglia di significatività statistica agisce, in pratica, come un filtro che lascia passare preferenzialmente i risultati più estremi, creando un'illusione di effetti più forti di quanto siano in realtà. Questo meccanismo è alla base del cosiddetto "decline effect" – il fenomeno per cui gli effect size tendono a ridursi nelle repliche successive di uno studio inizialmente promettente.
+Il risultato di questo processo di selezione è una *distorsione sistematica verso l'alto* degli *effect size* riportati nella letteratura scientifica. La soglia di significatività statistica agisce, in pratica, come un filtro che lascia passare preferenzialmente i risultati più estremi, creando l'illusione di effetti più forti di quanto non siano in realtà. Questo meccanismo è alla base del cosiddetto *decline effect*, ovvero il fenomeno per cui gli *effect size* tendono a ridursi nelle repliche successive di uno studio inizialmente promettente.
 
 ### Implicazioni per la ricerca cumulativa
 
-Le conseguenze di questa dinamica per la costruzione di conoscenza scientifica cumulativa sono profonde. Quando la letteratura pubblicata è composta prevalentemente da studi che hanno superato la soglia di significatività statistica, le stime aggregate degli effect size attraverso revisioni sistematiche o meta-analisi possono risultare sostanzialmente inflate. Questo porta a:
+Le conseguenze di questa dinamica sulla costruzione della conoscenza scientifica cumulativa sono profonde. Quando la letteratura pubblicata è costituita principalmente da studi che hanno superato la soglia di significatività statistica, le stime aggregate degli *effect size* ottenute tramite revisioni sistematiche o meta-analisi possono risultare notevolmente sovrastimate. Ciò porta a:
 
-1. **aspettative irrealistiche** circa l'efficacia di interventi o la forza di relazioni teoriche;
-2. **difficoltà di replicazione**, poiché i tentativi di replica si basano su stime di effect size sovrastimate;
-3. **allocazione inefficiente delle risorse**, quando decisioni pratiche (es. implementazione di interventi clinici) si basano su evidenze distorte.
+1. aspettative irrealistiche circa l'efficacia di interventi o la forza di relazioni teoriche;
+2. difficoltà di replicazione, derivanti dall'utilizzo di stime della grandezza dell'effetto sovrastimate;
+3. spreco di risorse, quando le decisioni pratiche (per esempio, l'implementazione di interventi clinici) si basano su evidenze distorte.
 
-È in questo contesto problematico che l'approccio bayesiano con prior informativi derivati da corpora di studi può offrire una soluzione metodologica robusta.
+È in questo contesto problematico che l'approccio bayesiano, con *prior* informativi derivati da corpora di studi, può offrire una soluzione metodologica robusta.
 
 ### L'approccio basato sui corpora di studi
 
-La proposta di @zwet2022proposal offre una strategia elegante per affrontare il problema del winner's curse attraverso l'inferenza bayesiana. L'idea fondamentale è apparentemente semplice ma metodologicamente sofisticata: invece di trattare ogni studio come un'entità isolata, possiamo estrarre informazioni sistematiche dalla distribuzione dei rapporti segnale-rumore osservati in un ampio corpus di studi simili.
+La proposta di @zwet2022proposal offre una strategia elegante per affrontare il problema del *winner's curse* attraverso l'inferenza bayesiana. L'idea di base è semplice: invece di considerare ogni studio come un'entità a sé stante, è possibile estrarre informazioni sistematiche dalla distribuzione dei rapporti segnale-rumore osservati in un ampio corpus di studi simili.
 
-Questo corpus agisce come una sorta di "memoria collettiva" di un campo di ricerca, catturando non solo i singoli risultati ma anche i pattern ricorrenti nella magnitudine degli effetti. Utilizzando questa informazione aggregata come distribuzione a priori, possiamo "correggere" le stime di nuovi studi tenendo conto di ciò che sappiamo essere tipico in quel particolare ambito di ricerca.
+Questo corpus funge da "memoria collettiva" di un campo di ricerca, catturando non solo i singoli risultati, ma anche i pattern ricorrenti nell'entità degli effetti. Utilizzando questa informazione aggregata come distribuzione a priori, è possibile "correggere" le stime di nuovi studi, tenendo conto di ciò che è tipico in quel particolare ambito di ricerca.
 
-L'approccio si basa su un'assunzione ragionevole: sebbene ogni studio abbia le sue specificità metodologiche e contestuali, esiste comunque un'informazione sistematica riguardante l'andamento tipico degli effetti in un determinato dominio che può guidare le nostre inferenze. Questa informazione diventa particolarmente preziosa proprio nei casi dove il rischio di sovrastima è maggiore – studi piccoli con elevata incertezza.
+Questo approccio si basa su un'assunzione ragionevole: sebbene ogni studio presenti specificità metodologiche e contestuali, esiste comunque un'informazione sistematica riguardante l'andamento tipico degli effetti in un determinato dominio che può guidare le nostre inferenze. Questa informazione risulta particolarmente preziosa quando il rischio di sovrastima è più elevato, come negli studi che presentano una piccola dimensione campionaria e un'ampia incertezza delle stime.
 
-Nel prosieguo del capitolo, vedremo come questa idea teorica può essere implementata concretamente utilizzando strumenti statistici bayesiani, applicandola al contesto specifico degli interventi di mindfulness per il benessere psicologico.
+Nel prosieguo del capitolo, vedremo come questa idea teorica possa essere concretamente implementata utilizzando strumenti statistici bayesiani e applicandola al contesto specifico degli interventi di mindfulness per il benessere psicologico.
 
 ## Il contesto empirico: una meta-analisi sugli interventi di mindfulness
 
@@ -84,13 +86,13 @@ La mindfulness, intesa come pratica di consapevolezza non giudicante del momento
 
 ### Risultati aggregati
 
-Dalla Tabella 3 dello studio di @vanagteren2021systematic, focalizziamoci sui risultati relativi agli interventi di mindfulness condotti nella popolazione generale (non clinica). I dati aggregati sono i seguenti:
+Dallo studio di @vanagteren2021systematic, prendiamo in esame i risultati della Tabella 3 relativi agli interventi di mindfulness condotti sulla popolazione generale (non clinica). I dati aggregati mostrano i seguenti valori:
 
 - **Hedges' $g$**: 0.420.  
-  Questo è l'effect size standardizzato medio, una misura che esprime la differenza tra gruppo sperimentale e controllo in unità di deviazione standard. Un valore di 0.42 è generalmente considerato un effetto "medio" secondo le convenzioni di Cohen.
+  Questo è l'*effect size* standardizzato medio, una misura che esprime la differenza tra gruppo sperimentale e controllo in unità di deviazione standard. Un valore di 0.42 è generalmente considerato un effetto "medio" secondo le convenzioni di Cohen.
 
 - **Intervallo di confidenza al 99%**: [0.29; 0.55].  
-  Questo intervallo indica che, con il 99% di confidenza, il vero effect size nella popolazione si colloca tra 0.29 e 0.55. La larghezza dell'intervallo riflette l'incertezza della stima.
+  Questo intervallo indica che, con il 99% di confidenza, il vero *effect size* nella popolazione si colloca tra 0.29 e 0.55. La larghezza dell'intervallo riflette l'incertezza della stima.
 
 - **Numero di studi ($k$)**: 56.  
   La meta-analisi ha aggregato i risultati di 56 studi indipendenti, fornendo una base sostanziale per le inferenze.
@@ -103,7 +105,7 @@ Dalla Tabella 3 dello studio di @vanagteren2021systematic, focalizziamoci sui ri
 
 ### I dati dei singoli studi
 
-Per costruire il nostro prior informativo, tuttavia, non possiamo limitarci ai soli dati aggregati. Abbiamo bisogno della distribuzione degli effect size nei singoli studi che compongono la meta-analisi. Questi dati sono stati estratti dalla *Supplementary Table 3* dello studio originale, che riporta i risultati relativi agli outcome di benessere soggettivo.
+Per costruire il nostro *prior* informativo, tuttavia, non possiamo limitarci ai soli dati aggregati. Abbiamo bisogno della distribuzione degli *effect size* nei singoli studi che compongono la meta-analisi. Questi dati sono stati estratti dalla *Supplementary Table 3* dello studio originale, che riporta i risultati relativi agli outcome di benessere soggettivo.
 
 Estraiamo e organizziamo un subset rappresentativo di questi studi:
 
@@ -156,7 +158,7 @@ Osservando questi dati, emergono alcune caratteristiche importanti:
 
 2. **Variabilità della precisione**: gli errori standard oscillano da 0.08 (Galante 2018, lo studio più grande con 481 partecipanti totali) a 0.21 (Glück 2011, uno studio più piccolo con 43 partecipanti).
 
-3. **Variabilità dei z-value**: i rapporti segnale-rumore variano considerevolmente, riflettendo sia le differenze negli effect size che nelle dimensioni campionarie.
+3. **Variabilità dei $z$-value**: i rapporti segnale-rumore variano considerevolmente, riflettendo sia le differenze negli effect size che nelle dimensioni campionarie.
 
 Questa eterogeneità è esattamente ciò che rende utile l'approccio basato su corpus: possiamo modellare la distribuzione sottostante di questi parametri per ottenere un prior che catturi la reale variabilità degli effetti in questo dominio di ricerca.
 
@@ -164,7 +166,7 @@ Questa eterogeneità è esattamente ciò che rende utile l'approccio basato su c
 
 ### Perché una mistura di distribuzioni?
 
-Per modellare adeguatamente la distribuzione del rapporto segnale-rumore (SNR) osservata nel nostro corpus di studi, adottiamo un approccio flessibile basato su *misture di distribuzioni normali*. Prima di addentrarci negli aspetti tecnici, è importante comprendere l'intuizione che sta alla base di questa scelta metodologica.
+Per modellare adeguatamente la distribuzione del rapporto segnale-rumore (SNR) osservata nel nostro corpus di studi, adottiamo un approccio flessibile basato su *misture di distribuzioni normali* (si veda il @sec-mcmc-mixture-models). Prima di addentrarci negli aspetti tecnici, è importante comprendere l'intuizione che sta alla base di questa scelta metodologica.
 
 Immaginiamo di voler descrivere la distribuzione delle altezze in una popolazione mista di adulti e adolescenti. Una singola distribuzione normale potrebbe non catturare adeguatamente questa realtà, poiché esistono due "sottogruppi" con caratteristiche distinte. Una mistura di due normali – una per gli adolescenti e una per gli adulti – descriverebbe la situazione in modo più accurato.
 
@@ -192,7 +194,7 @@ Analizziamo i componenti di questa equazione:
 
 - **$b_j$** è l'effect size osservato nello studio $j$ (ad esempio, l'Hedges' $g$ misurato);
 - **$s_j$** è l'errore standard associato a quella stima;
-- **$z_j = b_j/s_j$** è quindi lo z-value, che standardizza l'effect size rispetto alla sua incertezza;
+- **$z_j = b_j/s_j$** è quindi lo $z$-value, che standardizza l'*effect size* rispetto alla sua incertezza;
 - **$\text{SNR}_j$** rappresenta il "vero" rapporto segnale-rumore sottostante per quello studio;
 - **$\epsilon_j$** è il rumore campionario, che assumiamo distribuito normalmente con media zero e varianza unitaria: $\epsilon_j \sim \mathcal{N}(0, 1)$.
 
@@ -214,55 +216,50 @@ Questa notazione merita un'attenta spiegazione:
 
 - *Centratura sullo zero*: entrambe le componenti sono centrate sullo zero. Questo può sembrare controintuitivo – perché centrare su zero se ci aspettiamo effetti positivi? La ragione è che vogliamo modellare la distribuzione *simmetrica* dei possibili SNR, permettendo al modello di apprendere la dispersione tipica indipendentemente dalla direzione dell'effetto.
 
-### La distribuzione degli *z*-value osservati
+### La distribuzione degli $z$-value osservati
 
-Un risultato matematicamente importante — che semplifica notevolmente l’inferenza — è che anche la distribuzione degli *z*-value osservati può essere descritta come *una mistura di distribuzioni normali*. Questo fatto discende da una proprietà fondamentale delle distribuzioni normali: *la somma di due variabili normali indipendenti è ancora una variabile normale*.
+Un risultato matematico importante — che semplifica notevolmente il processo inferenziale — stabilisce che anche la distribuzione degli $z$-value osservati può essere rappresentata come *una mistura di distribuzioni normali*. Questa proprietà discende da un teorema fondamentale della statistica: *la somma di due variabili casuali normali indipendenti è a sua volta una variabile normale*.
 
-In termini più precisi:
+Formalmente: se $X \sim \mathcal{N}(\mu_X, \sigma_X^2)$ e $Y \sim \mathcal{N}(\mu_Y, \sigma_Y^2)$ sono indipendenti, allora $X + Y \sim \mathcal{N}(\mu_X + \mu_Y, \sigma_X^2 + \sigma_Y^2)$.
 
-* se $X \sim \mathcal{N}(\mu_X, \sigma_X^2)$ e $Y \sim \mathcal{N}(\mu_Y, \sigma_Y^2)$ sono indipendenti,
-* allora $X + Y \sim \mathcal{N}(\mu_X + \mu_Y, \sigma_X^2 + \sigma_Y^2)$.
-
-Nel nostro caso, ciascun valore osservato $z_j$ può essere scritto come la somma di due termini:
+Nel nostro contesto, ciascun valore $z_j$ osservato può essere scomposto nella somma di due componenti:
 
 $$
 z_j = \text{SNR}_j + \epsilon_j,
 $$
 dove:
 
-* $\text{SNR}_j$ rappresenta il vero rapporto segnale/rumore nello studio $j$;
-* $\epsilon_j$ rappresenta il rumore campionario (cioè la variabilità dovuta al fatto che ogni studio ha un campione finito).
+- $\text{SNR}_j$ rappresenta il vero rapporto segnale-rumore nello studio $j$;
+- $\epsilon_j$ rappresenta l'errore campionario (la variabilità intrinseca dovuta alla dimensione finita del campione).
 
-Poiché $\text{SNR}_j$ segue una *mistura di due distribuzioni normali*, possiamo applicare la proprietà precedente a ciascuna delle due componenti. Otteniamo così che anche la distribuzione di $z_j$ è una mistura di distribuzioni normali:
+Poiché $\text{SNR}_j$ segue a sua volta *una mistura di due distribuzioni normali*, applicando la proprietà precedente a ciascuna componente otteniamo che la distribuzione di $z_j$ è essa stessa una mistura di distribuzioni normali:
 
 $$
-z_j \sim p_1, \mathcal{N}(0, \tau_1^2 + 1) + (1 - p_1), \mathcal{N}(0, \tau_2^2 + 1).
+z_j \sim p_1\, \mathcal{N}(0, \tau_1^2 + 1) + (1 - p_1)\, \mathcal{N}(0, \tau_2^2 + 1).
 $$
+In questa formulazione:
 
-In questa espressione:
+- $p_1$ rappresenta la proporzione attribuibile alla prima componente della mistura;
+- $\tau_1^2$ e $\tau_2^2$ sono le varianze delle due popolazioni di *SNR*;
+- il termine additivo "+1" nelle varianze cattura il contributo del rumore campionario $\epsilon_j$.
 
-* $p_1$ è la proporzione della prima componente della mistura,
-* $\tau_1^2$ e $\tau_2^2$ sono le varianze delle due popolazioni di *SNR*,
-* il termine “+1” nelle varianze riflette il contributo aggiuntivo del rumore campionario $\epsilon_j$.
+In altri termini, rispetto alla distribuzione dei veri valori di *SNR*, le varianze osservate risultano incrementate di un'unità, riflettendo l'incertezza aggiuntiva introdotta dal processo di campionamento.
 
-**In altre parole**, rispetto alla distribuzione dei veri *SNR*, le varianze risultano “gonfiate” di 1 unità, perché includono l’incertezza introdotta dal campionamento.
+Dal punto di vista applicativo, questo risultato permette di stimare i parametri della mistura ($p_1, \tau_1^2, \tau_2^2$) *direttamente dagli $z$-value osservati*, senza necessità di conoscere i valori reali di *SNR*, che per definizione non sono osservabili.
 
-Questo risultato è cruciale, in quanto ci consente di stimare i parametri della miscela ($p_1, \tau_1^2, \tau_2^2$) *direttamente dagli *z*-value osservati*, senza bisogno di conoscere i *SNR* reali, che per definizione non sono osservabili.
-
-Infine, dietro questa formulazione apparentemente astratta si nasconde un’intuizione molto concreta. Stiamo descrivendo la variabilità dei risultati empirici come derivante da *una combinazione di due “popolazioni” di studi*: una con *SNR* tipicamente più basso (effetti piccoli o incerti) e una con *SNR* più alto (effetti più robusti o consistenti), entrambe soggette all’inevitabile *rumore campionario*. Stimando la forma di questa mistura nel nostro corpus di studi, possiamo poi utilizzare i parametri ottenuti come *distribuzione a priori informativa* per analizzare nuovi studi, incorporando così in modo coerente la conoscenza accumulata.
+Dal punto di vista concettuale, il modello interpreta la variabilità dei risultati empirici come derivante dalla coesistenza di due popolazioni di studi distinte: una con *SNR* tipicamente bassi (effetti piccoli o molto incerti) e una con *SNR* più elevati (effetti più robusti e replicabili), entrambe soggette al rumore di campionamento. Stimando la struttura di questa mistura sul corpus di studi disponibili, è possibile utilizzare i parametri ottenuti per costruire distribuzioni a priori informative da applicare a nuovi studi, incorporando in modo sistematico la conoscenza accumulata in letteratura.
 
 ## Stima del prior dal corpus
 
 ### Obiettivo della stima
 
-Il nostro primo passo concreto consiste nello stimare i parametri della mistura di normali che meglio descrive la distribuzione degli z-value osservati nel corpus di studi sulla mindfulness. In termini tecnici, vogliamo trovare i valori di $p_1$ (il peso della prima componente), $\tau_1$ e $\tau_2$ (le deviazioni standard delle due componenti del SNR) che rendono i nostri dati osservati più probabili. Per raggiungere questo obiettivo, implementiamo un framework di inferenza bayesiana mediante Stan, che consente una stima robusta e flessibile dei parametri del modello.
+Il primo passo operativo consiste nello stimare i parametri della mistura di distribuzioni normali che meglio approssima la distribuzione degli $z$-value osservati negli studi sulla mindfulness. L'obiettivo è determinare i valori di $p_1$ (peso della prima componente), $\tau_1$ e $\tau_2$ (deviazioni standard delle due componenti dello SNR) che massimizzano la verosimiglianza dei dati osservati. A tale scopo implementiamo un modello di inferenza bayesiana in Stan, che garantisce una stima robusta e flessibile dei parametri del modello.
 
 ### Passo 1: Specificazione del modello in Stan
 
-Iniziamo traducendo il nostro modello matematico in codice Stan. Il codice seguente definisce completamente la struttura probabilistica del nostro problema.
+Il modello matematico viene implementato in Stan attraverso il seguente codice, che ne definisce la struttura probabilistica completa.
 
 ```{r}
-#| label: stan-mixture-model
 #| message: false
 #| warning: false
 
@@ -329,19 +326,61 @@ generated quantities {
 "
 ```
 
-### Comprensione del codice Stan
+### Passo 1: Specificazione del modello in Stan
 
-Analizziamo più dettagliatamente le scelte modellistiche incorporate in questo codice:
+Il modello matematico viene implementato in Stan attraverso il seguente codice, che ne definisce la struttura probabilistica completa.
 
-**Prior sui parametri**: Abbiamo specificato distribuzioni a priori per i tre parametri principali:
+```{r}
+#| message: false
+#| warning: false
 
-- `theta ~ beta(2, 2)`: Questa distribuzione Beta con entrambi i parametri pari a 2 è leggermente concentrata attorno a 0.5 ma rimane abbastanza diffusa. Riflette un'assunzione moderata secondo cui potrebbe non esserci una componente fortemente dominante.
+# Definiamo il modello Stan per la mistura di normali
+stan_code_mixture <- "
+data {
+  int<lower=0> N;              // Numero di studi
+  vector[N] z;                 // z-values osservati
+}
 
-- `sigma1_sq ~ gamma(2, 0.5)` e `sigma2_sq ~ gamma(2, 0.1)`: Queste distribuzioni Gamma hanno forme diverse. La prima tende a concentrarsi su valori più piccoli, coerentemente con l'idea che la prima componente rappresenti studi con minor dispersione. La seconda permette valori più grandi, accomodando la possibilità di una seconda componente con code più pesanti.
+parameters {
+  real<lower=0, upper=1> theta;      // Proporzione prima componente
+  real<lower=1> sigma1_sq;           // Varianza prima componente (τ₁² + 1)
+  real<lower=1> sigma2_sq;           // Varianza seconda componente (τ₂² + 1)
+}
 
-**Likelihood attraverso log_mix**: La funzione `log_mix` di Stan implementa efficientemente il calcolo della log-verosimiglianza per una mistura. Per ogni z-value osservato, calcola la probabilità pesata di provenire da ciascuna delle due componenti normali.
+model {
+  // Prior sui parametri
+  theta ~ beta(2, 2);                // Leggermente concentrato attorno a 0.5
+  sigma1_sq ~ gamma(2, 0.5);         // Favorisce valori moderati
+  sigma2_sq ~ gamma(2, 0.1);         // Permette code più pesanti
+  
+  // Likelihood
+  for (n in 1:N) {
+    target += log_mix(
+      theta,
+      normal_lpdf(z[n] | 0, sqrt(sigma1_sq)),
+      normal_lpdf(z[n] | 0, sqrt(sigma2_sq))
+    );
+  }
+}
 
-**Quantità derivate**: Nella sezione `generated quantities`, recuperiamo i parametri del SNR originale ($\tau_1$ e $\tau_2$) sottraendo la varianza del rumore. Questo ci fornisce direttamente i parametri che useremo come prior informativo per analisi successive.
+generated quantities {
+  real tau1_sq = sigma1_sq - 1;      // Varianza SNR prima componente
+  real tau2_sq = sigma2_sq - 1;      // Varianza SNR seconda componente
+  real tau1 = sqrt(tau1_sq);         // Deviazione standard SNR prima componente
+  real tau2 = sqrt(tau2_sq);         // Deviazione standard SNR seconda componente
+}
+"
+```
+
+**Scelte modellistiche e motivazioni.**
+
+- **Prior per `theta`**: La distribuzione $Beta(2,2)$ riflette un'aspettativa moderata di bilanciamento tra le componenti, senza forti preferenze a priori.
+
+- **Prior per le varianze**: Le distribuzioni Gamma differenziate consentono alla prima componente (`sigma1_sq`) di concentrarsi su valori più contenuti, mentre la seconda (`sigma2_sq`) può accomodare una dispersione maggiore, modellando potenziali code pesanti nella distribuzione.
+
+- **Funzione di verosimiglianza**: L'utilizzo di `log_mix` implementa la mistura di due distribuzioni normali, calcolando la probabilità composta per ciascun $z$-value osservato.
+
+- **Parametri derivati**: Le quantità generate trasformano le varianze osservate nelle corrispondenti varianze del *SNR* sottostante, sottraendo il contributo fisso del rumore campionario e fornendo così i parametri direttamente utilizzabili come prior informativi.
 
 ::: {.callout-tip}
 Il blocco finale del modello Stan calcola le quantità derivate `tau1_sq` e `tau2_sq` sottraendo 1 dalle varianze osservate `sigma1_sq` e `sigma2_sq`. Questa operazione discende direttamente dalla formulazione teorica del modello della mistura, in cui la distribuzione degli *z*-value osservati è data da:
@@ -378,7 +417,7 @@ mixture_model <- cmdstan_model(
 )
 ```
 
-Prepariamo i dati nel formato richiesto da Stan (una lista nominata).
+Prepariamo i dati nel formato richiesto da Stan.
 
 ```{r}
 stan_data_mixture <- list(
@@ -422,15 +461,6 @@ prior_summary <- fit_mixture$summary(c("theta", "tau1", "tau2"))
 print(prior_summary)
 ```
 
-I risultati nel `prior_summary` forniscono diverse informazioni chiave:
-
-- **mean**: la media a posteriori di ciascun parametro, che rappresenta la nostra "miglior stima" centrale;
-- **median**: la mediana della posteriori, spesso preferita alla media per distribuzioni asimmetriche;
-- **sd**: la deviazione standard a posteriori, che quantifica l'incertezza sulla stima del parametro;
-- **q5 e q95**: i quantili al 5% e 95%, che definiscono un intervallo di credibilità al 90%;
-- **rhat**: una diagnostica di convergenza; valori vicini a 1.00 (tipicamente < 1.01) indicano buona convergenza delle catene MCMC;
-- **ess_bulk e ess_tail**: dimensioni effettive del campione per il corpo e le code della distribuzione; valori più alti indicano campionamento più efficiente.
-
 ### Visualizzazione delle distribuzioni a posteriori
 
 Per comprendere meglio l'incertezza sulle nostre stime e la forma delle distribuzioni a posteriori, creiamo un grafico delle densità a posteriori per i tre parametri chiave.
@@ -453,39 +483,39 @@ draws_mixture |>
 
 ### Interpretazione sostantiva dei parametri stimati
 
-A questo punto, è cruciale interpretare cosa significano concretamente i valori stimati per `theta`, `tau1`, e `tau2`:
+I parametri stimati forniscono informazioni sulla struttura degli effetti negli studi sulla mindfulness:
 
-- **theta** (peso della prima componente): se, ad esempio, otteniamo un valore attorno a 0.6-0.7, questo suggerirebbe che circa il 60-70% degli studi nel corpus appartiene a una "classe" con minore dispersione del SNR (la prima componente), mentre il 30-40% mostra dispersione maggiore.
+- **`theta` (peso della prima componente)**: un valore compreso tra 0.6-0.7 indica che circa il 60-70% degli studi presenta una variabilità contenuta del SNR, mentre il restante 30-40% appartiene a una classe con dispersione maggiore.
 
-- **tau1** (deviazione standard della prima componente del SNR): valori tipicamente attorno a 0.2-0.4 indicano che per la maggioranza degli studi, il rapporto segnale-rumore "vero" tende a essere relativamente contenuto, concentrato vicino allo zero.
+- **`tau1` (deviazione standard della prima componente)**: valori nell'intervallo 0.2-0.4 indicano che per la maggior parte degli studi il rapporto segnale-rumore vero è relativamente modesto e concentrato attorno allo zero.
 
-- **tau2** (deviazione standard della seconda componente del SNR): valori sostanzialmente più grandi di tau1 (ad esempio, 0.8-1.2) catturano quegli studi con rapporti segnale-rumore potenzialmente più elevati, rappresentando la coda della distribuzione.
+- **`tau2` (deviazione standard della seconda componente)**: valori più elevati (0.8-1.2) identificano la sottopopolazione di studi con SNR potenzialmente più consistenti, rappresentando la coda destra della distribuzione.
 
-Questi parametri, stimati empiricamente dal corpus, diventeranno la base del nostro prior informativo per analizzare nuovi studi. La loro interpretazione ci fornisce anche informazioni descrittive interessanti sulla natura degli effetti degli interventi di mindfulness: evidentemente, esiste eterogeneità sostanziale, con alcuni studi che mostrano effetti più chiari e altri più rumorosi o variabili.
+Questi parametri, stimati empiricamente dal corpus di studi, costituiranno la base per le distribuzioni a priori informative da applicare a nuove analisi. Dal punto di vista sostanziale, i parametri rivelano un quadro di eterogeneità degli effetti degli interventi di mindfulness, con la maggior parte degli studi che mostra effetti modesti e una minoranza che riporta effetti potenzialmente più rilevanti.
 
 ## Applicazione: analisi bayesiana di un nuovo studio
 
-### Scenario di applicazione
+### Scenario applicativo
 
-Dopo aver costruito il nostro prior informativo dal corpus di studi esistenti, possiamo ora applicarlo all'analisi di un nuovo studio ipotetico sugli interventi di mindfulness. Questo passaggio dimostra concretamente come il prior derivato empiricamente influenzi le nostre inferenze.
+Una volta costruito il prior informativo a partire dal corpus di studi, lo applichiamo all'analisi di un nuovo studio sugli interventi di mindfulness. Questo esempio dimostra concretamente come il prior derivato empiricamente modifichi le inferenze statistiche.
 
-Immaginiamo di condurre un nuovo studio con le seguenti caratteristiche:
+Consideriamo un nuovo studio con le seguenti caratteristiche:
 
 - **effect size osservato**: $b = 0.8$;
 - **errore standard**: $s = 0.15$.
 
-Questi valori corrispondono a uno $z$-value di $z = 0.8/0.15 \approx 5.33$, un valore notevolmente elevato che suggerirebbe un effetto molto forte secondo i criteri tradizionali. Tuttavia, come abbiamo discusso nella sezione sull'errore di tipo M, un $z$-value così alto potrebbe essere inflazionato, specialmente se lo studio ha caratteristiche che lo rendono soggetto al *winner's curse*.
+Questi valori producono un valore $z$-value di $z = 0.8/0.15 \approx 5.33$, che secondo i criteri convenzionali indicherebbe un effetto molto marcato. Tuttavia, come evidenziato nella discussione sull'errore di tipo M, valori così elevati potrebbero risultare sovrastimati, soprattutto in contesti soggetti al *winner's curse*.
 
-Il nostro obiettivo è stimare il *vero effect size* $\beta$ sottostante, utilizzando il *prior informativo* che incorpora ciò che sappiamo essere tipico nel campo degli interventi di mindfulness.
+L'obiettivo è stimare il vero effetto $\beta$ sottostante, utilizzando un prior informativo che riflette l'evidenza tipica del campo degli interventi di mindfulness.
 
-### Il modello bayesiano per l'inferenza sul nuovo studio
+### Modello bayesiano per il nuovo studio
 
-La struttura del modello bayesiano per analizzare il nuovo studio è concettualmente semplice ma statisticamente sofisticata. Abbiamo due componenti principali:
+La struttura del modello bayesiano combina due fonti di informazione:
 
-1. **Prior informativo**: derivato dal corpus, espresso come mistura di normali per il SNR;
-2. **Likelihood**: basato sui dati osservati nel nuovo studio.
+1. **Prior informativo**: derivato dall'analisi del corpus e rappresentato come mistura di distribuzioni normali per il SNR
+2. **Verosimiglianza**: basata sui dati osservati nel nuovo studio
 
-Queste due fonti di informazione vengono combinate attraverso il teorema di Bayes per produrre la distribuzione a posteriori di $\beta$.
+Queste componenti vengono integrate attraverso il teorema di Bayes per ottenere la distribuzione a posteriori di $\beta$.
 
 ### Formulazione del modello in Stan
 
@@ -545,42 +575,33 @@ generated quantities {
 "
 ```
 
-### Comprensione del meccanismo di *scaling*
+### Il meccanismo di scaling
 
-Un aspetto tecnico ma concettualmente molto importante riguarda il *passaggio dal prior espresso in termini di SNR (rapporto segnale/rumore)* al *prior espresso direttamente sull’effetto vero $\beta$*.
+Un aspetto tecnico cruciale riguarda la conversione del prior dal rapporto segnale/rumore (*SNR*) alla scala dell'effetto vero $\beta$.
 
-Nel corpus di studi precedenti abbiamo stimato la distribuzione del *vero segnale* in termini di SNR, cioè del rapporto tra l’effetto vero e la sua incertezza:
+Nel corpus di studi abbiamo stimato la distribuzione del *SNR*, definito come:
 
 $$
 \text{SNR} = \frac{\beta}{s}.
 $$
 
-Questo rapporto è utile perché è *invariante rispetto alla scala dell’esperimento*: due studi con precisione diversa (cioè con errori standard diversi) possono essere confrontati direttamente. Tuttavia, quando analizziamo un nuovo studio, vogliamo formulare il prior *sulla scala dell’effetto vero $\beta$*, non sul rapporto $\beta/s$. Per fare ciò, dobbiamo “riportare” la distribuzione dal dominio del SNR a quello dell’effetto osservato.
-
-Matematicamente, il legame è molto semplice:
+Questa quantità è invariante rispetto alla scala di misurazione, il che permette di confrontare studi con diversa precisione. Tuttavia, nell'analisi di un nuovo studio è necessario esprimere il prior direttamente sulla scala di $\beta$. La conversione matematica è diretta:
 
 $$
-\text{se } \text{SNR} \sim \mathcal{N}(0, \tau^2), \quad \text{allora } \beta = s \times \text{SNR} \sim \mathcal{N}(0, (s \times \tau)^2).
+\text{se } \text{SNR} \sim \mathcal{N}(0, \tau^2), \quad \text{allora } \beta = s \times \text{SNR} \sim \mathcal{N}(0, (s \times \tau)^2)
 $$
 
-In altre parole, *la deviazione standard della distribuzione del prior su $\beta$* deve essere *proporzionale all’errore standard osservato $s_{\text{obs}}$* dello studio in esame. Questo riflette un principio intuitivo:
+Questa relazione implica che la deviazione standard del prior su $\beta$ sia proporzionale all'errore standard dello studio in esame, riflettendo un principio fondamentale: studi con maggiore incertezza (errore standard ampio) richiedono prior più diffusi sull'effetto vero.
 
-> più uno studio è impreciso (cioè ha un errore standard più grande), più ampio deve essere anche il prior sull’effetto vero, perché disponiamo di meno informazione per restringerlo.
-
-Nel codice Stan, questa trasformazione è implementata dalle due righe:
+Nel codice Stan, questa trasformazione viene implementata come segue:
 
 ```stan
 real tau1_scaled = s_obs * tau1;
 real tau2_scaled = s_obs * tau2;
 ```
+dove `tau1` e `tau2` rappresentano le deviazioni standard del SNR stimate dal corpus, mentre `tau1_scaled` e `tau2_scaled` corrispondono alle deviazioni standard del prior su $\beta$ per lo specifico studio analizzato.
 
-Qui `tau1` e `tau2` rappresentano la deviazione standard del SNR nelle due componenti della mistura, stimate dal corpus di studi. Moltiplicandole per `s_obs`, otteniamo `tau1_scaled` e `tau2_scaled`, cioè le deviazioni standard del prior su $\beta$ per lo specifico studio che stiamo analizzando.
-
-In sintesi:
-
-* il prior del corpus è sul rapporto $\beta / s$ (invariante rispetto alla scala);
-* per applicarlo a un nuovo studio, dobbiamo moltiplicare per il suo errore standard $s_{\text{obs}}$;
-* questo passaggio assicura che il prior sia correttamente “adattato” alla precisione dello studio corrente.
+In sintesi, questo meccanismo di scaling garantisce che il prior informativo venga adattato correttamente alla precisione del nuovo studio, preservando l'invarianza del *SNR* mentre si opera sulla scala appropriata dell'effetto.
 
 ### Compilazione e preparazione dei dati+
 
@@ -647,22 +668,16 @@ print(results_summary)
 
 ### Interpretazione dei risultati principali
 
-I risultati nel sommario forniscono diverse informazioni cruciali:
+Il sommario dei risultati fornisce informazioni essenziali per la valutazione dell'effetto:
 
-1. **beta (il vero effect size stimato)**: 
-   - la media/mediana a posteriori rappresenta la nostra migliore stima del vero effect size, dopo aver incorporato l'informazione dal corpus;
-   - possiamo confrontare questo valore con l'osservazione originale (0.8) per quantificare l'entità dello shrinkage;
-   - l'intervallo di credibilità (q5-q95) quantifica l'incertezza residua.
+**Parametro beta (vero effect size)**
+La media e la mediana a posteriori rappresentano la stima puntuale dell'effetto dopo aver incorporato l'informazione proveniente dal corpus. Il confronto con il valore osservato  (0.8) quantifica l'entità dello shrinkage, mentre l'intervallo di credibilità (q5-q95) definisce l'incertezza residua associata alla stima.
 
-2. **shrinkage_factor**: 
-   - questo valore indica quanto la stima originale è stata "corretta" verso valori più conservativi;
-   - un valore di, ad esempio, 1.3 significherebbe che la stima originale era circa 30% più alta del vero valore stimato;
-   - questo fattore quantifica direttamente la correzione per il *winner's curse*.
+**Fattore di shrinkage**
+Questo parametro indica il grado di correzione applicato alla stima originale verso valori più conservativi. Un valore di 1.3, ad esempio, indicherebbe che la stima iniziale era circa il 30% superiore al valore effettivo stimato, quantificando direttamente la correzione per il "winner's curse".
 
-3. **beta_positive**: 
-   - la proporzione di campioni posteriori con beta > 0;
-   - rappresenta la probabilità bayesiana che l'effetto sia effettivamente positivo;
-   - anche con forte shrinkage, ci aspettiamo che questa rimanga elevata se l'evidenza è robusta.
+**Probabilità di effetto positivo (beta_positive)**
+La proporzione di campioni posteriori con beta > 0 esprime la probabilità bayesiana che l'effetto sia genuinamente positivo. Anche in presenza di un marcato shrinkage, ci si aspetta che questo valore rimanga elevato quando l'evidenza a favore dell'effetto è sostanziale.
 
 ### Visualizzazione della distribuzione a posteriori
 
@@ -730,11 +745,11 @@ ggplot(draws_bayesian, aes(x = beta)) +
 
 Il grafico illustra visivamente il meccanismo dello shrinkage bayesiano:
 
-- la *linea rossa tratteggiata* mostra la stima puntuale originale (0.8), che non tiene conto dell'informazione dal corpus;
-- la *linea blu solida* indica la mediana della distribuzione a posteriori, che rappresenta la stima corretta;
-- la *curva di densità blu* mostra l'intera distribuzione a posteriori, quantificando l'incertezza sulla stima.
+- La **linea rossa tratteggiata** indica la stima puntuale originale (0.8), ottenuta senza considerare l'informazione proveniente dal corpus di studi.
+- La **linea blu continua** rappresenta la mediana della distribuzione a posteriori, che costituisce la stima corretta dopo l'integrazione dell'evidenza pregressa.
+- La **curva di densità blu** visualizza l'intera distribuzione a posteriori e quantifica l'incertezza residua associata alla stima.
 
-La distanza tra le due linee verticali rappresenta visivamente l'entità dello *shrinkage*: quanto la nostra stima si è spostata verso valori più conservativi basandosi sull'esperienza aggregata del campo di ricerca.
+La distanza tra le due linee verticali mostra l'entità dello *shrinkage*, evidenziando quanto la stima si sia spostata verso valori più conservativi grazie all'incorporazione dell'esperienza accumulata nel campo di ricerca.
 
 ### Intervallo di credibilità
 
@@ -765,11 +780,11 @@ cat("\nInterpretazione: La probabilità che l'effetto sia\n")
 cat("effettivamente positivo è", round(prob_positive * 100, 1), "%\n")
 ```
 
-Questa probabilità rappresenta quanto siamo confidenti, alla luce di tutti i dati disponibili (nuovo studio + corpus), che l'intervento di mindfulness abbia un effetto benefico reale sul benessere.
+Questa probabilità esprime il grado di confidenza, basato sull'integrazione tra il nuovo studio e l'evidenza pregressa del corpus, circa l'esistenza di un effetto benefico reale dell'intervento di mindfulness sul benessere.
 
 ### Quantificazione dello shrinkage
 
-Calcoliamo statistiche sul fattore di shrinkage.
+Calcoliamo le statistiche descrittive del fattore di *shrinkage*.
 
 ```{r}
 shrinkage_median <- median(draws_bayesian$shrinkage_factor)
@@ -791,31 +806,31 @@ cat("(da", 0.8, "a", round(median(draws_bayesian$beta), 3), ")\n")
 
 ### Riflessioni sull'impatto del prior
 
-L'entità dello shrinkage osservato dipende da diversi fattori che vale la pena comprendere:
+L'entità dello *shrinkage* osservato è determinata da diversi fattori che meritano attenzione:
 
-1. **Magnitudine dello z-value originale**: $z$-value molto elevati (come nel nostro esempio) subiscono uno shrinkage maggiore, poiché il prior informativo suggerisce che tali valori estremi sono relativamente rari nel campo di ricerca;
+- **Magnitudine dello z-value originale**: valori estremamente elevati, come nell'esempio considerato, subiscono una correzione più marcata poiché il *prior* informativo indica che tali valori sono statisticamente improbabili nel contesto della letteratura esistente.
 
-2. **Precisione dello studio**: studi con errori standard più grandi (minor precisione) vengono influenzati maggiormente dal prior, poiché i loro dati sono meno informativi;
+- **Precisione dello studio**: studi caratterizzati da errori standard ampi (e quindi da minore precisione) risentono maggiormente dell'influenza del *prior*, poiché le loro osservazioni forniscono un'informazione meno vincolante.
 
-3. **Compatibilità con il corpus**: se l'effect size osservato è molto diverso da quello tipico nel corpus, il prior esercita una maggiore "forza di richiamo" verso valori più centrali.
+- **Coerenza con il corpus**: quando l'*effect size* osservato si discosta sensibilmente dai valori tipici del corpus, il prior esercita un'azione di richiamo più intensa verso l'intervallo di valori più plausibili.
 
-Questo comportamento è esattamente ciò che desideriamo: il *prior* agisce come un regolatore adattivo, applicando correzioni più sostanziali proprio nei casi dove il rischio di sovrastima è maggiore.
+Questo comportamento rappresenta esattamente l'obiettivo del metodo: il *prior* funge da regolatore adattivo, applicando correzioni più significative proprio nei casi in cui il rischio di sovrastima è più elevato.
 
-## Confronto con altre strategie di prior
+## Confronto tra strategie per la scelta dei prior
 
 ### Razionale del confronto
 
-Per apprezzare pienamente il valore del prior informativo derivato dal corpus, è utile confrontarlo con altre strategie comunemente utilizzate nell'analisi bayesiana. Questo confronto ci permette di comprendere come diverse scelte di *prior* influenzino le inferenze e, più in generale, di valutare il *trade-off* tra informazione incorporata e flessibilità del modello.
+Per valutare appieno l'utilità del *prior* informativo derivato dal corpus, è istruttivo confrontarlo con approcci alternativi comunemente impiegati nell'analisi bayesiana. Questo confronto consente di apprezzare come diverse scelte dei prior influenzino le conclusioni inferenziali e di esaminare il compromesso tra incorporazione di informazione pregressa e flessibilità del modello.
 
-Confronteremo tre approcci:
+Consideriamo tre diverse strategie:
 
-1. **Prior dal corpus** (già implementato): incorpora informazione empirica specifica del dominio;
-2. **Prior piatto** (non-informativo): non incorpora alcuna informazione preliminare;
-3. **Prior debolmente informativo** (*regularizing*): incorpora informazione generica per stabilizzare le stime.
+1. **prior informativo dal corpus**: incorpora evidenze empiriche specifiche del dominio di ricerca;
+2. **prior piatto (non informativo)**: non introduce alcuna informazione preliminare;
+3. **prior debolmente informativo**: introduce vincoli generici per stabilizzare le stime.
 
-### Modello 1: Prior piatto (non-informativo)
+### Modello 1: Prior piatto
 
-Il prior piatto rappresenta l'approccio "classico" dell'analisi bayesiana, dove si cerca di lasciare che i dati "parlino da soli" senza imporre assunzioni preliminari.
+Il prior piatto rappresenta l'approccio bayesiano "classico" che mira a minimizzare l'influenza di assunzioni preliminari, lasciando che siano i dati osservati a determinare principalmente i risultati dell'inferenza.
 
 ```{r}
 # Modello con prior piatto (uniforme) su beta
@@ -846,11 +861,11 @@ generated quantities {
 "
 ```
 
-**Interpretazione**: con un prior piatto, la distribuzione a posteriori di beta sarà semplicemente una normale centrata su `b_obs` con deviazione standard `s_obs`. In altre parole, la stima bayesiana coincide essenzialmente con la stima frequentista, senza alcuna correzione per il possibile *winner's curse*.
+**Interpretazione**: con un prior piatto, la distribuzione a posteriori di $\beta$ corrisponde a una distribuzione normale centrata su `b_obs` con deviazione standard `s_obs`. In altre parole, la stima bayesiana coincide sostanzialmente con quella frequentista, senza applicare alcuna correzione per il potenziale *winner's curse*.
 
 ### Modello 2: Prior debolmente informativo
 
-I prior debolmente informativi rappresentano un compromesso: incorporano qualche assunzione molto generica (tipicamente, che effetti estremi siano meno plausibili) senza essere specifici di un particolare dominio di ricerca.
+I prior debolmente informativi costituiscono un compromesso metodologico: incorporano assunzioni generali - tipicamente la minore plausibilità di effetti estremi - senza fare riferimento a evidenze specifiche di un particolare dominio di ricerca.
 
 ```{r}
 # Modello con prior Cauchy debolmente informativo
@@ -881,11 +896,11 @@ generated quantities {
 "
 ```
 
-**Interpretazione**: il prior Cauchy(0, 0.5) esprime una leggera preferenza per *effect size* vicini allo zero, ma le sue code pesanti permettono comunque valori grandi se supportati dai dati. Questo tipo di *prior* è spesso raccomandato come default "robusto" quando non si ha informazione specifica del dominio.
+**Interpretazione**: il prior Cauchy(0, 0.5) incorpora una moderata preferenza per *effect size* prossimi allo zero, pur mantenendo code sufficientemente pesanti da accomodare valori elevati qualora supportati dall'evidenza empirica. Questa specificazione è spesso raccomandata come scelta predefinita "robusta" in assenza di informazioni di dominio specifiche.
 
 ### Compilazione dei modelli alternativi
 
-Compiliamo entrambi i modelli.
+Procediamo alla compilazione di entrambi i modelli.
 
 ```{r}
 #| output: false
@@ -988,17 +1003,17 @@ ggplot(comparison_data, aes(x = beta, fill = model)) +
   )
 ```
 
-Il grafico rivela pattern distintivi per ciascun approccio:
+Il grafico evidenzia pattern distintivi per ciascun approccio:
 
-- **prior piatto** (nessuno shrinkage): la distribuzione è centrata molto vicino alla stima originale di 0.8. Questo riflette il fatto che, senza informazione preliminare, accettiamo la stima campionaria praticamente al valore nominale.
+- **Prior piatto** (nessuno *shrinkage*): la distribuzione risulta centrata in prossimità della stima originale di 0.8, riflettendo l'accettazione pressoché integrale della stima campionaria in assenza di informazioni preliminari.
 
-- **prior debolmente informativo**: mostra uno *shrinkage* moderato, spostando la distribuzione leggermente verso lo zero rispetto al prior piatto, ma meno drasticamente del prior dal corpus.
+- **Prior debolmente informativo**: manifesta uno *shrinkage* moderato, spostando la distribuzione verso lo zero in misura più contenuta rispetto al *prior* derivato dal corpus.
 
-- **prior dal corpus**: produce lo *shrinkage* più pronunciato, riflettendo l'informazione specifica che, nel campo degli interventi di mindfulness, *effect size* così elevati sono relativamente rari.
+- **Prior dal corpus**: produce la correzione più marcata, incorporando l'evidenza specifica che *effect size* di tale magnitudine sono statisticamente improbabili nel dominio degli interventi di mindfulness.
 
-### Tabella riassuntiva comparativa
+### Confronto quantitativo tra gli approcci
 
-Creiamo una tabella riassuntiva con le statistiche chiave per ogni modello.
+La tabella seguente sintetizza le statistiche chiave per ciascun modello:
 
 ```{r}
 comparison_summary <- comparison_data |>
@@ -1013,42 +1028,30 @@ comparison_summary <- comparison_data |>
     shrinkage_medio = mean(shrinkage_factor),
     .groups = "drop"
   ) |>
-  arrange(desc(mediana_beta))  # Ordiniamo dal meno al più conservativo
+  arrange(desc(mediana_beta))
 
-# Formattiamo e visualizziamo la tabella
 print(comparison_summary, width = Inf)
 ```
 
-La tabella riassuntiva permette di confrontare quantitativamente gli approcci lungo diverse dimensioni:
+Il confronto quantitativo evidenzia:
 
-1. **Stima centrale** (media/mediana_beta): 
-   - mostra l'entità dello shrinkage applicato da ciascun prior;
-   - ordinando i modelli, vediamo chiaramente quale approccio è più o meno conservativo.
+- **Stima centrale**: l'entità dello shrinkage applicato dai diversi prior, con una progressione dalla stima meno a quella più conservativa.
+- **Incertezza**: i prior informativi possono generare intervalli di credibilità più ampi, riflettendo l'incertezza aggiuntiva incorporata dal corpus di studi.
+- **Fattore di shrinkage**: la correzione percentuale applicata alla stima originale, con valori più elevati che indicano aggiustamenti più sostanziali.
 
-2. **Incertezza** (sd_beta e ampiezza_ci):
-   - il prior piatto tipicamente produce intervalli più stretti (riflette solo l'incertezza campionaria);
-   - i prior informativi possono produrre intervalli più ampi se incorporano incertezza aggiuntiva.
+### Considerazioni per la scelta dell'approccio
 
-3. **Shrinkage medio**:
-   - quantifica direttamente quanto ciascun approccio corregge la stima originale;
-   - valori vicini a 1.0 indicano poco o nessuno shrinkage;
-   - valori più alti indicano correzioni più sostanziali.
+La selezione della strategia per i prior dipende dagli obiettivi inferenziali e dal contesto di ricerca:
 
-### Quale approccio scegliere?
+- **Prior piatto**: appropriato in assenza di informazioni preliminari affidabili o con campioni sufficientemente ampi, ma incapace di correggere il winner's curse in studi di piccole dimensioni.
 
-La selezione della strategia di impostazione dei priori dipende dal contesto di ricerca e dagli obiettivi inferenziali che l'analista si prefigge.
+- **Prior debolmente informativo**: offre un compromesso ragionevole tra oggettività e stabilità, applicando una regolarizzazione generica senza assunzioni di dominio specifiche.
 
-L'impiego di un *prior piatto* sembra coerente con un'ideale di oggettività, permettendo ai dati di esprimersi in modo pressoché libero da influenze esterne. Questo approccio sembra essere particolarmente indicato in assenza di informazioni preliminari affidabili o quando la dimensione campionaria è talmente ampia da rendere trascurabile il rischio di sovrastima. Tuttavia, il suo principale svantaggio risiede nell'incapacità di correggere sistematicamente il *winner's curse*, con la conseguente possibilità di produrre stime inflazionate, specialmente in studi di piccole dimensioni.
+- **Prior dal corpus**: rappresenta l'opzione più sofisticata quando disponibile, correggendo esplicitamente il winner's curse attraverso l'integrazione sistematica dell'evidenza empirica pregressa.
 
-Una valida alternativa è offerta dal *prior debolmente informativo*, che introduce una leggera regolarizzazione senza imporre assunzioni eccessivamente rigide. Questa scelta è consigliabile quando, in mancanza di conoscenze di dominio specifiche, si desidera comunque prevenire stime estreme e statisticamente implausibili, perseguendo un compromesso prudente tra oggettività e stabilità numerica. La sua limitazione principale consiste in una regolarizzazione di carattere generico, non calibrata sulle peculiarità del campo di studio in esame.
+Nel contesto della ricerca psicologica, caratterizzato da campioni di dimensione moderata e significativa eterogeneità negli effetti, il prior derivato da corpus emerge come strategia preferibile quando sussistono le condizioni per la sua applicazione, permettendo di ancorare le nuove stime a un fondamento empirico consolidato.
 
-Infine, il *prior derivato da corpus* costituisce l'opzione più sofisticata, applicabile quando si dispone di un corpus solido e affidabile di studi precedenti metodologicamente simili. Questo approccio mira a correggere esplicitamente il *winner's curse*, ancorando le stime nuove a un fondamento di evidenza empirica preesistente, con l'obiettivo di ottenere risultati più realistici e contestualmente calibrati. La sua adozione, tuttavia, richiede la disponibilità di un corpus di alta qualità e presuppone una sostanziale similarità tra il nuovo studio e quelli che compongono il corpus di riferimento.
-
-Nel contesto tipico della ricerca psicologica, caratterizzato da campioni di dimensione limitata e da una reale preoccupazione per i bias di pubblicazione, il *prior* derivato da corpus emerge generalmente come la scelta più appropriata, laddove disponibile. Esso permette infatti di bilanciare con rigore l'evidenza empirica specifica del settore con i dati emergenti dal nuovo studio, orientando l'inferenza verso stime più robuste e verosimili.
-
-::: {.callout-caution}
-
-## Visualizzazione del processo di *shrinkage*
+::: {.callout-note collapse=true title="Visualizzazione del processo di *shrinkage*"}
 
 ```{r}
 #| label: prep-shrinkage-data
@@ -1124,9 +1127,9 @@ shrinkage_comparison <- rbind(
 )
 ```
 
-Uno dei modi più intuitivi per comprendere la logica dei *prior informativi* è osservare come essi modulino la forza dell’evidenza in funzione della sua plausibilità. Lo *shrinkage* — la tendenza delle stime a muoversi verso valori più realistici — non agisce in modo uniforme, ma cambia sistematicamente in base allo *z*-value osservato.
+Un modo particolarmente intuitivo per comprendere la logica dei prior informativi consiste nell'osservare come questi modulino la forza dell'evidenza in base alla sua plausibilità contestuale. Il fenomeno dello *shrinkage*, ovvero la tendenza delle stime a convergere verso valori più realistici, non si manifesta in modo uniforme, ma varia sistematicamente in funzione dello $z$-value osservato.
 
-La figura seguente mostra la *curva del fattore di shrinkage*, cioè di quanto il valore osservato viene “ridotto” (o riportato verso zero) in media. La relazione che emerge è altamente informativa: per *z*-value prossimi a zero, la correzione è praticamente assente; per valori intermedi, lo *shrinkage* cresce moderatamente; e per *z*-value molto elevati, la correzione diventa più marcata. Questo andamento riflette la logica adattiva del metodo: gli effetti estremi vengono corretti più fortemente perché, secondo il *prior* informativo derivato dal corpus, sono i meno plausibili.
+La figura seguente illustra la "curva del fattore di *shrinkage*", che quantifica l'entità media della correzione applicata al valore osservato. Si osserva una relazione caratteristica: per valori di $z$ prossimi a zero, la correzione è trascurabile; per valori intermedi, lo *shrinkage* aumenta moderatamente, mentre per valori di $z$ molto elevati, la correzione diventa particolarmente marcata. Questo andamento riflette la natura adattiva del metodo: gli effetti più estremi subiscono correzioni più sostanziali, poiché, secondo l'evidenza consolidata nel corpus, rappresentano le occorrenze meno plausibili.
 
 ```{r}
 #| label: fig-shrinkage
@@ -1142,9 +1145,11 @@ ggplot(shrinkage_data, aes(x = z, y = shrinkage)) +
        y = "Fattore di shrinkage\n(z_osservato / z_corretto)") 
 ```
 
-Osservando la curva, si nota come essa inizi quasi piatta — indicando che gli effetti piccoli non vengono toccati — e poi cresca progressivamente, raggiungendo il suo massimo proprio attorno a valori di *z* poco sopra la soglia convenzionale di significatività (circa 1.96). Questo punto è particolarmente interessante: suggerisce che gli effetti “appena significativi” sono quelli per cui il metodo interviene più energicamente, riconoscendo che, nella letteratura psicologica, proprio questi risultati tendono a essere i più instabili o sovrastimati. Lo *shrinkage*, in questo senso, agisce come un correttivo epistemico al *winner’s curse*: più un risultato sembra sorprendente o “forte”, maggiore è la probabilità che sia stato gonfiato dal rumore campionario, e più viene riportato verso valori compatibili con l’esperienza accumulata nel campo.
+L'osservazione della curva rivela un andamento caratteristico: inizialmente piatta, a indicare la sostanziale preservazione degli effetti di modesta entità, e successivamente crescente, raggiungendo il massimo in corrispondenza di valori di $z$ poco superiori alla soglia convenzionale di 1.96. Questo punto critico è particolarmente interessante, in quanto suggerisce che gli effetti "marginalmente oltre la soglia" ricevono la correzione più marcata. Nella ricerca psicologica, infatti, tali risultati mostrano tipicamente la maggiore instabilità e suscettibilità alla sovrastima.
 
-La seconda figura mostra come cambia la curva dello *shrinkage* quando si ipotizzano *prior* diversi. In rosso è mostrato il *prior stimato empiricamente* dal corpus di studi, in blu un *prior più conservativo* (che attribuisce minore probabilità agli effetti grandi), e in verde un *prior più permissivo* (che ammette maggiore variabilità).
+Lo shrinkage opera dunque come un correttivo epistemico del "winner's curse": quanto più un risultato appare sorprendente o "robusto", tanto maggiore è la probabilità che sia stato influenzato dal rumore campionario e tanto più intensamente viene calibrato in base all'evidenza accumulata nel campo di ricerca.
+
+La seconda figura mostra come il profilo dello *shrinkage* cambi in funzione di diversi prior. La curva rossa rappresenta il prior stimato empiricamente dal corpus, quella blu un *prior* più conservativo (che attribuisce minore plausibilità agli effetti di grande entità) e quella verde un *prior* più permissivo (che ammette una variabilità maggiore).
 
 ```{r}
 #| label: fig-shrinkage-sensitivity
@@ -1161,37 +1166,35 @@ ggplot(shrinkage_comparison, aes(x = z, y = shrinkage, color = scenario)) +
         plot.caption = element_text(hjust = 0, face = "italic"))
 ```
 
-La figura rende visibile un principio essenziale del ragionamento bayesiano: ciò che corregge la nostra stima non è una regola fissa, ma la combinazione dinamica tra le informazioni del *prior* e la forza dell’evidenza. Un *prior* più conservativo — che riflette la convinzione che la maggior parte degli effetti siano piccoli — induce una curva più ripida, e quindi una correzione più aggressiva. Al contrario, un *prior* più permissivo genera una curva più dolce: l’analista è disposto a credere più facilmente a effetti di grande ampiezza.
+La figura rende visibile un principio fondamentale del ragionamento bayesiano: la correzione delle stime non segue una regola rigida, ma emerge dalla combinazione dinamica tra l'informazione incorporata nel prior e la forza dell'evidenza empirica. Un *prior* di tipo conservativo - che riflette l'aspettativa di effetti generalmente contenuti - produce una curva più ripida, applicando quindi correzioni più marcate. Al contrario, un *prior* più permissivo genera un profilo più attenuato, esprimendo una maggiore disponibilità ad accogliere effetti di ampia entità.
 
-Il *prior* derivato empiricamente dal corpus di studi si colloca tra i due estremi, bilanciando prudenza e realismo. Esso rappresenta, in un certo senso, la “voce dell’esperienza” del campo scientifico, che informa il giudizio sul nuovo risultato senza sovrastarlo. In prospettiva applicativa, questa curva offre un potente strumento di riflessione: aiuta a comprendere perché risultati apparentemente significativi in studi piccoli o rumorosi debbano essere interpretati con cautela; mostra come la credibilità di un effetto dipenda non solo dal suo valore numerico, ma anche dalla storia epistemica del dominio di ricerca; e suggerisce che la robustezza scientifica non consiste nell’accumulare *p*-value sotto 0.05, ma nel mantenere coerenza tra i dati e ciò che, collettivamente, la letteratura ha già appreso.
+Il *prior* derivato empiricamente dal corpus di studi occupa una posizione intermedia, bilanciando prudenza e realismo. Esso rappresenta, in senso epistemico, la "memoria collettiva" del campo di ricerca, che informa la valutazione dei nuovi risultati senza prevaricarli. Sul piano applicativo, questa curva fornisce uno strumento di riflessione metodologica particolarmente utile: chiarisce perché risultati apparentemente solidi in studi di piccole dimensioni o con elevato rumore richiedano una valutazione cauta; dimostra come la credibilità di un effetto dipenda non solo dalla sua magnitudine osservata, ma anche dal contesto conoscitivo del dominio di ricerca; e suggerisce che la robustezza scientifica risieda non nell'accumulo di risultati estremi, ma nella coerenza tra nuove evidenze e conoscenza consolidata.
 
-In definitiva, il processo di *shrinkage* non è una penalizzazione, ma una forma di apprendimento collettivo. Rende visibile come la conoscenza accumulata dialoghi con l’evidenza nuova, temperando l’entusiasmo con il realismo e offrendo stime più credibili e stabili nel tempo.
+In ultima analisi, il processo di *shrinkage* non costituisce una penalizzazione, bensì una forma di "apprendimento collettivo formalizzato". Esso rende esplicito come il sapere accumulato interagisca con le nuove osservazioni, temperando l'entusiasmo iniziale con il realismo dell'esperienza pregressa e producendo stime più credibili e stabili nel lungo termine.
 :::
 
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-L'analisi dettagliata del metodo proposto da @zwet2022proposal consente di apprezzarne i fondamentali vantaggi metodologici, che emergono con particolare evidenza quando l'approccio viene contestualizzato nella pratica della ricerca psicologica contemporanea.
+L'analisi del metodo proposto da @zwet2022proposal ne evidenzia i pregi metodologici, particolarmente rilevanti nel contesto della ricerca psicologica contemporanea.
 
-Il suo pregio principale risiede nella capacità di ancorare la distribuzione a priori a una solida calibrazione empirica. A differenza dei prior soggettivi, spesso oggetto di controversie interpretative, o di quelli genericamente deboli che trascurano le specificità del dominio di ricerca, il prior derivato dal corpus si basa su evidenze consolidate. Questa caratteristica conferisce alla procedura una trasparenza metodologica che la rende particolarmente robusta alle critiche di arbitrarietà, talvolta rivolte all'inferenza bayesiana. La distribuzione a priori non riflette mere opinioni o convenzioni statistiche, ma cattura fedelmente la distribuzione empirica degli effetti osservati in un determinato ambito scientifico.
+Il principale vantaggio risiede nella capacità di calibrare la distribuzione a priori su basi empiriche solide. A differenza dei prior soggettivi, spesso controversi, o di quelli genericamente deboli che trascurano le specificità del dominio, il prior derivato dal corpus si basa su evidenze consolidate. Questa caratteristica conferisce alla procedura una trasparenza che la rende robusta rispetto alle critiche di arbitrarietà talvolta rivolte all'inferenza bayesiana. La distribuzione a priori non riflette mere opinioni, ma cattura la distribuzione empirica degli effetti osservati in un ambito scientifico specifico.
 
-Un secondo vantaggio cruciale consiste nella natura intrinsecamente adattiva dello shrinkage applicato alle stime. Come emerso dall'analisi della curva di shrinkage, il metodo non opera attraverso correzioni uniformi, ma modula l'entità della regolarizzazione in base alle caratteristiche specifiche di ogni studio. In particolare, interventi correttivi più sostanziali vengono riservati alle stime che presentano z-value particolarmente elevati, indicatori di potenziale sovrastima, o agli studi caratterizzati da ampi errori standard, dove l'informazione contenuta nei dati è più limitata. Questo comportamento differenziato è esattamente ciò che si desidera dal punto di vista metodologico: concentrare l'azione correttiva dove il rischio di "winner's curse" è più acuto, preservando al contempo l'integrità delle stime più affidabili. Dal punto di vista matematico, questa adattabilità deriva naturalmente dalla struttura bayesiana del modello, in cui la distribuzione a posteriori rappresenta sempre una sintesi ottimale tra l'informazione a priori e la verosimiglianza.
+Un secondo vantaggio consiste nella natura adattiva dello shrinkage applicato alle stime. Come mostrato dall'analisi della curva di shrinkage, il metodo modula l'entità della regolarizzazione in base alle caratteristiche di ciascun studio. Le correzioni più significative vengono riservate alle stime con z-value particolarmente elevati, indicatori di potenziale sovrastima, o agli studi con ampi errori standard, dove l'informazione contenuta nei dati è più limitata. Questo comportamento differenziato è auspicabile dal punto di vista metodologico: concentra l'azione correttiva dove il rischio di "winner's curse" è maggiore, preservando l'integrità delle stime più affidabili.
 
-La completa trasparenza operativa rappresenta un ulteriore punto di forza dell'approccio. Ogni fase della procedura è esplicitamente specificata e computazionalmente replicabile: dalla selezione documentata del corpus, con criteri di inclusione chiaramente dichiarati, alla stima automatizzata dei parametri del prior attraverso modelli Stan completamente specificati, fino all'applicazione standardizzata del prior a nuovi studi. Questa trasparenza favorisce simultaneamente la verificabilità metodologica e la cumulatività della ricerca, permettendo alla comunità scientifica di costruire progressivamente su basi metodologicamente robuste.
+La trasparenza operativa rappresenta un ulteriore punto di forza. Ogni fase della procedura è esplicitamente specificata e replicabile: dalla selezione documentata del corpus alla stima automatizzata dei parametri del prior tramite modelli Stan, fino all'applicazione standardizzata a nuovi studi. Questa trasparenza favorisce la verificabilità metodologica e la cumulatività della ricerca.
 
-Tuttavia, come ogni strumento statistico, anche l'approccio basato sui corpora presenta limitazioni che meritano un'attenta considerazione. La validità del prior così derivato dipende criticamente dalla qualità e rappresentatività del corpus di riferimento. La presenza di publication bias, qualora il corpus includesse prevalentemente studi pubblicati, potrebbe paradossalmente condurre all'utilizzo di un prior già inflazionato per correggere stime sovrastimate, compromettendo così l'efficacia correttiva dell'intera procedura. Una soluzione parziale a questa criticità consiste nell'includere, ove possibile, studi non pubblicati, preregistrati o provenienti da registri di trial. Analogamente, la rappresentatività del corpus rispetto al dominio di applicazione costituisce un requisito essenziale: corpora eterogenei o metodologicamente disomogenei rischiano infatti di generare prior inadeguati. Sul piano statistico, infine, il modello sottostante incorpora assunzioni che potrebbero non trovare piena realizzazione in tutti i contesti applicativi, come l'indipendenza tra rapporto segnale-rumore ed errore standard, la simmetria della distribuzione degli effetti e l'adeguatezza della forma funzionale scelta per modellare la distribuzione empirica.
+Tuttavia, l'approccio presenta delle limitazioni che meritano di essere considerate. La validità del prior dipende criticamente dalla qualità e dalla rappresentatività del corpus di riferimento. La presenza di bias di pubblicazione potrebbe compromettere l'efficacia correttiva della procedura. Una soluzione parziale potrebbe essere quella di includere studi non pubblicati, preregistrati o provenienti da registri di trial. Allo stesso modo, la rappresentatività del corpus rispetto al dominio di applicazione costituisce un requisito essenziale.
 
-La questione della generalizzabilità delle inferenze dal corpus al nuovo studio merita particolare attenzione. L'assunzione di scambiabilità implicita nel metodo, per cui il nuovo studio proviene dalla stessa super-popolazione degli studi nel corpus, potrebbe risultare problematica in presenza di innovazioni metodologiche radicali o in campi caratterizzati da rapida evoluzione temporale, in cui gli studi recenti potrebbero differire sistematicamente da quelli più datati.[^scambiabilita]
+Merita particolare attenzione anche la questione della generalizzabilità delle inferenze dal corpus al nuovo studio. L'assunzione di scambiabilità implicita nel metodo potrebbe risultare problematica in presenza di innovazioni metodologiche radicali o in campi caratterizzati da una rapida evoluzione temporale.
 
-[^scambiabilita]: In termini bayesiani, *scambiabilità* significa che, prima di osservare i dati, non abbiamo motivo di ritenere che uno studio sia sistematicamente diverso da un altro, al di là delle differenze casuali. Formalmente, una sequenza di studi è scambiabile se la distribuzione congiunta dei loro risultati è invariante rispetto all’ordine in cui vengono considerati. L’assunzione di scambiabilità giustifica l’uso di un’unica distribuzione a priori comune (ad esempio quella stimata dal corpus) per rappresentare l’incertezza sul vero effetto nei diversi studi. Quando tale assunzione non è plausibile — ad esempio perché i nuovi studi impiegano metodi o popolazioni molto diverse — il trasferimento diretto del prior dal corpus può introdurre distorsioni.
+Questo approccio si rivela particolarmente vantaggioso in presenza di corpus affidabili e in contesti in cui la prevenzione della sovrastima è una priorità, come nelle aree caratterizzate da studi di piccole dimensioni, alta variabilità e forte pressione pubblicazionale. È appropriato quando è necessario bilanciare l'esigenza di oggettività con l'incorporazione di informazioni pregresse e in programmi di ricerca cumulativa.
 
-Alla luce di queste considerazioni, è possibile delineare i contesti in cui l'approccio si rivela particolarmente vantaggioso. L'approccio è particolarmente utile in presenza di corpus affidabili e in contesti in cui la prevenzione della sovrastima è una priorità metodologica, come ad esempio nelle aree caratterizzate da studi di piccole dimensioni, alta variabilità e forte pressione pubblicazionale. L'approccio si rivela particolarmente appropriato quando è necessario bilanciare l'esigenza di oggettività con l'incorporazione di informazioni pregresse e in programmi di ricerca sistematica cumulativa, in cui ogni nuovo studio può beneficiare esplicitamente della conoscenza accumulata.
+Al contrario, l'assenza di un corpus adeguato, la ricerca su fenomeni inesplorati, l'estrema eterogeneità del dominio o le innovazioni metodologiche radicali rappresentano contesti in cui l'applicazione dell'approccio potrebbe risultare inappropriata.
 
-Al contrario, l'assenza di un corpus adeguato, la ricerca su fenomeni del tutto inesplorati, l'eterogeneità estrema del dominio o le innovazioni metodologiche radicali rappresentano contesti in cui l'applicazione dell'approccio potrebbe risultare inappropriata o controproducente.
+In sintesi, l'approccio basato sui corpora occupa una posizione metodologicamente preziosa: è più informativo dei prior non informativi, più oggettivo dei prior soggettivi e più specifico dei prior genericamente deboli. Attraverso l'utilizzo sistematico di informazioni aggregate da studi affini, consente di produrre stime dell'effetto che correggono efficacemente il bias del vincitore, rispettano l'evidenza empirica del dominio e favoriscono la cumulatività della ricerca.
 
-In sintesi, l'approccio basato sui corpora per la costruzione di prior informativi occupa una posizione metodologicamente preziosa nel panorama dell'inferenza statistica contemporanea. Si colloca in uno spazio intermedio ottimale: è più informativo dei prior non informativi, più oggettivo dei prior soggettivi e più specifico dei prior genericamente deboli. Attraverso l'utilizzo sistematico di informazioni aggregate da studi affini, questo approccio consente di produrre stime dell'effect size che correggono efficacemente il bias del vincitore, rispettano l'evidenza empirica del dominio, quantificano in modo appropriato l'incertezza e favoriscono la cumulatività della ricerca.
-
-Per la psicologia scientifica, che deve affrontare le sfide legate ai campioni limitati, all'alta variabilità e alle preoccupazioni sulla replicabilità, l'adozione di questo approccio potrebbe fornire un contributo prezioso allo sviluppo di una disciplina più solida e autocorrettiva, che impara sistematicamente dalla propria storia metodologica piuttosto che ripetere inconsapevolmente gli stessi errori inferenziali.
+Per la psicologia scientifica, che deve affrontare le sfide legate ai campioni limitati, all'alta variabilità e alle preoccupazioni sulla replicabilità, l'adozione di questo approccio potrebbe fornire un contributo prezioso per sviluppare una disciplina più solida e autocorrettiva.
 
 ::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
 ```{r}
