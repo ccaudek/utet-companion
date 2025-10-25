@@ -1,0 +1,351 @@
+# Modelli multilivello {#sec-multilevel}
+
+```{r}
+#| echo: false
+here::here("code", "_common.R") |> 
+  source()
+
+# Load packages
+if (!requireNamespace("pacman")) install.packages("pacman")
+pacman::p_load(car, lme4, cmdstanr, brms, kableExtra)
+```
+
+## Introduzione {.unnumbered .unlisted}
+
+Questo capitolo approfondisce gli aspetti implementativi dell'esempio presentato nel capitolo 23 del manuale didattico, dedicato ai modelli multilivello.
+
+Nei capitoli precedenti abbiamo esaminato il confronto tra le medie di gruppi indipendenti, assumendo che ogni osservazione fosse statisticamente indipendente dalle altre. Tuttavia, questa ipotesi è spesso irrealistica nel contesto della ricerca psicologica. Infatti, una parte essenziale del lavoro dello psicologo consiste nel comprendere sia le differenze tra le persone (differenze *interindividuali*), sia le variazioni all'interno della stessa persona nel tempo o nelle diverse situazioni (differenze *intraindividuali*).
+
+Le analisi tradizionali, come l'ANOVA o la regressione lineare classica, tendono però a trascurare la struttura multilivello dei dati, trattando tutte le osservazioni come indipendenti. In presenza di misurazioni ripetute o di gruppi naturalmente nidificati (per esempio, studenti all’interno di classi, pazienti all’interno di centri clinici o momenti di osservazione all’interno della stessa persona), tale assunzione viene violata, compromettendo la validità delle inferenze.
+
+Questa semplificazione può condurre a conclusioni fuorvianti. Si consideri, ad esempio, uno studio sull'umore giornaliero: in media, le persone potrebbero sembrare più felici durante il fine settimana, ma alcune potrebbero invece sperimentare maggiore solitudine o disagio proprio in quei giorni. Ignorare queste differenze individuali significa trascurare un'informazione psicologica cruciale, ovvero il modo in cui ogni individuo si discosta dal comportamento medio della popolazione.
+
+## L'approccio idiografico e l'analisi personalizzata
+
+Negli ultimi anni è cresciuta la consapevolezza che ogni individuo è un caso a sé. L’approccio idiografico cerca di modellare le caratteristiche di ogni persona singolarmente. Tuttavia, le analisi idiografiche pure richiedono un gran numero di dati per ciascun soggetto e spesso non sono praticabili negli studi reali.
+
+I *modelli multilivello bayesiani* offrono un compromesso elegante. Questi modelli permettono di stimare gli effetti specifici per ogni individuo, ma sfruttano anche l'informazione condivisa all'interno del gruppo. Ciò è possibile grazie al meccanismo di *shrinkage*, che "bilancia" le stime individuali con la tendenza generale. Ne vedremo il funzionamento più avanti.
+
+## I tre approcci: *complete pooling*, *no pooling*, e *partial pooling*
+
+Quando analizziamo i dati gerarchici, come le misurazioni ripetute sullo stesso individuo o i dati delle persone in gruppi, possiamo scegliere diverse strategie. Per fare un esempio, consideriamo uno studio sugli effetti della deprivazione del sonno su dieci partecipanti, valutati più volte ciascuno.
+
+Il primo approccio è il *complete pooling*. In questo caso, trattiamo tutti i dati come se fossero stati raccolti da un'unica entità, ignorando completamente la struttura gerarchica. È come se tutti e dieci i partecipanti fossero, in realtà, la stessa persona.
+
+All'estremo opposto, troviamo il *no pooling*. In questo caso, si stima un effetto completamente separato per ogni partecipante, come se non ci fosse alcuna informazione comune o relazione tra loro. Ogni individuo è considerato un'entità unica e indipendente.
+
+Infine, il *partial pooling*, noto anche come *modello multilivello*, rappresenta una via di mezzo e spesso è la soluzione più equilibrata. In questo approccio, stimiamo comunque effetti individuali per ciascun partecipante, ma li "regolarizziamo", ovvero li avviciniamo alla media complessiva del gruppo. Ciò significa che le stime per ciascun partecipante sono influenzate sia dai dati specifici di ciascun partecipante, sia dalla tendenza generale osservata nell'intero gruppo.
+
+Nelle prossime sezioni, esploreremo come implementare ciascuno di questi tre modelli utilizzando il pacchetto `brms` in R, fornendo un'applicazione pratica di questi concetti teorici.
+
+### Un esempio guidato: l’effetto della deprivazione del sonno sulle prestazioni psicomotorie
+
+Per illustrare l’utilità dei modelli multilivello nell’analisi di dati longitudinali, utilizzeremo un dataset derivato dallo studio di @belenky2003patterns, il quale ha esaminato l’effetto cumulativo della restrizione del sonno sulla vigilanza psicomotoria. In questo studio, i partecipanti hanno svolto per dieci giorni un compito di reazione agli stimoli visivi ripetuto più volte, dopo aver dormito solo tre ore per notte. La variabile di interesse è il tempo medio di reazione (in millisecondi), registrato ogni giorno per ciascun partecipante.
+
+Il dataset ha una struttura tipicamente multilivello: ogni soggetto ha fornito osservazioni ripetute nel tempo, pertanto ci si aspetta una forte correlazione intraindividuale. L’analisi mira a quantificare sia l’effetto medio della deprivazione del sonno sia le differenze individuali nella traiettoria del tempo di reazione.
+
+Per semplicità, caricheremo direttamente il file già elaborato `sleep2.csv`, in cui sono stati rimossi i primi due giorni (fase di adattamento e addestramento). Inoltre, è stata creata una nuova variabile, `days_deprived`, che parte da 0 (baseline) e aumenta nei giorni successivi di deprivazione del sonno. 
+
+```{r}
+#| echo: false
+sleep2 <- rio::import(here::here("data", "sleep2.csv"))
+
+ggplot(sleep2, aes(x = days_deprived, y = Reaction)) +
+  geom_point(alpha = 0.6) +
+  facet_wrap(~Subject) +
+  labs(
+    x = "Giorni di deprivazione del sonno (0 = baseline)",
+    y = "Tempo medio di reazione (ms)",
+    title = "Andamento del tempo di reazione durante la deprivazione del sonno"
+  )
+```
+
+Questa visualizzazione evidenzia sia la tendenza generale all'aumento del tempo di reazione sia la variabilità tra i soggetti riguardo al modo in cui le prestazioni si degradano nel tempo. I modelli multilivello ci permetteranno di formalizzare queste osservazioni, stimando congiuntamente l'effetto medio della deprivazione del sonno e le differenze tra i partecipanti in termini di velocità e intensità di tale effetto.
+
+### Relazione tra tempo di reazione e deprivazione del sonno
+
+L'analisi dei dati relativi alla deprivazione del sonno ha rivelato che, con l'unica eccezione del soggetto 335, il tempo medio di reazione tende ad aumentare progressivamente con l'aumentare di ogni giorno deprivazione aggiuntivo. Questo suggerisce che un modello di regressione lineare potrebbe essere utile per descrivere le prestazioni di ciascun partecipante.
+
+La regressione lineare è definita dalla seguente equazione:
+
+$$ 
+E(Y) = \beta_0 + \beta_1 X,
+$$
+dove:
+
+- $Y$ rappresenta la variabile dipendente (il tempo di reazione medio);
+- $\beta_0$ è l'intercetta, ovvero il tempo di reazione stimato il primo giorno (baseline, senza deprivazione del sonno);
+- $\beta_1$ è il coefficiente di pendenza che rappresenta la variazione stimata del tempo di reazione per ogni giorno di deprivazione aggiuntivo;
+- $X$ indica il numero di giorni di deprivazione del sonno.
+
+I parametri $\beta_0$ e $\beta_1$ vengono stimati dai dati e la loro interpretazione fornisce informazioni chiave sulle dinamiche delle prestazioni psicomotorie.
+
+### Scelta del modello di regressione
+
+Un aspetto cruciale dell'analisi è la scelta della struttura modellistica da adottare per descrivere i dati. Bisogna considerare le seguenti opzioni.
+
+1. *Complete Pooling:* questo approccio utilizza un unico modello di regressione lineare per tutti i partecipanti, assumendo che la relazione tra deprivazione del sonno e tempo di reazione sia identica per tutti. In pratica, si stima una singola intercetta ($\beta_0$) e una singola pendenza ($\beta_1$) comuni a tutti i soggetti. Sebbene sia semplice, questo metodo ignora completamente le differenze individuali.
+
+2. *No Pooling:* in questo caso, si stima un modello di regressione lineare separato per ciascun partecipante, consentendo a ogni soggetto di avere la propria intercetta e la propria pendenza. Questo approccio riconosce pienamente le variazioni individuali, ma potrebbe risultare eccessivamente complesso e sensibile al rumore nei dati, soprattutto quando il numero di punti di osservazione per soggetto è ridotto.
+
+3. *Partial Pooling:* questo approccio intermedio, spesso implementato attraverso i modelli multilivello, bilancia i due estremi descritti in precedenza. Si assume una relazione media condivisa tra i soggetti (ad esempio, una pendenza media), ma si consente una variazione individuale attorno a questa media. Il *partial pooling* sfrutta le informazioni condivise tra i partecipanti, migliorando la robustezza delle stime, soprattutto in presenza di un numero ridotto di dati per ciascun soggetto.
+
+## *Complete pooling*: un modello unico per tutti
+
+L’approccio del complete pooling presuppone che tutti i partecipanti seguano la stessa relazione tra la variabile indipendente (ad esempio, giorni di deprivazione del sonno) e quella dipendente (ad esempio, tempo di reazione). In altre parole, si stima un'unica intercetta e un'unica pendenza per l'intero campione, ignorando le differenze individuali. Questo approccio può essere utile come modello di partenza, ma è spesso irrealistico in psicologia, dove i soggetti tendono a mostrare andamenti diversi.
+
+Per adattare questo modello in R, utilizziamo la funzione `brm()`:
+
+```{r}
+#| output: false
+cp_model <- brm(
+  Reaction ~ days_deprived,
+  data = sleep2,
+  family = gaussian(),
+  chains = 2, iter = 1000, 
+  backend = "cmdstanr",
+  refresh = 0
+)
+```
+
+```{r}
+fixef(cp_model)
+```
+
+Il modello stima che il tempo di reazione iniziale (al giorno 0) sia di circa 268 ms e che aumenti di circa 11 ms per ogni giorno di deprivazione del sonno.
+
+
+###  Limiti dell’approccio
+
+Questo approccio presenta diverse criticità. In primo luogo, ignora il fatto che lo stesso soggetto viene misurato più volte, il che significa che l'indipendenza delle osservazioni non viene rispettata. Di conseguenza, gli errori standard dei coefficienti potrebbero risultare irrealistici, portando a una sottostima dell'incertezza. Inoltre, il modello non considera la perdita di informazione individuale, in quanto ogni soggetto potrebbe avere la propria intercetta e la propria pendenza, aspetti che non vengono presi in considerazione in questa analisi.
+
+Per visualizzare meglio questi risultati, possiamo aggiungere le previsioni del modello al grafico che abbiamo già creato. 
+
+```{r}
+#| echo: false
+ggplot(sleep2, aes(x = days_deprived, y = Reaction)) +
+  geom_abline(
+    intercept = fixef(cp_model)[1, "Estimate"],
+    slope = fixef(cp_model)[2, "Estimate"],
+    color = "blue"
+  ) +
+  geom_point() +
+  scale_x_continuous(breaks = 0:7) +
+  facet_wrap(~Subject) +
+  labs(y = "Tempo di reazione", x = "Giorni di deprivazione del sonno")
+```
+
+Il grafico mostra che il modello attuale non si adatta in modo ottimale ai dati raccolti. Ciò evidenzia la necessità di adottare un approccio diverso per modellare in modo più accurato le relazioni presenti nei dati.
+
+## *No Pooling*: un modello per ciascun partecipante
+
+L'approccio del no pooling stima una retta di regressione distinta per ogni soggetto, trattando ciascuno di essi come un caso indipendente. Questo approccio consente di cogliere al meglio le differenze individuali, ma ignora completamente l'informazione condivisa tra i soggetti. Si tratta del metodo più vicino a un'analisi idiografica pura. In questo modo, ogni partecipante ha la propria intercetta e la propria pendenza. Tuttavia, le stime non sono regolarizzate, pertanto i soggetti con pochi dati possono produrre stime molto rumorose.
+
+### Implementazione con `brm()` mediante un *loop*
+
+```{r}
+#| output: false
+
+# Otteniamo i livelli unici dei soggetti
+subjects <- unique(sleep2$Subject)
+
+# Inizializziamo una lista per salvare i modelli
+subject_models <- list()
+subject_coefs <- tibble()
+
+# Loop sui soggetti
+for (id in subjects) {
+  data_i <- filter(sleep2, Subject == id)
+  fit <- brm(
+    Reaction ~ days_deprived,
+    data = data_i,
+    family = gaussian(),
+    chains = 2, iter = 1000, refresh = 0,
+    backend = "cmdstanr",
+    silent = TRUE
+  )
+  subject_models[[as.character(id)]] <- fit
+  
+  coef_i <- fixef(fit)[, "Estimate"]
+  subject_coefs <- bind_rows(subject_coefs, tibble(
+    Subject = id,
+    intercept = coef_i[1],
+    slope = coef_i[2]
+  ))
+}
+```
+
+
+```{r}
+#| echo: false
+ggplot(sleep2, aes(x = days_deprived, y = Reaction)) +
+  geom_abline(
+    data = subject_coefs,
+    aes(intercept = intercept, slope = slope, color = Subject),
+    size = 0.8
+  ) +
+  geom_point(alpha = 0.6) +
+  scale_x_continuous(breaks = 0:7) +
+  facet_wrap(~Subject) +
+  labs(y = "Tempo di reazione", x = "Giorni di deprivazione del sonno") +
+  theme(legend.position = "none")
+
+```
+
+Questo approccio evidenzia efficacemente le differenze individuali sia nella pendenza, che riflette il tasso di peggioramento, sia nell'intercetta, corrispondente al livello basale di reazione. Tuttavia, questo approccio non sfrutta l'informazione condivisa all'interno del gruppo, limitando così la sua efficacia inferenziale. Inoltre, le stime risultano particolarmente instabili per i soggetti con un numero limitato di osservazioni.
+
+Nel prossimo passo, vedremo un compromesso tra il *no pooling* e il *complete pooling*: il *partial pooling*, tipico dei modelli multilivello bayesiani.
+
+## *Partial pooling*: un compromesso tra individuo e gruppo
+
+Nel modellare i dati psicologici, dobbiamo scegliere se trattare ogni partecipante come un caso a sé stante (*no pooling*) o considerare tutti i dati come provenienti da un unico gruppo omogeneo (*complete pooling*). Il *partial pooling* è un approccio intermedio: ogni soggetto ha le proprie stime, ma queste sono influenzate anche dai dati degli altri soggetti. Ciò si realizza con i modelli multilivello o a effetti misti.
+
+### Il concetto di *shrinkage*
+
+Nel *partial pooling*, le stime individuali subiscono un fenomeno di contrazione verso la media del gruppo noto come *shrinkage*. Questo meccanismo opera come una sorta di regolarizzazione statistica che stabilizza le stime, particolarmente utile quando i dati individuali sono limitati o affetti da rumore. Operativamente, il modello bilancia dinamicamente le fonti di informazione: per i partecipanti con un numero limitato di osservazioni, privilegia l'informazione di gruppo; quando invece sono disponibili numerosi dati individuali, attribuisce maggiore peso all'evidenza specifica del soggetto.
+
+### Implementazione con `brm()`
+
+L'obiettivo consiste nello specificare un modello che accomodi *eterogeneità individuale sia nel livello basale (intercetta) che nel tasso di cambiamento (pendenza)*.
+
+```{r}
+#| output: false
+# Modello multilivello (partial pooling)
+pp_model <- brm(
+  Reaction ~ 1 + days_deprived + (1 + days_deprived | Subject),
+  data = sleep2,
+  family = gaussian(),
+  chains = 2, iter = 2000, seed = 123,
+  backend = "cmdstanr",
+  refresh = 0
+)
+```
+
+Qui la sintassi `1 + days_deprived | Subject` specifica che a ciascun soggetto viene associata un'intercetta unica e una pendenza specifica per la variabile `days_deprived`.
+
+Costruiamo le predizioni del modello per ciascun soggetto, considerando l'intero range di giorni di deprivazione, e procediamo alla visualizzazione dei risultati:
+
+```{r}
+#| echo: false
+newdata <- crossing(
+  Subject = unique(sleep2$Subject),
+  days_deprived = 0:7
+)
+
+newdata <- newdata |> mutate(
+  Reaction = fitted(pp_model, newdata = newdata)[, "Estimate"]
+)
+```
+
+```{r}
+#| echo: false
+ggplot(sleep2, aes(x = days_deprived, y = Reaction)) +
+  geom_line(data = newdata, aes(group = Subject), color = "blue") +
+  geom_point() +
+  facet_wrap(~Subject) +
+  labs(
+    x = "Giorni di deprivazione del sonno",
+    y = "Tempo di reazione (ms)",
+    title = "Modello con partial pooling"
+  )
+```
+## Il ruolo dei modelli multilivello in psicologia
+
+### Una sintesi tra nomotetico e idiografico
+
+La ricerca psicologica si è tradizionalmente articolata in due prospettive epistemologiche distinte: l'approccio nomotetico, volto all'identificazione di principi generali applicabili a tutta la popolazione, e l'approccio idiografico, focalizzato sull'indagine delle caratteristiche distintive di ciascun individuo. I modelli multilivello rappresentano una sintesi metodologica che supera questa dicotomia, riconoscendo che le traiettorie individuali (dimensione idiografica) si sviluppano all'interno di contesti collettivi che ne influenzano l'andamento (dimensione nomotetica).
+
+Questa integrazione consente di indagare sistematicamente le differenze individuali, preservando al contempo la capacità di generalizzazione a livello di popolazione e offrendo un contributo metodologicamente robusto alla comprensione del comportamento umano.
+
+Tuttavia, l'applicazione di questi modelli richiede una riflessione critica sulle assunzioni teoriche su cui si basano. Come evidenziato da @richters2021incredible, gran parte della ricerca psicologica adotta implicitamente un'«assunzione ergonomica» che presuppone un'omogeneità psicologica fondamentale tra gli individui. Questa premessa, sebbene sia funzionale all'aggregazione dei dati e alla stima degli effetti medi, rischia di mascherare le sostanziali eterogeneità, producendo quello che l'autore chiama "causal debris": una proliferazione di risultati significativi, ma teoricamente frammentari e difficili da replicare.
+
+La capacità dei modelli multilivello di stimare simultaneamente effetti medi e variazioni individuali non garantisce che tali effetti riflettano processi causali omogenei tra i partecipanti. In assenza di una solida base teorica che specifichi quali meccanismi siano plausibilmente condivisi e in che modo possano variare, si rischia di interpretare le differenze qualitative come semplici deviazioni quantitative da un effetto medio.
+
+Pertanto, l'implementazione di modelli multilivello in psicologia richiede un'attenzione critica alla plausibilità teorica dell'omogeneità assunta, affiancando all'analisi statistica l'esplorazione di approcci complementari, quali la modellizzazione idiografica pura o l'identificazione di sottogruppi teoricamente fondati. Solo attraverso questa integrazione metodologica è possibile cogliere appieno la complessità e la variabilità che caratterizzano i fenomeni psicologici.
+
+## Interpretazione del modello
+
+Dopo aver stimato un modello multilivello, è importante saperlo leggere e interpretare. In particolare, analizzeremo tre componenti fondamentali: gli *effetti fissi* (la media del gruppo), gli *effetti casuali* (le deviazioni individuali) e la varianza tra soggetti.
+
+### Effetti fissi: la media del gruppo
+
+```{r}
+fixef(pp_model)
+```
+
+Questo comando restituisce le stime degli effetti fissi a livello di popolazione:
+
+- l'*intercetta* corrisponde al tempo di reazione medio stimato in condizioni basali (giorno 0, senza deprivazione di sonno);
+- il *coefficiente di `days_deprived`* indica l'incremento medio del tempo di reazione associato a ogni giorno aggiuntivo di deprivazione di sonno.
+
+Questi parametri rappresentano gli effetti "nomotetici" del modello, descrivendo le relazioni medie che caratterizzano l'intera popolazione di riferimento.
+
+### Effetti casuali: le deviazioni individuali
+
+```{r}
+ranef(pp_model)$Subject
+```
+
+Questo comando restituisce, per ciascun partecipante, l’entità con cui i suoi parametri si discostano dalla media di popolazione.
+
+In particolare, vengono riportati:
+
+* gli *scostamenti dell’intercetta*, che riflettono differenze nei tempi di reazione di base tra i soggetti;
+* gli *scostamenti della pendenza*, che mostrano quanto ciascun individuo sia più o meno sensibile, rispetto alla media del gruppo, all’effetto della deprivazione di sonno.
+
+Queste *deviazioni individuali*, note come *effetti casuali stimati*, quantificano la componente specifica di ciascun partecipante che non è spiegata dagli effetti fissi del modello. Esse consentono di osservare come ogni individuo si discosti sistematicamente dal comportamento medio del gruppo.
+
+### Varianza tra soggetti: quanta differenza c’è nel campione
+
+```{r}
+VarCorr(pp_model)$Subject
+```
+
+L’output riporta la *dispersione* (deviazioni standard, varianze e covarianze) e la *correlazione* tra gli effetti casuali dell’intercetta e della pendenza. Queste informazioni descrivono l'eterogeneità tra i partecipanti e il modo in cui le loro differenze nei tempi di reazione si associano all'effetto della deprivazione di sonno.
+
+* La *deviazione standard dell’intercetta* è di circa *33.6 ms* (*IC 95%: 20.9 – 53.5*), indicando una notevole variabilità nei *tempi di reazione di base*: alcuni soggetti sono sistematicamente più rapidi, altri più lenti, anche prima dell'intervento della manipolazione sperimentale.
+
+* La *deviazione standard della pendenza* è pari a *7.4 ms* (*IC 95%: 4.4 – 11.6*), suggerendo che esistono differenze di rilievo anche nella sensibilità individuale alla deprivazione di sonno. In altre parole, i soggetti non reagiscono tutti allo stesso modo: alcuni mostrano un rallentamento marcato, altri quasi nullo.
+
+* La *correlazione tra intercetta e pendenza* è stimata a *0.18*, ma con un intervallo di credibilità ampio (*–0.41, 0.76*). Questa incertezza indica che non vi è una prova consistente di un legame tra i tempi di reazione di base e l'entità dell'effetto della deprivazione: non possiamo affermare con certezza che chi parte più lento tenda anche ad aumentare di più i tempi con il sonno ridotto.
+
+La *matrice di covarianza*, anch'essa presente nell'output, completa il quadro informativo:
+la *covarianza* tra intercetta e pendenza è stimata attorno a *39*, sebbene con un ampio intervallo di credibilità (*–137, 205*). Questo parametro quantifica la *relazione sistematica* tra i due effetti casuali: un valore positivo indicherebbe che soggetti con tempi di reazione basali più elevati tendono a mostrare incrementi più marcati in condizioni di deprivazione, mentre la sostanziale sovrapposizione dello zero nell'intervallo di credibilità suggerisce che, nei nostri dati, le due dimensioni potrebbero variare in modo indipendente.
+
+Nel complesso, il modello rivela una *marcata eterogeneità tra gli individui*, sia nei livelli di prestazione iniziale sia nella risposta alla manipolazione. Questa diversità rappresenta la variabilità idiografica del campione: ciascun individuo presenta un proprio profilo di funzionamento, distinguibile ma connesso a un quadro di gruppo condiviso.
+
+**In sintesi:**
+
+| **Comando**               | **Cosa restituisce**                          | **Significato**                                 |
+| ------------------------- | --------------------------------------------- | ----------------------------------------------- |
+| `fixef(pp_model)`         | Effetti fissi (intercetta e pendenza medie)   | Relazioni medie a livello di popolazione        |
+| `ranef(pp_model)$Subject` | Deviazioni individuali dagli effetti fissi    | Specificità di ciascun soggetto rispetto alla media |
+| `VarCorr(pp_model)`       | Varianza e correlazione degli effetti casuali | Entità e struttura della variabilità individuale |
+
+Queste funzioni consentono di *interpretare il modello multilivello* in modo esaustivo: non solo identificano *le tendenze centrali*, ma anche *l'entità delle differenze individuali* rispetto a tali tendenze. Questa duplice lettura costituisce l'essenza del *partial pooling*.
+
+## Riflessioni conclusive {.unlisted .unnumbered}
+
+I modelli multilivello costituiscono uno strumento metodologico fondamentale per la ricerca psicologica, particolarmente adatto all'analisi di dati con struttura gerarchica, come quelli derivanti da misurazioni ripetute sugli stessi individui. Il loro principale vantaggio risiede nella capacità di integrare informazioni provenienti da diversi livelli di analisi, consentendo di stimare congiuntamente le tendenze generali a livello di popolazione e le variazioni specifiche a livello individuale.
+
+In questo capitolo è stato introdotto il concetto di "partial pooling", che si colloca a metà strada tra due approcci estremi: il "complete pooling", che presuppone l'omogeneità totale tra i soggetti, e il "no pooling", che analizza ogni individuo in modo completamente isolato. Il partial pooling rappresenta un compromesso ottimale tra queste due prospettive, consentendo, da un lato, di modellare sistematicamente la variabilità interindividuale e, dall'altro, di sfruttare strategicamente l'informazione condivisa nel campione per ottenere stime più robuste.
+
+Il fenomeno dello *shrinkage*, ovvero la contrazione delle stime individuali verso la media di gruppo, rappresenta una caratteristica essenziale di questo approccio. Questo meccanismo di regolarizzazione statistica non rappresenta un limite metodologico, ma un elemento funzionale che previene il sovradattamento e riduce l'incertezza delle stime, risultando particolarmente vantaggioso quando i dati individuali sono limitati o rumorosi.
+
+Dal punto di vista epistemologico, i modelli multilivello superano la tradizionale dicotomia tra approccio nomotetico e idiografico. Questi modelli, infatti, permettono di rispondere simultaneamente a domande relative alle relazioni medie a livello di popolazione e all'identificazione delle specifiche caratteristiche individuali, riconoscendo la coesistenza di pattern generali e di differenze sistematiche tra i soggetti.
+
+L'applicazione al dataset `sleepstudy` ha mostrato in modo concreto come modellare gli effetti della deprivazione di sonno sui tempi di reazione, distinguendo chiaramente l'effetto medio nella popolazione dalla variabilità interindividuale nella risposta alla deprivazione. L'analisi ha dimostrato che è possibile stimare i parametri specifici per ciascun partecipante, mantenendo al contempo la coerenza con il principio del partial pooling.
+
+Questi modelli trovano ampia applicazione in vari ambiti della psicologia, dalla psicometria allo studio delle traiettorie di sviluppo, e costituiscono la base concettuale per i successivi modelli di crescita latente. Rappresentano inoltre il quadro metodologico di riferimento per affrontare il tema dell'affidabilità tra osservatori, che verrà approfondito in seguito.
+
+In sintesi, i modelli multilivello offrono un approccio rigoroso e sofisticato per l'analisi dei dati psicologici, che coniuga il rigore metodologico con l'attenzione necessaria alla complessità dei fenomeni umani. La loro adozione contribuisce significativamente allo sviluppo di una psicologia scientifica che sia in grado di cogliere sia le regolarità generali sia le specificità individuali che caratterizzano il comportamento umano.
+
+::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+```{r}
+sessionInfo()
+```
+:::
+
+## Bibliografia {.unnumbered .unlisted}
+
+
