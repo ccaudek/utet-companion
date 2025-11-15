@@ -367,11 +367,80 @@ La nostra conoscenza del parametro $p$ risulta ora concentrata attorno al valore
 
 In termini pratici, se si dovesse formulare una previsione per i prossimi 10 lanci, l'intervallo più plausibile si collocherebbe tra 6 e 8 successi, anche se non si possono escludere esiti di 5 o 9 successi, a causa della variabilità casuale.
 
-
 ::: {.callout-caution collapse=true title="Nota"}
 Potrebbe sembrare ovvio che la distribuzione predittiva a posteriori riproduca fedelmente i dati osservati nel nostro esempio. In realtà, questo risultato positivo non è affatto scontato ed è importante dal punto di vista metodologico: attesta la buona calibrazione del nostro modello. 
 
 Nel caso che abbiamo discusso, abbiamo scelto un modello binomiale con un prior Beta perché ci permette di illustrare chiaramente la logica alla base della distribuzione predittiva a posteriori in un caso particolarmente semplice. È tuttavia cruciale riconoscere che la ricerca psicologica opera tipicamente con modelli di complessità ben superiore. In questi contesti applicativi, la corrispondenza tra i dati osservati e quelli generati tramite la distribuzione predittiva non può mai essere data per scontata, ma deve sempre essere oggetto di verifica empirica.
+:::
+
+## Validazione del modello: controlli predittivi a posteriori
+
+### Oltre il confronto relativo: validazione assoluta del modello
+
+Mentre i metodi di *valutazione relativa* tra modelli—quali criteri informativi, fattori di Bayes o cross-validation—sono essenziali per confrontare modelli rivali e saranno approfonditi in un capitolo successivo, è altrettanto cruciale saper valutare la bontà di un *singolo modello* in *termini assoluti*. I *Posterior Predictive Checks* (PPC) rispondono proprio a questa esigenza, permettendo di quantificare quanto bene un modello si adatti ai dati osservati, indipendentemente dall'esistenza di alternative.
+
+La logica sottostante è potente e intuitiva: *se un modello rappresenta un'accurata approssimazione del processo che ha realmente generato i dati, allora i parametri stimati (la distribuzione a posteriori) dovrebbero essere in grado di generare—se simuliamo un nuovo esperimento—dati replicati con caratteristiche simili a quelle che abbiamo effettivamente osservato.*
+
+::: {.callout-note title="Il principio fondamentale del PPC"}
+Un modello adeguato non deve solo adattarsi ai dati osservati, ma deve anche essere in grado di *generare* dati con proprietà statistiche simili. Se i dati osservati risultano atipici o "estremi" rispetto all'universo di dati che il modello può generare, abbiamo un segnale d'allarme sulla sua adeguatezza.
+:::
+
+### La distribuzione predittiva a posteriori per la verifica
+
+Consideriamo un modello parametrico con parametro $\theta \in \Theta$, densità a priori $p(\theta)$ e funzione di verosimiglianza $p(x \mid \theta)$ per i dati osservati $x$. Sia $\pi(\theta) = p(\theta \mid x)$ la densità a posteriori.
+
+::: {.callout-important title="Definizione: Distribuzione Predittiva a Posteriori per il Controllo"}
+La distribuzione predittiva a posteriori per dati replicati è la distribuzione marginale di un nuovo campione $x_{\text{rep}}$, generato dallo stesso modello di verosimiglianza, integrata rispetto alla distribuzione a posteriori del parametro:
+
+$$
+\pi(x_{\text{rep}}) := \int_{\Theta} p(x_{\text{rep}} \mid \theta)\, \pi(\theta)\, d\theta.
+$$ {#eq-post-pred-rep}
+:::
+
+Sebbene formalmente identica alla distribuzione predittiva per dati futuri, qui l'utilizzo è concettualmente diverso. Non siamo interessati a prevedere il futuro, ma a *simulare un esperimento replicato* per verificare la plausibilità che il nostro modello abbia generato i dati già in nostro possesso.
+
+### Implementare i controlli predittivi: valutare l'adeguatezza del modello
+
+I PPC quantificano numericamente se i dati osservati $x$ appaiano "atipici" rispetto alla distribuzione predittiva $\pi(x_{\text{rep}})$. La procedura standardizzata prevede:
+
+1.  *Definire una Statistica di Discrepanza $T(\cdot)$*: una quantità (es., media, varianza, skewness) che catturi una caratteristica dei dati che vogliamo verificare.
+2.  *Calcolare un Posterior Predictive p-value*: la probabilità che la statistica calcolata su dati replicati sia più estrema di quella osservata. Una versione pratica è la proporzione di repliche in cui $T(x_{\text{rep}}) \ge T(x)$.
+
+::: {.callout-tip title="Esempio applicativo: tempi di reazione"}
+**Contesto:** modelliamo i tempi di reazione in un compito di Stroop con una distribuzione normale.
+
+**Problema:** i tempi di reazione reali sono tipicamente asimmetrici (distribuzione con coda a destra), mentre la normale è simmetrica.
+
+**Controllo PPC:**
+
+- **Statistica scelta:** coefficiente di asimmetria (*skewness*).
+- **Procedura:** generiamo 5.000 dataset replicati $x_{\text{rep}}$ dal modello e per ognuno calcoliamo la sua skewness.
+- **Risultato:** se la skewness osservata nei dati reali è maggiore del 98% delle skewness simulate, concludiamo che il modello normale non riesce a catturare l'asimmetria dei dati, suggerendo l'adozione di modelli alternativi (es., log-normale, Gamma).
+:::
+
+### Interpretazione e limiti
+
+I PPC sono strumenti diagnostici potenti, ma la loro interpretazione richiede attenzione:
+
+- **Non sono test di ipotesi classici:** il *posterior predictive p-value* non va interpretato come un p-value frequentista. Non esiste una soglia universale di "significatività"; è un indicatore di discrepanza relativa.
+- **La scelta della statistica $T$ è fondamentale:** statistiche diverse rivelano inadeguatezze diverse. È buona pratica testare più aspetti (ad esempio, minimo, massimo, correlazioni) per un esame completo.
+- **Strumento complementare:** i PPC non sostituiscono il confronto di modelli. Un modello può superare un PPC ma essere peggiore di un'alternativa più parsimoniosa.
+
+### Implementazione pratica
+
+Nei software bayesiani moderni (come Stan, brms, o PyMC), i controlli predittivi a posteriori sono facilmente implementabili:
+
+```r
+# Esempio con brms
+pp_check(fit, type = "dens_overlay", ndraws = 100)  # Confronto densità
+pp_check(fit, type = "stat", stat = "mean")         # Confronto media
+pp_check(fit, type = "stat_2d", stat = c("mean", "sd"))  # Confronto bivariato
+```
+
+Queste funzioni generano automaticamente dataset replicati dalla distribuzione predittiva a posteriori e visualizzano il confronto con i dati osservati, facilitando la diagnosi visuale dell'adeguatezza del modello.
+
+::: {.callout-important title="Messaggio chiave"}
+La distribuzione predittiva a posteriori non serve solo a fare previsioni su dati futuri, ma costituisce anche lo strumento fondamentale per la *validazione critica* del modello stesso. Chiedendoci "Questo modello potrebbe plausibilmente aver generato i dati che osservo?", adottiamo una posizione epistemologica coerente con il framework bayesiano: i modelli sono approssimazioni provvisorie delle nostre credenze, sempre soggette a revisione alla luce dell'esperienza.
 :::
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
