@@ -44,6 +44,29 @@ Il sito è generato con [Quarto](https://quarto.org/) e pubblicato con GitHub Pa
 Correzioni e suggerimenti sono benvenuti: apri una *issue* qui  
 <https://github.com/ccaudek/utet-companion/issues>.
 
+## Citations
+
+If you are using specific methods or functions from the book, please consider citing the scientific paper and/or corresponding package.
+
+If you want to cite this online book in your research. The following citation is recommended, as it always resolves to the latest version of the book:
+
+> Caudek, C. (2025). Metodi bayesiani per la psicologia. Zenodo. https://doi.org/10.5281/zenodo.17628315
+
+You can use the following BibTeX entry:
+
+```
+@book{eabm_2025,
+  author       = {Caudek Corrado},
+  title        = {Metodi bayesiani per la psicologia},
+  month        = nov,
+  year         = 2025,
+  publisher    = {Zenodo},
+  version      = {v0.1.0},
+  doi          = {10.5281/zenodo.17628315},
+  url          = {https://doi.org/10.5281/zenodo.17628315},
+                  },
+```
+
 ## Licenza
 
 Materiali distribuiti con licenza  
@@ -56,3 +79,6 @@ Materiali distribuiti con licenza
 ---
 
 ✦ Parte del progetto **UTET** per la didattica e la divulgazione della modellazione bayesiana in psicologia.
+
+
+
