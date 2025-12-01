@@ -1,0 +1,844 @@
+# Entropia e informazione di Shannon {#sec-entropy-shannon-information}
+
+## Introduzione {.unnumbered .unlisted}
+
+In ambito probabilistico, l'entropia fornisce una misura quantitativa del grado di incertezza o imprevedibilità di un sistema. Si consideri, a titolo esemplificativo, il tentativo di prevedere la risposta di uno studente a un test a scelta multipla. In assenza di informazioni specifiche sulla sua preparazione, l'ipotesi più conservativa è che tutte le opzioni siano equiprobabili, una condizione che corrisponde al massimo livello di incertezza. Al contrario, qualora si sapesse che lo studente è molto preparato e fornisce quasi sempre la risposta corretta, l'incertezza risulterebbe drasticamente ridotta. È questa quantificazione sistematica dell'incertezza a costituire l'essenza del concetto di entropia.
+
+Dal punto di vista qualitativo, l'entropia può essere interpretata come il livello di "sorpresa" attesa associata al verificarsi di un evento. La sua proprietà fondamentale è di raggiungere il valore massimo in condizioni di massima indeterminazione, ovvero quando tutti gli esiti possibili sono equiprobabili. Viceversa, l'entropia si annulla quando un esito possiede probabilità prossima all'unità, rendendo il risultato di fatto certo e prevedibile.
+
+Un esempio tratto dalla psicologia sperimentale può chiarire ulteriormente questa dualità: il lancio di una moneta non truccata $(p = 0.5)$ riflette un'elevata entropia a causa dell'intrinseca imprevedibilità del risultato. All'opposto, il comportamento stereotipato di un paziente che fornisce invariabilmente la medesima risposta a uno stimolo rappresenta una situazione a entropia pressoché nulla, caratterizzata da un'altissima prevedibilità.
+
+### Panoramica del capitolo {.unnumbered .unlisted}
+
+- Introdurre il concetto di informazione e la sua unità di misura (bit). 
+- Definire l’entropia come media della sorpresa di Shannon. 
+- Interpretare l’entropia in termini di incertezza e numero di alternative equiprobabili.  
+- Stimare l’entropia da distribuzioni teoriche e da campioni osservati.  
+- Collegare l’entropia alla codifica di Huffman e al limite teorico di compressione.  
+
+::: {.callout-tip collapse=true}
+## Prerequisiti
+
+- Per i concetti di base sulla teoria dell'informazione, si rimanda ai primi due capitoli di  *Information Theory: A Tutorial Introduction* [@stone2022information].
+:::
+
+::: {.callout-caution collapse=true title="Preparazione del Notebook"}
+
+```{r}
+#| output: false
+here::here("code", "_common.R") |> 
+  source()
+
+library(igraph)
+library(ggraph)
+library(tidygraph)
+
+# Funzione per calcolare la lunghezza media del codice di Huffman
+huffman_encoding <- function(probabilities) {
+  # Crea la "coda con priorità" iniziale come lista di liste
+  heap <- lapply(names(probabilities), function(sym) list(probabilities[[sym]], list(sym, "")))
+
+  # Funzione per ordinare la heap per probabilità (peso)
+  sort_heap <- function(heap) {
+    heap[order(sapply(heap, function(x) x[[1]]))]
+  }
+
+  # Costruzione dell'albero di Huffman
+  while (length(heap) > 1) {
+    heap <- sort_heap(heap)
+    lo <- heap[[1]]
+    hi <- heap[[2]]
+    heap <- heap[-c(1, 2)]
+
+    # Aggiunge i prefissi "0" e "1" ai codici
+    for (i in seq_along(lo)[-1]) {
+      lo[[i]][[2]] <- paste0("0", lo[[i]][[2]])
+    }
+    for (i in seq_along(hi)[-1]) {
+      hi[[i]][[2]] <- paste0("1", hi[[i]][[2]])
+    }
+
+    merged <- c(list(lo[[1]] + hi[[1]]), lo[-1], hi[-1])
+    heap <- append(heap, list(merged))
+  }
+
+  # Estrai la lista finale dei simboli e codici
+  final <- heap[[1]][-1]
+  names(final) <- sapply(final, function(x) x[[1]])
+
+  # Crea dizionario con codici
+  huffman_dict <- lapply(final, function(x) x[[2]])
+
+  # Calcolo della lunghezza media del codice
+  avg_length <- sum(mapply(function(sym, code) {
+    probabilities[[sym]] * nchar(code)
+  }, names(huffman_dict), huffman_dict))
+
+  return(list(avg_length = avg_length, codes = huffman_dict))
+}
+```
+:::
+
+## Che cos'è l'informazione?
+
+L'informazione può essere concettualizzata come la riduzione di incertezza riguardo a un insieme di possibili esiti. Il bit rappresenta l'unità fondamentale di informazione, corrispondente alla quantità di conoscenza ottenuta quando si sceglie tra due alternative ugualmente probabili. 
+
+Matematicamente, ogni volta che il numero di possibili esiti raddoppia, è richiesto un bit aggiuntivo per specificare univocamente un elemento tra gli esiti possibili. Questa relazione è catturata dalla funzione logaritmica in base 2: dato un insieme di N alternative equiprobabili, la quantità di informazione necessaria per identificare un elemento specifico è precisamente $\log_2(N)$ bit.
+
+### Dalle scelte ai bit: un esempio visivo
+
+Per comprendere come l'informazione venga misurata in bit, consideriamo un esempio che illustra il legame tra scelte sequenziali e codifica binaria. Immaginiamo di trovarci a un incrocio con due strade possibili. Ogni scelta tra due alternative equiprobabili (ad esempio, sinistra o destra) può essere codificata con un singolo bit, convenzionalmente rappresentato con 0 per una direzione e 1 per l'altra.
+
+Estendiamo questo concetto a un percorso con più incroci sequenziali, come mostrato nel seguente diagramma ad albero. Ogni percorso completo dalla radice alle foglie è univocamente descritto da una sequenza di bit, dove ciascun bit rappresenta una decisione binaria presa a un incrocio. Ad esempio, per raggiungere la destinazione `D011`, la sequenza corretta è `0-1-1`, che corrisponde a tre scelte consecutive.
+
+```{r}
+#| echo: false
+
+# Definisci gli archi come dataframe
+edges <- data.frame(
+  from = c("A", "A", "B0", "B0", "B1", "B1", "C00", "C00", "C01", "C01", "C10", "C10", "C11", "C11"),
+  to   = c("B0", "B1", "C00", "C01", "C10", "C11", "D000", "D001", "D010", "D011", "D100", "D101", "D110", "D111"),
+  label = c("0", "1", "0", "1", "0", "1", "0", "1", "0", "1", "0", "1", "0", "1")
+)
+
+# Definisci le posizioni manualmente
+positions <- data.frame(
+  name = c("A", "B0", "B1", "C00", "C01", "C10", "C11",
+           "D000", "D001", "D010", "D011", "D100", "D101", "D110", "D111"),
+  x = c(0, -2, 2, -3, -1, 1, 3, -3.5, -2.5, -1.5, -0.5, 0.5, 1.5, 2.5, 3.5),
+  y = c(0, -1, -1, -2, -2, -2, -2, -3, -3, -3, -3, -3, -3, -3, -3)
+)
+
+# Crea il grafo
+graph <- graph_from_data_frame(edges, vertices = positions, directed = TRUE)
+
+# Disegna con ggraph
+ggraph(graph, layout = "manual", x = positions$x, y = positions$y) +
+  geom_edge_link(aes(label = label), angle_calc = "along", label_dodge = unit(2, "mm"),
+                 label_size = 3, color = "black") +
+  geom_node_label(aes(label = name), fill = "white", color = "black", fontface = "bold", size = 3) +
+  theme_void() +
+  ggtitle("Albero delle possibilità per 3 bit di informazione")
+```
+
+L'albero mostra come, partendo dal nodo radice `A`, ogni livello successivo raddoppi il numero di percorsi possibili. Con tre decisioni sequenziali, otteniamo $2^3 = 8$ percorsi finali, ciascuno identificato univocamente da una stringa di 3 bit. Questo esempio mostra come il logaritmo in base 2 del numero di esiti possibili ($\log_2(8) = 3$) corrisponda esattamente al numero di bit necessari per specificare qualsiasi percorso all'interno del diagramma ad albero.
+
+#### Relazione tra destinazioni e bit
+
+Ogni decisione binaria lungo il percorso contribuisce con un bit alla specificazione univoca della destinazione finale. Formalmente, dato un insieme di $m$ destinazioni distinte, il numero di bit necessari per identificare una qualsiasi destinazione finale è dato dalla relazione:
+
+$$
+n = \log_2 m.
+$$
+
+Nell'esempio illustrato dall'albero decisionale, le destinazioni finali sono otto. Applicando la formula, otteniamo $\log_2 8 = 3$ bit, che corrispondono esattamente alle tre decisioni binarie sequenziali richieste per raggiungere qualsiasi destinazione finale.
+
+#### Il significato operativo di un bit
+
+Concettualmente, un bit rappresenta la risoluzione di un'incertezza elementare in uno scenario decisionale binario. Corrisponde a rispondere a una domanda del tipo: "A questo incrocio, devo procedere verso sinistra o destra?". È l'unità minima di informazione che riduce l'incertezza tra due alternative equiprobabili.
+
+#### Fondamento logaritmico della misura dell'informazione
+
+La scelta del logaritmo in base 2 non è arbitraria ma risponde a una precisa necessità matematica. Il logaritmo calcola l'esponente a cui elevare 2 per ottenere un numero dato, che nel nostro contesto si traduce nel numero di decisioni binarie necessarie per selezionare un'opzione tra $m$ possibilità equiprobabili. Nell'esempio concreto, specificare il percorso per `D011` a partire da `A` richiede la risposta a tre distinte domande binarie, ciascuna delle quali risolve un livello di incertezza.
+
+**Sintesi concettuale:**
+
+- il percorso verso `D011` da `A` richiede tre decisioni binarie sequenziali;
+- ogni decisione è rappresentata da un bit (0/1), generando la stringa binaria `011`;
+- rispondere alla domanda "Qual è il percorso per `D011`?" richiede pertanto **3 bit di informazione**;
+- l'informazione si misura in bit poiché ogni bit raddoppia la capacità di distinguere tra alternative.
+
+In conclusione, la relazione tra numero di alternative e informazione necessaria segue una progressione logaritmica che riflette la natura esponenziale dello spazio delle possibilità. Ogni bit aggiuntivo non aggiunge semplicemente un'unità di informazione, ma raddoppia la capacità discriminante del sistema, permettendo di navigare in spazi decisionali via via più ampi.
+
+## La sorpresa e l’informazione di Shannon
+
+Introduciamo ora un elemento cruciale nella teoria dell'informazione: la *probabilità dell'evento*. Eventi con probabilità differenti veicolano quantità di informazione sostanzialmente diverse. Un evento altamente probabile genera scarsa sorpresa e fornisce un contributo informativo limitato; al contrario, un evento raro produce una sorpresa significativa e trasmette un'informazione più sostanziale.
+
+Shannon formalizzò questa intuizione fondamentale definendo l'informazione (o "sorpresa") associata a un evento $x$ come:
+
+$$
+h(x) = \log_2 \frac{1}{p(x)} = -\log_2 p(x) \ \text{bit}.
+$$ {#eq-shannon-information-def}
+
+Questa relazione mostra come l'informazione sia inversamente proporzionale alla probabilità dell'evento: al diminuire di $p(x)$, aumenta $h(x)$ in accordo con una progressione logaritmica.[^information]
+
+[^information]: Per le proprietà dei logaritmi: $\log(1/x) = -\log(x)$, poiché $\log(1/x) = \log(1) - \log(x) = 0 - \log(x)$.
+
+Consideriamo tre eventi con probabilità progressivamente decrescenti: 0.5, 0.25 e 0.10. Applicando la definizione di Shannon, otteniamo valori di sorpresa corrispondenti a 1.00, 2.00 e 3.32 bit rispettivamente. Man mano che la probabilità diminuisce, l'informazione, misurata in bit, aumenta secondo una relazione non lineare. Un'osservazione inattesa possiede quindi un "peso informativo" maggiore, modificando in misura più significativa lo stato della nostra conoscenza riguardo al sistema in esame.
+
+Questa caratteristica riflette un principio fondamentale: l'informazione è tanto più preziosa quanto più riduce un'incertezza elevata. La sorpresa di Shannon quantifica precisamente questo valore epistemico, fornendo una metrica rigorosa per valutare quanto un'osservazione contribuisca ad arricchire la nostra comprensione della realtà.
+
+### Entropia come informazione attesa
+
+Finora abbiamo esaminato la sorpresa associata a singoli eventi. Per caratterizzare l'incertezza complessiva di un sistema in grado di generare esiti diversi, è necessario calcolare il valore atteso della sorpresa considerando tutti i possibili risultati e le rispettive probabilità. Questa quantità è nota come *entropia*.
+
+Matematicamente, l'entropia di una variabile casuale discreta $X$ è definita come il valore atteso dell'informazione di Shannon su tutti i possibili esiti del suo spazio campionario $\mathcal{X}$:
+
+$$
+H(X) = \mathbb{E}[h(X)] = \sum_{x \in \mathcal{X}} p(x) \cdot \left[-\log_2 p(x)\right].
+$$ {#eq-entropy-weighted-info-mean-def}
+
+A differenza della sorpresa individuale $h(x)$, l'entropia $H(X)$ non caratterizza un evento specifico, ma rappresenta l'incertezza media intrinseca al sistema, ovvero la sorpresa che ci aspettiamo di ottenere osservando ripetutamente i realizzazioni della variabile.
+
+- **Distribuzione bilanciata**: quando le probabilità sono uniformemente distribuite tra tutti gli esiti possibili, l'entropia raggiunge il suo valore massimo. In questo scenario, ogni osservazione fornisce un contributo informativo sostanziale e comparabile.
+- **Distribuzione sbilanciata**: quando la distribuzione presenta forti asimmetrie (come nel caso di una moneta fortemente truccata), l'entropia assume valori più bassi. La maggiore prevedibilità del sistema si traduce in una riduzione dell'informazione media per osservazione.
+
+Il grafico seguente illustra la relazione funzionale tra la probabilità di un evento e il corrispondente valore di sorpresa secondo la definizione di Shannon:
+
+```{r}
+p_vals <- seq(0.001, 1, by = 0.001)
+surprise <- -log2(p_vals)
+
+ggplot(data.frame(p = p_vals, h = surprise), aes(x = p, y = h)) +
+  geom_line(size = 1) +
+  labs(
+    x = "Probabilità dell'evento p(x)",
+    y = "Sorpresa h(x) [bit]",
+    title = "Relazione tra probabilità e sorpresa nell'informazione di Shannon"
+  ) +
+  theme_minimal()
+```
+
+La curva mostra chiaramente come la sorpresa cresca asintoticamente al diminuire della probabilità, sottolineando il maggiore valore informativo degli eventi rari rispetto a quelli comuni.
+
+### Interpretazione dell'entropia
+
+Poiché l'entropia rappresenta la sorpresa media attesa, essa può essere interpretata come il *numero medio di bit necessari per descrivere un'osservazione* della variabile $X$ in uno schema di codifica ottimale.
+
+Quando l'entropia è espressa in bit, possiamo convertirla in un numero equivalente di alternative equiprobabili attraverso la relazione:
+
+$$
+m = 2^{H(X)}.
+$$ {#eq-entroy-bits-surprise}
+
+Un'entropia di $H(X)$ bit corrisponde quindi alla stessa incertezza che sperimenteremmo se dovessimo distinguere tra $m$ esiti tutti ugualmente probabili. In questo senso profondo, l'entropia quantifica l'informazione intrinseca di una variabile esprimendola in termini del numero di scelte binarie necessarie per descriverla in modo efficiente.
+
+Questa interpretazione operativa rivela che l'entropia rappresenta il limite teorico inferiore per la compressione dei dati: nessun algoritmo di codifica può rappresentare le realizzazioni di $X$ utilizzando in media meno di $H(X)$ bit per simbolo. Pertanto, variabili con alta entropia richiedono più risorse per essere rappresentate, mentre quelle con bassa entropia ammettono rappresentazioni più compatte.
+
+La conversione a $m$ alternative equiprobabili fornisce inoltre un'utile intuizione geometrica: l'entropia misura l'"ampiezza efficace" dello spazio delle possibilità, riducendo distribuzioni complesse e potenzialmente asimmetriche a un equivalente scenario uniforme che cattura la stessa quantità di incertezza.
+
+::: {#exercise-entropy-discrete-rv .callout .exercise collapse="true" collapsed="true"}
+## Esercizio — Interpretazione dell'entropia.
+
+**1. Caso di riferimento: moneta equa.**
+
+Se una variabile casuale può assumere due valori *ugualmente probabili*, come una moneta equa con
+$p(\text{testa}) = p(\text{croce}) = 0.5$, la sua entropia è:
+
+$$
+H(X) = 0.5 \log_2\frac{1}{0.5} + 0.5 \log_2\frac{1}{0.5}
+      = 0.5 \times 1 + 0.5 \times 1
+      = 1 \ \text{bit}.
+$$
+Questo è il *valore massimo* di entropia per una variabile con due soli esiti: 1 bit è l’informazione necessaria per distinguere tra due alternative equiprobabili.
+
+**2. Moneta sbilanciata: singolo lancio.**
+
+Quando la moneta è sbilanciata, l’informazione media diminuisce.
+Supponiamo $p(\text{testa}) = 0.9$ e $p(\text{croce}) = 0.1$.
+
+La *sorpresa* associata a ciascun esito è:
+
+$$
+h(\text{testa}) = \log_2\frac{1}{0.9} \approx 0.15 \ \text{bit},
+$$
+
+$$
+h(\text{croce}) = \log_2\frac{1}{0.1} \approx 3.32 \ \text{bit}.
+$$
+
+Pesando queste sorprese con le rispettive probabilità otteniamo l’entropia media:
+
+$$
+H(X) = 0.9 \times 0.15 + 0.1 \times 3.32 \approx 0.469 \ \text{bit}.
+$$
+Questa entropia è *inferiore a 1 bit*, nonostante l’esito raro (“croce”) sia molto più sorprendente di quello di una moneta equa.
+In generale, *nessuna moneta sbilanciata* può avere un’entropia media superiore a quella di una moneta equa.
+
+**3. Più lanci: interpretazione pratica.**
+
+Se lanciamo questa moneta 1000 volte, l’informazione totale prodotta sarà:
+
+$$
+1000 \times 0.469 \approx 469 \ \text{bit}.
+$$
+Quindi, rispetto alla moneta equa (1000 bit), otteniamo meno della metà dell’informazione.
+
+**4. Numero equivalente di alternative equiprobabili.**
+
+L’entropia può essere anche interpretata come il *numero equivalente di alternative tutte equiprobabili*:
+
+$$
+m = 2^{H(X)} = 2^{0.469} \approx 1.38.
+$$
+Questo *non significa* che esista un dado fisico con 1.38 facce: è solo un modo per dire che la quantità di incertezza media di questa moneta è la stessa di una variabile che può assumere circa 1.38 valori tutti con la stessa probabilità.
+
+
+```{r}
+# Funzione per calcolare l'entropia di una moneta
+entropy_coin <- function(p) {
+  ifelse(p == 0 | p == 1, 0,
+         -p * log2(p) - (1 - p) * log2(1 - p))
+}
+
+# Sequenza di probabilità
+p_values <- seq(0, 1, by = 0.01)
+H_values <- entropy_coin(p_values)
+
+# Dati per i punti di esempio
+points_df <- data.frame(
+  p = c(0.5, 0.9),
+  H = entropy_coin(c(0.5, 0.9)),
+  label = c("Moneta equa\nH=1 bit", "Moneta sbilanciata\nH=0.469 bit")
+)
+
+# Grafico
+ggplot(data.frame(p = p_values, H = H_values), aes(x = p, y = H)) +
+  geom_line(size = 1) +
+  geom_point(data = points_df, aes(x = p, y = H), color = "brown", size = 3) +
+  geom_text(data = points_df, aes(label = label), vjust = -1, hjust = 0.5) +
+  labs(
+    x = expression(paste("Probabilità di testa, ", p)),
+    y = "Entropia H(X) [bit]"
+  )
+```
+:::
+
+### Proprietà fondamentali dell'entropia
+
+L'entropia possiede caratteristiche matematiche fondamentali che ne definiscono il comportamento in diversi scenari probabilistici:
+
+L'entropia raggiunge il suo **valore massimo** quando tutti gli esiti possibili sono equiprobabili. In questa configurazione di massima indeterminazione, il sistema esibisce la massima imprevedibilità: non disponiamo di alcuna informazione privilegiata che ci permetta di prevedere il risultato con accuratezza superiore a quanto consentito dal puro caso. Per una variabile con $n$ esiti possibili, questo massimo corrisponde a $\log_2 n$ bit.
+
+All'estremo opposto, l'entropia assume il suo **valore minimo** (pari a zero) quando il risultato è deterministico, ovvero quando un singolo evento possiede probabilità 1 e tutti gli altri probabilità 0. In questa condizione non sussiste alcuna incertezza residua: l'esito è perfettamente prevedibile, l'osservazione non genera sorpresa e non fornisce informazione aggiuntiva rispetto a quanto già noto.
+
+Una proprietà strutturale cruciale è l'**additività** per variabili casuali indipendenti: l'entropia congiunta di due o più variabili statisticamente indipendenti è esattamente pari alla somma delle loro entropie individuali. Formalmente, per $X$ e $Y$ indipendenti:
+
+$$
+H(X, Y) = H(X) + H(Y).
+$$
+
+Questa proprietà fondamentale discende direttamente dall'additività dei logaritmi nella definizione shannoniana e riflette il principio secondo cui, per eventi indipendenti, l'incertezza totale si compone in modo lineare dalle incertezze dei singoli componenti. L'informazione necessaria per descrivere il sistema complessivo equivale alla somma delle informazioni richieste per descrivere ciascuna parte costituente.
+
+## Stimare l’entropia
+
+Nelle sezioni precedenti abbiamo definito l'entropia come la sorpresa media attesa associata all'osservazione di una variabile casuale, fondandola sul concetto di informazione di Shannon. Passiamo ora dalla teoria alla pratica, illustrando come calcolare l'entropia sia a partire da una distribuzione di probabilità teorica, sia da dati osservati.
+
+### Entropia di una distribuzione di probabilità
+
+Consideriamo una variabile casuale discreta $X$ in grado di assumere valori $x_1, x_2, \dots, x_n$ nell'insieme $\mathcal{X}$, ciascuno con probabilità $p(x) = \Pr\{X = x\}$. L'informazione, o "sorpresa", associata all'osservazione di un particolare esito $x$ è definita come:
+
+$$
+h(x) = -\log_2 p(x).
+$$
+
+Questa funzione cattura l'intuizione per cui eventi improbabili ($p(x)$ piccolo) producono un'alta sorpresa, mentre eventi certi ($p(x) = 1$) non forniscono alcuna informazione nuova.
+
+Per quantificare l'incertezza complessiva della variabile $X$, calcoliamo il valore atteso della sorpresa su tutti i suoi possibili esiti. Si ottiene così la definizione di *entropia di Shannon*:
+
+$$
+H(X) = \mathbb{E}[h(X)] = -\sum_{x \in \mathcal{X}} p(x) \log_2 p(x).
+$$ {#eq-entropy-prob-distr-def}
+
+Ogni termine della sommatoria, $-p(x)\log_2 p(x)$, rappresenta il contributo informativo medio dell'esito $x$, ponderato per la sua probabilità di occorrenza.
+
+**Proprietà fondamentali:**
+
+- L'entropia è **massima** per una distribuzione uniforme, quando tutti gli esiti sono equiprobabili e l'incertezza è massima.
+- L'entropia **diminuisce** quando la distribuzione diventa più squilibrata; esiti ad alta probabilità riducono la sorpresa media.
+- L'entropia è **zero** se un esito è certo ($p(x)=1$), poiché non sussiste alcuna incertezza.
+
+In sintesi, $H(X)$ misura l'incertezza media di $X$ e può essere interpretata come il *numero medio di bit necessari per codificare un'osservazione* della variabile in uno schema di compressione ottimale.
+
+::: {.callout-note}
+### Approfondimento matematico
+- La **sommatoria** calcola il contributo di ogni possibile esito, garantendo che tutti gli elementi dello spazio campionario siano considerati.
+- Il **logaritmo in base 2** quantifica l'informazione in bit, coerente con l'interpretazione in termini di scelte binarie.
+- Il **segno negativo** compensa il fatto che i logaritmi di probabilità ($0 \leq p(x) \leq 1$) sono valori non positivi, producendo così una quantità sempre non negativa.
+- La definizione presuppone la convenzione che $0 \cdot \log_2 0 = 0$, poiché eventi impossibili non contribuiscono all'entropia.
+:::
+
+::: {#exercise-entropyunbalanced-coin .callout .exercise collapse="true" collapsed="true"}
+#### Esercizio — Entropia di un dado con otto facce.
+
+Supponiamo di avere un dado con otto facce. Ci sono $m = 8$ esiti possibili:
+
+$$
+A_x = \{1,2,3,4,5,6,7,8\}.
+$$
+
+Poiché il dado è equo, tutti gli otto esiti hanno la stessa probabilità di $p(x) = 1/8$, definendo così una distribuzione di probabilità uniforme:
+
+$$
+p(X) = \left\{\frac{1}{8}, \frac{1}{8}, \frac{1}{8}, \frac{1}{8}, \frac{1}{8}, \frac{1}{8}, \frac{1}{8}, \frac{1}{8}\right\}.
+$$
+
+L'entropia di questa distribuzione può essere calcolata come:
+
+$$
+H(X) = - \sum_{i=1}^{8} \frac{1}{8} \log_2 \frac{1}{8} = \log_2 8 = 3 \text{ bit}.
+$$
+Poiché l'informazione associata a ciascun esito è esattamente 3 bit, anche l'entropia media è di 3 bit, che rappresenta l'incertezza complessiva della variabile $X$.
+
+Dato che $X$ ha un'entropia di $H(X) = 3$ bit, possiamo dire che $X$ può rappresentare fino a:
+
+$$
+m = 2^{H(X)} = 2^3 = 8
+$$
+esiti equiprobabili.
+::: 
+
+::: {#exercise-entropy-discrete-rv .callout .exercise collapse="true" collapsed="true"}
+#### Esercizio — Entropia di un variabile casuale discreta.
+
+Sia $X$ una variabile casuale discreta che può assumere i valori $a, b, c,$ e $d$ con una distribuzione di probabilità di massa $p(a) = \frac{1}{2}$, $p(b) = \frac{1}{4}$, $p(c) = \frac{1}{8}$, e $p(d) = \frac{1}{8}$, rispettivamente. L'entropia di $X$, che misura l'incertezza associata alla distribuzione di probabilità, è calcolata come:
+
+$$
+H(X) = -\left(\frac{1}{2} \log_2 \frac{1}{2} + \frac{1}{4} \log_2 \frac{1}{4} + \frac{1}{8} \log_2 \frac{1}{8} + \frac{1}{8} \log_2 \frac{1}{8}\right).
+$$
+Calcolando i singoli termini, otteniamo:
+
+$$
+H(X) = -\left(\frac{1}{2} \cdot (-1) + \frac{1}{4} \cdot (-2) + \frac{1}{8} \cdot (-3) + \frac{1}{8} \cdot (-3)\right) = \frac{7}{4} \text{ bits}.
+$$
+È importante notare che l'entropia $H(X)$ dipende esclusivamente dalla distribuzione di probabilità dei valori di $X$ e non dai valori stessi.
+:::
+
+### Entropia in un campione osservato
+
+Finora abbiamo considerato l'entropia nel caso ideale in cui la distribuzione di probabilità teorica della popolazione è perfettamente nota. Nella pratica della ricerca psicologica ed empirica in generale, lavoriamo tipicamente con dati campionari, dove la distribuzione sottostante deve essere stimata a partire dalle osservazioni disponibili.
+
+In questo scenario applicativo, possiamo stimare l'entropia attraverso un approccio frequentista: calcoliamo le frequenze relative di ciascun valore distinto nel campione e le utilizziamo come stime empiriche delle probabilità sottostanti. Formalmente, dato un campione di $n$ osservazioni indipendenti, la probabilità di ciascun esito $x$ viene stimata come:
+
+$$
+\hat{p}(x) = \frac{\text{conteggio delle osservazioni con valore } x}{n}
+$$
+
+L'entropia campionaria risulta quindi dalla sostituzione delle probabilità teoriche con le loro stime empiriche:
+
+$$
+\hat{H}(X) = -\sum_{x \in \mathcal{X}} \hat{p}(x) \log_2 \hat{p}(x)
+$$
+
+Questa quantità stimata quantifica il grado di incertezza o imprevedibilità presente nella distribuzione osservata. Un campione che mostra frequenze uniformi tra i diversi valori presenterà un'entropia stimata elevata, riflettendo un'alta incertezza e variabilità nei dati. Al contrario, un campione in cui un singolo valore domina nettamente gli altri mostrerà un'entropia stimata bassa, indicando una distribuzione più prevedibile e concentrata attorno a modalità specifiche.
+
+**Importante**: questa stima rappresenta una approssimazione dell'entropia vera della popolazione e può essere soggetta a bias, particolarmente quando la dimensione campionaria è piccola rispetto al numero di categorie possibili. Tuttavia, fornisce un indicatore robusto della dispersione informativa presente nel dataset osservato.
+
+::: {#exercise-entropy-sample-obs .callout .exercise collapse="true" collapsed="true"}
+#### Esercizio — Entropia di un campione di osservazioni.
+
+Per comprendere meglio questo concetto, possiamo calcolare l'entropia associata a insiemi di osservazioni. Consideriamo i due vettori seguenti: 
+
+$$
+\begin{align}
+x &= \{1, 2, 3, 3, 3, 3, 2, 1, 3, 3, 2, 1, 1, 4, 4, 3, 1, 2\}, \notag\\
+y &= \{3, 4, 1, 1, 1, 1, 4, 3, 1, 1, 4, 3, 3, 2, 2, 1, 3, 4\}. \notag
+\end{align}
+$$
+
+Troviamo l'entropia associata a ciascuno di essi.
+
+```{r}
+# Vettori x e y
+x <- c(1, 2, 3, 3, 3, 3, 2, 1, 3, 3, 2, 1, 1, 4, 4, 3, 1, 2)
+y <- c(3, 4, 1, 1, 1, 1, 4, 3, 1, 1, 4, 3, 3, 2, 2, 1, 3, 4)
+
+# Conta le frequenze
+x_counts <- table(x)
+y_counts <- table(y)
+
+# Calcola le probabilità relative
+x_probabilities <- as.numeric(x_counts) / length(x)
+y_probabilities <- as.numeric(y_counts) / length(y)
+
+# Funzione per calcolare l'entropia (log in base 2)
+calculate_entropy <- function(probabilities) {
+  -sum(probabilities * log2(probabilities))
+}
+
+# Calcolo dell'entropia
+x_entropy <- calculate_entropy(x_probabilities)
+y_entropy <- calculate_entropy(y_probabilities)
+
+# Stampa i risultati
+cat(sprintf("Entropia di x: %.4f bit\n", x_entropy))
+cat(sprintf("Entropia di y: %.4f bit\n", y_entropy))
+```
+
+Entrambi i vettori hanno la stessa entropia di 1.8776 bit.
+:::
+
+
+#### Interpretazione finale
+
+L’entropia $H(X)$ quantifica l'incertezza media intrinseca a una distribuzione di probabilità. Essa può essere interpretata operativamente come il *numero medio di bit necessari per codificare in modo ottimale un'osservazione* della variabile $X$. In altri termini, l'entropia misura la quantità media di informazione che acquisiamo osservando una realizzazione della variabile casuale: valori di entropia più elevati corrispondono a una maggiore imprevedibilità del fenomeno studiato e a una più ricca complessità informativa.
+
+### Entropia di variabili casuali continue
+
+Il concetto di entropia si estende naturalmente alle variabili casuali continue attraverso la sostituzione della sommatoria con un integrale. Questa generalizzazione, nota come *entropia differenziale*, diventa necessaria poiché le variabili continue assumono valori in insiemi non numerabili, dove le probabilità puntuali sono nulle e la funzione di densità di probabilità diventa l'oggetto matematico rilevante per la caratterizzazione distributiva.
+
+Per una variabile continua $X$ con funzione di densità di probabilità $p(x)$, l'entropia differenziale è definita come:
+
+$$
+H(X) = -\int_{\mathcal{X}} p(x) \log_2 p(x) \, dx,
+$$ {#eq-entropy-density-distr-def}
+
+dove l'integrale è calcolato sull'intero supporto $\mathcal{X}$ della variabile.
+
+Analogamente al caso discreto, l'entropia differenziale misura l'incertezza media della distribuzione:
+
+- Una densità di probabilità molto concentrata (ad esempio, un picco stretto e pronunciato) implica bassa entropia differenziale, indicando una sostanziale prevedibilità dei valori assunti dalla variabile.
+- Una densità ampiamente dispersa (come una distribuzione uniforme su un intervallo esteso) comporta alta entropia differenziale, riflettendo una maggiore imprevedibilità e variabilità delle osservazioni.
+
+Il segno negativo nell'equazione compensa la negatività del logaritmo per valori $0 < p(x) \leq 1$, garantendo che l'entropia differenziale sia una quantità ben definita e mantenendo la coerenza concettuale con l'interpretazione informativa. Tuttavia, a differenza del caso discreto, l'entropia differenziale può assumere valori negativi quando la densità di probabilità è estremamente concentrata, pur mantenendo il suo significato relativo come misura comparativa di incertezza.
+
+::: {#exercise-entropy-sample-obs .callout .exercise collapse="true" collapsed="true"}
+#### Esercizio — Un confronto numerico: normali più “strette” e più “larghe”.
+
+Per la distribuzione normale $X \sim \mathcal N(\mu,\sigma^2)$ l’entropia differenziale ha una forma chiusa:
+
+$$
+H(X)=\tfrac12 \log_2\!\big(2\pi e\,\sigma^2\big)\ \text{bit}.
+$$
+La dipendenza è tutta nella scala $\sigma$: raddoppiare $\sigma$ aggiunge esattamente 1 bit di entropia, perché la massa di probabilità si “spalma” su un intervallo più ampio. Numericamente, con $\sigma=0{,}5$, $H(X)\approx 1{,}047$ bit; con $\sigma=1$, $H(X)\approx 2{,}047$ bit; con $\sigma=2$, $H(X)\approx 3{,}047$ bit. L’aumento regolare di un bit per ogni raddoppio di $\sigma$ rende molto trasparente l’idea che una densità più concentrata (piccola $\sigma$) produce minore incertezza, mentre una densità più diffusa (grande $\sigma$) produce maggiore incertezza.
+
+Ecco un frammento R che replica il calcolo e mostra le tre densità normalizzate sulla stessa scala, così che la relazione tra forma della densità e entropia sia visibile a colpo d’occhio.
+
+```{r}
+# Entropia differenziale (in bit) per N(mu, sigma^2)
+h_norm_bits <- function(sigma) 0.5 * log2(2 * pi * exp(1) * sigma^2)
+
+sigmas <- c(0.5, 1, 2)
+entropie <- sapply(sigmas, h_norm_bits)
+round(entropie, 3)
+# atteso: 1.047, 2.047, 3.047
+
+# Visualizzazione delle densità
+df <- data.frame(
+  x = rep(seq(-6, 6, length.out = 1000), times = length(sigmas)),
+  sigma = factor(rep(sigmas, each = 1000))
+)
+df$dens <- mapply(function(x, s) dnorm(x, mean = 0, sd = s), df$x, as.numeric(as.character(df$sigma)))
+
+ggplot(df, aes(x = x, y = dens, group = sigma)) +
+  geom_line(aes(linetype = sigma), linewidth = 1) +
+  labs(
+    subtitle = paste0("H(σ=0.5)≈", round(entropie[1],3), " bit; ",
+                      "H(σ=1)≈",   round(entropie[2],3), " bit; ",
+                      "H(σ=2)≈",   round(entropie[3],3), " bit"),
+    x = "x", y = "densità"
+  ) 
+```
+
+Nell’analisi di dati psicologici, la stessa variabile misurata con una scala più “compressa” (varianza più piccola, punteggi concentrati) porta a una minore entropia differenziale rispetto alla stessa variabile osservata con maggiore dispersione. Questo legame diretto tra dispersione e entropia chiarisce perché, in presenza di eterogeneità individuale o situazionale, la “quantità di incertezza” da descrivere aumenti con la variabilità del fenomeno.
+:::
+
+## La codifica di Huffman
+
+Abbiamo visto che l'entropia $H(X)$ misura la sorpresa media di una variabile casuale $X$. Un risultato fondamentale della teoria dell'informazione stabilisce che l'entropia rappresenta il **limite inferiore teorico** per la lunghezza media di un codice binario in grado di rappresentare senza perdite gli esiti di $X$. Formalmente, è impossibile progettare un sistema di codifica che utilizzi in media meno di $H(X)$ bit per simbolo.
+
+L'algoritmo di *Huffman*, sviluppato da David A. Huffman nel 1952 durante i suoi studi universitari, fornisce un metodo costruttivo ed efficiente per generare codici prefissi che si avvicinano asintoticamente a questo limite teorico.
+
+### Il principio di ottimizzazione
+
+L'intuizione fondamentale dell'algoritmo è tanto semplice quanto potente: *assegnare codici brevi agli eventi ad alta probabilità e codici più lunghi agli eventi rari*. Questa strategia di ottimizzazione rispecchia comportamenti comunicativi quotidiani in cui tendiamo ad abbreviare espressioni frequenti ("tvb", "xké") mentre utilizziamo forme estese per concetti meno comuni.
+
+### L'algoritmo: implementazione procedurale
+
+L'implementazione procede attraverso la costruzione di un *albero binario ottimale* dove le foglie rappresentano i simboli dell'alfabeto sorgente:
+
+1.  **Inizializzazione:** Creare una coda di priorità contenente tutti i simboli, ciascuno associato alla rispettiva probabilità di occorrenza.
+2.  **Fusione ricorsiva:** Finché la coda contiene più di un elemento:
+    - Estrai i due nodi con probabilità minore
+    - Crea un nuovo nodo interno con probabilità pari alla somma delle probabilità dei figli
+    - Inserisci il nuovo nodo nella coda di priorità
+3.  **Costruzione dell'albero:** L'ultimo nodo rimasto costituisce la radice dell'albero di Huffman.
+4.  **Assegnazione dei codici:** Percorri l'albero dalla radice a ciascuna foglia, assegnando `0` ai rami sinistri e `1` ai rami destri. La sequenza binaria risultante rappresenta il codice ottimale per ciascun simbolo.
+
+La proprietà fondamentale che garantisce la decodificabilità univoca è che il codice risultante è un *codice prefisso*: nessuna parola codice costituisce il prefisso iniziale di un'altra, eliminando ogni ambiguità durante il processo di decodifica.
+
+### Esempio applicativo
+
+Consideriamo un sistema di comunicazione con quattro simboli e le seguenti distribuzioni di frequenza:
+
+| Simbolo | Frequenza | Probabilità |
+|---------|-----------|-------------|
+| A       | 20        | 0.465       |
+| B       | 10        | 0.233       |
+| C       | 8         | 0.186       |
+| D       | 5         | 0.116       |
+
+**Costruzione dell'albero di Huffman:**
+
+1. Unione iniziale: D(0.116) + C(0.186) → N1(0.302)
+2. Unione successiva: B(0.233) + N1(0.302) → N2(0.535)  
+3. Unione finale: A(0.465) + N2(0.535) → Radice(1.000)
+
+**Rappresentazione ad albero:**
+```
+         (Radice)
+        0/      \1
+      (A:0.465) (N2:0.535)
+              0/        \1
+         (B:0.233)    (N1:0.302)
+                    0/        \1
+                (D:0.116)  (C:0.186)
+```
+
+**Codici risultanti:**
+- A: `0` (1 bit)
+- B: `10` (2 bit) 
+- D: `110` (3 bit)
+- C: `111` (3 bit)
+
+Si osserva come la lunghezza di ciascun codice sia inversamente proporzionale alla probabilità del simbolo corrispondente.
+
+### Analisi di efficienza
+
+Valutiamo le performance della codifica rispetto al limite teorico:
+
+* **Lunghezza media del codice:**
+  $$
+  L = (0.465\cdot 1) + (0.233\cdot 2) + (0.186\cdot 3) + (0.116\cdot 3) = 1.907 \ \text{bit/simbolo}
+  $$
+
+* **Entropia della distribuzione:**
+  $$
+  H(X) = -\sum p(x)\log_2 p(x) \approx 1.842 \ \text{bit/simbolo}
+  $$
+
+L'efficienza della codifica risulta:
+$$
+\eta = \frac{H(X)}{L} \approx 96.6\%
+$$
+
+Il codice di Huffman (1.907 bit/simbolo) si avvicina notevolmente al limite teorico dell'entropia (1.842 bit/simbolo). La discrepanza residua è attribuibile al vincolo di lunghezza intera dei codici, mentre l'entropia rappresenta un limite continuo teoricamente raggiungibile solo asintoticamente.
+
+#### Quadro riassuntivo e implicazioni cognitive
+
+| Concetto                     | Significato Teorico                                                              | Analogia Psicologica                           |
+| :--------------------------- | :------------------------------------------------------------------------------- | :-------------------------------------------------------------- |
+| **Entropia H(X)**            | Limite teorico assoluto di compressione. Misura l'incertezza intrinseca.         | Il "carico cognitivo" minimo necessario per rappresentare uno stimolo. |
+| **Codifica di Huffman**      | Metodo pratico per costruire un codice ottimale che si avvicina a `H(X)`. | Una strategia cognitiva efficiente per categorizzare informazioni (etichette mentali corte per concetti comuni). |
+| **Lunghezza media L**        | Performance pratica ottenuta con Huffman.                                       | Il reale "costo" cognitivo della strategia adottata.            |
+| **Differenza (L - H(X))**    | Scostamento dal limite teorico ideale.                   | Inefficienza della strategia cognitiva rispetto all'ottimo teorico. |
+
+In sintesi, l'algoritmo di Huffman costituisce un ponte elegante tra teoria astratta e applicazione pratica, dimostrando concretamente come il principio fondamentale dell'entropia—limite teorico di compressione—possa essere realizzato attraverso una strategia di codifica computazionalmente efficiente. Questo meccanismo di ottimizzazione fornisce un'analogia potente per comprendere come i sistemi cognitivi umani possano elaborare le informazioni in modo economicamente vantaggioso, privilegiando rappresentazioni concise per stimoli frequenti al fine di ottimizzare le risorse cognitive limitate.
+
+::: {#exercise-entropy-huffman .callout .exercise collapse="true" collapsed="true"}
+#### Esercizio — Entropia e codifica di Huffman.
+
+Supponiamo di avere una variabile casuale $X$ che può assumere quattro valori: $A$, $B$, $C$, e $D$, con le seguenti probabilità:
+
+* $p(A) = 0.4$
+* $p(B) = 0.3$
+* $p(C) = 0.2$
+* $p(D) = 0.1$
+
+Per rappresentare questi esiti con un codice binario efficiente possiamo usare la *codifica di Huffman*, che assegna codici più brevi ai simboli più probabili, e codici più lunghi a quelli meno probabili.
+
+Supponiamo che Huffman produca la seguente codifica:
+
+* A = `0` (1 bit)
+* B = `10` (2 bit)
+* C = `110` (3 bit)
+* D = `111` (3 bit)
+
+La *lunghezza media del codice* si ottiene moltiplicando la probabilità di ciascun simbolo per la lunghezza del suo codice binario, e poi sommando:
+
+$$
+\begin{align}
+\text{Lunghezza media} &= (0.4 \times 1) + (0.3 \times 2) + (0.2 \times 3) + (0.1 \times 3) \\
+&= 0.4 + 0.6 + 0.6 + 0.3 = 1.9 \text{ bit}.
+\end{align}
+$$
+
+Questo significa che, in media, servono *1.9 bit* per rappresentare un'osservazione della variabile $X$ usando la codifica di Huffman.
+
+Confermiamo il risultato con il seguente codice R:
+
+```{r}
+# Definizione delle probabilità
+probabilities <- list(A = 0.4, B = 0.3, C = 0.2, D = 0.1)
+```
+
+```{r}
+# Funzione per la codifica di Huffman
+huffman_encoding <- function(probabilities) {
+  nodes <- lapply(names(probabilities), function(sym) {
+    list(symbol = sym, prob = probabilities[[sym]], left = NULL, right = NULL)
+  })
+
+  while (length(nodes) > 1) {
+    nodes <- nodes[order(sapply(nodes, function(n) n$prob))]
+    left <- nodes[[1]]
+    right <- nodes[[2]]
+    merged <- list(symbol = NULL, prob = left$prob + right$prob, left = left, right = right)
+    nodes <- c(nodes[-c(1, 2)], list(merged))
+  }
+
+  assign_codes <- function(node, prefix = "", code_map = list()) {
+    if (!is.null(node$symbol)) {
+      code_map[[node$symbol]] <- prefix
+    } else {
+      code_map <- assign_codes(node$left, paste0(prefix, "0"), code_map)
+      code_map <- assign_codes(node$right, paste0(prefix, "1"), code_map)
+    }
+    return(code_map)
+  }
+
+  code_map <- assign_codes(nodes[[1]])
+
+  avg_length <- sum(sapply(names(probabilities), function(sym) {
+    probabilities[[sym]] * nchar(code_map[[sym]])
+  }))
+
+  return(list(avg_length = avg_length, huffman_dict = code_map))
+}
+```
+
+```{r}
+# Applicazione e stampa dei risultati
+result <- huffman_encoding(probabilities)
+
+cat(sprintf("Lunghezza media del codice di Huffman: %.2f bit/simbolo\n", result$avg_length))
+cat("Codici di Huffman:\n")
+for (sym in names(result$huffman_dict)) {
+  cat(sprintf("%s: %s\n", sym, result$huffman_dict[[sym]]))
+}
+```
+
+Ora calcoliamo l'entropia teorica della variabile $X$, cioè la lunghezza media **minima** che qualsiasi codifica binaria può raggiungere:
+
+$$
+\begin{align}
+H(X) &= - \sum p(x) \log_2 p(x) \\
+     &= -[0.4 \log_2 0.4 + 0.3 \log_2 0.3 + 0.2 \log_2 0.2 + 0.1 \log_2 0.1] \\
+     &= 1.8465 \text{ bit}.
+\end{align}
+$$
+Il valore dell'entropia è leggermente *inferiore alla lunghezza media di Huffman* (1.9 bit). Questo è normale: Huffman fornisce *codici con lunghezza intera in bit*, mentre l'entropia può assumere valori decimali. La codifica di Huffman è quindi *quasi ottimale*.
+
+In sintesi:
+
+* *l'entropia $H(X)$* rappresenta la *lunghezza media teorica minima* (in bit) per codificare una variabile casuale;
+* la *codifica di Huffman* costruisce un codice binario che si avvicina molto a questo limite, usando *più bit per i simboli rari* e *meno bit per quelli frequenti*;
+* in questo modo, l'entropia ci offre un criterio per valutare *quanto efficiente* è una codifica: *più la lunghezza media si avvicina all'entropia, più è efficiente*.
+:::
+
+## Applicazioni psicologiche dell'entropia
+
+Il concetto di entropia, nella sua accezione di misura della sorpresa media associata a un evento, trova applicazione diretta nello studio di numerosi fenomeni psicologici. In particolare, la sorpresa—formalizzabile attraverso l'informazione di Shannon—è stata collegata a specifici correlati emotivi, meccanismi di apprendimento e processi di modulazione motivazionale.
+
+Un esempio paradigmatico è fornito da @spector1956expectations, il quale indagò l'effetto della probabilità a priori sulla soddisfazione percepita in seguito a una promozione lavorativa. I risultati dimostrarono che esiti inizialmente giudicati improbabili—e dunque più sorprendenti al loro verificarsi—generavano un impatto emotivo significativamente più intenso rispetto a esiti ampiamente attesi. Questo suggerisce che l'entropia non costituisce una mera astrazione matematica, ma un indicatore predittivo della potenziale intensità di una risposta affettiva.
+
+Ricerche più recenti, condotte sia in contesti sperimentali controllati che in setting ecologici, hanno ulteriormente consolidato questa relazione. Studi di neuroscienze cognitive, ad esempio, hanno evidenziato come eventi ad alta sorpresa modulino l'attività di regioni cerebrali implicate nell'elaborazione emotiva, come l'amigdala e la corteccia prefrontale ventromediale, influenzando tanto l'umore immediato quanto i successivi processi di apprendimento. Parallelamente, analisi basate su dati di *Ecological Momentary Assessment* (EMA) mostrano come la probabilità soggettiva di un evento si correli sistematicamente con le fluttuazioni dell'umore, rivelando che episodi rari e inattesi inducono oscillazioni emotive di maggiore ampiezza.
+
+Nel loro insieme, questi risultati illustrano come l'entropia possa essere impiegata in psicologia non solo come strumento descrittivo per caratterizzare distribuzioni di probabilità, ma anche come variabile esplicativa in modelli che esplorano l'intreccio tra aspettative, sorpresa ed esperienza emotiva. È proprio questo nesso fondamentale a preparare il terreno per l'introduzione della divergenza di Kullback-Leibler, che estenderà il discorso al confronto tra modelli nell'ambito dell'inferenza bayesiana.
+
+::: {#exercise-entropy-huffman .callout .exercise collapse="true" collapsed="true"}
+#### Esercizio -- probabilità, sorpresa e umore.
+
+In questo esempio, simuliamo 200 osservazioni in cui ogni partecipante sperimenta un evento con probabilità variabile. La *sorpresa* di ciascun evento viene calcolata con la formula di Shannon, e l’effetto sull’umore viene simulato assumendo che eventi più sorprendenti producano, in media, variazioni di umore più ampie (positive o negative).
+
+```{r}
+set.seed(123)
+
+# Numero di osservazioni
+n <- 200
+
+# Probabilità percepita dell'evento (da molto probabile a molto improbabile)
+p_event <- runif(n, min = 0.05, max = 0.95)
+
+# Sorpresa di Shannon (in bit)
+surprise <- -log2(p_event)
+
+# Variazione di umore simulata:
+# partiamo da un effetto medio proporzionale alla sorpresa, con rumore casuale
+delta_mood <- 0.5 * surprise + rnorm(n, mean = 0, sd = 0.5)
+
+# Mettiamo tutto in un data frame
+df <- data.frame(
+  p_event = p_event,
+  surprise = surprise,
+  delta_mood = delta_mood
+)
+
+# Visualizzazione
+ggplot(df, aes(x = surprise, y = delta_mood)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  labs(
+    x = "Sorpresa (bit)",
+    y = "Δ Umore"
+  ) 
+```
+
+**Interpretazione.**
+Il grafico mostra che, in questa simulazione, eventi più sorprendenti (bit più alti) tendono a produrre variazioni di umore maggiori. Questo illustra visivamente l’idea, già documentata empiricamente, che la sorpresa può amplificare la risposta emotiva.
+:::
+
+## Riflessioni conclusive {.unnumbered .unlisted}
+
+In questo capitolo abbiamo esplorato la capacità dell'*entropia* di quantificare sistematicamente l'incertezza e l'informazione in sistemi complessi. Attraverso esempi che spaziano dal semplice lancio di una moneta alla sofisticata codifica efficiente dei messaggi, abbiamo verificato come questo potente strumento matematico trovi applicazione concreta in contesti sia teorici che pratici.
+
+Abbiamo appreso che l'entropia misura fondamentalmente l'incertezza: situazioni massimamente imprevedibili, come il risultato del lancio di una moneta equilibrata, presentano un'entropia elevata, mentre comportamenti stereotipati e deterministici sono caratterizzati da un'entropia prossima allo zero. Abbiamo inoltre scoperto come l'informazione coincida concettualmente con la sorpresa, per cui eventi rari e inaspettati—formalizzati attraverso l'informazione di Shannon—veicolano un contenuto informativo maggiore rispetto a eventi comuni e attesi. Infine, abbiamo compreso che l'entropia stabilisce un limite teorico alla compressione dei dati, rappresentando il numero minimo di bit necessari per descrivere un'informazione senza perdite, un principio che l'algoritmo di Huffman realizza con elegante efficacia computazionale.
+
+### La rilevanza per la ricerca psicologica {.unnumbered .unlisted}
+
+Questi concetti trovano un'eco immediata e profonda nella ricerca psicologica contemporanea. Nell'ambito della modellizzazione cognitiva, l'entropia fornisce una metrica quantitativa per il "lavoro" informazionale richiesto per elaborare stimoli diversi, offrendo una misura rigorosa della complessità dei processi mentali. Lo studio delle emozioni, d'altro canto, beneficia del legame tra probabilità e risposta affettiva: come illustrato dagli studi empirici citati, gli eventi ad alta sorpresa—e quindi ad alta entropia—tendono a innescare reazioni emotive più intense, gettando un ponte teorico tra teoria dell'informazione e neuroscienze affettive. In prospettiva evolutiva, questi fondamenti ci condurranno direttamente alla valutazione dei modelli psicologici, dove l'entropia costituirà la base per strumenti sofisticati di confronto e selezione basati sulla capacità predittiva.
+
+### Verso strumenti più avanzati {.unnumbered .unlisted}
+
+L'entropia non rappresenta un punto di arrivo, bensì una solida piattaforma di lancio verso strumenti inferenziali più raffinati. Nel prossimo capitolo incontreremo la *divergenza di Kullback-Leibler*, che misura direttamente quanto un modello si discosti dalla realtà utilizzando proprio i concetti di entropia che abbiamo assimilato. Questo, a sua volta, ci preparerà all'incontro con l'*ELPD* (Expected Log Predictive Density), una metrica fondamentale per confrontare modelli bayesiani nella pratica della ricerca applicata.
+
+Comprendere l'entropia significa quindi acquisire una lente interpretativa potente: ci permette di tradurre osservazioni qualitative sulla variabilità del comportamento in misure quantitative rigorose, trasformando l'intuizione clinica in analisi scientifica sistematica. È questo salto epistemologico—dal "questo comportamento è variabile" al "l'entropia di questo comportamento è di X bit"—che rende la teoria dell'informazione un alleato indispensabile per la psicologia contemporanea nella sua transizione verso paradigmi più quantitativi e predittivi.
+
+::: {.callout-note collapse="true" title="Mappa concettuale: dall'entropia alla valutazione dei modelli"}
+
+**Entropia $H(X)$**  
+→ Misura l’incertezza intrinseca di una variabile casuale.  
+→ Interpretabile come la sorpresa media o la lunghezza media minima (in bit) necessaria per codificare gli esiti di $X$.  
+
+**Divergenza di Kullback–Leibler $D_{KL}(P \parallel Q)$**  
+→ Confronta due distribuzioni di probabilità $P$ (la "vera" distribuzione) e $Q$ (il modello).  
+→ Misura *quanto* il modello $Q$ si discosta da $P$ in termini di inefficienza nel codificare i dati.  
+
+**Expected Log Predictive Density (ELPD)**  
+→ Valuta la capacità predittiva di un modello su dati nuovi.  
+→ Collegata alla minimizzazione della KL tra la distribuzione dei dati e la distribuzione predittiva del modello.  
+→ Più alto è l’ELPD, migliore è la capacità del modello di rappresentare e prevedere i dati.  
+
+**Collegamento logico:**  
+Entropia → ci dice quanta incertezza c’è nei dati.  
+KL → ci dice quanto un modello spreca informazione rispetto a quella incertezza.  
+ELPD → ci dice quanto bene il modello prevede, riducendo quello spreco.
+
+:::
+
+```{r}
+#| echo: false
+#| fig-cap: "Diagramma concettuale che collega Entropia → Divergenza KL → ELPD nel percorso di valutazione dei modelli psicologici."
+#| label: fig-h-kl-elpd
+
+# Diagramma concettuale semplificato
+```
+
+::: {#fig-h-kl-elpd}
+![](../../figures/entropy_kl_elpd.png){width="80%"}
+
+Diagramma visivo che collega Entropia → Divergenza KL → ELPD.
+:::
+
+La progressione concettuale dall'entropia alla divergenza KL fino all'ELPD rappresenta un percorso metodologico coerente che guiderà la nostra esplorazione dei modelli psicologici nei capitoli successivi, fornendo un framework unificato per la valutazione della bontà predittiva nella ricerca empirica.
+
+::: {.callout-note collapse=true}
+## Informazioni sull'ambiente di sviluppo {.unnumbered .unlisted} 
+
+```{r}
+sessionInfo()
+```
+:::
+
+## Bibliografia {.unnumbered .unlisted}
+

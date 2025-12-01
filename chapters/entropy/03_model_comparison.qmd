@@ -2,48 +2,37 @@
 
 ## Introduzione {.unnumbered .unlisted}
 
-I capitoli precedenti ci hanno fornito due strumenti concettuali fondamentali: l'*entropia*, che misura l'incertezza di una distribuzione, e la *divergenza di Kullback–Leibler* ($D_{\text{KL}}$), che quantifica la distanza informazionale tra due distribuzioni. È giunto il momento di fare il passo successivo: utilizzare questi strumenti per *valutare e confrontare i modelli statistici* in ambito bayesiano. 
+I capitoli precedenti hanno introdotto due strumenti concettuali fondamentali: l'*entropia*, che misura l'incertezza intrinseca di una distribuzione di probabilità, e la *divergenza di Kullback–Leibler*, che quantifica la distanza informazionale tra due distribuzioni. Possiamo ora utilizzare questi strumenti per *valutare e confrontare modelli statistici* nell'ambito del framework bayesiano.
 
-Tutto parte da una domanda cruciale: *quanto sarà capace il nostro modello di prevedere dati mai osservati prima?* Un modello valido non è quello che si adatta perfettamente ai dati osservati, ma quello che sa *generalizzare* efficacemente a situazioni future. Questa distinzione tra adattamento (*fitting*) e generalizzazione è al centro della valutazione predittiva.
+La domanda metodologica centrale che ci guida è: *Quanto sarà accurato il nostro modello nel fare previsioni su dati mai osservati?* Un modello statisticamente valido non è solo quello che si adatta bene ai dati già raccolti, ma quello che dimostra di *generalizzare* efficacemente a nuovi contesti e popolazioni. Questa distinzione tra adattamento ai dati osservati e capacità predittiva è fondamentale per la valutazione dei modelli nella ricerca empirica.
 
-Immaginiamo di sviluppare un test psicometrico per stimare l'ansia da esame. Non ci interessa solo che il modello descriva bene il campione utilizzato per costruirlo, ma vogliamo anche essere sicuri che fornisca *previsioni affidabili anche per nuovi studenti*. Scegliere un modello statistico, in questo senso, è come scegliere un test psicologico: cerchiamo lo strumento che offra la maggiore affidabilità predittiva.
+Consideriamo, ad esempio, lo sviluppo di un test psicometrico per stimare il livello di ansia da esame negli studenti universitari. L'obiettivo non è costruire un modello che descriva perfettamente il campione specifico utilizzato per lo sviluppo, ma uno strumento che fornisca *previsioni affidabili per nuovi studenti*, garantendo la validità ecologica e l'utilità applicativa del costrutto.
 
-Un approccio intuitivo per valutare le prestazioni predittive consiste nel calcolare l'*errore quadratico medio* (MSE)[^mse] sui dati a disposizione, presupponendo che sarà simile per dati futuri. Tuttavia, questa strategia trascura un elemento essenziale: *l'incertezza delle stime*. Le nostre previsioni dipendono da parametri di cui non conosciamo il valore esatto, ma solo la distribuzione a posteriori. È la *distribuzione predittiva a posteriori* che, propagando tale incertezza, fornisce una visione completa e probabilistica delle previsioni.
-
-[^mse]: L'errore quadratico medio (MSE) misura la discrepanza tra valori previsti e osservati: $\text{MSE} = \frac{1}{n}\sum_{i=1}^n (y_i - \hat{y}_i)^2$. Sebbene utile, non cattura l'incertezza probabilistica delle previsioni.
-
-Tuttavia, sorge un problema: valutare la capacità predittiva sugli stessi dati usati per stimare il modello porta a un *ottimismo eccessivo* e al rischio di *overfitting*. Per ottenere una stima realistica della capacità di generalizzazione, è necessario un criterio che valuti la performance predittiva *su dati non osservati*.
-
-Ed è qui che entra in gioco l'*Expected Log Predictive Density (ELPD)*.
-L'ELPD misura, attraverso il *log-score*, quanto bene un modello prevede dati futuri generati dalla distribuzione vera. In sostanza, rappresenta l'accuratezza predittiva *attesa*. Un ELPD più alto indica una migliore capacità predittiva. (Anticipiamo un collegamento teorico che formalizzeremo in seguito: *massimizzare l'ELPD equivale a minimizzare la divergenza di Kullback-Leibler tra il modello e il processo generativo dei dati sottostante*.)
-
-La difficoltà pratica risiede nel fatto che l'ELPD, definito come un'aspettativa rispetto alla distribuzione vera -- e ignota -- dei dati, non è calcolabile in modo diretto. È necessario pertanto ricorrere a delle *approssimazioni numeriche*. La più comune e solida dal punto di vista teorico è la *cross-validazione leave-one-out (LOO-CV)*. Questo metodo valuta la capacità predittiva del modello per ogni singola osservazione quando questa viene esclusa dal set di addestramento. Sommando i contributi della log-verosimiglianza di tutte le osservazioni così valutate, si ottiene una stima robusta dell'ELPD *out-of-sample* (ossia al di fuori del campione di addestramento) che è notevolmente più resistente al fenomeno dell'overfitting rispetto alle stime basate sui dati di addestramento.
-
-Questo capitolo illustra come la *cross-validazione leave-one-out* (LOO) fornisca un criterio rigoroso per il confronto tra modelli bayesiani, consentendo di mitigare il rischio di sovradattamento e di orientare la selezione verso i modelli con le migliori capacità predittive generalizzabili.
+In questo capitolo, viene introdotta l'*Expected Log Predictive Density (ELPD)* come metrica fondamentale per valutare la capacità predittiva dei modelli e viene mostrato come stimarla in modo robusto attraverso la tecnica di *cross-validazione leave-one-out (LOO-CV)*, fornendo così le basi per una selezione dei modelli sia teoricamente fondata che praticamente implementabile.
 
 ### Panoramica del capitolo {.unnumbered .unlisted}
 
-Per valutare la qualità predittiva dei modelli, seguiremo un percorso strutturato che dalla teoria conduce alla pratica applicativa:
-
 **1. Fondamenti della valutazione predittiva**
 
-*   **Distribuzione predittiva a posteriori**: propagare l'incertezza parametrica nelle previsioni.
-*   **Log-score**: valutare l'accuratezza predittiva per ogni singola osservazione.
+- Il log-score come misura di accuratezza predittiva.
+- La differenza tra approccio classico e bayesiano.
+- Dalla LPPD (in-sample) all'ELPD (out-of-sample).
 
-**2. Dalla teoria alla stima pratica**
+**2. Il fondamento teorico**
 
-*   **Da LPPD a ELPD**: distinguere la bontà di adattamento (*in-sample*) dalla capacità di generalizzazione (*out-of-sample*).
-*   **Fondamento teorico**: collegare l'ELPD alla minimizzazione della divergenza di Kullback-Leibler.
+- Il collegamento tra ELPD e divergenza KL.
+- Perché massimizzare l'ELPD è il criterio corretto.
 
-**3. Implementazione e confronto**
+**3. Implementazione pratica**
 
-*   **Stima con PSIS-LOO**: approssimare efficientemente l'ELPD, con diagnostiche per l'affidabilità.
-*   **Confronto tra modelli**: utilizzare ΔELPD e il suo errore standard per identificare il modello con le migliori prestazioni predittive, bilanciando prestazioni e parsimonia.
+- La stima con PSIS-LOO.
+- Diagnostiche e interpretazione.
+- Confronto tra modelli con ΔELPD.
 
 ::: {.callout-tip collapse=true}
 ## Prerequisiti
 
-- Per comprendere appieno questo capitolo è utile leggere il capitolo 7 *Ulysses' Compass* di *Statistical Rethinking* (@McElreath_rethinking).
+Per comprendere appieno questo capitolo è utile leggere il capitolo 7 *Ulysses' Compass* di *Statistical Rethinking* (@McElreath_rethinking).
 :::
 
 ::: {.callout-caution collapse=true title="Preparazione del Notebook"}
@@ -63,113 +52,74 @@ conflicts_prefer(rstan::loo)
 **ELPD in pillole**
 
 * **Definizione:** misura della capacità predittiva *out-of-sample* di un modello.
-* **Calcolo teorico:** media del log-score atteso per nuove osservazioni. Valori più alti indicano modelli più predittivi.
-* **Fondamento teorico:** massimizzare l'ELPD equivale a minimizzare la divergenza di Kullback-Leibler dalla distribuzione vera dei dati.
-* **Applicazione pratica:** stimato efficientemente mediante *cross-validazione leave-one-out* (PSIS-LOO), senza necessità di nuovi campioni.
+* **Interpretazione:** valori più alti indicano migliore capacità di generalizzazione.
+* **Fondamento teorico:** massimizzare l'ELPD equivale a minimizzare la divergenza KL dalla distribuzione vera.
+* **Stima pratica:** mediante *cross-validazione leave-one-out* (PSIS-LOO).
 :::
 
-## Dal problema alla metrica: la predizione bayesiana {#sec-predizione}
+## Il log-score: misurare l'accuratezza predittiva {#sec-log-score}
 
-Prima di addentrarci nei dettagli tecnici, chiariamo perché la valutazione predittiva bayesiana è diversa da quella frequentista classica.
+### L'idea fondamentale
 
-### L'approccio classico: parametri come valori fissi
+Per valutare un modello statistico, ci chiediamo: *quanto è plausibile un'osservazione alla luce del modello?* La risposta è data dalla probabilità (o densità di probabilità) che il modello assegna a ciascun dato osservato.
 
-Per capire come valutare un modello statistico, iniziamo con una domanda fondamentale: *quanto è plausibile un'osservazione alla luce di un certo modello?*
+Un modello accurato assegna probabilità elevate agli eventi che effettivamente si verificano. Al contrario, un modello inadeguato assegna probabilità basse ai dati osservati, rivelando una discrepanza sistematica tra le sue previsioni e la realtà empirica.
 
-#### Dalla plausibilità alla densità di probabilità
+### Un esempio concreto
 
-La risposta sta nella *densità di probabilità* (o probabilità, nel caso discreto) che il modello assegna a quell'osservazione. L'idea chiave è questa:
+Consideriamo un esperimento binomiale con 7 successi su 10 prove. Confrontiamo due modelli alternativi:
 
-> *Un modello che rappresenta bene il vero meccanismo generatore dei dati assegnerà densità di probabilità elevate alle osservazioni che effettivamente si verificano. Al contrario, un modello inadeguato assegnerà densità basse agli eventi che osserviamo.*
+- **Modello A**: postula una probabilità di successo $\theta = 0.7$;
+- **Modello B**: postula una probabilità di successo $\theta = 0.1$.
 
-#### Un esempio concreto
+```{r}
+# Probabilità di osservare 7 successi su 10 prove
+p_A <- dbinom(7, 10, prob = 0.7)
+p_B <- dbinom(7, 10, prob = 0.1)
 
-Supponiamo di osservare *7 successi su 10 prove* di un esperimento bernoulliano (ad esempio, 7 risposte corrette su 10 domande di un test). Vogliamo valutare due modelli:
+cat("Modello A (θ = 0.7):", round(p_A, 4), "\n")
+cat("Modello B (θ = 0.1):", round(p_B, 8), "\n")
+cat("Rapporto di verosimiglianza:", round(p_A/p_B, 1), "\n")
+```
 
-- *il Modello A* assume che la probabilità di successo sia $\theta = 0.7$;
-- *il Modello B* assume che la probabilità di successo sia $\theta = 0.1$.
+Il Modello A assegna all'osservazione una probabilità circa 30000 volte superiore rispetto al Modello B. Questa differenza quantifica in modo inequivocabile la superiorità del Modello A nel rappresentare i dati osservati.
 
-Calcoliamo la probabilità di osservare esattamente 7 successi secondo ciascun modello:
+### Dal prodotto alla somma: il ruolo del logaritmo
 
-$$
-P(Y = 7 \mid \theta = 0.7) = \binom{10}{7} (0.7)^7 (0.3)^3 \approx 0.267.
-$$
-
-$$
-P(Y = 7 \mid \theta = 0.1) = \binom{10}{7} (0.1)^7 (0.9)^3 \approx 0.000008.
-$$
-
-Il Modello A assegna all'osservazione una probabilità molto più alta (~0.27) rispetto al Modello B (~0.0008). Questo ci dice che il Modello A rappresenta meglio i dati osservati.
-
-#### Dal singolo dato all'intero dataset
-
-Quando abbiamo più osservazioni indipendenti $y_1, y_2, \dots, y_N$, dobbiamo combinare le informazioni. Se le osservazioni sono indipendenti, la probabilità congiunta è il *prodotto* delle probabilità individuali:
+Quando abbiamo multiple osservazioni indipendenti, le probabilità congiunte si ottengono moltiplicando le probabilità individuali. Tuttavia, questa moltiplicazione produce valori estremamente piccoli che risultano numericamente instabili e difficili da manipolare. La soluzione a questo problema consiste nel passare ai logaritmi:
 
 $$
-p(y_1, y_2, \dots, y_N \mid \hat{\theta}) = p(y_1 \mid \hat{\theta}) \times p(y_2 \mid \hat{\theta}) \times \cdots \times p(y_N \mid \hat{\theta}).
+\text{Log-score} = \sum_{i=1}^N \log p(y_i \mid \theta).
 $$
 
-Lavorare con prodotti di probabilità (spesso numeri molto piccoli) è scomodo sia dal punto di vista computazionale che matematico. La soluzione è passare allo *spazio logaritmico*, dove i prodotti diventano somme:
-
-$$
-\log p(y_1, \dots, y_N \mid \hat{\theta}) = \sum_{i=1}^N \log p(y_i \mid \hat{\theta}).
-$$
-
-Questa quantità si chiama *log-score* (o log-verosimiglianza).
-
-#### Il log-score come misura di bontà di adattamento
-
-Il log-score è una misura di quanto bene il modello si adatta ai dati osservati:
-
-$$
-\text{Log-score} = \sum_{i=1}^N \log p(y_i \mid \hat{\theta}).
-$$
-
-Dal punto di vista interpretativo, valori di log-score più elevati – o meno negativi – indicano che il modello assegna probabilità alte ai dati effettivamente osservati, rivelando quindi un buon adattamento ai dati empirici. Al contrario, valori di log-score più bassi o fortemente negativi indicano che il modello considera i dati osservati come statisticamente improbabili, rivelando un cattivo adattamento del modello alla realtà empirica.
-
-#### Estensione a dati non osservati
-
-Lo stesso principio si applica quando vogliamo valutare la capacità del modello di predire *nuove osservazioni* $\tilde{y}_1, \dots, \tilde{y}_M$ che non sono state ancora viste:
-
-$$
-\text{Log-score predittivo} = \sum_{i=1}^M \log p(\tilde{y}_i \mid \hat{\theta}).
-$$
-
-#### Il problema fondamentale: certezza irrealistica
-
-L'approccio classico presenta una limitazione fondamentale: tratta la stima $\hat{\theta}$ come se fosse un valore certo, quando in realtà essa rappresenta solo un valore stimato dai dati disponibili. Se l'esperimento venisse ripetuto con un campione diverso, si otterrebbe probabilmente una stima differente $\hat{\theta}'$, il che evidenzia l'incertezza intrinseca nella stima dei parametri.
-
-Trascurare questa variabilità implica una visione eccessivamente ottimistica della qualità del modello. È in questo contesto che l'approccio bayesiano introduce un importante cambiamento prospettico, incorporando esplicitamente l'incertezza dei parametri nel processo inferenziale.
+Il log-score possiede diverse proprietà matematicamente desiderabili: assume valori **meno negativi** (più prossimi allo zero) per modelli migliori; gode della proprietà additiva, permettendo di sommare i contributi di ciascuna osservazione indipendente; ed è direttamente interpretabile nell'ambito della teoria dell'informazione, collegandosi ai concetti di entropia e divergenza KL discussi nei capitoli precedenti.
 
 ### L'approccio bayesiano: parametri come quantità incerte
 
-*Nell'approccio bayesiano*, i parametri non sono quantità fisse, ma entità sconosciute riguardo alle quali esprimiamo un grado di credenza. L’osservazione dei dati $y$, aggiorna queste credenze, generando la distribuzione a posteriori $p(\theta \mid y)$ che rappresenta ciò che sappiamo su $\theta$ dopo aver analizzato l’evidenza empirica.
+Nell'inferenza bayesiana, i parametri non sono quantità fisse ma variabili casuali riguardo alle quali esprimiamo un grado di credenza probabilistico. I dati osservati $y$ aggiornano queste credenze mediante il teorema di Bayes, producendo la distribuzione a posteriori $p(\theta \mid y)$ che sintetizza tutta l'informazione disponibile su $\theta$.
 
-La previsione per un nuovo dato $\tilde{y}$ non può quindi basarsi su un singolo valore stimato, ma deve riflettere l’intera incertezza residua. La distribuzione predittiva a posteriori,
+La previsione per una nuova osservazione $\tilde{y}$ deve quindi incorporare coerentemente tutta l'incertezza residua sui parametri. La distribuzione predittiva a posteriori,
 $$
 p(\tilde{y} \mid y) = \int p(\tilde{y} \mid \theta)\, p(\theta \mid y)\, d\theta.
 $$ {#eq-predictive-posterior}
-formalizza questa idea: ogni possibile valore di $\theta$ contribuisce alla previsione in proporzione alla sua plausibilità a posteriori. Ne risulta una previsione che non affida tutto il peso a un singolo valore stimato, ma distribuisce l’incertezza in modo coerente.
+formalizza questo principio: ogni valore possibile di $\theta$ contribuisce alla previsione in proporzione alla sua plausibilità a posteriori. Il risultato è una previsione probabilisticamente coerente che non si riduce a una singola stima puntuale.
 
 ### Il log-score bayesiano
 
-Per valutare la capacità predittiva di un modello nei confronti di un'osservazione $y_i$, si considera la densità predittiva a posteriori calcolata nel punto osservato. Il logaritmo di questa densità,
+Per valutare la capacità predittiva di un modello rispetto a un'osservazione $y_i$, si considera il logaritmo della densità predittiva a posteriori calcolata nel punto osservato:
 
 $$
 \log p(y_i \mid y)
 = \log \!\left(\underbrace{\int p(y_i \mid \theta)\, p(\theta \mid y)\, d\theta}_{\text{densità predittiva a posteriori}}\right).
 $$ {#eq-log-score-single}
-costituisce il log-score bayesiano. A differenza delle valutazioni basate su $\hat{\theta}$, questa misura incorpora l’incertezza parametrica in modo completo e riflette la plausibilità dell’osservazione alla luce dell’intero modello bayesiano e non solo del suo punto stimato.
 
-Un punteggio elevato (cioè poco negativo) indica che l’osservazione $y_i$ risulta ben compatibile con la distribuzione predittiva del modello: la densità $p(y_i\mid y)$ è alta e il modello mostra una buona coerenza con i dati. Al contrario, un valore molto negativo del log-score indica che il modello assegna una bassa probabilità all’osservazione, segnalando una discrepanza sostanziale tra la previsione e la realtà empirica.
+A differenza delle valutazioni basate su stime puntuali di $\hat{\theta}$, questa misura incorpora completamente l'incertezza parametrica. Un log-score elevato (poco negativo) indica che l'osservazione risulta plausibile alla luce del modello bayesiano completo, mentre un valore molto negativo segnala una discrepanza sostanziale tra previsione e realtà.
 
-In questo modo, il log-score bayesiano diventa la misura naturale della qualità predittiva di un modello, in quanto non valuta la predizione condizionata a un'unica stima, ma considera l'intera distribuzione delle ipotesi plausibili sui parametri, fornendo così una valutazione più realistica e meno incline all'eccessiva sicurezza tipica degli approcci che ignorano l'incertezza parametrica.
+Il log-score bayesiano rappresenta così la misura naturale della qualità predittiva nell'inferenza bayesiana, fornendo una valutazione più realistica e robusta rispetto agli approcci che ignorano l'incertezza parametrica.
 
-#### Dall’integrale alla pratica: l’approssimazione tramite MCMC
+#### Dall'integrale alla pratica: l'approssimazione tramite MCMC
 
-L’integrale che definisce il log-score bayesiano, mostrato in @eq-log-score-single, è raramente risolvibile in forma analitica. Nella pratica dell’inferenza bayesiana moderna, la soluzione consiste nell’utilizzare campioni ottenuti tramite algoritmi MCMC, come ad esempio $\theta^{(1)}, \theta^{(2)}, \dots, \theta^{(S)}$ generati da Stan. Questi campioni costituiscono una rappresentazione discreta della distribuzione a posteriori e permettono di approssimare l’integrale mediante la semplice media aritmetica delle densità predittive calcolate per ciascun campione parametrico.
-
-L’approssimazione diventa quindi:
+L'integrale che definisce il log-score bayesiano, mostrato in @eq-log-score-single, è raramente risolvibile in forma analitica per modelli di complessità anche moderata. Nella pratica dell'inferenza bayesiana moderna, si ricorre a campioni MCMC, come $\theta^{(1)}, \theta^{(2)}, \dots, \theta^{(S)}$ generati da Stan, che forniscono una rappresentazione discreta della distribuzione a posteriori. Questi campioni permettono di approssimare l'integrale mediante una semplice media aritmetica:
 
 $$
 p(y_i\mid y)\approx \frac{1}{S}\sum_{s=1}^S p(y_i\mid\theta^{(s)}),
@@ -177,12 +127,12 @@ p(y_i\mid y)\approx \frac{1}{S}\sum_{s=1}^S p(y_i\mid\theta^{(s)}),
 \log p(y_i\mid y)\approx \log\left(\frac{1}{S}\sum_{s=1}^S p(y_i\mid\theta^{(s)})\right).
 $$ {#eq-mcmc-approximation}
 
-Questa formula riflette fedelmente l'idea bayesiana secondo cui la previsione deve considerare tutte le possibilità compatibili con i dati. È importante sottolineare che si prende *il logaritmo della media* delle densità predittive, non la media dei logaritmi delle densità. Questa distinzione non è un dettaglio tecnico secondario: solo il logaritmo della media riproduce correttamente la struttura dell’integrale originale e preserva l’effetto della variabilità delle previsioni dovuta all’incertezza sui parametri. La media dei logaritmi, al contrario, produrrebbe un risultato concettualmente diverso, non corrispondente alla densità predittiva a posteriori.
+Questa approssimazione implementa fedelmente l'idea bayesiana secondo cui la previsione deve ponderare tutte le possibilità compatibili con i dati. È cruciale osservare che si calcola *il logaritmo della media* delle densità predittive, non la media dei loro logaritmi. Questa distinzione non è meramente tecnica: solo il logaritmo della media preserva la struttura probabilistica dell'integrale originale e incorpora correttamente l'effetto della variabilità a posteriori. La media dei logaritmi condurrebbe invece a una misura concettualmente differente, non corrispondente alla densità predittiva a posteriori.
 
 ::: {.callout-note title="Esempio pratico con MCMC" collapse=true}
-Supponiamo di aver ottenuto 5 campioni MCMC dalla distribuzione a posteriori: $\theta^{(1)}=0.65$, $\theta^{(2)}=0.70$, $\theta^{(3)}=0.68$, $\theta^{(4)}=0.72$, $\theta^{(5)}=0.69$.
+Consideriamo 5 campioni MCMC dalla distribuzione a posteriori: $\theta^{(1)}=0.65$, $\theta^{(2)}=0.70$, $\theta^{(3)}=0.68$, $\theta^{(4)}=0.72$, $\theta^{(5)}=0.69$.
 
-Vogliamo calcolare il log-score per l'osservazione $y_i = 7$ successi su 10 prove:
+Calcoliamo il log-score per l'osservazione $y_i = 7$ successi su 10 prove:
 
 ```{r}
 theta_samples <- c(0.65, 0.70, 0.68, 0.72, 0.69)
@@ -190,38 +140,36 @@ y_i <- 7
 n <- 10
 ```
 
-Passo 1: calcolo della likelihood per ogni campione: 
+Passo 1: calcolo della verosimiglianza per ciascun campione: 
 
 ```{r}
 likelihoods <- dbinom(y_i, size = n, prob = theta_samples)
 likelihoods
 ```
 
-Passo 2: calcolo della media delle likelihood:
+Passo 2: calcolo della media delle verosimiglianze:
 
 ```{r}
 mean_likelihood <- mean(likelihoods)
 mean_likelihood
 ```
 
-Passo 3: calcolo del log-score:
+Passo 3: calcolo del log-score bayesiano:
 
 ```{r}
 log_score <- log(mean_likelihood)
 log_score
 ```
 
-Il log-score è -1.339. Se invece avessimo usato solo $\hat{\theta}=0.7$ (approccio classico):
+Il log-score è -1.339. Confrontiamolo con l'approccio classico basato sulla stima puntuale $\hat{\theta}=0.7$:
 
 ```{r}
 log(dbinom(7, 10, 0.7))  
 ```
 
-La seconda formula calcolerebbe invece la media dei log-score per ciascun valore di $\theta^{(s)}$, trattandoli tutti come ugualmente plausibili. La prima formula, invece, calcola la media *nello spazio delle probabilità* prima di prendere il logaritmo, dando implicitamente più peso ai valori di $\theta$ con likelihood più alta. 
+La differenza tra i due approcci si accentua quando l'incertezza parametrica è maggiore. Con una distribuzione a posteriori dispersa, l'approccio bayesiano — mediando sulle diverse possibilità — fornisce una valutazione predittiva più robusta e rappresentativa della reale capacità del modello di generalizzare a nuovi dati.
 
-Questo è esattamente ciò che vogliamo: incorporare pienamente l'incertezza parametrica nella valutazione predittiva.
-
-In questo caso la differenza è minima, ma diventa rilevante con un'incertezza parametrica maggiore.
+Questo principio riflette l'essenza dell'inferenza bayesiana: incorporare coerentemente l'incertezza parametrica nel processo predittivo, riconoscendo che non esiste un unico "valore vero" del parametro, ma piuttosto un insieme di valori tutti più o meno plausibili alla luce dell'evidenza empirica.
 :::
 
 ### Il problema dell'overfitting: in-sample vs out-of-sample
@@ -232,59 +180,56 @@ $$
 \text{LPPD} = \sum_{i=1}^N \log p(y_i \mid y).
 $$ {#eq-lppd}
 
-Questa misura descrive la capacità del modello di adattarsi ai dati osservati e costituisce l’analogo bayesiano della tradizionale valutazione *in-sample*. Un valore elevato di LPPD, però, non è necessariamente un indice di buona qualità predittiva. Esattamente come nell’approccio frequentista, una prestazione eccellente sui dati già visti può mascherare una scarsa capacità di generalizzazione.
+Questa misura descrive la capacità del modello di adattarsi ai dati osservati e costituisce l'analogo bayesiano della tradizionale valutazione *in-sample*. Un valore elevato di LPPD, tuttavia, non garantisce necessariamente una buona qualità predittiva. Come nell'approccio frequentista, una prestazione eccellente sui dati già visti può mascherare una scarsa capacità di generalizzazione a nuove osservazioni.
 
-Il motivo è il fenomeno del sovradattamento. Un modello sufficientemente flessibile è in grado di adattarsi non solo al segnale reale, ma anche alle fluttuazioni casuali del campione. In questi casi, la LPPD riflette un adattamento eccessivamente accurato ai dati utilizzati per aggiornare la distribuzione a posteriori dei parametri, generando un’impressione eccessivamente ottimistica delle prestazioni del modello. In quanto misura *in-sample*, la LPPD è esposta agli stessi rischi delle metriche frequentiste basate sui dati di addestramento.
+Il problema fondamentale risiede nel fenomeno del sovradattamento (*overfitting*): un modello sufficientemente flessibile può adattarsi non solo al segnale sistematico sottostante, ma anche al rumore campionario specifico del dataset osservato. In tali casi, la LPPD riflette un adattamento eccessivamente accurato ai dati utilizzati per costruire la distribuzione a posteriori, fornendo una stima eccessivamente ottimistica delle reali prestazioni predittive.
+
+La LPPD, in quanto misura *in-sample*, è esposta agli stessi rischi delle metriche frequentiste basate sui dati di addestramento: tende a sovrastimare sistematicamente la reale capacità predittiva del modello quando applicato a nuovi dati provenienti dalla stessa popolazione. Questa sovrastima è particolarmente pronunciata per modelli con molti parametri o strutture funzionali complesse, che hanno maggiore capacità di catturare non solo le regolarità genuine ma anche le fluttuazioni casuali specifiche del campione.
 
 ### Verso una valutazione out-of-sample: l'ELPD
 
-Per valutare in modo credibile la capacità predittiva di un modello, è necessario uscire dalla logica dell'adattamento ai dati già osservati e spostare l’attenzione sulla capacità di predire nuove osservazioni. L’*Expected Log Predictive Density* (ELPD) risponde esattamente a questa esigenza. Esso quantifica quanto bene il modello predirebbe futuri dati $\tilde{y}$, generati dallo stesso processo sconosciuto che ha prodotto il campione osservato.
-
-La definizione formale è la seguente:
+Per valutare in modo credibile la capacità predittiva di un modello, è necessario abbandonare la logica dell'adattamento ai dati già osservati e spostare l'attenzione sulla capacità di predire nuove osservazioni. L'*Expected Log Predictive Density* (ELPD) risponde a questa esigenza quantificando quanto bene il modello predirebbe dati futuri $\tilde{y}$ generati dallo stesso processo sottostante:
 
 $$
 \text{ELPD} = \mathbb{E}_{p(\tilde{y})}\left[\log p(\tilde{y} \mid y)\right] = \int p(\tilde{y})\, \log p(\tilde{y} \mid y)\, d\tilde{y},
 $$ {#eq-elpd-definition}
-dove $p(\tilde{y})$ rappresenta la vera, ma non osservabile, distribuzione dei dati futuri. L’ELPD corrisponde quindi al *valore atteso* del log-score bayesiano per nuove osservazioni, non utilizzate per stimare i parametri.
+dove $p(\tilde{y})$ rappresenta la distribuzione vera (e sconosciuta) dei dati futuri. L'ELPD corrisponde quindi al *valore atteso* del log-score bayesiano per nuove osservazioni, non utilizzate nella stima del modello.
 
-L’interpretazione è diretta: valori più elevati di ELPD indicano una migliore capacità di generalizzazione. A differenza della LPPD, che misura la coerenza interna del modello con i dati già noti, l’ELPD si concentra sulla prestazione predittiva prospettica ed è pertanto il criterio concettualmente più appropriato per valutare la qualità predittiva.
-
-Il passaggio dalla LPPD all’ELPD rappresenta dunque una transizione metodologica essenziale: si passa da una misura dell’adattamento ai dati a una misura della capacità predittiva genuina. È proprio questo cambiamento di prospettiva che consente di allineare la valutazione del modello con l’obiettivo centrale della modellazione bayesiana nell'ambito della previsione.
+L'interpretazione è diretta: valori più elevati di ELPD indicano una migliore capacità di generalizzazione. A differenza della LPPD, che misura la coerenza interna del modello con i dati già noti, l'ELPD valuta la prestazione predittiva prospettica ed è pertanto il criterio concettualmente più appropriato per la selezione dei modelli.
 
 ### Il collegamento fondamentale: ELPD e divergenza KL
 
-Abbiamo visto che l’ELPD misura la capacità predittiva out-of-sample di un modello. Ma perché proprio questa quantità è la metrica corretta? La risposta risiede nella teoria dell'informazione.
+Perché proprio l'ELPD rappresenta la metrica corretta? La risposta risiede nella teoria dell'informazione.
 
 #### La divergenza di Kullback-Leibler come distanza dalla verità
 
-Consideriamo:
+Consideriamo due distribuzioni:
 
-- $p(\tilde{y})$: la *vera distribuzione* che genera i dati futuri (sconosciuta);
-- $q(\tilde{y} \mid y)$: la *distribuzione predittiva* del nostro modello condizionata ai dati osservati $y$.
+- $p(\tilde{y})$: la *vera distribuzione* che genera i dati futuri, di fatto sconosciuta;
+- $q(\tilde{y} \mid y)$: la *distribuzione predittiva* del nostro modello, condizionata ai dati osservati $y$.
 
 ::: {.callout-note title="Nota sulla notazione"}
-Usiamo $q$ per la distribuzione predittiva del modello per distinguerla chiaramente da $p$, la distribuzione vera dei dati. In precedenza abbiamo scritto $p(\tilde{y} \mid y)$ per la distribuzione predittiva a posteriori; qui usiamo $q(\tilde{y} \mid y)$ per lo stesso concetto, ma nel contesto del confronto con la verità $p(\tilde{y})$.
+Utilizziamo $q$ per indicare la distribuzione predittiva del modello, distinguendola chiaramente da $p$ che rappresenta la distribuzione vera dei dati. In precedenza abbiamo utilizzato $p(\tilde{y} \mid y)$ per la distribuzione predittiva a posteriori; in questo contesto di confronto con la verità $p(\tilde{y})$, adottiamo $q(\tilde{y} \mid y)$ per maggiore chiarezza concettuale.
 :::
 
-La distanza tra queste due distribuzioni è quantificata dalla *divergenza di Kullback–Leibler*:
+La distanza informazionale tra queste due distribuzioni è data dalla *divergenza di Kullback-Leibler*:
 
 $$
 D_{\text{KL}}(p \parallel q) = \mathbb{E}_{p(\tilde{y})}\left[\log \frac{p(\tilde{y})}{q(\tilde{y} \mid y)}\right].
 $$ 
-Intuitivamente, questa quantità misura quanta informazione perdiamo usando il modello $q$ per approssimare la realtà $p$. Più la divergenza è piccola, più il modello è vicino al vero processo generatore dei dati.
+Questa quantità misura l'informazione persa usando il modello $q$ per approssimare la realtà $p$. Minore è la divergenza, più il modello si avvicina al vero processo generatore dei dati.
 
 #### La scomposizione che rivela l'ELPD
 
-La divergenza KL si può riscrivere in due parti:
+La divergenza KL si scompone in due termini:
 
 $$
 D_{\text{KL}}(p \parallel q) = \underbrace{\mathbb{E}_{p}\left[\log p(\tilde{y})\right]}_{\text{entropia di } p \text{ (costante)}} - \underbrace{\mathbb{E}_{p}\left[\log q(\tilde{y} \mid y)\right]}_{\text{questo è esattamente l'ELPD}}.
 $$ {#eq-kl-decomposition}
 
-Il primo termine non dipende dal modello: è un punto di riferimento fisso determinato dalla realtà.
-Il secondo termine, invece, coincide esattamente con la definizione dell’ELPD data nell'@eq-elpd-definition, è il valore atteso del log-score della distribuzione predittiva del modello semplicemente scritta con la notazione $q$ invece di $p$ per la distribuzione predittiva.
+Il primo termine è fisso ed è determinato dalla complessità intrinseca della realtà. Il secondo termine, invece, coincide esattamente con la definizione dell'ELPD fornita nell'@eq-elpd-definition, e corrisponde al valore atteso del log-score della distribuzione predittiva del modello (qui espressa con la notazione $q$ invece di $p$ per la distribuzione predittiva).
 
-In altre parole:
+In altri termini:
 
 $$
 \mathbb{E}_{p(\tilde{y})}[\log q(\tilde{y}\mid y)] = \text{ELPD}.
@@ -292,73 +237,75 @@ $$
 
 #### Conseguenza fondamentale
 
-Da questa scomposizione segue immediatamente che:
+Da questa scomposizione discende immediatamente che:
 
 $$
 \boxed{\text{Massimizzare l'ELPD} \;\equiv\; \text{Minimizzare } D_{\text{KL}}(p \parallel q)} .
 $$
 
-Se due modelli, $M_1$ e $M_2$, hanno ELPD diversi, allora:
+Se due modelli, $M_1$ e $M_2$, presentano ELPD diversi, allora:
 
-* se $\text{ELPD}(M_1) > \text{ELPD}(M_2)$, allora $M_1$ è, in senso informazionale, più vicino alla verità di $M_2$.
+* se $\text{ELPD}(M_1) > \text{ELPD}(M_2)$, ne consegue che $M_1$ è più vicino alla verità di $M_2$ in senso informazionale.
 
 ::: {.callout-important title="Messaggio chiave"}
-L’ELPD non è quindi una misura “di comodo”: è la traduzione operativa di un principio teorico preciso — scegliere il modello che si avvicina di più al vero processo generatore dei dati.
-
-Quando utilizziamo l'ELPD per selezionare un modello, stiamo implicitamente cercando il modello che rappresenta al meglio il vero meccanismo generatore dei dati, anche se non conosciamo esplicitamente la funzione di probabilità $p(\tilde{y})$.
+L'ELPD non è una misura scelta per convenienza, ma la traduzione operativa di un principio teorico preciso: selezionare il modello che meglio approssima il vero processo generatore dei dati. Quando usiamo l'ELPD per confrontare modelli, stiamo implicitamente identificando quello che rappresenta più fedelmente il meccanismo sottostante, anche senza conoscere esplicitamente $p(\tilde{y})$.
 :::
 
 #### Perché questo collegamento è importante
 
-Il legame tra l'ELPD e la divergenza di Kullback-Leibler fornisce una solida giustificazione teorica per l'uso dell'ELPD nella selezione dei modelli. Non si tratta di una metrica scelta per comodità, ma deriva direttamente dai principi della teoria dell'informazione. Massimizzare l'ELPD significa, in senso formale, scegliere il modello la cui distribuzione predittiva è più vicina alla distribuzione che genera i dati futuri.
+Il legame tra l'ELPD e la divergenza di Kullback-Leibler fornisce una giustificazione teorica per l'utilizzo dell'ELPD nella selezione dei modelli. Questa non è una metrica scelta per convenienza, ma discende direttamente dai principi fondamentali della teoria dell'informazione. Massimizzare l'ELPD equivale formalmente a selezionare il modello la cui distribuzione predittiva è più vicina al vero processo generatore dei dati.
 
-In termini pratici, confrontare i modelli tramite l’ELPD equivale quindi a rispondere alla domanda centrale della modellazione predittiva: *Qual è il modello che approssima meglio il vero processo generativo?* Questo rende l’ELPD non solo interpretabile, ma anche profondamente coerente con l’obiettivo di valutare la qualità predittiva out-of-sample.
+In termini operativi, confrontare modelli attraverso l'ELPD significa rispondere alla domanda centrale della modellazione predittiva: *Quale modello approssima meglio il meccanismo sottostante che genera i dati?* Questo rende l'ELPD non solo interpretabile, ma anche profondamente coerente con l'obiettivo di valutare la qualità predittiva *out-of-sample*.
 
-Tuttavia, l'implementazione pratica di questo criterio presenta un'ovvia difficoltà: non possiamo calcolare direttamente l'aspettativa $\mathbb{E}_{p(\tilde{y})}[\cdot]$ poiché la distribuzione vera $p(\tilde{y})$ rimane sconosciuta. Serve quindi una strategia pratica per stimare questa quantità utilizzando soltanto il dataset a disposizione.
+Tuttavia, l'implementazione pratica di questo criterio incontra un'ovvia difficoltà: non possiamo calcolare direttamente l'aspettativa $\mathbb{E}_{p(\tilde{y})}[\cdot]$ poiché la distribuzione vera $p(\tilde{y})$ rimane sconosciuta. È quindi necessaria una strategia per stimare questa quantità utilizzando esclusivamente i dati disponibili, senza accedere alla distribuzione teorica sottostante.
 
 ### Come stimare l'ELPD: la validazione Leave-One-Out (LOO)
 
-La soluzione a questo problema prevede l'utilizzo dei dati osservati attraverso una procedura che evita l'auto-referenzialità. La *Leave-One-Out Cross-Validation* (LOO-CV) realizza questo principio nel modo più diretto possibile: per ogni osservazione $y_i$, si calcola la previsione utilizzando un modello stimato *escludendo* proprio quella stessa osservazione.
+Per superare l'ostacolo della distribuzione vera sconosciuta, si ricorre a una strategia che utilizza i dati osservati evitando l'auto-referenzialità. La *Leave-One-Out Cross-Validation* (LOO-CV) implementa questo principio nel modo più diretto possibile: per ogni osservazione $y_i$, si calcola la previsione utilizzando un modello stimato *escludendo* proprio quel dato.
 
-La procedura, per ogni $i \in \{1, \dots, N\}$, si articola come segue:
+La procedura si articola sequenzialmente per ogni $i \in \{1, \dots, N\}$ nel modo seguente:
 
 1.  si rimuove temporaneamente l'osservazione $y_i$ dal dataset;
-2.  si stima il modello utilizzando le rimanenti osservazioni $y_{-i}$;
+2.  si stima il modello utilizzando esclusivamente le rimanenti osservazioni $y_{-i}$;
 3.  si valuta la capacità predittiva del modello così stimato sull'osservazione esclusa, calcolando la densità predittiva $p(y_i \mid y_{-i})$.
 
-La somma dei logaritmi di queste densità predittive fornisce una stima dell'Expected Log Predictive Density (ELPD):
+La somma dei logaritmi di queste densità predittive fornisce una stima robusta dell'*Expected Log Predictive Density* (ELPD):
 
 $$
 \widehat{\text{ELPD}}_{\text{LOO}}
 = \sum_{i=1}^N \log p(y_i \mid y_{-i}).
 $$ {#eq-elpd-loo}
 
-Questa stima è realmente *out-of-sample*: ogni osservazione viene valutata da un modello che non l’ha mai “vista” durante l’adattamento.
+Questa stima è genuinamente *out-of-sample*: ogni osservazione viene valutata da un modello che non l'ha mai "incontrata" durante la fase di adattamento, simulando così la condizione ideale di previsione su dati completamente nuovi.
 
-L'ostacolo principale nell'implementazione della LOO-CV è di natura computazionale: ricalcolare il modello $N$ volte, una per ogni osservazione rimossa, risulta spesso proibitivo. Per ovviare a questo problema, la metodologia *PSIS-LOO* (*Pareto Smoothed Importance Sampling*) consente di approssimare l'intera procedura LOO a partire da un'unica esecuzione del modello completo.
+#### L'approccio pratico: PSIS-LOO
 
-Il metodo si basa su una tecnica di *Importance Sampling* per *assegnare pesi ai campioni della distribuzione a posteriori* $p(\theta \mid y)$, in modo da ottenere approssimativamente la distribuzione a posteriori che si sarebbe ottenuta escludendo il dato $i$-esimo, $p(\theta \mid y_{-i})$, e quindi generare la densità predittiva $p(y_i \mid y_{-i})$ senza dover ricalibrare il modello.
+L'ostacolo principale nell'implementazione diretta della LOO-CV risiede nella sua complessità computazionale: ricalibrare il modello $N$ volte, una per ogni osservazione rimossa, risulta spesso computazionalmente proibitivo per dataset di dimensioni anche moderate. Per ovviare a questo problema, la metodologia *PSIS-LOO* (*Pareto Smoothed Importance Sampling*) consente di approssimare l'intera procedura LOO a partire da un'unica esecuzione del modello completo su tutti i dati.
 
-Un vantaggio cruciale di PSIS-LOO è la sua capacità di *autodiagnosi*. Il metodo fornisce una stima del parametro di forma Pareto-$\hat{k}$, che funge da indicatore di affidabilità:
+Il metodo si basa su una tecnica di *Importance Sampling* che assegna pesi differenziati ai campioni della distribuzione a posteriori $p(\theta \mid y)$, permettendo di approssimare la distribuzione che si sarebbe ottenuta escludendo ciascuna osservazione $p(\theta \mid y_{-i})$, e quindi di generare la densità predittiva $p(y_i \mid y_{-i})$ senza ricalibrazioni ripetute.
 
-- valori di $\hat{k} < 0.7$ suggeriscono che l'approssimazione è accurata;
-- valori di $\hat{k} \geq 0.7$ segnalano una potenziale instabilità nell'approssimazione, indicando la necessità di ricorrere a metodi di convalida più robusti, sebbene più onerosi dal punto di vista computazionale.
+#### Diagnostica dell'affidabilità
+
+Un vantaggio cruciale di PSIS-LOO è la sua capacità di *autodiagnosi*. Il metodo fornisce una stima del parametro di forma Pareto-$\hat{k}$, che indica l'affidabilità dell'approssimazione:
+
+- valori di $\hat{k} < 0.7$ suggeriscono che l'approssimazione è accurata e affidabile;
+- valori di $\hat{k} \geq 0.7$ segnalano una potenziale instabilità nell'approssimazione, indicando la necessità di ricorrere a metodi di convalida più robusti, sebbene computazionalmente più onerosi come la LOO-CV completa o la validazione incrociata k-fold.
+
+Questa diagnostica integrata rende PSIS-LOO non solo efficiente computazionalmente, ma anche metodologicamente rigoroso.
 
 ### Riepilogo del percorso logico
 
-Il percorso metodologico che abbiamo sviluppato si articola attraverso la seguente sequenza concettuale. Si parte dal *log-score*, che costituisce la misura fondamentale di accuratezza predittiva per una singola osservazione. La somma di questi log-score sui dati osservati definisce la *LPPD*, una metrica *in-sample* che risulta però vulnerabile al rischio di overfitting. L'*ELPD* rappresenta l'obiettivo teorico ideale, corrispondendo al log-score atteso su dati futuri, la cui massimizzazione equivale a minimizzare la divergenza di Kullback-Leibler dalla distribuzione vera dei dati.
+Il percorso metodologico che abbiamo sviluppato segue una sequenza logicamente coerente. Si parte dal *log-score*, una misura fondamentale dell'accuratezza predittiva per una singola osservazione. La somma di questi log-score definisce la *LPPD*, una metrica *in-sample* vulnerabile al rischio di *overfitting*. L'*ELPD* rappresenta l'obiettivo teorico ideale: il log-score atteso su dati futuri, la cui massimizzazione equivale a minimizzare la divergenza di Kullback-Leibler dalla distribuzione vera.
 
-Per superare le limitazioni pratiche del calcolo diretto dell'ELPD, la procedura di *validazione Leave-One-Out (LOO)* offre un metodo robusto per stimare questa quantità senza incorrere in overfitting. Infine, l'implementazione *PSIS-LOO* rende computazionalmente efficiente questo approccio attraverso tecniche avanzate di campionamento per importanza.
-
-Dal punto di vista applicativo, il confronto tra modelli avviene utilizzando la stima $\widehat{\text{ELPD}}_{\text{LOO}}$, dove valori più elevati indicano una superiore capacità predittiva. È fondamentale accompagnare questo confronto con una stima dell'incertezza, riportando la differenza $\Delta\text{ELPD}$ insieme al suo errore standard. Una regola pratica consolidata suggerisce di considerare credibile il miglioramento predittivo $|\Delta\text{ELPD}| \geq 2 \times \text{SE}$, garantendo così una valutazione statisticamente robusta tra modelli concorrenti.
+Per superare le limitazioni pratiche del calcolo diretto dell'ELPD, la procedura di *validazione Leave-One-Out (LOO)* offre un metodo robusto per stimare questa quantità evitando l'*overfitting*. Infine, l'implementazione *PSIS-LOO* rende computazionalmente efficiente questo approccio attraverso tecniche avanzate di *Importance Sampling*.
 
 ::: {.callout-note collapse=true title="Esempio numerico: ELPD e divergenza KL"}
-Per comprendere concretamente il collegamento tra ELPD e divergenza KL, consideriamo il seguente esempio. Supponiamo di voler predire il numero di "teste" in $n=10$ lanci di una moneta:
+Consideriamo un esempio concreto per illustrare il collegamento tra ELPD e divergenza KL. Supponiamo di voler predire il numero di "teste" in $n=10$ lanci di una moneta:
 
 * *distribuzione vera*: $p(y) = \text{Binomiale}(n=10, p=0.6)$;
 * *modello candidato*: $q(y) = \text{Binomiale}(n=10, q=0.5)$.
 
-Calcoliamo l'ELPD per il modello candidato e confrontiamolo con quello del "modello vero":
+Calcoliamo l'ELPD per entrambi i modelli:
 
 ```{r}
 n <- 10
@@ -392,51 +339,31 @@ cat(sprintf("Differenza ELPD (vero - candidato): %.4f\n", elpd_p - elpd_q))
 cat(sprintf("KL(p || q): %.4f\n", kl_pq))
 ```
 
-**Osservazioni:**
+**Risultato chiave:**
 
-* l'ELPD del modello candidato è inferiore rispetto a quello del modello vero;
+* l'ELPD del modello candidato è inferiore a quello del modello vero;
 * la differenza tra i due ELPD coincide esattamente con la divergenza KL $D_{\text{KL}}(p \parallel q)$.
 
-Questo esempio dimostra sia algebricamente che numericamente il principio fondamentale secondo cui *massimizzare l'ELPD equivale a minimizzare la divergenza KL dalla distribuzione vera*.
-:::
-
-## Implementazione pratica: PSIS-LOO {#sec-loo-psis}
-
-### Dalla teoria alla pratica
-
-Come abbiamo visto, l'ELPD rappresenta la misura ideale per valutare la capacità predittiva di un modello. Sebbene la cross-validazione leave-one-out (LOO-CV) fornisca una stima concettualmente corretta, la necessità di riadattare il modello $n$ volte la rende computazionalmente proibitiva.
-
-Una soluzione efficace è rappresentata dal metodo *PSIS-LOO* (*Pareto Smoothed Importance Sampling LOO*), che approssima in modo efficiente la stima LOO utilizzando un'unica campionatura MCMC dal modello completo. Questo approccio non solo riduce drasticamente il costo computazionale, ma fornisce anche importanti diagnostiche per valutarne l'affidabilità.
-
-### Diagnostiche Pareto-$k$
-
-Il metodo PSIS-LOO genera per ogni osservazione un parametro diagnostico $k$ che ne valuta l'influenza. L'interpretazione di questo parametro segue linee guida precise: valori di $k \leq 0.5$ indicano una stima affidabile; valori compresi tra $0.5$ e $0.7$ suggeriscono un'affidabilità moderata e richiedono una certa cautela nell'interpretazione; valori superiori a $0.7$ segnalano una possibile instabilità dell'approssimazione e rendono opportuno considerare metodologie alternative come la validazione incrociata K-fold, l'approccio LOO per cluster, o un refitting mirato del modello.
-
-### Validazione per dati dipendenti
-
-::: {.callout-important title="Unità di validazione corretta"}
-In presenza di dati dipendenti (misure ripetute, dati gerarchici, EMA), la procedura LOO deve essere applicata a livello di *cluster*, non di singola osservazione.
-
-**Esempio**: in uno studio EMA con più misurazioni per soggetto, l'unità LOO è il soggetto, non la singola misurazione. Per ogni validazione si esclude l'intero gruppo di osservazioni del soggetto.
+Questo esempio conferma numericamente il principio fondamentale: *massimizzare l'ELPD equivale a minimizzare la divergenza KL dalla distribuzione vera*.
 :::
 
 ### Confronto tra modelli mediante ELPD-LOO
 
-Una volta stimato l'ELPD-LOO per ciascun modello candidato, il confronto delle loro prestazioni predittive avviene calcolando la differenza tra i rispettivi indici:
+Una volta stimato l'ELPD-LOO per ciascun modello candidato, il confronto delle loro prestazioni predittive si basa sulla differenza:
 
 $$
 \Delta \text{ELPD} = \text{ELPD}_{\text{LOO}}(M_1) - \text{ELPD}_{\text{LOO}}(M_2).
 $$ {#eq-delta-elpd}
 
-Per interpretare tale differenza in modo robusto, si applica una regola empirica consolidata: un vantaggio di $\Delta \text{ELPD} \geq 2 \times \text{SE}$, dove SE rappresenta l'errore standard della differenza, può essere considerato un'evidenza credibile a favore del modello con ELPD più elevato.  Questo criterio fornisce una soglia pratica per distinguere miglioramenti predittivi sostanziali dalle fluttuazioni campionarie.
+Per interpretare questa differenza in modo robusto, si applica una regola empirica consolidata: un vantaggio di $\Delta \text{ELPD} \geq 2 \times \text{SE}$, dove SE rappresenta l'errore standard della differenza, costituisce un'evidenza credibile a favore del modello con ELPD più elevato. Questo criterio fornisce una soglia pratica per distinguere miglioramenti predittivi sostanziali da fluttuazioni campionarie.
 
 ::: {.callout-note collapse=true title="Un esempio con `brms`"}
-Usando `brms`, questo esempio illustra il confronto tra due modelli molto semplici:
+Illustriamo il confronto tra due modelli usando `brms`:
 
 * *Modello A*: la probabilità di successo $p$ viene stimata dai dati;
-* *Modello B*: assumiamo a priori che la probabilità sia fissa e pari a 0.5 (una “moneta equa”).
+* *Modello B*: assumiamo a priori che la probabilità sia fissa e pari a 0.5 (una "moneta equa").
 
-Per rendere l’esempio concreto, simuliamo 50 osservazioni con una probabilità vera pari a 0.8:
+Simuliamo 50 osservazioni con probabilità vera $p = 0.8$:
 
 ```{r}
 set.seed(1)
@@ -446,7 +373,7 @@ dat <- data.frame(y = y)
 
 #### Modello A: la probabilità è stimata dai dati {.unnumbered .unlisted}
 
-Usiao un modello Bernoulli con la sola intercetta, `y ~ 1`, equivalente a stimare un’unica probabilità $p$. Un prior debole sul parametro `Intercept` è sufficiente in questo contesto.
+Usiamo un modello Bernoulli con la sola intercetta, `y ~ 1`, equivalente a stimare un'unica probabilità $p$. Un prior debole sul parametro `Intercept` è sufficiente in questo contesto.
 
 ```{r}
 #| output: false
@@ -465,7 +392,7 @@ fit_A <- brm(
 
 #### Modello B: probabilità fissa $p = 0.5$ {.unnumbered .unlisted}
 
-Nel framework di regressione logistica implementato da `brms`, la modellazione non avviene direttamente sulla probabilità $\theta$ ma sulla sua trasformazione logit. Poiché l'obiettivo è implementare un modello con probabilità fissa $p = 0.5$, e dato che $\text{logit}(0.5) = 0$, è possibile approssimare questo vincolo con un *prior* fortemente concentrato attorno allo zero per il parametro di intercetta. Un *prior* normale con deviazione standard estremamente ridotta ($\sigma = 10^{-6}$) vincola efficacemente il parametro a mantenersi in prossimità del valore target:
+Nel framework di regressione logistica implementato da `brms`, la modellazione non avviene direttamente sulla probabilità $\theta$ ma sulla sua trasformazione logit. Poiché l'obiettivo è implementare un modello con probabilità fissa $p = 0.5$, e dato che $\text{logit}(0.5) = 0$, è possibile approssimare questo vincolo con un *prior* fortemente informativo concentrato attorno allo zero per il parametro dell'intercetta. Un *prior* normale con deviazione standard estremamente ridotta ($\sigma = 10^{-6}$) vincola efficacemente il parametro a mantenersi in prossimità del valore target:
 
 ```{r}
 #| output: false
@@ -482,9 +409,9 @@ fit_B <- brm(
 )
 ```
 
-Questa configurazione determina una trasformazione logit della probabilità sostanzialmente pari a zero, corrispondente a un valore di $\theta$ molto prossimo a 0.5. Il risultato è l'equivalente pratico di un modello a probabilità fissa, che preserva la specifica parametrica predefinita senza adattarsi alle evidenze contenute nei dati.
+Questa configurazione determina una trasformazione logit della probabilità sostanzialmente pari a zero, corrispondente a un valore di $\theta$ molto prossimo a 0.5 e implementa, di fatto, un modello a probabilità fissa che preserva la specifica parametrica predefinita senza adattarsi alle evidenze contenute nei dati.
 
-#### Calcolo dell’ELPD-LOO {.unnumbered .unlisted}
+#### Calcolo dell'ELPD-LOO {.unnumbered .unlisted}
 
 ```{r}
 loo_A <- loo(fit_A)
@@ -510,52 +437,40 @@ cmp
 
 #### Interpretazione dei risultati {.unnumbered .unlisted}
 
-La differenza $\Delta\text{ELPD}_{\text{LOO}}$ risulta notevolmente superiore a $2\times\mathrm{SE}$, il che indica che il vantaggio predittivo del *Modello A* non può essere attribuito a fluttuazioni campionarie. Questo risultato consente di affermare con ragionevole certezza che il modello A possiede prestazioni predittive credibilmente superiori rispetto all'alternativa presa in considerazione.
+La differenza $\Delta\text{ELPD}_{\text{LOO}} = 26.5$ risulta notevolmente superiore a $2 \times \mathrm{SE} = 10.4$, indicando che il vantaggio predittivo del Modello A non è attribuibile a fluttuazioni campionarie. Possiamo quindi affermare con ragionevole certezza che il Modello A possiede prestazioni predittive credibilmente superiori.
 
-Questo risultato è perfettamente in linea con le aspettative teoriche: quando il tasso di successi osservato si attesta intorno a 0.8, un modello che stima il parametro $p$ dai dati supera necessariamente un modello che impone rigidamente $p = 0.5$. La flessibilità del Modello A nel catturare la proporzione effettiva di successi si traduce in una migliore capacità di prevedere nuove osservazioni, dimostrando il valore dell'apprendimento dai dati rispetto all'assunzione di parametri fissi predefiniti.
+Questo risultato è coerente con le aspettative teoriche: con un tasso di successi osservato attorno a 0.8, un modello che stima $p$ dai dati supera necessariamente un modello che impone rigidamente $p = 0.5$. La flessibilità del Modello A nel catturare la proporzione effettiva di successi si traduce in una migliore capacità di prevedere nuove osservazioni, dimostrando il valore dell'apprendimento dai dati rispetto all'assunzione di parametri fissi predefiniti.
 :::
 
 ## Criteri di informazione e confronto tra modelli {#sec-criteri}
 
-La valutazione predittiva di un modello si fonda sull’*Expected Log Predictive Density* (ELPD), che quantifica quanto le previsioni del modello si avvicinino ai dati che intende spiegare. Per concludere il capitolo, consideriamo i cosiddetti *criteri di informazione* che rappresentano diverse strategie per stimare l’ELPD in modo più o meno accurato e computazionalmente efficiente. La loro funzione è sempre la stessa: offrire una misura sintetica della capacità del modello di generalizzare al di là dei dati osservati, tenendo conto della sua complessità effettiva.
+La valutazione predittiva dei modelli statistici si basa sull'*Expected Log Predictive Density* (ELPD), che quantifica la corrispondenza tra le previsioni del modello e i dati osservati. Concludiamo il capitolo esaminando i *criteri di informazione* e gli approcci alternativi per stimare l'ELPD, che presentano diversi compromessi tra accuratezza ed efficienza computazionale. La loro funzione fondamentale rimane costante: fornire una misura sintetica della capacità del modello di generalizzare tenendo conto della sua complessità effettiva.
 
 ### Panoramica dei criteri principali
 
-Il riferimento metodologico più solido in ambito bayesiano è il PSIS-LOO, che stima l'ELPD mediante una validazione leave-one-out approssimata con l'algoritmo *Pareto Smoothed Importance Sampling*. In questo modo si ottiene una stima dell'abilità predittiva del modello per ciascuna osservazione, corretta per la difficoltà del problema e per le possibili instabilità dell'*Importance Sampling*. L'ELPD-LOO è considerato lo standard di riferimento per i modelli bayesiani, in quanto sfrutta appieno la distribuzione a posteriori e fornisce diagnostiche affidabili, come gli indici Pareto-$k$, che segnalano eventuali problemi locali di adattamento.
+Il riferimento metodologico più solido nell'ambito bayesiano è il PSIS-LOO, che stima l'ELPD mediante la validazione leave-one-out approssimata con il *Pareto Smoothed Importance Sampling*. Questo approccio fornisce una stima robusta dell'abilità predittiva per ciascuna osservazione, corretta per la difficoltà del problema. L'ELPD-LOO è considerato lo standard per i modelli bayesiani, in quanto sfrutta appieno la distribuzione a posteriori e fornisce indici diagnostici affidabili tramite gli indici Pareto-$\hat{k}$ .
 
-Un criterio strettamente correlato è il *WAIC*, che stima anch’esso l’ELPD ma introduce una penalizzazione adattiva basata sulla variabilità posteriore della log-verosimiglianza. Il termine di penalità, $p_{\text{waic}}$, riflette la complessità effettiva del modello: non il semplice numero di parametri, ma il grado di flessibilità che il modello dimostra nei confronti dei dati. Nella pratica, il WAIC fornisce spesso risultati simili al LOO, pur essendo ancora più semplice dal punto di vista computazionale.
+Un criterio strettamente correlato è il *WAIC* (*Watanabe-Akaike Information Criterion*), che stima l'ELPD introducendo una penalizzazione basata sulla variabilità posteriore della log-verosimiglianza. Il termine di penalità $p_{\text{WAIC}}$ riflette la complessità effettiva del modello, non il numero di parametri, ma il grado di flessibilità dimostrato nei confronti dei dati. Il WAIC fornisce spesso risultati simili al LOO, ma con un costo computazionale inferiore.
 
-Accanto ai criteri bayesiani esistono criteri più tradizionali, ampiamente utilizzati nella pratica frequentista, come l'AIC e il BIC. L’AIC valuta la bontà di adattamento penalizzandola con un termine proporzionale al numero di parametri, assumendo implicitamente un campione ampio e modelli regolari. Il BIC sostituisce questa penalità con una funzione crescente del campione, favorendo in maniera più decisa i modelli parsimoniosi e puntando, almeno in teoria, all'identificazione del modello "vero". Nessuno dei due criteri, però, incorpora l'incertezza parametrica, come invece fanno i metodi bayesiani, motivo per cui risultano meno adatti quando il modello presenta gerarchie, priors informativi o distribuzioni posteriori complesse.
+Accanto ai criteri bayesiani, esistono approcci tradizionali come l'AIC (*Akaike Information Criterion*) e il BIC (*Bayesian Information Criterion*). L'AIC valuta la bontà di adattamento penalizzandola in base al numero di parametri, assumendo campioni ampi e modelli regolari. Il BIC utilizza una penalità che cresce con la dimensione del campione, favorendo i modelli parsimoniosi. Entrambi, tuttavia, non incorporano l'incertezza parametrica e sono quindi meno adatti ai modelli con gerarchie, priors informativi o distribuzioni a posteriori complesse.
 
-È importante ricordare che l'ELPD e i criteri di informazione utilizzano convenzioni di scala diverse: mentre l'ELPD aumenta con la qualità predittiva, l'AIC, il BIC e il LOOIC adottano solitamente una scala di devianza (–2 $\times$ log-score), in cui valori più bassi indicano un modello migliore. In ogni caso, ciò che conta davvero è la differenza tra i modelli: riportare sistematicamente l'ELPD e il suo errore standard permette di quantificare l'incertezza nel confronto e di trarre conclusioni solide.
+È importante ricordare che l'ELPD e i criteri di informazione utilizzano convenzioni di scala diverse: mentre l'ELPD aumenta con l'aumentare della qualità predittiva, l'AIC, il BIC e il LOOIC adottano solitamente una scala di devianza (–2 $\times$ log-score), in cui valori più bassi indicano un modello migliore. In ogni caso, ciò che conta davvero è la differenza tra i modelli: riportare l'ELPD e il suo errore standard permette di quantificare l'incertezza del confronto e di trarre conclusioni solide.
 
 ### Quando usare ciascun criterio
 
-La scelta del criterio dipende dalla struttura del modello e dalla natura dei dati. Nei modelli bayesiani, e in generale ogni volta che si desidera valutare la performance predittiva, PSIS-LOO dovrebbe rappresentare il metodo principale, con WAIC come verifica di coerenza. Nei modelli frequentisti più semplici, l'AIC rimane un criterio pratico quando il campione è ampio, mentre il BIC privilegia una selezione strettamente parsimoniosa. Nei modelli gerarchici, nei quali l’unità di validazione non coincide necessariamente con la singola osservazione, LOO e WAIC permettono di definire correttamente il livello di previsione. Nelle serie temporali, invece, è essenziale adottare procedure *leave-future-out* che rispettino la dipendenza temporale.
-
-### Penalizzazione effettiva nei modelli bayesiani
-
-In un modello bayesiano, la complessità non corrisponde al numero di parametri, ma all'ampiezza effettiva dello spazio delle soluzioni compatibili con i dati. La penalizzazione utilizzata da LOO e WAIC riflette proprio questo aspetto: la variabilità della log-verosimiglianza a posteriori misura la libertà del modello nel plasmare le proprie previsioni. Questa penalizzazione adattiva è uno dei motivi per cui i criteri LOO e WAIC risultano più affidabili dei criteri classici nei modelli complessi con priors informativi o componenti gerarchiche.
-
-## Workflow operativo e buone pratiche {#sec-workflow}
-
-L’applicazione concreta dei criteri di informazione richiede alcune attenzioni metodologiche. Innanzitutto, è necessario definire con chiarezza l’unità di validazione: nelle situazioni i.i.d., questa coincide con la singola osservazione, mentre nei dati dipendenti deve corrispondere all’intero cluster o al blocco temporale. Una volta stimati i modelli candidati, si calcola l’ELPD-LOO insieme alle diagnostiche Pareto-$k$ che forniscono indicazioni sulle possibili instabilità dell’approssimazione. Il confronto tra i modelli si basa sulla differenza tra l'ELPD e il suo errore standard e deve essere interpretato alla luce della qualità predittiva, della parsimonia e della coerenza teorica delle specificazioni.
-
-Alcuni errori ricorrenti possono compromettere la valutazione: l'uso di metriche in-sample, come la log-verosimiglianza del modello stimato, porta a una sovrastima sistematica della capacità predittiva; il confronto di criteri eterogenei senza convertirli sulla stessa scala produce conclusioni distorte; l'ignoranza della dipendenza nei dati genera stime eccessivamente ottimistiche; la trascuratezza dei valori elevati di Pareto-$k$ può nascondere problemi sostanziali nel modello; infine, ogni operazione di pre-processing deve essere ripetuta all'interno di ciascun fold per evitare fughe di informazione.
-
-Per verificare la stabilità delle conclusioni, è buona pratica calcolare anche il WAIC: quando il LOO e il WAIC convergono, l'affidabilità del confronto aumenta. Nel report finale, è opportuno presentare l'ELPD-LOO (o LOOIC), le differenze tra i modelli con il relativo errore standard, le diagnostiche Pareto-$k$ e, quando utile, il valore medio per osservazione, che permette di confrontare dataset di dimensioni diverse in modo più trasparente.
+La scelta del criterio dipende dalla struttura del modello e dalla natura dei dati. Nei modelli bayesiani, e in generale ogni volta che si desidera valutare la performance predittiva, il PSIS-LOO dovrebbe rappresentare il metodo principale, con il WAIC come verifica di coerenza. Nei modelli frequentisti più semplici, l'AIC rimane un criterio pratico quando il campione è ampio, mentre il BIC privilegia una selezione strettamente parsimoniosa. Nei modelli gerarchici, nei quali l'unità di validazione non coincide necessariamente con la singola osservazione, i criteri LOO e WAIC permettono di definire correttamente il livello di previsione. Nelle serie temporali, invece, è essenziale adottare procedure *leave-future-out* che rispettino la dipendenza temporale.
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-Il principio fondamentale che emerge da questa discussione è al contempo semplice e sostanziale: la qualità di un modello statistico si valuta principalmente in base alla sua capacità di generare previsioni accurate su dati che non ha mai incontrato durante la fase di addestramento. Nel quadro concettuale bayesiano, questo principio si traduce in pratica nell'uso della distribuzione predittiva a posteriori $p(\tilde{y} \mid y)$ e nella corrispondente misura di performance, l'Expected Log Predictive Density (ELPD), che quantifica l'accuratezza delle previsioni su dati futuri.
+Il principio fondamentale che emerge da questa discussione è al contempo semplice e sostanziale: la qualità di un modello statistico si valuta principalmente in base alla sua capacità di generare previsioni accurate su dati che non ha mai incontrato durante la fase di addestramento. Nel quadro concettuale bayesiano, questo principio si traduce operativamente nell'utilizzo della distribuzione predittiva a posteriori $p(\tilde{y} \mid y)$ e nella corrispondente misura di performance, l'*Expected Log Predictive Density* (ELPD), che quantifica sistematicamente l'accuratezza delle previsioni su dati futuri.
 
-Dal punto di vista teorico, massimizzare l'ELPD equivale a minimizzare la divergenza di Kullback-Leibler dalla distribuzione vera dei dati, creando un ponte metodologico tra i principi della teoria dell'informazione e la pratica della modellazione statistica. Dal punto di vista applicativo, l'ELPD viene stimato in modo efficiente tramite l'approccio PSIS-LOO, che fornisce anche diagnostiche tramite i parametri Pareto-$k$ per valutarne l'affidabilità. Il WAIC rappresenta un'alternativa pienamente bayesiana che spesso produce risultati concordanti con il LOO, mentre misure come l'AIC e il BIC, sebbene utili in contesti frequentisti, possono condurre a conclusioni fuorvianti in presenza di campioni limitati o di strutture gerarchiche complesse.
+Dal punto di vista teorico, massimizzare l'ELPD equivale a minimizzare la divergenza di Kullback-Leibler dalla distribuzione vera dei dati, creando così un ponte metodologico solido tra i principi della teoria dell'informazione e la pratica concreta della modellazione statistica. Dal punto di vista applicativo, l'ELPD viene stimato in modo efficiente tramite l'approccio PSIS-LOO, che fornisce anche preziose diagnostiche attraverso i parametri Pareto-$k$ per valutarne l'affidabilità. Il WAIC rappresenta un'alternativa pienamente bayesiana che spesso produce risultati concordanti con il LOO, mentre misure come l'AIC e il BIC, sebbene utili in contesti frequentisti semplici, possono condurre a conclusioni fuorvianti in presenza di campioni limitati o di strutture gerarchiche complesse.
 
-Nel confronto tra i modelli concorrenti, è essenziale includere sistematicamente i valori di ELPD_(LOO) e le differenze $\Delta \text{ELPD}$ accompagnate dai rispettivi errori standard, nonché le diagnostiche Pareto-$k$ e le eventuali azioni correttive intraprese in caso di valori problematici. La scelta dell'unità di predizione appropriata è cruciale, soprattutto per i dati gerarchici, dove l'unità di analisi potrebbe corrispondere a cluster piuttosto che a osservazioni individuali. Per le serie temporali, invece, sono necessari schemi di validazione di tipo *leave-future-out* che rispettino la struttura sequenziale dei dati.
+Nel confronto tra modelli concorrenti, è necessario confrontare i valori di ELPD_LOO e le differenze $\Delta \text{ELPD}$ accompagnate dai rispettivi errori standard, nonché le diagnostiche Pareto-$k$ e le eventuali azioni correttive intraprese in caso di valori problematici. 
 
-È importante notare che molti ambienti software riportano i risultati nella scala della devianza ($\text{LOOIC} = -2 \cdot \text{ELPD}_{\text{LOO}}$), dove valori numericamente più bassi indicano prestazioni predittive superiori. Tuttavia, la scelta del modello non dovrebbe mai ridursi a un esercizio puramente meccanico. Differenze marginali nell'ELPD raramente hanno una rilevanza sostanziale e, in tali circostanze, è preferibile privilegiare i principi di parsimonia e coerenza teorica. L'obiettivo ultimo della modellazione statistica non si esaurisce nella capacità predittiva, ma include anche la comprensione dei meccanismi alla base del fenomeno in esame. L'ELPD fornisce quindi una bussola quantitativa preziosa, che deve però essere integrata con la conoscenza del dominio di applicazione e con l'interpretabilità del modello.
+È importante notare che molti ambienti software riportano i risultati nella scala della devianza ($\text{LOOIC} = -2 \cdot \text{ELPD}_{\text{LOO}}$), dove valori numericamente più bassi indicano prestazioni predittive superiori. Tuttavia, la selezione del modello non dovrebbe mai ridursi a un esercizio puramente meccanico. Differenze marginali nell'ELPD raramente possiedono una rilevanza sostanziale e, in tali circostanze, è preferibile privilegiare i principi di parsimonia e coerenza teorica. L'obiettivo ultimo della modellazione statistica non si esaurisce nella capacità predittiva, ma include anche la comprensione dei meccanismi sottostanti al fenomeno in esame. L'ELPD fornisce quindi una bussola quantitativa preziosa, che deve però essere integrata con la conoscenza del dominio di applicazione e con l'interpretabilità del modello.
 
-Il messaggio fondamentale che emerge da questa analisi è che il modello statistico ottimale è quello che combina efficacemente la capacità di prevedere il futuro con l'interpretabilità dei suoi meccanismi e la coerenza con il quadro teorico di riferimento.
+Il messaggio fondamentale che emerge da questa analisi è che il modello statistico ottimale è quello che combina efficacemente la capacità di prevedere il futuro con l'interpretabilità dei suoi meccanismi e la coerenza con il quadro teorico di riferimento. Questo modello non solo rappresenta uno strumento predittivo, ma anche un mezzo per avanzare nella comprensione scientifica dei fenomeni studiati.
 
 ::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
 ```{r}
