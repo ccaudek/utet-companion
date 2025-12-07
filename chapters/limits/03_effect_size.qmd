@@ -1,0 +1,753 @@
+# La dimensione dell'effetto: un laboratorio computazionale {#sec-effect-size}
+
+::: {.callout-note appearance="minimal"}
+La **dimensione dell'effetto** (*effect size*) quantifica la forza di una relazione statistica tra variabili. A differenza del valore-$p$, che risponde alla domanda "c'è un effetto?", la dimensione dell'effetto risponde alla domanda più importante: "**quanto è grande l'effetto?**".
+
+È essenziale distinguere tra dimensione dell'effetto e significatività statistica. Un risultato può essere "statisticamente significativo" anche con un effetto minuscolo (basta avere un campione sufficientemente grande), e viceversa, un effetto sostanziale può non raggiungere la significatività in campioni piccoli. La conoscenza di uno di questi aspetti non fornisce automaticamente informazioni sull'altro.
+
+L'American Psychological Association raccomanda di riportare sempre la dimensione dell'effetto negli studi pubblicati. Tuttavia, riportarla non equivale a interpretarla correttamente. In questo capitolo esploreremo come calcolare, visualizzare e soprattutto *comprendere* le dimensioni degli effetti attraverso simulazioni computazionali.
+:::
+
+::: callout-important
+## In questo capitolo imparerai a
+
+- Calcolare e interpretare il $d$ di Cohen e il coefficiente di correlazione $r$.
+- Visualizzare concretamente cosa significano effetti "piccoli", "medi" e "grandi".
+- Comprendere perché $r^2$ può essere fuorviante rispetto a $r$.
+- Utilizzare benchmark empirici per contestualizzare le dimensioni degli effetti.
+- Riconoscere i limiti del "modello a pulsante" nelle scienze sociali.
+:::
+
+::: {.callout-caution collapse=true title="Preparazione del Notebook"}
+
+```{r}
+#| message: false
+#| warning: false
+
+# Caricamento librerie
+here::here("code", "_common.R") |> 
+  source()
+library(tidyverse)
+library(patchwork)
+```
+:::
+
+## Il $d$ di Cohen: la differenze tra gruppi
+
+### Definizione e calcolo
+
+Il $d$ di Cohen è la misura più utilizzata per quantificare la differenza tra due gruppi. Esprime la differenza tra le medie in unità di deviazione standard:
+
+$$
+d = \frac{M_1 - M_2}{S_p},
+$$
+dove $S_p$ è la deviazione standard combinata (*pooled*):
+
+$$
+S_p = \sqrt{\frac{(n_1 - 1) S_1^2 + (n_2 - 1) S_2^2}{n_1 + n_2 - 2}}.
+$$
+
+Un $d = 0.5$ significa che le medie dei due gruppi differiscono di mezza deviazione standard. Ma cosa significa concretamente?
+
+### Visualizzare il $d$ di Cohen
+
+La seguente simulazione mostra come appaiono distribuzioni con diversi valori di $d$:
+
+```{r fig.asp=1}
+#| out.width: "100%"
+#| fig-width: 10
+#| fig-height: 10
+#| label: fig-cohen-d-visual
+#| fig-cap: "Visualizzazione di diversi valori del d di Cohen. Con d = 0.2 le distribuzioni si sovrappongono quasi completamente; con d = 0.8 la separazione è evidente."
+
+# Funzione per generare dati con un dato Cohen's d
+generate_groups <- function(d, n = 1000) {
+  tibble(
+    value = c(rnorm(n, mean = 0, sd = 1), 
+              rnorm(n, mean = d, sd = 1)),
+    group = rep(c("Controllo", "Trattamento"), each = n)
+  )
+}
+
+# Creiamo grafici per diversi valori di d
+d_values <- c(0.2, 0.5, 0.8, 1.2)
+labels <- c("Piccolo (d = 0.2)", "Medio (d = 0.5)", 
+            "Grande (d = 0.8)", "Molto grande (d = 1.2)")
+
+plots <- map2(d_values, labels, function(d, label) {
+  data <- generate_groups(d)
+  
+  # Calcola la percentuale di sovrapposizione (approssimata)
+  overlap <- 2 * pnorm(-abs(d) / 2) * 100
+  
+  ggplot(data, aes(x = value, fill = group)) +
+    geom_density(alpha = 0.5, color = "white") +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "blue", alpha = 0.5) +
+    geom_vline(xintercept = d, linetype = "dashed", color = "red", alpha = 0.5) +
+    scale_fill_manual(values = c("Controllo" = "steelblue", "Trattamento" = "coral")) +
+    labs(
+      title = label,
+      subtitle = sprintf("Sovrapposizione: %.0f%%", overlap),
+      x = "Valore standardizzato",
+      y = "Densità",
+      fill = ""
+    ) +
+    theme(legend.position = "bottom") +
+    coord_cartesian(xlim = c(-4, 5))
+})
+
+(plots[[1]] + plots[[2]]) / (plots[[3]] + plots[[4]])
+```
+
+### Interpretare il $d$ di Cohen: dalla scala standardizzata all'intuizione clinica
+
+Un modo particolarmente utile per interpretare il coefficiente $d$ di Cohen consiste nel tradurlo dalla scala standardizzata a una metrica intuitivamente comprensibile: **la probabilità che un individuo estratto casualmente dal gruppo trattamento ottenga un punteggio superiore a un individuo estratto casualmente dal gruppo controllo**. Questa metrica, nota come *Common Language Effect Size* (CLES), trasforma un effetto espresso in unità di deviazione standard in un'indicazione probabilistica immediatamente interpretabile.
+
+La relazione tra $d$ e la CLES è matematicamente definita:
+$$
+\text{CLES} = \Phi\left(\frac{d}{\sqrt{2}}\right)
+$$
+dove $\Phi$ rappresenta la funzione di distribuzione cumulativa della distribuzione normale standard.
+
+Questa trasformazione offre diversi vantaggi interpretativi:
+
+1. **Intuizione immediata**: mentre "d = 0.5" può risultare astratto, affermare che "il 64% degli individui del gruppo trattamento supera il gruppo controllo" fornisce un'immagine concreta della differenza tra i gruppi.
+
+2. **Comunicazione efficace**: la CLES rappresenta un linguaggio comune comprensibile a ricercatori, clinici, pazienti e decisori politici, indipendentemente dalla loro familiarità con la statistica inferenziale.
+
+3. **Valutazione contestuale**: permette di valutare l'effetto in termini di sovrapposizione tra le distribuzioni dei due gruppi, offrendo una visione più completa della separazione tra le popolazioni.
+
+Questa traduzione probabilistica risulta particolarmente preziosa in contesti applicati, come la psicologia clinica, dove la rilevanza pratica di un intervento si valuta nei termini della sua capacità di produrre differenze clinicamente rilevanti nella vita reale delle persone.
+
+```{r}
+#| label: tbl-cles
+#| tbl-cap: "Traduzione del d di Cohen in probabilità interpretabili"
+
+# Funzione per calcolare CLES da Cohen's d
+cles <- function(d) {
+  pnorm(d / sqrt(2))
+}
+
+# Funzione per calcolare la percentuale di non-sovrapposizione
+non_overlap <- function(d) {
+  2 * pnorm(abs(d) / 2) - 1
+}
+
+tibble(
+  `Cohen's d` = c(0.0, 0.2, 0.5, 0.8, 1.0, 1.5, 2.0),
+  `Etichetta Cohen` = c("Nullo", "Piccolo", "Medio", "Grande", 
+                        "Grande", "Molto grande", "Enorme"),
+  `CLES` = sprintf("%.1f%%", cles(`Cohen's d`) * 100),
+  `Interpretazione CLES` = c(
+    "50% (come il caso)",
+    "56% supera il controllo",
+    "64% supera il controllo", 
+    "71% supera il controllo",
+    "76% supera il controllo",
+    "86% supera il controllo",
+    "92% supera il controllo"
+  )
+) |>
+  knitr::kable()
+```
+
+La traduzione di $d$ nella probabilità di superiorità offre un'immagine concreta della rilevanza pratica degli effetti standardizzati:
+
+**Per un effetto "piccolo" ($d = 0.2$)**:  
+se selezioniamo casualmente un individuo dal gruppo di trattamento e uno dal gruppo di controllo, l'individuo trattato presenterà un punteggio superiore solo nel 56% dei casi. Questa proporzione supera di soli 6 punti percentuali il puro caso (50%), rappresentando una differenza appena percettibile nella pratica quotidiana.
+
+**Per un effetto "grande" ($d = 0.8$)**:  
+la stessa operazione produce risultati sensibilmente diversi: l'individuo trattato otterrà un punteggio superiore nel 71% dei casi, indicando una separazione più marcata tra le distribuzioni dei due gruppi.
+
+Questa traduzione probabilistica mostra come anche gli effetti classificati come "grandi" secondo le convenzioni di Cohen lascino comunque spazio a una sostanziale sovrapposizione tra i gruppi. Un'interpretazione che considera esclusivamente la grandezza standardizzata dell'effetto rischia di sopravvalutare il suo impatto pratico, mentre la prospettiva della *Common Language Effect Size* mantiene un ancoraggio realistico alla variabilità individuale e alla sovrapposizione tra le popolazioni.
+
+## Il coefficiente di correlazione $r$: comprendere le relazioni lineari
+
+Il coefficiente di correlazione $r$ di Pearson quantifica la forza e la direzione di una relazione lineare tra due variabili continue. La sua scala varia da -1 (correlazione negativa perfetta) a +1 (correlazione positiva perfetta), con lo zero che indica assenza di relazione lineare.
+
+Una proprietà importante è la convertibilità tra $d$ (differenza standardizzata tra medie) e $r$ (correlazione):
+
+$$
+d = \frac{2r}{\sqrt{1-r^2}} \qquad \text{e} \qquad r = \frac{d}{\sqrt{d^2 + 4}}.
+$$
+
+Questa relazione permette di tradurre effetti espressi in una metrica nell'altra, facilitando confronti tra diverse tradizioni di ricerca.
+
+### Visualizzazione di correlazioni di diversa intensità
+
+```{r fig.asp=1}
+#| out.width: "100%"
+#| fig-width: 8
+#| fig-height: 8
+#| label: fig-correlations-visual
+#| fig-cap: "Visualizzazione di correlazioni progressivamente più forti. Con $r$ = 0.1 la relazione è quasi impercettibile; con $r$ = 0.7 emerge un chiaro pattern lineare."
+
+# Funzione per generare dati con una correlazione specifica
+generate_correlated_data <- function(r, n = 200) {
+  x <- rnorm(n, mean = 0, sd = 1)
+  y <- r * x + sqrt(1 - r^2) * rnorm(n)
+  tibble(x = x, y = y, correlation = r)
+}
+
+# Valori di correlazione da visualizzare
+r_values <- c(0.1, 0.3, 0.5, 0.7)
+
+# Generazione di tutti i plot
+correlation_plots <- map(r_values, function(r_val) {
+  data <- generate_correlated_data(r_val)
+  
+  ggplot(data, aes(x = x, y = y)) +
+    geom_point(alpha = 0.6, color = "steelblue", size = 1.5) +
+    geom_smooth(method = "lm", se = FALSE, color = "#E64A19", linewidth = 1.2) +
+    labs(
+      title = sprintf("r = %.1f", r_val),
+      subtitle = sprintf("r² = %.2f", r_val^2),
+      x = "Variabile X",
+      y = "Variabile Y"
+    ) +
+    theme_minimal() +
+    theme(
+      aspect.ratio = 1,
+      plot.title = element_text(face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(hjust = 0.5, color = "#666666")
+    ) +
+    coord_cartesian(xlim = c(-3, 3), ylim = c(-3, 3))
+})
+
+# Layout a griglia 2x2
+(correlation_plots[[1]] + correlation_plots[[2]]) / 
+(correlation_plots[[3]] + correlation_plots[[4]]) +
+  plot_annotation(
+    title = "Intensità Progressiva della Correlazione Lineare",
+    subtitle = "La linea rossa rappresenta la retta di regressione che meglio approssima\nla relazione",
+    caption = "Nota: r2 rappresenta la proporzione di varianza in Y spiegata da X."
+  ) &
+  theme(plot.title = element_text(face = "bold", size = 14))
+```
+
+## Il problema di $r^2$: una simulazione chiarificatrice
+
+### La distorsione quadratica nell'interpretazione
+
+Una pratica diffusa nella ricerca applicata consiste nell'elevare al quadrato il coefficiente di correlazione $r$ per ottenere $r^2$, tipicamente interpretato come "percentuale di varianza spiegata". Sebbene matematicamente corretta, questa trasformazione può distorcere gravemente la percezione della grandezza relativa degli effetti, creando interpretazioni fuorvianti.
+
+L'esempio classico di Darlington (1990) illustra in modo illuminante questa distorsione. Consideriamo un semplice gioco d'azzardo con due monete:
+
+- Un **nickel** (5¢): se esce testa, vinci 5 centesimi;
+- Un **dime** (10¢): se esce testa, vinci 10 centesimi.
+
+Entrambe le monete sono eque, ma differiscono nel valore del premio. Calcoliamo le correlazioni tra la probabilità di successo (abilità del giocatore) e la vincita monetaria:
+
+```{r}
+#| label: fig-coins-simulation
+#| fig-cap: "Simulazione dell'esempio di Darlington: r² può produrre interpretazioni fuorvianti sull'importanza relativa degli effetti."
+
+set.seed(123)
+n_players <- 1000
+
+# Simulazione del gioco delle monete
+darlington_simulation <- tibble(
+  player = 1:n_players,
+  # Abilità del giocatore (variabile latente che influenza entrambe le monete)
+  player_skill = rnorm(n_players, mean = 0, sd = 0.5),
+  
+  # Probabilità di successo influenzata dall'abilità
+  nickel_success_prob = 0.4 + 0.2 * pnorm(player_skill),
+  dime_success_prob = 0.4 + 0.2 * pnorm(player_skill),
+  
+  # Simulazione degli esiti dei lanci
+  nickel_outcome = rbinom(n_players, 1, nickel_success_prob),
+  dime_outcome = rbinom(n_players, 1, dime_success_prob),
+  
+  # Vincite monetarie
+  nickel_payout = nickel_outcome * 5,   # 0 o 5 centesimi
+  dime_payout = dime_outcome * 10       # 0 o 10 centesimi
+)
+
+# Calcolo delle correlazioni
+correlation_results <- tibble(
+  Statistica = c("Correlazione (r)", "Coefficiente di determinazione (r²)", "Vincita attesa per lancio"),
+  Nickel = c(
+    sprintf("%.3f", cor(darlington_simulation$player_skill, darlington_simulation$nickel_payout)),
+    sprintf("%.3f", cor(darlington_simulation$player_skill, darlington_simulation$nickel_payout)^2),
+    sprintf("%.2f¢", mean(darlington_simulation$nickel_payout))
+  ),
+  Dime = c(
+    sprintf("%.3f", cor(darlington_simulation$player_skill, darlington_simulation$dime_payout)),
+    sprintf("%.3f", cor(darlington_simulation$player_skill, darlington_simulation$dime_payout)^2),
+    sprintf("%.2f¢", mean(darlington_simulation$dime_payout))
+  ),
+  `Rapporto Dime/Nickel` = c(
+    sprintf("%.2f volte", 
+            cor(darlington_simulation$player_skill, darlington_simulation$dime_payout) / 
+            cor(darlington_simulation$player_skill, darlington_simulation$nickel_payout)),
+    sprintf("%.2f volte", 
+            (cor(darlington_simulation$player_skill, darlington_simulation$dime_payout)^2) / 
+            (cor(darlington_simulation$player_skill, darlington_simulation$nickel_payout)^2)),
+    sprintf("%.2f volte", 
+            mean(darlington_simulation$dime_payout) / mean(darlington_simulation$nickel_payout))
+  )
+)
+
+# Visualizzazione della tabella
+correlation_results |>
+  knitr::kable(
+    align = c("l", "c", "c", "c"),
+    caption = "Confronto tra nickel e dime: la distorsione introdotta da r²"
+  ) |>
+  kableExtra::kable_styling(
+    bootstrap_options = c("striped", "hover"),
+    full_width = FALSE,
+    position = "center"
+  )
+```
+
+### L'Insight critico: la distorsione quadratica
+
+L'esempio rivela l'illusione creata da $r^2$:
+
+**La realtà lineare**:
+il dime paga esattamente il doppio del nickel (10¢ vs 5¢). Se misuriamo l'effetto dell'abilità del giocatore attraverso $r$, troviamo che il dime ha una correlazione approssimativamente doppia rispetto al nickel.
+
+**La distorsione quadratica**:
+quando eleviamo al quadrato per ottenere $r^2$, la relazione raddoppiata (×2) diventa quadruplicata (×4). Se interpretassimo $r^2$ come misura dell'"importanza relativa", concluderemmo erroneamente che il dime "spiega quattro volte più varianza" del nickel, suggerendo un'importanza relativa quadrupla anziché doppia.
+
+### Visualizzazione della relazione non lineare tra $r$ e $r^2$
+
+```{r}
+#| label: fig-r-vs-r2
+#| fig-cap: "La trasformazione quadratica da r a r² comprime i valori piccoli e amplifica le differenze relative tra valori maggiori."
+
+# Creazione dei dati per il grafico
+transformation_data <- tibble(
+  r = seq(0, 1, by = 0.01),
+  r_squared = r^2
+)
+
+# Punti di riferimento specifici
+reference_points <- tibble(
+  r = c(0.1, 0.3, 0.5, 0.7),
+  label = c("r = 0.1\n(r² = 0.01)", 
+            "r = 0.3\n(r² = 0.09)", 
+            "r = 0.5\n(r² = 0.25)", 
+            "r = 0.7\n(r² = 0.49)")
+)
+
+ggplot(transformation_data, aes(x = r, y = r_squared)) +
+  geom_line(color = "#1976D2", linewidth = 1.5, alpha = 0.8) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", 
+              color = "#757575", linewidth = 0.8, alpha = 0.5) +
+  geom_point(data = reference_points, aes(x = r, y = r^2), 
+             color = "#E64A19", size = 4) +
+  geom_segment(data = reference_points, 
+               aes(x = r, xend = r, y = 0, yend = r^2),
+               color = "#E64A19", linetype = "dotted", alpha = 0.6) +
+  geom_segment(data = reference_points,
+               aes(x = 0, xend = r, y = r^2, yend = r^2),
+               color = "#E64A19", linetype = "dotted", alpha = 0.6) +
+  geom_text(data = reference_points,
+            aes(x = r, y = r^2, label = label),
+            vjust = -0.5, hjust = 0.5, size = 3.5, color = "#E64A19") +
+  labs(
+    x = "Coefficiente di correlazione (r)",
+    y = "Coefficiente di determinazione (r²)",
+    title = "La Trasformazione Non Lineare da r a r²",
+    subtitle = "La linea tratteggiata mostra r = r² (riferimento lineare)"
+  ) +
+  scale_x_continuous(
+    breaks = seq(0, 1, 0.1),
+    limits = c(0, 1)
+  ) +
+  scale_y_continuous(
+    breaks = seq(0, 1, 0.1),
+    limits = c(0, 1)
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold"),
+    axis.text = element_text(color = "#333333")
+  ) +
+  annotate("text", x = 0.82, y = 0.7, 
+           label = "Effetto di compressione:\nvalori piccoli di r diventano\nancora più piccoli in r²",
+           hjust = 1, size = 3.5, color = "#666666", lineheight = 0.9)
+```
+
+### Implicazioni per la ricerca applicata
+
+Questa distorsione sistematica ha conseguenze pratiche rilevanti in diversi contesti di ricerca:
+
+**1. Confronto di predittori in modelli di regressione.**
+Quando si confronta l'importanza relativa di diverse variabili predittive, l'uso di $r^2$ può sovrastimare drasticamente il contributo delle variabili con effetti più forti, distorcendo le conclusioni sui fattori più rilevanti.
+
+**2. Meta-analisi e sintesi di evidenze.** 
+L'aggregazione di effetti attraverso $r^2$ può produrre stime distorte della grandezza relativa degli effetti tra studi differenti, compromettendo la validità delle sintesi quantitative.
+
+**3. Comunicazione Scientifica.**
+Presentare $r^2$ senza il corrispondente $r$ può indurre lettori non esperti a conclusioni errate sull'importanza pratica dei risultati. Ad esempio, un $r = 0.3$ (effetto moderato) diventa $r^2 = 0.09$, che può essere erroneamente interpretato come "solo il 9% di varianza spiegata" suggerendo un effetto trascurabile.
+
+In sintesi, l'esempio di Darlington serve come monito metodologico: mentre $r^2$ possiede un'interpretazione matematica precisa come proporzione di varianza spiegata, la sua natura quadratica lo rende uno strumento problematico per confronti relativi. La correlazione $r$, nonostante i suoi limiti, preserva meglio le proporzioni lineari tra effetti.
+
+La scelta tra $r$ e $r^2$ dovrebbe essere guidata dallo scopo analitico specifico:
+
+- **per comprendere relazioni lineari e confronti relativi**: preferire $r$;
+- **per quantificare la capacità predittiva in termini di riduzione dell'errore**: considerare $r^2$ insieme a $r$;
+- **per comunicazioni con pubblico non specialistico**: presentare entrambi gli indicatori con spiegazioni chiare.
+
+## Gli standard di Cohen: utili ma arbitrari
+
+Jacob Cohen (1988) propose soglie convenzionali per classificare gli effetti:
+
+| Misura | Piccolo | Medio | Grande |
+|--------|---------|-------|--------|
+| $d$    | 0.20    | 0.50  | 0.80   |
+| $r$    | 0.10    | 0.30  | 0.50   |
+
+Tuttavia, in seguito, lo stesso Cohen espresse rammarico per queste etichette, precisando che dovrebbero essere usate solo in assenza di criteri migliori. Il problema è che "piccolo", "medio" e "grande" sono privi di significato senza contestualizzazione.
+
+### Simulazione: lo stesso $d$ in contesti diversi
+
+```{r}
+#| label: fig-context-matters
+#| fig-cap: "Lo stesso d = 0.3 ha significati radicalmente diversi in contesti diversi."
+
+# Scenario 1: Intervento educativo sul QI (SD ≈ 15 punti)
+# d = 0.3 → differenza di 4.5 punti QI
+
+# Scenario 2: Farmaco per la pressione (SD ≈ 10 mmHg)
+# d = 0.3 → differenza di 3 mmHg
+
+# Scenario 3: Terapia per la depressione (BDI, SD ≈ 10 punti)
+# d = 0.3 → differenza di 3 punti BDI
+
+contexts <- tibble(
+  Contesto = c("QI (SD = 15)", "Pressione arteriosa (SD = 10 mmHg)", 
+               "Depressione BDI (SD = 10)"),
+  `Cohen's d` = c(0.3, 0.3, 0.3),
+  `Differenza grezza` = c("4.5 punti QI", "3 mmHg", "3 punti BDI"),
+  `Interpretazione clinica` = c(
+    "Modesta ma rilevante per politiche educative",
+    "Clinicamente rilevante (riduce il rischio cardiovascolare)",
+    "Sotto la soglia di cambiamento clinicamente rilevante (5 punti)"
+  )
+)
+
+contexts |>
+  knitr::kable()
+```
+
+Lo stesso $d = 0.3$ può essere irrilevante in un contesto e clinicamente importante in un altro. Per questo è cruciale andare oltre le etichette di Cohen.
+
+## Benchmark empirici: un approccio contestualizzato per interpretare le dimensioni degli effetti
+
+@funder2019evaluating propongono due strategie pragmatiche per interpretare le dimensioni degli effetti in termini di rilevanza pratica, superando i limiti delle classificazioni arbitrarie.
+
+**1. Confronto con effetti noti.**
+
+Piuttosto che ricorrere a etichette arbitrarie ("piccolo", "medio", "grande"), si confronta il risultato con effetti ben stabiliti nella letteratura scientifica. Questo approccio fornisce un sistema di riferimento empirico anziché normativo.
+
+```{r}
+#| fig-width: 10
+#| fig-height: 6
+#| out.width: "100%"
+#| label: fig-benchmarks
+#| fig-cap: "Benchmark empirici per contestualizzare le dimensioni degli effetti. Il tipico effetto in psicologia sociale (r = 0.19) è paragonabile all'efficacia dell'ibuprofene sul dolore."
+
+# Benchmark da Funder & Ozer (2019) e altre fonti
+benchmarks <- tibble(
+  Effetto = c(
+    "Ibuprofene sul dolore",
+    "Antistaminici sul raffreddore",
+    "Media psicologia sociale (meta-analisi 708 studi)",
+    "Genere → altezza",
+    "Psicoterapia → miglioramento sintomi",
+    "Aspirina → prevenzione infarto",
+    "Fumo → cancro ai polmoni"
+  ),
+  r = c(0.14, 0.11, 0.19, 0.67, 0.32, 0.02, 0.40),
+  Fonte = c("Meyer et al., 2001", "Meyer et al., 2001", 
+            "Richard et al., 2003", "Conoscenza comune",
+            "Smith et al., 1980", "ISIS-2, 1988", "Doll & Hill, 1950")
+) |>
+  mutate(
+    d = 2 * r / sqrt(1 - r^2),
+    Cohen_label = case_when(
+      abs(r) < 0.1 ~ "< Piccolo",
+      abs(r) < 0.3 ~ "Piccolo",
+      abs(r) < 0.5 ~ "Medio",
+      TRUE ~ "Grande"
+    )
+  ) |>
+  arrange(r)
+
+ggplot(benchmarks, aes(x = r, y = reorder(Effetto, r), fill = Cohen_label)) +
+  geom_col(alpha = 0.8) +
+  geom_vline(xintercept = c(0.1, 0.3, 0.5), linetype = "dashed", 
+             color = "gray50", alpha = 0.5) +
+  scale_fill_manual(values = c("< Piccolo" = "gray70", "Piccolo" = "lightblue",
+                               "Medio" = "steelblue", "Grande" = "darkblue")) +
+  labs(
+    x = "Correlazione (r)",
+    y = "",
+    fill = "Etichetta Cohen",
+    title = "Benchmark empirici per le dimensioni degli effetti",
+    subtitle = "Le linee tratteggiate indicano le soglie di Cohen (0.1, 0.3, 0.5)"
+  ) +
+  theme(legend.position = "bottom")
+```
+
+Questi benchmark offrono una prospettiva chiarificatrice. L'effetto dell'aspirina nella prevenzione dell'infarto ($r = 0.02$) è classificato come "trascurabile" secondo le categorie di Cohen, eppure l'ISIS-2 trial ha dimostrato che salva circa 25 vite ogni 1000 pazienti trattati. Al contrario, molti effetti "medi" in psicologia sociale potrebbero non avere alcuna rilevanza pratica.
+
+**2. L'importanza degli effetti cumulativi.**
+
+Un effetto statisticamente modesto può generare conseguenze sostanziali quando applicato su larga scala o quando si accumula nel tempo. Questa prospettiva è particolarmente rilevante per le politiche pubbliche e gli interventi a livello di popolazione.
+
+```{r}
+#| label: fig-cumulative-effects
+#| fig-cap: "Anche un effetto piccolo (r = 0.10) può avere impatti sostanziali se applicato a grandi popolazioni."
+
+# Simulazione: effetto di un intervento educativo su larga scala
+n_students <- c(100, 1000, 10000, 100000, 1000000)
+effect_r <- 0.10
+effect_d <- 2 * effect_r / sqrt(1 - effect_r^2)
+
+# Assumiamo che "successo" significhi superare una soglia (es. promozione)
+# Baseline: 50% di successo
+# Con l'intervento: la distribuzione si sposta di d
+
+baseline_success <- 0.50
+intervention_success <- pnorm(qnorm(baseline_success) + effect_d)
+
+cumulative <- tibble(
+  `Studenti totali` = scales::comma(n_students),
+  `Successi baseline` = scales::comma(round(n_students * baseline_success)),
+  `Successi con intervento` = scales::comma(round(n_students * intervention_success)),
+  `Studenti in più che hanno successo` = scales::comma(
+    round(n_students * (intervention_success - baseline_success))
+  )
+)
+
+cumulative |>
+  knitr::kable()
+```
+
+La tabella illustra un principio fondamentale: la rilevanza pratica di un effetto non dipende solo dalla sua grandezza standardizzata, ma anche dalla scala della sua applicazione.
+
+Con un effetto piccolo ($r = 0.10$, classificato come "piccolo" secondo Cohen), applicato a una scuola di 1000 studenti, si ottengono 40 studenti in più che raggiungono il successo accademico. Estendendo lo stesso intervento a livello regionale (100,000 studenti), si generano circa 4,000 successi aggiuntivi. A livello nazionale (1,000,000 di studenti), l'effetto produce circa 40,000 successi in più.
+
+Questo approccio contestuale sfida tre presupposti comuni.
+
+* Il mito della soglia minima: effetti classificati come "piccoli" o "trascurabili" secondo Cohen possono avere importanza pratica sostanziale quando valutati nel loro contesto applicativo.
+* La necessità del confronto: l'interpretazione di una dimensione dell'effetto è intrinsecamente relativa. Un $r = 0.20$ è modesto se paragonato al fumo come fattore di rischio per il cancro ($r = 0.40$), ma rilevante se confrontato con l'efficacia di farmaci comunemente prescritti.
+* L'importanza della scala: la valutazione della rilevanza pratica deve considerare non solo la grandezza standardizzata dell'effetto, ma anche la popolazione a cui si applica e le conseguenze cumulative nel tempo.
+
+Questa prospettiva riconcilia la precisione statistica con la rilevanza pratica, promuovendo una ricerca che non si limita a dimostrare effetti statisticamente significativi, ma che valuta la loro importanza nel mondo reale.
+
+## Il problema del "piranha": effetti troppo grandi per essere veri
+
+Andrew Gelman ha coniato il termine *piranha problem* per descrivere una contraddizione sistemica nella letteratura psicologica: se esistessero realmente tutti gli effetti grandi e robusti riportati negli studi, questi *piranha* statistici si "mangerebbero a vicenda" poiché non esisterebbe sufficiente varianza da spiegare [@tosh2021piranha].
+
+Il concetto è fondamentalmente aritmetico: il comportamento umano emerge dall'interazione di innumerevoli fattori genetici, ambientali, culturali e situazionali. Se ciascuno di questi fattori producesse indipendentemente un effetto di dimensione media ($r = 0.30$, secondo le convenzioni di Cohen), rapidamente supereremmo il 100% della varianza spiegabile. La matematica di base dell'analisi della varianza rende questa situazione impossibile.
+
+```{r}
+#| label: fig-piranha-problem
+#| fig-cap: "Il 'piranha problem': se esistessero molti effetti grandi e indipendenti, non resterebbe varianza da spiegare. Con 10 predittori di r = 0.30, la R² totale supererebbe 1 (impossibile)."
+
+# Simulazione: quanta varianza "consumano" predittori multipli?
+n_predictors <- 1:20
+r_each <- 0.30
+
+# Se i predittori fossero indipendenti, R² ≈ n * r²
+# (semplificazione per illustrare il concetto)
+cumulative_r2 <- n_predictors * r_each^2
+
+tibble(
+  `Numero di predittori` = n_predictors,
+  `R² cumulativa (se indipendenti)` = cumulative_r2
+) |>
+  ggplot(aes(x = `Numero di predittori`, y = `R² cumulativa (se indipendenti)`)) +
+  geom_line(color = "steelblue", linewidth = 1.2) +
+  geom_point(color = "steelblue", size = 2) +
+  geom_hline(yintercept = 1, color = "red", linetype = "dashed", linewidth = 1) +
+  annotate("text", x = 15, y = 1.1, label = "R² = 1 (limite massimo)", 
+           color = "red", hjust = 0) +
+  geom_vline(xintercept = 1 / r_each^2, color = "coral", linetype = "dotted") +
+  annotate("text", x = 12, y = 0.5, 
+           label = sprintf("Con r = %.2f per predittore,\nbastano %.0f predittori\nper 'esaurire' la varianza", 
+                          r_each, 1 / r_each^2),
+           color = "coral", hjust = 0) +
+  scale_y_continuous(limits = c(0, 2), breaks = seq(0, 2, 0.25)) +
+  labs(
+    title = "Il 'Piranha Problem'",
+    subtitle = "Se ogni predittore spiega r² = 0.09 della varianza...",
+    y = "R² cumulativa"
+  )
+```
+
+Da questa simulazione possiamo trarre tre implicazioni metodologiche. 
+
+**1. È necessario un sano scetticismo sugli effetti molto grandi.**
+Quando un singolo fattore pretende di spiegare più del 10-15% della varianza di comportamenti umani complessi, è opportuno attivare un sano scetticismo metodologico. Effetti di questa portata dovrebbero suscitare interrogativi critici e richiedere verifiche rigorose. In particolare, tali risultati richiedono verifiche di robustezza tramite analisi di sensibilità, validazione incrociata su campioni indipendenti e un'analisi esplicita dei possibili artefatti metodologici o dei possibili fattori di confusione che potrebbero aver influito sulle stime.
+
+**2. Il valore atteso della grandezza dell'effetto.**
+È importante riconoscere che la maggior parte degli effetti genuini nel comportamento umano presenta dimensioni modeste. Questa caratteristica non rappresenta un fallimento della ricerca, ma riflette piuttosto la complessità intrinseca del comportamento umano. Spesso, i piccoli effetti sono reali: un coefficiente di correlazione pari a 0.10 può rappresentare un'associazione autentica e replicabile. La scienza progredisce proprio integrando numerosi piccoli effetti in teorie più ampie, dimostrando che la replicabilità è più importante della apparente grandezza degli effetti: un effetto piccolo ma stabile nel tempo fornisce informazioni più affidabili di un effetto grande ma instabile o non replicabile.
+
+**3. La rilevananza pratica dipende dal contesto.**
+Come abbiamo già sottolineato in precedenza, la grandezza standardizzata di un effetto rappresenta solo una dimensione della sua importanza. Una valutazione completa richiede di considerare il contesto applicativo nel suo complesso. La scala di applicazione è determinante: un effetto modesto (r = 0,10) applicato a una popolazione di 10 milioni di persone può produrre conseguenze sostanziali. Allo stesso modo, è necessario valutare il rapporto costi-benefici, poiché gli effetti modesti di interventi a basso costo possono rivelarsi altamente efficienti. Non bisogna trascurare l'importanza teorica: un effetto piccolo può avere implicazioni significative per lo sviluppo o la validazione di teorie scientifiche. Infine, l'impatto cumulativo degli effetti che si sommano nel tempo o che agiscono attraverso diversi canali può generare cambiamenti sostanziali che superano l'apparente modestia di ciascun contributo individuale.
+
+**Riconciliazione: dalla dimensione dell'effetto alla rilevanza integrata.**
+
+Il problema del *piranha* ci ricorda che la ricerca scientifica richiede una valutazione olistica che integri diverse dimensioni della qualità della ricerca. La plausibilità teorica, intesa come coerenza con le conoscenze esistenti, rappresenta un primo criterio fondamentale. A questi si deve aggiungere la robustezza metodologica, che si riferisce alla qualità del disegno della ricerca e delle analisi statistiche. La replicabilità, ovvero la consistenza dei risultati attraverso studi e campioni diversi, costituisce un ulteriore elemento indispensabile. Infine, la rilevanza contestuale, intesa come significato pratico nel dominio applicativo specifico, completa il quadro valutativo.
+
+Piuttosto che celebrare acriticamente gli effetti di grandi dimensioni, la comunità scientifica dovrebbe valorizzare gli studi che quantificano accuratamente gli effetti, anche quando sono di modesta entità, che documentano in modo trasparente i limiti delle stime ottenute, che collocano i risultati nel contesto della letteratura esistente e che esplicitano con chiarezza le implicazioni pratiche e teoriche dei risultati. Questo approccio promuove una scienza cumulativa e realistica, in cui l'umiltà epistemologica si combina con il rigore metodologico per ottenere una comprensione progressivamente più accurata del comportamento umano.
+
+La dimensione dell'effetto è uno strumento utile per valutare l'importanza pratica dei risultati di ricerca, ma la sua utilità dipende da un'interpretazione consapevole e contestualizzata. 
+
+Le considerazioni emerse in questo capitolo possono essere riassunte in cinque principi guida. In primo luogo, è essenziale evitare l'uso acritico delle etichette convenzionali proposte da Cohen. Le categorie di "piccolo", "medio" e "grande" sono convenzioni arbitrarie che, se applicate meccanicamente, rischiano di oscurare il significato contestuale dei risultati. Queste etichette, non ancorate alla realtà specifica del fenomeno studiato, possono condurre a conclusioni fuorvianti o eccessivamente semplificate.
+
+In secondo luogo, nella comunicazione dei risultati è preferibile utilizzare il coefficiente di correlazione $r$ piuttosto che il suo quadrato $r^2$. La trasformazione in "varianza spiegata", sebbene matematicamente corretta, introduce una distorsione sistematica che tende a minimizzare la percezione dell'importanza degli effetti, soprattutto quando questi sono di lieve entità. La natura quadratica di questa trasformazione amplifica artificialmente le differenze tra gli effetti più forti, creando una gerarchia di importanza che non corrisponde necessariamente alla loro rilevanza pratica.
+
+Il terzo principio riguarda l'importanza di utilizzare benchmark empirici come riferimento interpretativo. Confrontare i propri risultati con effetti ben documentati nel campo di studio o in ambiti affini offre una prospettiva più ricca e significativa rispetto alle classificazioni arbitrarie. Questa pratica consente di ancorare l'interpretazione statistica a un contesto di conoscenze consolidate, facilitando la valutazione dell'originalità dei risultati e la loro comunicazione a un pubblico più ampio.
+
+Il quarto punto sottolinea la necessità di considerare sistematicamente le implicazioni pratiche delle dimensioni degli effetti. Un effetto statisticamente "piccolo" può avere conseguenze sostanziali se applicato su larga scala o se i suoi effetti si accumulano nel tempo. Questa prospettiva è particolarmente rilevante nella valutazione di interventi sociali, sanitari o educativi, in cui l'impatto aggregato può tradursi in benefici significativi per la comunità.
+
+Infine, l'applicazione del cosiddetto "piranha test" offre un utile criterio di controllo critico. Quando i risultati suggeriscono l'esistenza simultanea di numerosi effetti indipendenti di grandi dimensioni, è opportuno attivare uno scetticismo metodologico. Questa situazione, infatti, solleva interrogativi sulla plausibilità teorica dei risultati e sulla possibilità di sovrastima statistica, richiedendo ulteriori verifiche di robustezza e replicazione.
+
+La statistica bayesiana, che esploreremo nel prosieguo del corso, fornisce un quadro concettuale particolarmente adatto ad affrontare queste sfide interpretative. Questo approccio fornisce strumenti più sofisticati per quantificare l'incertezza associata alle stime degli effetti e consente di integrare esplicitamente le conoscenze pregresse nella valutazione dei nuovi risultati. Attraverso questa metodologia, è possibile sviluppare una comprensione più sfumata e contestualizzata delle dimensioni degli effetti e promuovere una comunicazione scientifica più trasparente e informativa.
+
+## Esercizi
+
+::: {.callout-important title="Esercizio 1: Calcolare e visualizzare Cohen's d" collapse="true"}
+
+Hai condotto uno studio su un intervento per migliorare la memoria. I risultati sono:
+
+- Gruppo controllo: $M = 45$, $SD = 12$, $n = 30$
+- Gruppo intervento: $M = 51$, $SD = 14$, $n = 32$
+
+1. Calcola il $d$ di Cohen con la formula della pooled SD.
+2. Calcola il CLES (probabilità che un partecipante del gruppo intervento superi uno del controllo).
+3. Visualizza le due distribuzioni sovrapposte.
+:::
+
+::: {.callout-tip title="Soluzione Esercizio 1" collapse="true"}
+```{r}
+# Dati
+m1 <- 45; sd1 <- 12; n1 <- 30
+m2 <- 51; sd2 <- 14; n2 <- 32
+
+# 1. Calcolo Cohen's d
+pooled_sd <- sqrt(((n1 - 1) * sd1^2 + (n2 - 1) * sd2^2) / (n1 + n2 - 2))
+cohens_d <- (m2 - m1) / pooled_sd
+
+cat(sprintf("Pooled SD: %.2f\n", pooled_sd))
+cat(sprintf("Cohen's d: %.2f\n", cohens_d))
+
+# 2. CLES
+cles_value <- pnorm(cohens_d / sqrt(2))
+cat(sprintf("CLES: %.1f%% (probabilità che intervento > controllo)\n", cles_value * 100))
+
+# 3. Visualizzazione
+tibble(
+  value = c(rnorm(1000, m1, sd1), rnorm(1000, m2, sd2)),
+  group = rep(c("Controllo", "Intervento"), each = 1000)
+) |>
+  ggplot(aes(x = value, fill = group)) +
+  geom_density(alpha = 0.5) +
+  geom_vline(xintercept = c(m1, m2), linetype = "dashed") +
+  scale_fill_manual(values = c("steelblue", "coral")) +
+  labs(
+    title = sprintf("d = %.2f, CLES = %.1f%%", cohens_d, cles_value * 100),
+    x = "Punteggio memoria",
+    y = "Densità"
+  )
+```
+:::
+
+::: {.callout-important title="Esercizio 2: r vs r² - Un caso pratico" collapse="true"}
+
+Un ricercatore afferma: "La correlazione tra ore di studio e voto è r = 0.40, ma questo spiega solo il 16% della varianza, quindi studiare conta poco."
+
+1. Commenta criticamente questa affermazione.
+2. Calcola quante ore di studio in più servono per aumentare il voto di 1 punto (assumendo voto medio = 25, SD = 4, ore studio medie = 20, SD = 10).
+3. Confronta questo effetto con i benchmark della letteratura.
+:::
+
+::: {.callout-tip title="Soluzione Esercizio 2" collapse="true"}
+```{r}
+# 1. Critica
+cat("L'affermazione è fuorviante per tre ragioni:\n\n")
+cat("a) r = 0.40 è un effetto 'medio-grande' secondo Cohen\n")
+cat("b) r² minimizza sistematicamente l'interpretabilità\n")
+cat("c) Il 16% di varianza può tradursi in differenze pratiche significative\n\n")
+
+# 2. Calcolo pratico
+r <- 0.40
+sd_voto <- 4
+sd_ore <- 10
+mean_voto <- 25
+mean_ore <- 20
+
+# La pendenza della regressione standardizzata è r
+# In unità originali: b = r * (SD_y / SD_x)
+b <- r * (sd_voto / sd_ore)
+ore_per_punto <- 1 / b
+
+cat(sprintf("Per ogni ora di studio in più, il voto aumenta di %.2f punti\n", b))
+cat(sprintf("Per aumentare il voto di 1 punto, servono %.1f ore in più\n\n", ore_per_punto))
+
+# 3. Confronto con benchmark
+cat("Confronto con benchmark:\n")
+cat("- r = 0.40 è più forte dell'effetto medio in psicologia sociale (r = 0.19)\n")
+cat("- È comparabile all'effetto fumo → cancro (r ≈ 0.40)\n")
+cat("- È molto più forte dell'effetto aspirina → prevenzione infarto (r = 0.02)\n")
+```
+:::
+
+::: {.callout-important title="Esercizio 3: Il piranha test" collapse="true"}
+
+Un articolo afferma di aver trovato 5 predittori indipendenti del benessere psicologico, ciascuno con $r = 0.35$:
+
+1. Supporto sociale
+2. Esercizio fisico  
+3. Qualità del sonno
+4. Reddito
+5. Ottimismo
+
+Usa il "piranha test" per valutare la plausibilità di questi risultati.
+:::
+
+::: {.callout-tip title="Soluzione Esercizio 3" collapse="true"}
+```{r}
+# Piranha test
+r <- 0.35
+n_predictors <- 5
+
+# R² cumulativa se i predittori fossero indipendenti
+r2_each <- r^2
+r2_cumulative <- n_predictors * r2_each
+
+cat(sprintf("Ogni predittore 'spiega' r² = %.2f della varianza\n", r2_each))
+cat(sprintf("5 predittori indipendenti spiegherebbero R² = %.2f\n\n", r2_cumulative))
+
+if (r2_cumulative > 1) {
+  cat("IMPOSSIBILE: R² > 1!\n")
+} else if (r2_cumulative > 0.5) {
+  cat("SOSPETTO: R² > 0.50 per il benessere psicologico è implausibile\n")
+  cat("Il benessere è influenzato da centinaia di fattori, non solo 5\n")
+}
+
+cat("\nPossibili spiegazioni:\n")
+cat("1. Gli effetti sono sovrastimati (errore di tipo M)\n")
+cat("2. I predittori sono correlati tra loro (multicollinearità)\n")
+cat("3. Le misure condividono varianza di metodo\n")
+cat("4. P-hacking o selezione dei predittori post-hoc\n")
+```
+:::
+
+::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+```{r}
+sessionInfo()
+```
+:::
+
+## Bibliografia {.unnumbered .unlisted}

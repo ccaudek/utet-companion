@@ -1,0 +1,588 @@
+# La fragilità del valore-$p$ {#sec-p-value-fragility}
+
+::: {.callout-note appearance="minimal"}
+Nel Capitolo 3 del manuale abbiamo visto che il valore-$p$ è spesso frainteso e usato impropriamente. Una delle sue caratteristiche più problematiche, ma meno intuitive, è la sua **estrema variabilità**: campioni diversi dalla stessa popolazione possono produrre p-value drasticamente diversi.
+
+@gelman2006difference hanno sintetizzato questo problema in una frase memorabile:
+
+> La differenza tra "significativo" e "non significativo" non è di per sé statisticamente significativa.
+
+In questo capitolo esploreremo questa affermazione attraverso simulazioni, mostrando concretamente quanto sia fragile basare decisioni scientifiche sulla distinzione binaria $p < 0.05$ vs $p \geq 0.05$.
+:::
+
+::: callout-important
+## In questo capitolo imparerai a
+
+- Osservare empiricamente la variabilità del valore-$p$ da campione a campione.
+- Confrontare la distribuzione dei p-value sotto $H_0$ vera vs $H_0$ falsa.
+- Comprendere perché la differenza tra "significativo" e "non significativo" non è significativa.
+- Confrontare la stabilità delle inferenze frequentiste vs bayesiane.
+:::
+
+::: callout-tip
+## Prerequisiti
+
+- Leggere il **Capitolo 3** del manuale ("Il valore-$p$ e i suoi fraintendimenti").
+- Leggere il post di Gelman & Stern (2006): [The Difference Between "Significant" and "Not Significant" is not Itself Statistically Significant](http://www.stat.columbia.edu/~gelman/research/published/signif4.pdf).
+:::
+
+::: callout-caution
+## Preparazione del Notebook
+
+```{r}
+#| message: false
+#| warning: false
+
+# Caricamento librerie
+library(tidyverse)
+library(patchwork)
+
+# Tema grafico comune
+theme_set(theme_minimal(base_size = 12))
+
+# Seed per riproducibilità
+set.seed(42)
+```
+:::
+
+## Simulazione 1: La variabilità del valore-$p$
+
+### Setup
+
+Immaginiamo di studiare un effetto molto piccolo: $\mu = 0.05$ con $\sigma = 0.1$ (equivalente a un Cohen's $d = 0.5$). Estraiamo 100 campioni indipendenti di $n = 10$ osservazioni ciascuno e calcoliamo il p-value per testare $H_0: \mu = 0$.
+
+```{r}
+# Parametri della simulazione
+n_samples <- 100         # Numero di campioni indipendenti
+n_obs <- 10              # Osservazioni per campione
+true_mean <- 0.05        # Media vera (effetto piccolo)
+true_sd <- 0.1           # Deviazione standard
+
+# Simula i campioni e calcola i p-value
+simulation <- tibble(sample_id = 1:n_samples) |>
+  rowwise() |>
+  mutate(
+    data = list(rnorm(n_obs, mean = true_mean, sd = true_sd)),
+    sample_mean = mean(data),
+    sample_sd = sd(data),
+    t_stat = sample_mean / (sample_sd / sqrt(n_obs)),
+    p_value = 2 * pt(-abs(t_stat), df = n_obs - 1),
+    significant = p_value < 0.05
+  ) |>
+  ungroup()
+```
+
+```{r}
+#| echo: false
+# Statistiche riassuntive
+cat("═══════════════════════════════════════════════════════\n")
+cat("         VARIABILITÀ DEI VALORI-p\n")
+cat("         (100 campioni dalla stessa popolazione)\n")
+cat("═══════════════════════════════════════════════════════\n")
+cat(sprintf("Effetto vero: μ = %.2f, σ = %.2f (d = %.1f)\n", 
+            true_mean, true_sd, true_mean/true_sd))
+cat(sprintf("Dimensione campione: n = %d\n", n_obs))
+cat("───────────────────────────────────────────────────────\n")
+cat(sprintf("Range p-value:    [%.4f, %.4f]\n", 
+            min(simulation$p_value), max(simulation$p_value)))
+cat(sprintf("Mediana p-value:  %.3f\n", median(simulation$p_value)))
+cat(sprintf("Significativi:    %d/%d (%.0f%%)\n", 
+            sum(simulation$significant), n_samples,
+            100 * mean(simulation$significant)))
+cat("═══════════════════════════════════════════════════════\n")
+```
+
+
+### Visualizzazione
+
+```{r}
+#| label: fig-pvalue-variability
+#| fig-cap: "Variabilità dei p-value in 100 campioni dalla stessa popolazione. Lo stesso effetto vero produce conclusioni opposte a seconda del campione."
+#| fig-height: 5
+
+# Ordina per p-value per una visualizzazione più chiara
+simulation_ordered <- simulation |>
+  arrange(p_value) |>
+  mutate(rank = row_number())
+
+ggplot(simulation_ordered, aes(x = rank, y = p_value, color = significant)) +
+  geom_point(size = 2, alpha = 0.8) +
+  geom_hline(yintercept = 0.05, linetype = "dashed", color = "red", linewidth = 1) +
+  scale_color_manual(
+    values = c("TRUE" = "forestgreen", "FALSE" = "gray60"),
+    labels = c("TRUE" = "Significativo (p < 0.05)", "FALSE" = "Non significativo")
+  ) +
+  scale_y_continuous(trans = "log10", 
+                     breaks = c(0.001, 0.01, 0.05, 0.1, 0.5, 1),
+                     labels = c("0.001", "0.01", "0.05", "0.1", "0.5", "1")) +
+  labs(
+    x = "Campioni (ordinati per p-value)",
+    y = "Valore-p (scala logaritmica)",
+    color = "",
+    title = "100 studi identici, conclusioni diverse",
+    subtitle = sprintf("Stesso effetto (d = %.1f), stesso n = %d, ma p-value da %.4f a %.2f",
+                      true_mean/true_sd, n_obs, 
+                      min(simulation$p_value), max(simulation$p_value))
+  ) 
+```
+
+Il grafico mostra un risultato sorprendente: lo **stesso effetto vero**, studiato con lo **stesso protocollo**, produce p-value che variano da quasi 0 a quasi 1. Alcuni studi concluderebbero "effetto altamente significativo" ($p < 0.01$), altri "nessuna evidenza" ($p > 0.5$).
+
+## Simulazione 2: La Distribuzione dei P-value
+
+### Sotto l'ipotesi nulla vera
+
+Se $H_0$ è vera ($\mu = 0$), i p-value dovrebbero essere **uniformemente distribuiti** tra 0 e 1. Questo significa che il 5% dei p-value sarà < 0.05 per puro caso.
+
+```{r}
+#| label: fig-pvalue-under-h0
+#| fig-cap: "Distribuzione dei p-value quando H₀ è vera. I p-value sono uniformi: il 5% cade sotto 0.05 per puro caso."
+
+# Simulazione sotto H0 vera
+n_sims_h0 <- 10000
+p_values_h0 <- map_dbl(1:n_sims_h0, function(i) {
+  x <- rnorm(n_obs, mean = 0, sd = true_sd)  # H0 vera: mu = 0
+  t.test(x, mu = 0)$p.value
+})
+
+tibble(p_value = p_values_h0) |>
+  ggplot(aes(x = p_value)) +
+  geom_histogram(bins = 50, fill = "steelblue", color = "white", 
+                 aes(y = after_stat(density)), alpha = 0.8) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "red", linewidth = 1) +
+  geom_vline(xintercept = 0.05, linetype = "dashed", color = "darkred", linewidth = 1) +
+  annotate("text", x = 0.10, y = 1.3, label = "5% falsi positivi", 
+           color = "darkred", hjust = 0) +
+  labs(
+    x = "Valore-p",
+    y = "Densità",
+    title = "Distribuzione dei p-value sotto H₀ vera",
+    subtitle = sprintf("%.1f%% dei p-value sono < 0.05 (atteso: 5%%)", 
+                      100 * mean(p_values_h0 < 0.05))
+  ) +
+  coord_cartesian(ylim = c(0, 1.5))
+```
+
+### Sotto l'ipotesi nulla falsa
+
+Se esiste un effetto reale, la distribuzione dei p-value si sposta verso lo zero, ma rimane molto variabile:
+
+```{r}
+#| label: fig-pvalue-distributions
+#| fig-cap: "Distribuzione dei p-value sotto H₀ vera vs falsa. Anche con un effetto reale (d = 0.5), molti studi non raggiungono la significatività."
+#| fig-height: 6
+
+# Simulazione sotto H0 falsa (effetto piccolo)
+effect_sizes <- c(0, 0.2, 0.5, 0.8)
+n_sims <- 5000
+
+pvalue_distributions <- map_dfr(effect_sizes, function(d) {
+  p_vals <- map_dbl(1:n_sims, function(i) {
+    x <- rnorm(n_obs, mean = d * true_sd, sd = true_sd)
+    t.test(x, mu = 0)$p.value
+  })
+  
+  tibble(
+    effect_size = d,
+    p_value = p_vals,
+    label = sprintf("d = %.1f (potenza: %.0f%%)", d, 100 * mean(p_vals < 0.05))
+  )
+})
+
+ggplot(pvalue_distributions, aes(x = p_value)) +
+  geom_histogram(bins = 50, fill = "steelblue", color = "white", alpha = 0.8) +
+  geom_vline(xintercept = 0.05, linetype = "dashed", color = "red") +
+  facet_wrap(~label, ncol = 2, scales = "free_y") +
+  labs(
+    x = "Valore-p",
+    y = "Frequenza",
+    title = "Come la dimensione dell'effetto influenza la distribuzione dei p-value",
+    subtitle = sprintf("n = %d per campione, %d simulazioni per condizione", n_obs, n_sims)
+  )
+```
+
+Anche con un effetto "medio" ($d = 0.5$), circa il 40% degli studi non raggiunge la significatività. La variabilità dei p-value diminuisce solo con effetti grandi ($d \geq 0.8$).
+
+## Simulazione 3: Due Studi "Contraddittori"
+
+### Il paradosso di Gelman & Stern
+
+Immaginiamo due studi identici che trovano:
+
+- Studio A: $p = 0.04$ → "Effetto significativo!"
+- Studio B: $p = 0.06$ → "Nessun effetto"
+
+Questi risultati sono davvero contraddittori? Simuliamo cosa succede quando due ricercatori studiano lo stesso effetto:
+
+```{r}
+#| label: fig-two-studies
+#| fig-cap: "1000 coppie di studi identici. Spesso uno trova p < 0.05 e l'altro no, pur studiando lo stesso effetto."
+
+# Simula coppie di studi
+n_pairs <- 1000
+study_pairs <- tibble(pair_id = 1:n_pairs) |>
+  rowwise() |>
+  mutate(
+    # Studio A
+    data_a = list(rnorm(n_obs, mean = true_mean, sd = true_sd)),
+    p_a = t.test(data_a, mu = 0)$p.value,
+    sig_a = p_a < 0.05,
+    # Studio B (stessa popolazione!)
+    data_b = list(rnorm(n_obs, mean = true_mean, sd = true_sd)),
+    p_b = t.test(data_b, mu = 0)$p.value,
+    sig_b = p_b < 0.05,
+    # Concordanza
+    concordance = case_when(
+      sig_a & sig_b ~ "Entrambi significativi",
+      !sig_a & !sig_b ~ "Entrambi non significativi",
+      TRUE ~ "Risultati discordanti"
+    )
+  ) |>
+  ungroup()
+
+# Statistiche
+concordance_stats <- study_pairs |>
+  count(concordance) |>
+  mutate(pct = n / sum(n) * 100)
+
+print(concordance_stats)
+
+# Visualizzazione
+ggplot(study_pairs, aes(x = p_a, y = p_b, color = concordance)) +
+  geom_point(alpha = 0.5, size = 2) +
+  geom_hline(yintercept = 0.05, linetype = "dashed", color = "gray50") +
+  geom_vline(xintercept = 0.05, linetype = "dashed", color = "gray50") +
+  geom_abline(slope = 1, intercept = 0, color = "gray30", linetype = "dotted") +
+  scale_color_manual(values = c(
+    "Entrambi significativi" = "forestgreen",
+    "Entrambi non significativi" = "steelblue",
+    "Risultati discordanti" = "coral"
+  )) +
+  labs(
+    x = "P-value Studio A",
+    y = "P-value Studio B",
+    color = "",
+    title = "Coppie di studi sullo stesso effetto",
+    subtitle = sprintf("%.0f%% delle coppie dà risultati discordanti", 
+                      concordance_stats$pct[concordance_stats$concordance == "Risultati discordanti"])
+  ) +
+  coord_fixed() 
+```
+
+I **risultati discordanti** sono comuni! Due ricercatori che studiano lo stesso fenomeno con lo stesso protocollo possono facilmente arrivare a conclusioni opposte, semplicemente a causa della variabilità campionaria.
+
+## Simulazione 4: Confronto con l'Approccio Bayesiano
+
+L'approccio bayesiano non usa soglie arbitrarie, ma produce una **distribuzione a posteriori** che quantifica l'incertezza. Confrontiamo la stabilità delle due inferenze.
+
+```{r}
+#| label: fig-freq-vs-bayes-stability
+#| fig-cap: "Confronto della stabilità: il p-value varia enormemente, mentre la probabilità a posteriori è più stabile."
+#| fig-height: 5
+
+# Funzione per calcolo bayesiano approssimato
+# Prior: mu ~ N(0, prior_sd)
+# Likelihood: x_bar | mu ~ N(mu, sigma/sqrt(n))
+bayesian_posterior_prob <- function(data, prior_sd = 0.2) {
+  x_bar <- mean(data)
+  se <- sd(data) / sqrt(length(data))
+  
+  # Posterior (coniugazione normale)
+  prior_precision <- 1 / prior_sd^2
+  data_precision <- 1 / se^2
+  
+  post_precision <- prior_precision + data_precision
+  post_mean <- (data_precision * x_bar) / post_precision
+  post_sd <- sqrt(1 / post_precision)
+  
+  # P(mu > 0 | data)
+  pnorm(0, mean = post_mean, sd = post_sd, lower.tail = FALSE)
+}
+
+# Calcola entrambe le misure per i 100 campioni
+comparison <- simulation |>
+  rowwise() |>
+  mutate(
+    prob_positive = bayesian_posterior_prob(data)
+  ) |>
+  ungroup()
+
+# Visualizzazione side-by-side
+p1 <- ggplot(comparison, aes(x = p_value)) +
+  geom_histogram(bins = 25, fill = "coral", color = "white", alpha = 0.8) +
+  geom_vline(xintercept = 0.05, linetype = "dashed", color = "black") +
+  labs(
+    title = "A) Distribuzione dei p-value",
+    x = "P-value",
+    y = "Frequenza",
+    subtitle = sprintf("Range: [%.3f, %.3f]", min(comparison$p_value), max(comparison$p_value))
+  )
+
+p2 <- ggplot(comparison, aes(x = prob_positive)) +
+  geom_histogram(bins = 25, fill = "steelblue", color = "white", alpha = 0.8) +
+  geom_vline(xintercept = 0.95, linetype = "dashed", color = "black") +
+  labs(
+    title = "B) Distribuzione P(μ > 0 | dati)",
+    x = "Probabilità a posteriori",
+    y = "Frequenza",
+    subtitle = sprintf("Range: [%.2f, %.2f]", min(comparison$prob_positive), max(comparison$prob_positive))
+  )
+
+p1 + p2
+```
+
+```{r}
+#| echo: false
+# Confronto quantitativo della variabilità
+cat("═══════════════════════════════════════════════════════\n")
+cat("    CONFRONTO VARIABILITÀ: FREQUENTISTA VS BAYESIANO\n")
+cat("═══════════════════════════════════════════════════════\n")
+cat(sprintf("Coefficiente di variazione p-value:     %.2f\n", 
+            sd(comparison$p_value) / mean(comparison$p_value)))
+cat(sprintf("Coefficiente di variazione P(μ>0|dati): %.2f\n", 
+            sd(comparison$prob_positive) / mean(comparison$prob_positive)))
+cat("───────────────────────────────────────────────────────\n")
+cat(sprintf("Conclusioni discordanti (p-value):      %.0f%%\n",
+            100 * mean(comparison$significant != (comparison$significant[1]))))
+cat(sprintf("Conclusioni discordanti (Bayes, >0.95): %.0f%%\n",
+            100 * mean((comparison$prob_positive > 0.95) != (comparison$prob_positive[1] > 0.95))))
+cat("═══════════════════════════════════════════════════════\n")
+```
+
+La probabilità a posteriori è **più stabile** del valore-$p$ perché:
+
+1. lo **shrinkage** verso la prior attenua le stime estreme;
+2. non c'è una trasformazione non lineare che amplifica le fluttuazioni;
+3. l'inferenza è su una **scala interpretabile** (probabilità dell'ipotesi).
+
+::: callout-warning
+## Avvertimento importante
+
+Anche l'approccio bayesiano non è immune dalla variabilità campionaria. Se usassimo una soglia arbitraria (es. "concludi che l'effetto esiste se $P(\mu > 0 | \text{dati}) > 0.95$"), ricadremmo negli stessi problemi del valore-$p$. Il vantaggio bayesiano sta nel **quantificare l'incertezza** in modo continuo, non nel fornire certezze.
+:::
+
+## Simulazione 5: L'Effetto della Dimensione Campionaria
+
+```{r}
+#| label: fig-sample-size-pvalue
+#| fig-cap: "La variabilità del p-value diminuisce con n, ma rimane sostanziale anche con campioni grandi."
+
+sample_sizes <- c(10, 30, 100, 300)
+n_sims <- 1000
+
+sample_size_effect <- map_dfr(sample_sizes, function(n) {
+  p_vals <- map_dbl(1:n_sims, function(i) {
+    x <- rnorm(n, mean = true_mean, sd = true_sd)
+    t.test(x, mu = 0)$p.value
+  })
+  
+  tibble(
+    n = n,
+    p_value = p_vals,
+    label = sprintf("n = %d", n)
+  )
+})
+
+ggplot(sample_size_effect, aes(x = p_value)) +
+  geom_histogram(bins = 40, fill = "steelblue", color = "white", alpha = 0.8) +
+  geom_vline(xintercept = 0.05, linetype = "dashed", color = "red") +
+  facet_wrap(~label, ncol = 2) +
+  labs(
+    x = "Valore-p",
+    y = "Frequenza",
+    title = "Distribuzione dei p-value per diverse dimensioni campionarie",
+    subtitle = sprintf("Effetto vero: d = %.1f", true_mean/true_sd)
+  )
+
+# Statistiche riassuntive
+sample_size_effect |>
+  group_by(n) |>
+  summarise(
+    `Mediana p` = sprintf("%.3f", median(p_value)),
+    `Range p` = sprintf("[%.3f, %.3f]", min(p_value), max(p_value)),
+    `% significativi` = sprintf("%.0f%%", 100 * mean(p_value < 0.05)),
+    .groups = "drop"
+  ) |>
+  knitr::kable(caption = "Variabilità del p-value in funzione di n")
+```
+
+Anche con $n = 300$, i p-value variano da quasi 0 a quasi 1. La potenza aumenta (più studi trovano $p < 0.05$), ma la **variabilità intrinseca** del p-value rimane.
+
+## Riflessioni conclusive
+
+Le simulazioni presentate in questo capitolo offrono una dimostrazione empirica illuminante della profonda fragilità del valore-$p$ come strumento inferenziale. La prima evidenza riguarda la **variabilità estrema** delle stime. Lo stesso effetto reale, investigato attraverso lo stesso protocollo sperimentale, può produrre risultati statistici diametralmente opposti: un p-value di 0.001 in un campione, suggerendo evidenza schiacciante, e un valore-$p$ di 0.90 in un altro campione, indicando completa assenza di segnale. Questa oscillazione estrema non riflette necessariamente qualità metodologica differenziale, ma piuttosto l'aleatorietà intrinseca del processo di campionamento.
+
+La seconda evidenza concerne la **discordanza sistematica tra studi**. Due ricercatori che investigano il medesimo fenomeno utilizzando protocolli metodologicamente solidi hanno una probabilità sostanziale di giungere a conclusioni statisticamente opposte. Questo fenomeno non costituisce un'eccezione ma una proprietà strutturale della inferenza basata sul p-value, minando la coerenza cumulativa della conoscenza scientifica.
+
+La terza evidenza rivela la **natura uniforme della distribuzione sotto l'ipotesi nulla**. Quando l'ipotesi nulla è vera, i p-value si distribuiscono uniformemente tra 0 e 1, garantendo per pura legge probabilistica che esattamente il 5% dei risultati verrà dichiarato "significativo" per effetto del caso. Questo meccanismo trasforma la soglia del 5% non in un filtro che separa segnale da rumore, ma in un generatore sistematico di falsi positivi.
+
+La quarta evidenza emerge dal **confronto con l'approccio bayesiano**. La probabilità a posteriori dimostra una maggiore stabilità rispetto al p-value, ma questa stabilità non equivale a certezza. L'inferenza bayesiana riduce ma non elimina l'incertezza intrinseca all'inferenza da dati campionari, offrendo una quantificazione più sfumata ma non infallibile dell'evidenza.
+
+La quinta evidenza riguarda l'**effetto della dimensione campionaria**. Campioni più grandi aumentano la potenza statistica, riducendo la probabilità di falsi negativi, ma non eliminano la variabilità fondamentale delle stime. Anche studi con migliaia di partecipanti producono risultati che fluttuano attorno al vero valore del parametro, sebbene con oscillazioni più contenute.
+
+La lezione fondamentale che emerge da queste simulazioni è che la distinzione binaria tra "significativo" e "non significativo" rappresenta una convenzione **arbitraria nella sua definizione e fragile nella sua applicazione**. Come affermano acutamente @gelman2006difference, interpretare questa distinzione artificiale come se riflettesse una differenza ontologica nel fenomeno studiato costituisce un errore logico di proporzioni epistemologiche rilevanti. Trattare valori-$p$ di 0.049 e 0.051 come portatori di significati scientifici antitetici equivale a confondere un artefatto della procedura statistica con una proprietà della realtà studiata.
+
+
+## Esercizi
+
+::: {.callout-important title="Esercizio 1: Replicabilità apparente" collapse="true"}
+
+Un ricercatore trova $p = 0.048$ nel suo studio. Qual è la probabilità che una replica esatta (stesso $n$, stessa popolazione) trovi anch'essa $p < 0.05$?
+
+Usa la simulazione per rispondere, considerando tre scenari:
+1. L'effetto vero è quello stimato nello studio originale
+2. L'effetto vero è la metà di quello stimato (Type M error)
+3. L'effetto vero è zero (falso positivo originale)
+:::
+
+::: {.callout-tip title="Soluzione Esercizio 1" collapse="true"}
+
+```{r}
+# Parametri dello studio originale
+n_original <- 30
+d_estimated <- 0.4  # Stima dallo studio con p = 0.048
+
+# Scenari
+scenarios <- tibble(
+  scenario = c("Effetto = stimato", "Effetto = metà", "Effetto = zero"),
+  true_d = c(d_estimated, d_estimated/2, 0)
+)
+
+# Simula repliche
+n_reps <- 10000
+
+replication_probs <- map_dfr(1:nrow(scenarios), function(i) {
+  d <- scenarios$true_d[i]
+  
+  p_reps <- map_dbl(1:n_reps, function(j) {
+    x <- rnorm(n_original, mean = d, sd = 1)
+    t.test(x, mu = 0)$p.value
+  })
+  
+  tibble(
+    scenario = scenarios$scenario[i],
+    prob_replicate = mean(p_reps < 0.05)
+  )
+})
+
+replication_probs |>
+  mutate(`P(replica significativa)` = sprintf("%.0f%%", prob_replicate * 100)) |>
+  select(scenario, `P(replica significativa)`) |>
+  knitr::kable()
+```
+
+**Interpretazione**: Anche assumendo che l'effetto stimato sia corretto, la replica ha solo ~50% di probabilità di essere significativa. Se l'effetto è sovrastimato (Type M error), la probabilità scende drasticamente.
+:::
+
+::: {.callout-important title="Esercizio 2: Intervallo di 'previsione' per p" collapse="true"}
+
+Se un effetto vero è $d = 0.3$ e $n = 50$, quale intervallo conterrà il 95% dei p-value ottenibili in studi futuri?
+
+Confronta questo intervallo con quello per la probabilità a posteriori bayesiana.
+:::
+
+::: {.callout-tip title="Soluzione Esercizio 2" collapse="true"}
+
+```{r}
+# Simulazione
+d <- 0.3
+n <- 50
+n_sims <- 10000
+
+future_studies <- map_dfr(1:n_sims, function(i) {
+  x <- rnorm(n, mean = d, sd = 1)
+  
+  # P-value
+  p <- t.test(x, mu = 0)$p.value
+  
+  # Bayesiano
+  x_bar <- mean(x)
+  se <- sd(x) / sqrt(n)
+  prior_sd <- 0.5
+  
+  post_precision <- 1/prior_sd^2 + 1/se^2
+  post_mean <- (1/se^2 * x_bar) / post_precision
+  post_sd <- sqrt(1/post_precision)
+  
+  prob_pos <- pnorm(0, post_mean, post_sd, lower.tail = FALSE)
+  
+  tibble(p_value = p, prob_positive = prob_pos)
+})
+
+# Intervalli al 95%
+cat("Intervallo al 95% per p-value:\n")
+cat(sprintf("  [%.4f, %.4f]\n", 
+            quantile(future_studies$p_value, 0.025),
+            quantile(future_studies$p_value, 0.975)))
+
+cat("\nIntervallo al 95% per P(μ > 0 | dati):\n")
+cat(sprintf("  [%.3f, %.3f]\n",
+            quantile(future_studies$prob_positive, 0.025),
+            quantile(future_studies$prob_positive, 0.975)))
+
+cat("\nAmpiezza relativa degli intervalli:\n")
+cat(sprintf("  P-value: %.2f (su scala 0-1)\n",
+            diff(quantile(future_studies$p_value, c(0.025, 0.975)))))
+cat(sprintf("  Bayesiano: %.2f (su scala 0-1)\n",
+            diff(quantile(future_studies$prob_positive, c(0.025, 0.975)))))
+```
+:::
+
+::: {.callout-important title="Esercizio 3: Soglie alternative" collapse="true"}
+
+Alcuni hanno proposto di abbassare la soglia a $p < 0.005$ per ridurre i falsi positivi. Simula cosa succederebbe in termini di:
+
+1. Tasso di falsi positivi
+2. Potenza (con $d = 0.3$, $n = 50$)
+3. Concordanza tra studi
+:::
+
+::: {.callout-tip title="Soluzione Esercizio 3" collapse="true"}
+
+```{r}
+thresholds <- c(0.05, 0.01, 0.005, 0.001)
+d <- 0.3
+n <- 50
+n_sims <- 10000
+
+threshold_analysis <- map_dfr(thresholds, function(alpha) {
+  # Sotto H0 (falsi positivi)
+  p_h0 <- map_dbl(1:n_sims, ~t.test(rnorm(n, 0, 1), mu = 0)$p.value)
+  fpr <- mean(p_h0 < alpha)
+  
+  # Sotto H1 (potenza)
+  p_h1 <- map_dbl(1:n_sims, ~t.test(rnorm(n, d, 1), mu = 0)$p.value)
+  power <- mean(p_h1 < alpha)
+  
+  # Concordanza tra coppie
+  p_pairs <- map_dfr(1:1000, function(i) {
+    p1 <- t.test(rnorm(n, d, 1), mu = 0)$p.value
+    p2 <- t.test(rnorm(n, d, 1), mu = 0)$p.value
+    tibble(sig1 = p1 < alpha, sig2 = p2 < alpha)
+  })
+  discord <- mean(p_pairs$sig1 != p_pairs$sig2)
+  
+  tibble(
+    alpha = alpha,
+    `Falsi positivi` = sprintf("%.2f%%", fpr * 100),
+    `Potenza` = sprintf("%.0f%%", power * 100),
+    `Discordanza` = sprintf("%.0f%%", discord * 100)
+  )
+})
+
+threshold_analysis |>
+  mutate(Soglia = sprintf("p < %.3f", alpha)) |>
+  select(Soglia, `Falsi positivi`, Potenza, Discordanza) |>
+  knitr::kable(caption = "Effetto di soglie più stringenti")
+```
+
+**Interpretazione**: Abbassare la soglia riduce i falsi positivi ma anche la potenza. La discordanza tra studi rimane alta perché il problema è la **variabilità** del p-value, non la soglia scelta.
+:::
+
+::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+```{r}
+sessionInfo()
+```
+:::
+
+## Bibliografia {.unnumbered .unlisted}

@@ -1,0 +1,747 @@
+# Limiti dell'inferenza frequentista: un laboratorio computazionale {#sec-limits-freq-inference}
+
+::: {.callout-note appearance="minimal"}
+Nel Capitolo 3 del manuale abbiamo analizzato i fondamenti teorici della critica al valore-$p$: la sua definizione come probabilità condizionata all'ipotesi nulla, le controversie storiche tra Fisher e Neyman-Pearson e il celebre monito dell'ASA del 2016.
+
+In questo capitolo non ripeteremo quelle argomentazioni, ma le **metteremo alla prova** in modo dinamico, servendoci di simulazioni computazionali. Il nostro obiettivo è tradurre affermazioni astratte — come "il p-hacking incrementa i falsi positivi" o "l'optional stopping invalida l'inferenza" — in **esperienze visive e quantitative**. Genereremo dati ex novo, applicheremo le procedure statistiche criticate e **osserveremo in diretta** come e perché esse falliscono.
+
+Come suggeriva Richard Feynman, *"Ciò che non sono in grado di costruire, non lo comprendo"*. In queste pagine costruiremo i problemi stessi del valore-$p$ per giungere a una comprensione **operativa e intuitiva** delle sue insidie.
+:::
+
+::: {.callout-important}
+## In questo capitolo imparerai a
+
+- Osservare empiricamente come il p-hacking inflazioni il tasso di falsi positivi.
+- Visualizzare la distribuzione anomala dei valori-$p$ nella letteratura scientifica.
+- Comprendere attraverso simulazioni perché il valore-$p$ non fornisce la probabilità che l'ipotesi sia vera.
+- Sperimentare la fragilità delle decisioni basate su soglie arbitrarie.
+:::
+
+::: {.callout-tip}
+## Prerequisiti
+
+- Leggere il **Capitolo 3** del manuale ("Il valore-$p$ e i suoi fraintendimenti"), che fornisce le basi teoriche per le simulazioni presentate qui.
+- Leggere [Bayesian statistics for clinical research](https://www.sciencedirect.com/science/article/pii/S0140673624012959) di @Goligher2024.
+:::
+
+::: {.callout-caution collapse=true title="Preparazione del Notebook"}
+
+```{r}
+here::here("code", "_common.R") |> 
+  source()
+
+# Load packages
+if (!requireNamespace("pacman")) install.packages("pacman")
+pacman::p_load(patchwork)
+```
+:::
+
+## Simulazione 1: Il $p$-hacking in azione
+
+Immaginiamo un ricercatore che studia l'effetto di un intervento psicologico. **Nella realtà, l'intervento non ha alcun effetto** (la differenza tra i gruppi è esattamente zero). Tuttavia, il ricercatore ha molte "scelte analitiche" a disposizione: può escludere outlier, trasformare variabili, aggiungere covariate o analizzare sottogruppi. Ognuna di queste scelte rappresenta un "grado di libertà" che può essere sfruttato, **consapevolmente o meno**, per ottenere un risultato statisticamente significativo.
+
+Simuliamo questo scenario: il ricercatore conduce 20 test statistici diversi sugli stessi dati (ad esempio, provando diverse definizioni operative della variabile dipendente). Quanti risultati "significativi" troverà, anche se l'effetto vero è nullo?
+
+Parametri della simulazione:
+
+```{r}
+n_tests <- 20          # Numero di test che il ricercatore prova
+n_per_group <- 30      # Osservazioni per gruppo
+n_simulations <- 1000  # Quante volte ripetiamo l'esperimento
+```
+
+La seguente funzione simula un ricercatore che esamina 20 versioni leggermente diverse dello stesso dataset. Per ogni versione, i dati vengono generati da **due popolazioni identiche** (non c'è alcun effetto reale), ma le fluttuazioni casuali producono variazioni tra i campioni. Il ricercatore conduce un test $t$ di Student su ciascuna versione e **seleziona il valore-$p$ più basso**.
+
+```{r}
+simulate_phacking <- function(n_tests, n_per_group) {
+  p_values <- numeric(n_tests)
+  
+  for (i in 1:n_tests) {
+    # Generazione di dati senza effetto reale
+    group1 <- rnorm(n_per_group, mean = 0, sd = 1)
+    group2 <- rnorm(n_per_group, mean = 0, sd = 1)  # Stessa media = nessun effetto
+    
+    p_values[i] <- t.test(group1, group2)$p.value
+  }
+  
+  # Il ricercatore riporta il p-value più basso
+  min(p_values)
+}
+```
+
+Esecuzione della simulazione:
+
+```{r}
+best_p_values <- replicate(n_simulations, simulate_phacking(n_tests, n_per_group))
+```
+
+Calcolo del tasso di falsi positivi:
+
+```{r}
+false_positive_rate <- mean(best_p_values < 0.05)
+```
+
+Visualizzazione dei risultati:
+
+```{r}
+tibble(p_value = best_p_values) |>
+  ggplot(aes(x = p_value)) +
+  geom_histogram(bins = 50, fill = "steelblue", color = "white", alpha = 0.8) +
+  geom_vline(xintercept = 0.05, color = "red", linetype = "dashed", linewidth = 1) +
+  annotate("text", x = 0.15, y = Inf, vjust = 2, 
+           label = sprintf("Tasso falsi positivi: %.1f%%", false_positive_rate * 100),
+           color = "red", fontface = "bold", size = 5) +
+  labs(
+    x = "Valore-p minimo tra 20 test",
+    y = "Frequenza",
+    title = "P-Hacking: selezionare il p-value più basso tra molti test",
+    subtitle = "Effetto vero = 0, ma il ricercatore trova 'significatività' nel 64% dei casi"
+  ) +
+  scale_x_continuous(breaks = seq(0, 1, 0.1))
+```
+
+**Interpretazione.**
+Il grafico mostra un risultato sorprendente: **anche se l'effetto vero è esattamente zero**, selezionando il valore-$p$ più basso tra 20 test otteniamo un risultato "statisticamente significativo" (valore-$p$ < 0.05) in circa il **64% dei casi**. Questo è ben lontano dal livello nominale del 5% che corrisponde all'errore di II tipo.
+
+Il risultato che abbiamo ottenuto può essere calcolato analiticamente: la probabilità di ottenere almeno un valore-$p$ < 0.05 in 20 test indipendenti è:
+$$
+P(\text{almeno un falso positivo}) = 1 - P(\text{nessun falso positivo})
+$$
+Se ogni test è indipendente e l'ipotesi nulla è vera:
+$$
+P(\text{nessun falso positivo in 20 test}) = (1 - 0.05)^{20} = 0.95^{20} \approx 0.3585.
+$$
+Se la probabilità di *nessun* falso positivo è circa 0.3585, allora la probabilità dell'evento complementare (*almeno un* falso positivo) è:
+$$
+\begin{align}
+P(\text{almeno un falso positivo}) &= 1 - P(\text{nessun falso positivo}) \notag\\
+&= 1 - 0.3585 \approx 0.6415 
+\end{align}
+$$
+ovvero
+$$
+P(\text{almeno un falso positivo}) = 1 - (1 - 0.05)^{20} \approx 0.64.
+$$
+
+In conclusione, il **P-Hacking trasforma un tasso di errore del 5% in un tasso di errore del 64%**.
+
+::: {.callout-note title="Riflessione"}
+Questo scenario non richiede malafede. Un ricercatore potrebbe sinceramente credere che alcune analisi siano "migliori" di altre e, **inconsapevolmente**, finire per selezionare quella che produce il risultato desiderato. Il problema è **strutturale, non morale**. 
+:::
+
+## Simulazione 2: la distribuzione sospetta dei valori-$p$
+
+Se il $p$-hacking fosse diffuso nella letteratura scientifica, ci aspetteremmo di vedere un'anomalia nella distribuzione dei valori-$p$ riportati: **un eccesso di valori appena sotto la soglia di 0.05**. Questo fenomeno è stato effettivamente documentato in analisi su larga scala della letteratura psicologica, economica e biomedica.
+
+Simuliamo due scenari per comprendere cosa dovremmo osservare in una letteratura "sana" (senza pratiche selettive) rispetto a una "contaminata" da $p$-hacking.
+
+Parametri della simulazione: 
+
+```{r}
+n_studies <- 5000
+n_per_group <- 50
+```
+
+**Scenario 1: letteratura onesta.** Nella letteratura onesta, assumiamo che il 50% degli studi esamini ipotesi quando l'effetto vero è moderato ($d$ = 0.3) e il 50% degli studi esamini ipotesi quando l'effetto vero è zero ($d$ = 0). Tutti i risultati vengono riportati in modo trasparente, indipendentemente dal valore-$p$ ottenuto nel test $t$ di Student:
+
+```{r}
+simulate_honest_literature <- function() {
+  has_true_effect <- sample(c(TRUE, FALSE), 1)
+  true_d <- ifelse(has_true_effect, 0.3, 0)
+  
+  group1 <- rnorm(n_per_group, mean = 0, sd = 1)
+  group2 <- rnorm(n_per_group, mean = true_d, sd = 1)
+  
+  t.test(group1, group2)$p.value
+}
+
+honest_pvalues <- replicate(n_studies, simulate_honest_literature())
+```
+
+**Scenario 2: letteratura con $p$-hacking**. Consideriamo gli stessi presupposti scientifici del caso precedente: 50% effetti veri, 50% nulli. In questo caso, però, i ricercatori provano 10 diverse analisi sui dati. Se in una di queste analisi trovano un valore-$p$ < 0.5 riportano quello, altrimenti riportano l'ultimo valore-$p$ calcolato.
+
+```{r}
+simulate_phacked_literature <- function() {
+  has_true_effect <- sample(c(TRUE, FALSE), 1)
+  true_d <- ifelse(has_true_effect, 0.3, 0)
+  
+  # Il ricercatore prova fino a 10 varianti dell'analisi
+  for (attempt in 1:10) {
+    group1 <- rnorm(n_per_group, mean = 0, sd = 1)
+    group2 <- rnorm(n_per_group, mean = true_d, sd = 1)
+    
+    p <- t.test(group1, group2)$p.value
+    
+    # Se trova significatività, si ferma
+    if (p < 0.05) return(p)
+  }
+  
+  # Se dopo 10 tentativi non trova nulla, riporta l'ultimo p-value
+  return(p)
+}
+
+phacked_pvalues <- replicate(n_studies, simulate_phacked_literature())
+```
+
+Filtriamo solo i valori-$p$ "pubblicabili" (< 0.10) per una visualizzazione chiara intorno alla soglia critica:
+
+```{r}
+p1 <- tibble(p_value = honest_pvalues) |>
+  filter(p_value < 0.10) |>
+  ggplot(aes(x = p_value)) +
+  geom_histogram(bins = 40, fill = "forestgreen", color = "white", alpha = 0.8) +
+  geom_vline(xintercept = 0.05, color = "red", linetype = "dashed") +
+  labs(
+    title = "A) Letteratura senza distorsioni",
+    x = "Valore-p",
+    y = "Frequenza"
+  ) +
+  scale_x_continuous(breaks = seq(0, 0.10, 0.01)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+p2 <- tibble(p_value = phacked_pvalues) |>
+  filter(p_value < 0.10) |>
+  ggplot(aes(x = p_value)) +
+  geom_histogram(bins = 40, fill = "coral", color = "white", alpha = 0.8) +
+  geom_vline(xintercept = 0.05, color = "red", linetype = "dashed") +
+  labs(
+    title = "B) Letteratura con p-hacking",
+    x = "Valore-p",
+    y = "Frequenza"
+  ) +
+  scale_x_continuous(breaks = seq(0, 0.10, 0.01)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+#| label: fig-pvalue-distribution
+#| fig-cap: "Confronto tra la distribuzione teorica dei p-value e quella distorta dalla selezione."
+#| fig-height: 5
+
+p1 + p2
+```
+
+Calcoliamo il rapporto tra valore-$p$ appena sotto vs appena sopra lo 0.05:
+
+```{r}
+ratio_honest <- sum(honest_pvalues > 0.04 & honest_pvalues < 0.05) / 
+                sum(honest_pvalues > 0.05 & honest_pvalues < 0.06)
+
+ratio_phacked <- sum(phacked_pvalues > 0.04 & phacked_pvalues < 0.05) / 
+                 sum(phacked_pvalues > 0.05 & phacked_pvalues < 0.06)
+```
+
+```{r}
+# echo: false
+cat("Rapporto p-value [0.04-0.05] / [0.05-0.06]:\n")
+cat(sprintf("  Letteratura onesta: %.2f\n", ratio_honest))
+cat(sprintf("  Letteratura con p-hacking: %.2f\n", ratio_phacked))
+```
+
+**Interpretazione.**
+Il confronto tra i due scenari rivela pattern distintivi che fungono da indicatori della salute metodologica di una letteratura scientifica. 
+
+Nel primo scenario, che rappresenta una letteratura scientifica senza distorsioni, i valori-$p$ si distribuiscono in modo relativamente uniforme nella regione intorno alla soglia di 0.05. Questa distribuzione riflette l'assenza di manipolazioni selettive: non vi è nulla di statisticamente "speciale" nella soglia convenzionale di significatività. Il rapporto tra valori appena sotto e appena sopra 0.05 si attesta intorno a 1.0, dimostrando una continuità naturale nella distribuzione. Circa il 25-30% degli studi risulta statisticamente significativo, una proporzione che corrisponde alle aspettative basate sui parametri della simulazione, in cui metà degli studi esamina ipotesi con effetto vero presente e l'altra metà esamina ipotesi con effetto vero nullo.
+
+Il secondo scenario, che simula una letteratura contaminata da $p$-hacking, presenta caratteristiche marcate e preoccupanti. Si osserva un evidente picco anomalo di valori-$p$ concentrati immediatamente sotto la soglia di 0.05. Questa concentrazione crea una discontinuità statistica pronunciata: i valori appena sotto la soglia sono numericamente molto superiori a quelli appena sopra. Il rapporto tra queste due regioni supera 3.0, indicando una distorsione sostanziale nella restituzione dei risultati. Inoltre, oltre il 50% degli studi risulta "statisticamente significativo", una proporzione notevolmente superiore a quella che ci si aspetterebbe in base ai parametri della simulazione. Questa discrepanza segnala come il $p$-hacking possa artificialmente far apparire la letteratura più solida di quanto non lo sia in realtà.
+
+### Evidenze empiriche nella letteratura scientifica
+
+I pattern emersi dalla simulazione trovano riscontro nelle analisi empiriche condotte su ampi corpora di letteratura scientifica. Le anomalie distributive osservate sperimentalmente non sono mere astrazioni teoriche, ma documentano fenomeni sistematicamente rilevati attraverso indagini bibliometriche su larga scala.
+
+Nell'ambito delle scienze psicologiche, l'analisi di @head2015extent su 12.000 articoli ha evidenziato una discontinuità statistica particolarmente marcata: i valori-$p$ pari a 0.049 si verificano con una frequenza superiore del 300% rispetto a quelli immediatamente adiacenti pari a 0.051. Una tale asimmetria concentrata in prossimità della soglia canonica di significatività non può essere attribuita a fluttuazioni casuali, ma denota con elevata probabilità un processo selettivo nella presentazione dei risultati.
+
+Evidenze analoghe emergono anche dalle scienze economiche, dove @brodeur2020methods hanno riscontrato anomalie distributive riconducibili a pratiche di p-hacking. La distribuzione dei valori-p negli studi pubblicati presenta picchi statisticamente significativi in corrispondenza esatta delle soglie convenzionali di riferimento (0.01, 0.05 e 0.10). Questa regolarità, osservata trasversalmente su diverse riviste e periodi temporali, suggerisce l'esistenza di un meccanismo sistemico di adattamento dei risultati ai benchmark metodologici predefiniti.
+
+La pervasività di queste distorsioni ha stimolato lo sviluppo di strumenti analitici specifici per la loro rilevazione e quantificazione. @simonsohn2014p hanno formalizzato la "p-curve analysis", una metodologia che sfrutta la distribuzione dei valori-$p$ per discriminare tra letteratura caratterizzata da effetti genuini da quella influenzata da pratiche selettive. Questo approccio non solo consente di identificare i campi di ricerca potenzialmente affetti da $p$-hacking, ma anche di stimare la probabilità che un insieme di risultati significativi rifletta effettivamente effetti reali piuttosto che artefatti statistici.
+
+### Implicazioni pratiche per la ricerca scientifica
+
+La discontinuità nella distribuzione dei valori-p funge da vero e proprio "termometro della credibilità" per interi campi di ricerca. Questo indicatore consente di rilevare problematiche sistemiche: analisi bibliometriche sofisticate possono individuare discipline o aree di ricerca che presentano forti evidenze di $p$-hacking. Allo stesso tempo, tale metrica può essere utilizzata per monitorare i progressi metodologici: in seguito all'adozione diffusa di pratiche di ricerca aperta e trasparente, ci si aspetterebbe una riduzione progressiva di queste distorsioni. Dal punto di vista interpretativo, nei campi caratterizzati da forti distorsioni, i risultati marginalmente significativi (con valori-$p$ prossimi a 0.05) richiedono un'interpretazione particolarmente cauta e scettica.
+
+La consapevolezza di questa "impronta digitale" statistica ha motivato e accelerato importanti riforme metodologiche nel panorama scientifico contemporaneo. Tra queste innovazioni, si possono citare la preregistrazione degli studi, che vincola i ricercatori a piani analitici predeterminati, l'adozione sistematica di correzioni per i confronti multipli, che riducono il rischio di falsi positivi, e una maggiore trasparenza nella comunicazione dei risultati, che include la condivisione di dati e codici analitici. Queste pratiche, sempre più diffuse, rappresentano risposte concrete al problema del p-hacking e contribuiscono a rafforzare l'affidabilità cumulativa della conoscenza scientifica.
+
+## Simulazione 3: il grande equivoco
+
+Nella pratica della ricerca, i ricercatori utilizzano comunemente il valore-$p$ per valutare se un effetto "esiste". Ma quanto è affidabile questa inferenza? La simulazione che segue ci aiuta a comprendere la differenza cruciale tra ciò che il valore-$p$ misura realmente e ciò che i ricercatori spesso credono che misuri.
+
+Uno degli equivoci più diffusi nella psicologia empirica consiste nel ritenere che un valore-$p$ di 0.03 indichi che *esiste solo il 3% di probabilità che l’ipotesi nulla sia vera*, oppure, in modo complementare, che *vi sia il 97% di probabilità che l’effetto esista*. Questa lettura è intuitiva, ma completamente sbagliata dal punto di vista matematico.
+
+### Che cosa misura davvero il valore-$p$?
+
+Il valore-$p$ indica la probabilità di ottenere dati almeno altrettanto estremi di quelli osservati **sotto l’assunzione che l’ipotesi nulla sia vera**. Formalmente:
+
+$$
+p = P(\text{dati osservati o più estremi} \mid H_0).
+$$
+Dunque il valore-$p$ non esprime la probabilità che un’ipotesi sia vera o falsa. Più modestamente, quantifica **la compatibilità dei dati con l’ipotesi nulla**.
+
+### Perché l’interpretazione intuitiva è sbagliata
+
+L’errore nasce dalla confusione tra due probabilità condizionate opposte:
+
+$$
+P(\text{Dati} \mid H_0) \neq P(H_0 \mid \text{Dati}).
+$$
+
+Il teorema di Bayes chiarisce la differenza:
+
+$$
+P(H_0 \mid \text{Dati}) = \frac{P(\text{Dati} \mid H_0), P(H_0)}{P(\text{Dati})}.
+$$
+
+Per ottenere la probabilità che l’ipotesi nulla sia vera **dopo aver visto i dati**, è indispensabile conoscere anche due quantità ignorate dall’approccio del valore-$p$:
+
+* la **plausibilità a priori** dell’ipotesi, $P(H_0)$;
+* la **probabilità dei dati sotto l’ipotesi alternativa**, $P(\text{Dati} \mid H_1)$, cioè la potenza statistica del test, ovvero la probabilità che, se l'ipotesi $H_1$ è vera (ovvero se esiste un effetto), verranno effettivamente osservati dati coerenti con la presenza di tale effetto.
+
+Senza queste informazioni, il valore-$p$ non può in alcun modo informarci sulla probabilità che un'ipotesi sia vera.
+
+In alcuni contesti ben strutturati e ad alta potenza, un valore-$p$ = 0.03 può sostenere l’esistenza di un effetto. Ma in scenari esplorativi, dove le ipotesi sono speculative e gli effetti reali sono rari, lo stesso valore-$p$ può indicare ancora **un’alta probabilità che l’ipotesi nulla sia vera**.
+
+### Simulazione
+
+La simulazione seguente mostra concretamente questo fenomeno.
+
+**Passo 1: impostiamo le condizioni del campo di ricerca.**
+
+Nella simulazione, vogliamo capire se un valore-*p* “significativo” indica davvero che l’effetto esiste. Per farlo, immaginiamo un campo di ricerca tipicamente esplorativo dove:
+
+```{r}
+prior_prob_effect <- 0.10   # Solo il 10% delle ipotesi testate ha un effetto reale
+n_studies <- 10000          # Simuliamo un ampio corpus di studi
+n_per_group <- 30           # Dimensioni campionarie tipiche
+effect_size_if_true <- 0.5  # Quando esiste, l'effetto è moderato (d = 0.5)
+```
+
+Queste assunzioni riflettono una realtà metodologica spesso trascurata:
+
+* **prevalenza bassa di effetti reali** (10%): in molti campi esplorativi, la maggior parte delle ipotesi testate non ha un effetto reale;
+* **dimensioni campionarie modeste** (n=30 per gruppo): tipiche di molti studi psicologici;
+* **effetti moderati quando presenti**: un effetto reale ha una grandezza clinicamente rilevante ma di entità modesta.
+
+**Passo 2: generazione dei dati.**
+
+```{r}
+set.seed(123) # Per risultati riproducibili
+results <- tibble(
+  study_id = 1:n_studies,
+  has_true_effect = runif(n_studies) < prior_prob_effect
+) |>
+  rowwise() |>
+  mutate(
+    true_d = ifelse(has_true_effect, effect_size_if_true, 0),
+    p_value = {
+      # Generazione dei dati: entrambi i gruppi dalla stessa distribuzione se H₀ vera
+      group1 <- rnorm(n_per_group, mean = 0, sd = 1)
+      group2 <- rnorm(n_per_group, mean = true_d, sd = 1)  # Media diversa solo se effetto reale
+      t.test(group1, group2)$p.value
+    }
+  ) |>
+  ungroup()
+```
+
+Il processo di generazione dei dati simula due scenari distinti:
+
+1. **per il 90% degli studi**: entrambi i gruppi provengono dalla stessa distribuzione (media 0, sd 1); qualsiasi differenza osservata è solo frutto del caso.
+2. **per il 10% degli studi**: il secondo gruppo ha una media superiore (0.5), simulando un effetto reale ma moderato.
+
+**Passo 3. Calcolo del Valore Predittivo Positivo.**
+
+Il cuore della simulazione risiede nel confrontare ciò che il valore-$p$ suggerisce con ciò che sappiamo essere vero. 
+
+```{r}
+calculate_ppv <- function(data, p_threshold) {
+  # Seleziona solo gli studi "significativi" secondo la soglia
+  significant <- data |> dplyr::filter(p_value < p_threshold)
+  
+  if (nrow(significant) == 0) return(NA_real_)
+  
+  # Calcola la proporzione di veri positivi tra i significativi
+  mean(significant$has_true_effect)
+}
+
+# Analizziamo diverse soglie di significatività
+thresholds <- c(0.05, 0.01, 0.005, 0.001)
+
+# Calcolo dei PPV usando sapply
+ppv_results <- tibble(
+  threshold = thresholds,
+  ppv = sapply(thresholds, function(t) calculate_ppv(results, t))
+)
+```
+
+Il PPV risponde alla domanda: "Tra tutti i risultati statisticamente significativi, quanti corrispondono effettivamente a effetti reali?"
+
+**Passo 4: visualizzazione della distribuzione dei risultati.**
+
+```{r}
+results |>
+  filter(p_value < 0.10) |>
+  ggplot(aes(x = p_value, fill = has_true_effect)) +
+  geom_histogram(bins = 50, position = "stack", alpha = 0.8) +
+  geom_vline(xintercept = 0.05, color = "black", linetype = "dashed", linewidth = 1) +
+  scale_fill_manual(
+    values = c("TRUE" = "forestgreen", "FALSE" = "coral"),
+    labels = c("TRUE" = "Effetto vero", "FALSE" = "Nessun effetto (falso positivo)")
+  ) +
+  labs(
+    x = "Valore-p",
+    y = "Numero di studi",
+    fill = "Tipo di risultato",
+    title = "Composizione degli studi 'significativi'",
+    subtitle = sprintf("Prevalenza effetti reali = %d%%", prior_prob_effect * 100)
+  )
+```
+
+Tabella di sintesi:
+
+```{r}
+# Creazione della tabella comparativa
+comparison_summary <- ppv_results |>
+  mutate(
+    `Soglia p-value` = sprintf("p < %.3f", threshold),
+    `Interpretazione errata comune` = sprintf(
+      "≈ %.1f%% probabilità che H₀ sia vera", 
+      threshold * 100
+    ),
+    `Realtà statistica (PPV)` = sprintf(
+      "%.1f%% probabilità effetto reale", 
+      ppv * 100
+    ),
+    `Discrepanza` = sprintf(
+      "%.1f%%", 
+      abs(threshold - ppv) * 100
+    ),
+    `Rapporto PPV/p-value` = sprintf(
+      "%.1fx", 
+      ppv / threshold
+    )
+  ) |>
+  select(-threshold, -ppv)
+
+# Visualizzazione tabella
+comparison_summary |>
+  knitr::kable(
+    align = c("l", "c", "c", "c", "c"),
+    caption = "Confronto tra interpretazione erronea del valore-p e realtà statistica"
+  ) |>
+  kableExtra::kable_styling(
+    bootstrap_options = c("striped", "hover"),
+    full_width = FALSE,
+    position = "center"
+  ) |>
+  kableExtra::add_header_above(
+    c(" " = 1, "Percezione comune" = 1, "Realtà simulata" = 1, "Differenza" = 1, "Fattore" = 1)
+  ) |>
+  kableExtra::row_spec(1:4, bold = FALSE) |>
+  kableExtra::column_spec(1, bold = TRUE)
+```
+
+### L'inganno del valore-$p$
+
+La tabella precedente rivela un contrasto drammatico: **l'interpretazione comunemente attribuita al valore-$p$ sovrastima sistematicamente l'evidenza a favore di un effetto**. Quando i ricercatori osservano un risultato con $p$ = 0.05, molti formulano implicitamente il seguente ragionamento: "Esiste solo il 5% di probabilità che questa scoperta sia un falso positivo". La simulazione mostra invece che, in un campo di ricerca caratterizzato da bassa prevalenza di effetti reali:
+
+* **con $p$ < 0.05**: solamente il 40-50% dei risultati dichiarati significativi corrisponde effettivamente a effetti reali;
+* **con $p$ < 0.01**: questa proporzione aumenta, raggiungendo approssimativamente il 60-70%;
+* **Persino con p < 0.001**: potremmo non superare una certezza dell'85-90%, ben lontana dalla quasi certezza che molti attribuirebbero a un valore-$p$ così piccolo.
+
+### L'origine del malinteso: due domande statisticamente distinte
+
+Questa marcata discrepanza tra percezione e realtà nasce da una confusione tra due quantità probabilistiche che rispondono a interrogativi statisticamente diversi:
+
+1. **ciò che il valore-$p$ effettivamente misura**:
+
+   > "Qual è la probabilità di osservare dati almeno altrettanto estremi di quelli ottenuti, nell'ipotesi che l'effetto non esista?"
+   > $$P(\text{Dati osservati o più estremi} \mid H_0)$$
+
+2. **ciò che i ricercatori vorrebbero conoscere**:
+
+   > "Data l'evidenza empirica raccolta, quanto è plausibile che l'effetto ipotizzato esista realmente?"
+   > $$P(H_1 \mid \text{Dati})$$
+
+Queste domande rappresentano **probabilità condizionate con direzioni opposte**, matematicamente collegate ma concettualmente distinte secondo il teorema di Bayes. Trascurare questa distinzione equivale a confondere due proposizioni logicamente differenti: "la probabilità che piova dato che il cielo è nuvoloso" con "la probabilità che il cielo sia nuvoloso dato che piove". Sebbene correlate, queste probabilità possono assumere valori radicalmente diversi.
+
+### Implicazioni per l'integrità scientifica
+
+Ignorare questa differenza fondamentale conduce a due conseguenze metodologicamente dannose:
+
+1. **sovrastima sistematica dell'evidenza**: i ricercatori attribuiscono al valore-$p$ un significato inferenziale che esso non possiede, attribuendo alle loro scoperte un grado di certezza non supportato dai dati.
+
+2. **accumulo di risultati non replicabili**: la letteratura scientifica si riempie di "scoperte" statisticamente significative ma sostanzialmente non replicabili, minando progressivamente l'affidabilità cumulativa della conoscenza scientifica.
+
+In sintesi, la simulazione dimostra in modo inequivocabile che **la significatività statistica non costituisce un proxy affidabile della verità scientifica**. In un panorama di ricerca caratterizzato da bassa prevalenza di effetti reali, dimensioni campionarie spesso inadeguate e pratiche analitiche selettive, persino risultati dichiarati "altamente significativi" possono possedere un grado di affidabilità considerevolmente inferiore a quanto comunemente ritenuto.
+
+## Simulazione 4: la fragilità della soglia $p$ = 0.05
+
+Cosa distingue un p-value di 0.049 da uno di 0.051? Dal punto di vista scientifico, nulla. Dal punto di vista delle convenzioni editoriali, tutto: il primo è "significativo" e pubblicabile, il secondo no.
+
+Questa simulazione mostra quanto sia arbitraria questa distinzione, visualizzando come piccole fluttuazioni casuali possano spostare un risultato da un lato all'altro della soglia.
+
+### Simulazione
+
+```{r}
+# Effetto vero piccolo ma reale
+true_effect <- 0.2  # Cohen's d
+n_per_group <- 50
+n_replications <- 1e5
+```
+
+```{r}
+set.seed(123)
+# Simuliamo molte repliche dello stesso studio
+replications <- tibble(
+  replication = 1:n_replications
+) |>
+  rowwise() |>
+  mutate(
+    p_value = {
+      g1 <- rnorm(n_per_group, 0, 1)
+      g2 <- rnorm(n_per_group, true_effect, 1)
+      t.test(g1, g2)$p.value
+    },
+    significant = p_value < 0.05
+  ) |>
+  ungroup()
+
+# Statistiche
+prop_significant <- mean(replications$significant)
+median_p <- median(replications$p_value)
+```
+
+```{r}
+#| label: fig-threshold-fragility
+#| fig-cap: "Lo stesso effetto vero produce p-value molto variabili in campioni diversi. La soglia 0.05 è un confine arbitrario che separa campioni essenzialmente indistinguibili."
+
+# Visualizzazione
+replications |>
+  ggplot(aes(x = p_value, fill = significant)) +
+  geom_histogram(bins = 50, color = "white", alpha = 0.8) +
+  geom_vline(xintercept = 0.05, color = "black", linetype = "dashed", linewidth = 1.2) +
+  scale_fill_manual(
+    values = c("TRUE" = "forestgreen", "FALSE" = "coral"),
+    labels = c("TRUE" = "Significativo (p < 0.05)", "FALSE" = "Non significativo")
+  ) +
+  annotate("text", x = 0.5, y = Inf, vjust = 2,
+           label = sprintf("Effetto vero: d = %.1f\nPotenza: %.0f%%\nMediana p-value: %.3f",
+                          true_effect, prop_significant * 100, median_p),
+           hjust = 0.5, size = 4) +
+  labs(
+    x = "Valore-p",
+    y = "Numero di repliche",
+    fill = "",
+    title = "1000 repliche dello stesso studio\ncon lo stesso effetto vero",
+    subtitle = "Alcuni studi trovano 'significatività', altri no – ma l'effetto sottostante è identico"
+  ) 
+```
+
+**Interpretazione.**
+Il grafico mostra che, dato uno stesso effetto vero, i valori-$p$ ottenuti in diverse repliche variano enormemente. Alcuni studi ottengono un valore-$p$ = 0.001, altri un valore-$p$ prossimo a 1. Questa variabilità non riflette differenze nell'effetto (che è sempre $d$ = 0.2), ma solo fluttuazioni casuali nel campionamento.
+
+```{r}
+# Zoom sulla zona critica
+replications |>
+  filter(p_value > 0.03 & p_value < 0.07) |>
+  ggplot(aes(x = p_value, fill = significant)) +
+  geom_histogram(bins = 20, color = "white", alpha = 0.8) +
+  geom_vline(xintercept = 0.05, color = "black", linetype = "dashed", linewidth = 1.2) +
+  scale_fill_manual(
+    values = c("TRUE" = "forestgreen", "FALSE" = "coral"),
+    labels = c("TRUE" = "Pubblicabile", "FALSE" = "Nel cassetto")
+  ) +
+  labs(
+    x = "Valore-p",
+    y = "Numero di repliche",
+    fill = "",
+    title = "Zoom sulla 'zona grigia' (p tra 0.03 e 0.07)",
+    subtitle = "Studi identici finiscono su lati opposti della soglia\nper pura variabilità campionaria"
+  ) 
+```
+
+Lo zoom sulla "zona grigia" è particolarmente istruttivo: studi con un valore-$p$ = 0.049 e studi con un valore-$p$ = 0.051 sono scientificamente indistinguibili, ma il sistema editoriale li tratta come radicalmente diversi. Come hanno scritto @gelman2006difference
+
+> *The difference between “significant” and “not significant” is not itself statistically significant.*
+
+## Riflessioni conclusive {.unnumbered .unlisted}
+
+Le simulazioni presentate in questo capitolo hanno trasformato le critiche teoriche al valore-$p$ in esperienze empiriche concrete. Abbiamo visto che:
+
+1. **il $p$-hacking rappresenta un fallimento sistemico**: bastano poche scelte analitiche selettive per inflazionare drammaticamente il tasso di falsi positivi. Questo fenomeno emerge naturalmente da un sistema di incentivi che premia la significatività statistica. La soluzione, pertanto, non risiede nell'appello all'integrità individuale, ma nell'adozione di pratiche strutturali come la preregistrazione, la trasparenza analitica e la condivisione dei dati.
+
+2. **la distribuzione dei valori-$p$ tradisce le pratiche scorrette**: l'eccesso di valori appena sotto la soglia di 0.05 osservato in molte discipline trova un preciso parallelo nelle simulazioni di $p$-hacking sistematico, offrendo un indicatore empirico di pratiche analitiche selettive.
+
+3. **il valore-$p$ promuove un malinteso semantico**: la terza simulazione ha smascherato l'errore interpretativo più diffuso, ovvero la confusione tra $P(\text{Dati} \mid H_0)$ e $P(H_0 \mid \text{Dati})$. Questo malinteso può condurre a conclusioni gravemente fuorvianti, soprattutto in campi caratterizzati da una bassa prevalenza di effetti reali, in cui anche valori $p$ apparentemente convincenti possono corrispondere a probabilità modeste che l'effetto esista realmente.
+
+4. **la soglia canonica $p$ = 0.05 è arbitraria**: le simulazioni hanno mostrato come questa soglia sia una convenzione fragile, nel senso che studi metodologicamente identici possono cadere su lati opposti di questa barriera artificiale per pura variabilità campionaria, ricevendo tuttavia interpretazioni diametralmente opposte nella comunicazione scientifica.
+
+Questi risultati possono essere interpretati come l'indicazione che il valore-$p$ sia del tutto inutile nella pratica scientifica. Un'altra interpretazione è che esso conservi una qualche utilità, ma solo se viene utilizzato in modo consapevole, come parte di un ragionamento più ampio che includa la stima dell'effetto, la sua incertezza, la plausibilità teorica e la replicabilità. L'approccio bayesiano, che esploreremo nel resto del corso, offre un quadro concettualmente più coerente per rispondere alle domande che realmente interessano alla ricerca scientifica.
+
+## Esercizi
+
+::: {.callout-important title="Esercizio 1: Variare i parametri del p-hacking" collapse="true"}
+
+Modifica la Simulazione 1 per rispondere a queste domande:
+
+1. Come cambia il tasso di falsi positivi se il ricercatore prova solo 5 test invece di 20?
+2. E se ne prova 50?
+3. Qual è il numero di test necessario per avere un tasso di falsi positivi del 50%?
+
+**Suggerimento**: Usa la formula $1 - (1 - 0.05)^k$ dove $k$ è il numero di test.
+:::
+
+::: {.callout-tip title="Soluzione Esercizio 1" collapse="true"}
+
+```{r}
+# Tasso teorico di falsi positivi in funzione del numero di test
+k_values <- 1:50
+false_positive_rates <- 1 - (1 - 0.05)^k_values
+
+tibble(k = k_values, fpr = false_positive_rates) |>
+  ggplot(aes(x = k, y = fpr)) +
+  geom_line(color = "steelblue", linewidth = 1) +
+  geom_hline(yintercept = 0.50, linetype = "dashed", color = "red") +
+  geom_vline(xintercept = log(0.5) / log(0.95), linetype = "dashed", color = "red") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    x = "Numero di test provati",
+    y = "Tasso di falsi positivi",
+    title = "Come il numero di test influenza il tasso di falsi positivi"
+  )
+
+# Calcolo esatto
+k_for_50pct <- ceiling(log(0.5) / log(0.95))
+cat(sprintf("Servono %d test per raggiungere un tasso di falsi positivi del 50%%\n", k_for_50pct))
+```
+:::
+
+::: {.callout-important title="Esercizio 2: Il PPV in diversi campi" collapse="true"}
+
+La Simulazione 3 assume che il 10% delle ipotesi testate sia vero (scenario tipico per ricerca esplorativa). 
+
+1. Ricalcola il PPV assumendo che il 50% delle ipotesi sia vero (scenario di ricerca confermativa).
+2. Ricalcola assumendo che solo il 1% sia vero (scenario di drug discovery o ricerca genomica).
+3. Qual è la prevalenza minima necessaria affinché un p < 0.05 abbia almeno il 90% di probabilità di essere un vero effetto?
+:::
+
+::: {.callout-tip title="Soluzione Esercizio 2" collapse="true"}
+
+```{r}
+# Funzione per calcolare il PPV teorico (usando Bayes)
+# PPV = P(H1|p<α) = P(p<α|H1) * P(H1) / P(p<α)
+# Dove P(p<α) = P(p<α|H1)*P(H1) + P(p<α|H0)*P(H0)
+
+calculate_theoretical_ppv <- function(prior_h1, power = 0.80, alpha = 0.05) {
+  # P(p<α | H1) ≈ power (potenza del test)
+  # P(p<α | H0) = alpha
+  p_significant <- power * prior_h1 + alpha * (1 - prior_h1)
+  ppv <- (power * prior_h1) / p_significant
+  return(ppv)
+}
+
+# PPV per diverse prevalenze
+prevalences <- c(0.01, 0.10, 0.50, 0.80)
+ppv_values <- sapply(prevalences, calculate_theoretical_ppv)
+
+tibble(
+  `Prevalenza effetti veri` = sprintf("%.0f%%", prevalences * 100),
+  `PPV (potenza 80%)` = sprintf("%.1f%%", ppv_values * 100)
+) |>
+  knitr::kable()
+
+# Prevalenza minima per PPV = 90%
+# 0.90 = (0.80 * π) / (0.80 * π + 0.05 * (1-π))
+# Risolvendo per π:
+# 0.90 * (0.80*π + 0.05 - 0.05*π) = 0.80*π
+# 0.72*π + 0.045 - 0.045*π = 0.80*π
+# 0.045 = 0.80*π - 0.72*π + 0.045*π
+# 0.045 = 0.125*π
+pi_min <- 0.045 / 0.125
+cat(sprintf("\nPrevalenza minima per PPV ≥ 90%%: %.0f%%\n", pi_min * 100))
+```
+:::
+
+::: {.callout-important title="Esercizio 3: Simulare l'approccio bayesiano" collapse="true"}
+
+Ripeti la Simulazione 4, ma invece di calcolare il p-value, calcola la probabilità a posteriori che l'effetto sia positivo usando un'approssimazione bayesiana semplice.
+
+**Suggerimento**: Usa una prior N(0, 1) per l'effetto e confronta la stabilità della conclusione bayesiana rispetto alla decisione basata sul p-value.
+:::
+
+::: {.callout-tip title="Soluzione Esercizio 3" collapse="true"}
+
+```{r}
+#| message: false
+
+# Approssimazione bayesiana semplice usando coniugazione normale
+# Prior: δ ~ N(0, σ_prior²)
+# Likelihood: d_obs | δ ~ N(δ, SE²)
+# Posterior: δ | d_obs ~ N(μ_post, σ_post²)
+
+bayesian_analysis <- function(d_obs, se_obs, prior_sd = 1) {
+  # Posterior mean and sd (formula della coniugazione normale)
+  prior_precision <- 1 / prior_sd^2
+  data_precision <- 1 / se_obs^2
+  
+  posterior_precision <- prior_precision + data_precision
+  posterior_sd <- sqrt(1 / posterior_precision)
+  posterior_mean <- (data_precision * d_obs) / posterior_precision
+  
+  # Probabilità che l'effetto sia positivo
+  prob_positive <- pnorm(0, mean = posterior_mean, sd = posterior_sd, lower.tail = FALSE)
+  
+  return(prob_positive)
+}
+
+# Simulazione comparativa
+true_effect <- 0.2
+n_per_group <- 50
+n_replications <- 1000
+
+comparison <- tibble(replication = 1:n_replications) |>
+  rowwise() |>
+  mutate(
+    # Genera dati
+    g1 = list(rnorm(n_per_group, 0, 1)),
+    g2 = list(rnorm(n_per_group, true_effect, 1)),
+    
+    # Analisi frequentista
+    t_result = list(t.test(g1, g2)),
+    p_value = t_result$p.value,
+    freq_decision = ifelse(p_value < 0.05, "Significativo", "Non significativo"),
+    
+    # Analisi bayesiana
+    d_obs = (mean(g2) - mean(g1)) / sqrt((var(g1) + var(g2)) / 2),
+    se_obs = sqrt(2 / n_per_group),
+    prob_positive = bayesian_analysis(d_obs, se_obs),
+    bayes_decision = ifelse(prob_positive > 0.95, "Prob > 95%", "Prob ≤ 95%")
+  ) |>
+  ungroup()
+
+# Confronto della stabilità
+cat("Stabilità delle conclusioni:\n\n")
+cat("Approccio frequentista:\n")
+table(comparison$freq_decision) |> print()
+
+cat("\n\nApproccio bayesiano:\n")
+comparison |>
+  summarise(
+    `Media P(δ > 0)` = mean(prob_positive),
+    `SD P(δ > 0)` = sd(prob_positive),
+    `Min` = min(prob_positive),
+    `Max` = max(prob_positive)
+  ) |>
+  print()
+```
+
+La probabilità a posteriori varia in modo molto più graduale rispetto alla decisione binaria frequentista. Questo riflette meglio l'incertezza reale sui risultati.
+:::
+
+::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+```{r}
+sessionInfo()
+```
+:::
+
+## Bibliografia {.unnumbered .unlisted}
