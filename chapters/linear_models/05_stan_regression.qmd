@@ -1,25 +1,13 @@
 # Regressione lineare in Stan {#sec-regression-stan}
 
-## Introduzione {.unnumbered .unlisted}
+::: {.callout-note appearance="minimal"}
 
 Nei capitoli precedenti, abbiamo formulato la regressione lineare bivariata sia in chiave frequentista sia in chiave bayesiana, lavorando con modelli semplici e utilizzando notazioni compatte per facilitarne l'implementazione in R. Questi esercizi ci hanno permesso di comprendere la logica dell'approccio bayesiano, ma hanno anche evidenziato i limiti delle soluzioni analitiche, che sono praticabili solo in casi elementari e non si estendono facilmente a modelli con più predittori, variabili categoriali o strutture gerarchiche.
 
 Per affrontare problemi realistici, è necessario un linguaggio che ci permetta di specificare modelli generali e di stimarli in modo efficiente con algoritmi di campionamento moderni. Questo linguaggio è Stan. Con Stan, possiamo tradurre direttamente le nostre ipotesi in codice, lasciando al software il compito di eseguire il campionamento dalla distribuzione a posteriori.
 
 In questo capitolo vedremo come implementare il modello di regressione lineare in Stan. Partiremo dalla traduzione della formulazione matematica in codice, per poi esaminare il contributo dei diversi blocchi del linguaggio (data, parameters, model, generated quantities) alla definizione e stima del modello. L'obiettivo non è solo imparare a scrivere un programma funzionante, ma soprattutto comprendere il legame stretto tra la teoria statistica, la specificazione del modello e il calcolo computazionale.
-
-### Perché usare Stan per la regressione? {.unnumbered .unlisted}
-
-Scrivere la regressione in Stan significa specificare un *modello generativo* completo:
-
-$$
-y_n \sim \mathcal{N}(\alpha + \mathbf{x}_n^\top \boldsymbol{\beta},\, \sigma),
-$$
-con priors espliciti per $\alpha$, $\boldsymbol{\beta}$ e $\sigma$. Questo approccio offre tre vantaggi immediati:
-
-1. *Trasparenza* — la struttura del modello (likelihood e priors) è dichiarata in modo chiaro.
-2. *Coerenza* — l’inferenza è interamente bayesiana: non ci sono p-value né “soglie di significatività”.
-3. *Flessibilità* — lo stesso schema si estende facilmente a *GLM* (esiti Bernoulli, Poisson, ecc.) e a modelli multilivello, semplicemente cambiando la famiglia di distribuzione o la struttura gerarchica.
+:::
 
 ### Idee guida del capitolo {.unnumbered .unlisted}
 
@@ -28,7 +16,20 @@ con priors espliciti per $\alpha$, $\boldsymbol{\beta}$ e $\sigma$. Questo appro
 * *Coefficiente parziale vs bivariato*: in presenza di correlazione tra predittori, il coefficiente bivariato può risultare distorto o addirittura invertire segno. I coefficienti del modello multiplo misurano invece l’associazione condizionata.
 * *Priors su scala naturale*: formulare i priors nelle unità originali (per esempio, punteggi da 0 a 10 o da 0 a 100) rende le ipotesi più interpretabili e comunicabili.
 
-### Una prima finestra sugli errori di specificazione {.unnumbered .unlisted}
+## Perché usare Stan per la regressione? 
+
+Scrivere la regressione in Stan significa specificare un *modello generativo* completo:
+
+$$
+y_n \sim \mathcal{N}(\alpha + \mathbf{x}_n^\top \boldsymbol{\beta},\, \sigma),
+$$
+con priors espliciti per $\alpha$, $\boldsymbol{\beta}$ e $\sigma$. Questo approccio offre tre vantaggi immediati:
+
+1. *trasparenza*: la struttura del modello (likelihood e priors) è dichiarata in modo chiaro.
+2. *coerenza*: l’inferenza è interamente bayesiana: non ci sono p-value né “soglie di significatività”.
+3. *flessibilità*: lo stesso schema si estende facilmente a *GLM* (esiti Bernoulli, Poisson, ecc.) e a modelli multilivello, semplicemente cambiando la famiglia di distribuzione o la struttura gerarchica.
+
+## Una prima finestra sugli errori di specificazione 
 
 Il capitolo affronterà anche alcuni casi frequenti di *specificazione errata*, con esempi concreti tratti dalla ricerca psicologica:
 
@@ -36,11 +37,9 @@ Il capitolo affronterà anche alcuni casi frequenti di *specificazione errata*, 
 2. *Forma funzionale errata*: trattare relazioni non lineari come lineari semplici produce stime ingannevoli.
 3. *Varianza non costante e outlier*: assumere residui gaussiani omoschedastici può essere inadeguato; i *posterior predictive checks* aiutano a diagnosticarlo e a considerare likelihood più robuste.
 
-
 In sintesi, la regressione lineare in Stan non è solo un esercizio di calcolo, ma un’occasione per apprendere un metodo: partire da un modello teorico, tradurlo in linguaggio probabilistico, implementarlo in codice, e valutarne la capacità di rappresentare i dati psicologici in modo critico e trasparente.
 
-
-### Panoramica del capitolo {.unnumbered .unlisted}
+## Panoramica del capitolo {.unnumbered .unlisted}
 
 - Il modello di regressione multipla in *notazione matriciale*.  
 - Formulazione del modello in codice Stan.  
@@ -70,7 +69,6 @@ if (!requireNamespace("pacman")) install.packages("pacman")
 pacman::p_load(brms, posterior, cmdstanr, tidybayes, loo, patchwork)
 ```
 :::
-
 
 ## Regressione lineare con un solo predittore 
 

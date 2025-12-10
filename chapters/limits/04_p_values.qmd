@@ -1,22 +1,22 @@
 # La fragilità del valore-$p$ {#sec-p-value-fragility}
 
 ::: {.callout-note appearance="minimal"}
-Nel Capitolo 3 del manuale abbiamo visto che il valore-$p$ è spesso frainteso e usato impropriamente. Una delle sue caratteristiche più problematiche, ma meno intuitive, è la sua **estrema variabilità**: campioni diversi dalla stessa popolazione possono produrre p-value drasticamente diversi.
+Nel Capitolo 3 del manuale abbiamo visto che il valore-$p$ è spesso frainteso e utilizzato in modo improprio. Uno degli aspetti più critici, ma spesso trascurato, riguarda la sua **estrema variabilità**: campioni diversi estratti dalla stessa popolazione possono produrre valori-$p$ profondamente diversi, portando, solo a causa di fluttuazioni casuali, a conclusioni opposte riguardo allo stesso fenomeno.
 
-@gelman2006difference hanno sintetizzato questo problema in una frase memorabile:
+Questo problema è stato efficacemente e ironicamente colto da @gelman2006difference, che hanno osservato: "La differenza tra 'significativo' e 'non significativo' non è di per sé statisticamente significativa".
 
-> La differenza tra "significativo" e "non significativo" non è di per sé statisticamente significativa.
+Questa affermazione, apparentemente paradossale, coglie un punto cruciale: una soglia convenzionale come $p$ = 0.05 non garantisce una distinzione affidabile tra effetti reali e assenza di effetto. Variazioni minime e del tutto casuali nei dati possono spostare un valore-$p$ da un lato all’altro della soglia, alterando radicalmente l'interpretazione del risultato senza che questo corrisponda a un cambiamento reale nel fenomeno studiato.
 
-In questo capitolo esploreremo questa affermazione attraverso simulazioni, mostrando concretamente quanto sia fragile basare decisioni scientifiche sulla distinzione binaria $p < 0.05$ vs $p \geq 0.05$.
+In questo capitolo, esploreremo l'instabilità del valore-$p$ attraverso delle simulazioni. L’obiettivo è mostrare quanto sia rischioso basare la valutazione di un risultato sulla dicotomia $p < 0.05$ vs. $p \geq 0.05$ e perché questa pratica possa portare a conclusioni fuorvianti nella ricerca psicologica.
 :::
 
 ::: callout-important
 ## In questo capitolo imparerai a
 
-- Osservare empiricamente la variabilità del valore-$p$ da campione a campione.
-- Confrontare la distribuzione dei p-value sotto $H_0$ vera vs $H_0$ falsa.
-- Comprendere perché la differenza tra "significativo" e "non significativo" non è significativa.
-- Confrontare la stabilità delle inferenze frequentiste vs bayesiane.
+- osservare empiricamente la variabilità del valore-$p$ da campione a campione;
+- confrontare la distribuzione dei valori-$p$ sotto l'ipotesi $H_0$ vera vs. l'ipotesi $H_0$ falsa;
+- comprendere perché la differenza tra "significativo" e "non significativo" non è significativa;
+- confrontare la stabilità delle inferenze frequentiste vs bayesiane.
 :::
 
 ::: callout-tip
@@ -33,23 +33,20 @@ In questo capitolo esploreremo questa affermazione attraverso simulazioni, mostr
 #| message: false
 #| warning: false
 
-# Caricamento librerie
+here::here("code", "_common.R") |> 
+  source()
 library(tidyverse)
 library(patchwork)
-
-# Tema grafico comune
-theme_set(theme_minimal(base_size = 12))
-
-# Seed per riproducibilità
-set.seed(42)
 ```
 :::
 
-## Simulazione 1: La variabilità del valore-$p$
+## Simulazione 1: la variabilità del valore-$p$
 
-### Setup
+Supponiamo di voler studiare un effetto di modesta entità. Nella popolazione di riferimento, la variabile di interesse ha una media $\mu = 0.05$ e una deviazione standard $\sigma = 0.1$. Ciò corrisponde a una dimensione dell'effetto di Cohen $d$ = 0.5, convenzionalmente considerata di intensità "media".
 
-Immaginiamo di studiare un effetto molto piccolo: $\mu = 0.05$ con $\sigma = 0.1$ (equivalente a un Cohen's $d = 0.5$). Estraiamo 100 campioni indipendenti di $n = 10$ osservazioni ciascuno e calcoliamo il p-value per testare $H_0: \mu = 0$.
+Per illustrare l'elevata volatilità del valore-$p$ in piccoli campioni, simuliamo uno scenario di ricerca tipico: la raccolta ripetuta di nuovi dati. In particolare, dalla popolazione descritta estraiamo 100 campioni casuali indipendenti, ciascuno di dimensioni ridotte ($n$ = 10). Per ogni campione, eseguiamo un test $t$ di Student per verificare l'ipotesi nulla $H_0: \mu = 0$.
+
+L’obiettivo della simulazione è mostrare come, nonostante l’effetto reale nella popolazione sia costante ($\mu$ = 0.05), il valore-$p$ oscilli in modo drastico da un campione all'altro. Questa marcata variabilità rivela la natura intrinsecamente instabile del valore-$p$ quale statistica campionaria. Ne consegue che le sue fluttuazioni potrebbero essere **interpretate in modo fuorviante** come cambiamenti sostanziali del fenomeno studiato, mentre in realtà riflettono **esclusivamente la variabilità casuale** insita nel processo di campionamento.
 
 ```{r}
 # Parametri della simulazione
@@ -75,25 +72,18 @@ simulation <- tibble(sample_id = 1:n_samples) |>
 ```{r}
 #| echo: false
 # Statistiche riassuntive
-cat("═══════════════════════════════════════════════════════\n")
-cat("         VARIABILITÀ DEI VALORI-p\n")
-cat("         (100 campioni dalla stessa popolazione)\n")
-cat("═══════════════════════════════════════════════════════\n")
 cat(sprintf("Effetto vero: μ = %.2f, σ = %.2f (d = %.1f)\n", 
             true_mean, true_sd, true_mean/true_sd))
-cat(sprintf("Dimensione campione: n = %d\n", n_obs))
-cat("───────────────────────────────────────────────────────\n")
-cat(sprintf("Range p-value:    [%.4f, %.4f]\n", 
+cat(sprintf("Dimensione del campione: n = %d\n", n_obs))
+cat(sprintf("Campo di variazione:    [%.4f, %.4f]\n", 
             min(simulation$p_value), max(simulation$p_value)))
-cat(sprintf("Mediana p-value:  %.3f\n", median(simulation$p_value)))
-cat(sprintf("Significativi:    %d/%d (%.0f%%)\n", 
+cat(sprintf("Mediana dei valori-p:  %.3f\n", median(simulation$p_value)))
+cat(sprintf("Valori-p significativi:    %d/%d (%.0f%%)\n", 
             sum(simulation$significant), n_samples,
             100 * mean(simulation$significant)))
-cat("═══════════════════════════════════════════════════════\n")
 ```
 
-
-### Visualizzazione
+Visualizzazione:
 
 ```{r}
 #| label: fig-pvalue-variability
@@ -116,27 +106,29 @@ ggplot(simulation_ordered, aes(x = rank, y = p_value, color = significant)) +
                      breaks = c(0.001, 0.01, 0.05, 0.1, 0.5, 1),
                      labels = c("0.001", "0.01", "0.05", "0.1", "0.5", "1")) +
   labs(
-    x = "Campioni (ordinati per p-value)",
+    x = "Campioni (ordinati per valore-p)",
     y = "Valore-p (scala logaritmica)",
     color = "",
     title = "100 studi identici, conclusioni diverse",
-    subtitle = sprintf("Stesso effetto (d = %.1f), stesso n = %d, ma p-value da %.4f a %.2f",
+    subtitle = sprintf("Stesso effetto (d = %.1f), stesso n = %d, ma valori-p da %.4f a %.2f",
                       true_mean/true_sd, n_obs, 
                       min(simulation$p_value), max(simulation$p_value))
   ) 
 ```
 
-Il grafico mostra un risultato sorprendente: lo **stesso effetto vero**, studiato con lo **stesso protocollo**, produce p-value che variano da quasi 0 a quasi 1. Alcuni studi concluderebbero "effetto altamente significativo" ($p < 0.01$), altri "nessuna evidenza" ($p > 0.5$).
+Il grafico mette in evidenza un risultato particolarmente incisivo: **lo stesso effetto reale**, valutato con **la medesima procedura statistica** (test $t$ di Student), può generare valori-$p$ che coprono pressoché l’intera gamma possibile, da valori prossimi a 0 fino a valori prossimi a 1. In pratica, estraendo campioni diversi dalla stessa popolazione, si giungerebbe a conclusioni diametralmente opposte: con alcuni si dichiarerebbe l'effetto "altamente significativo" ($p$ < 0.01), mentre con altri non si rileverebbe alcuna evidenza statistica ($p$ > 0.05). Tale variabilità non riflette differenze nel fenomeno sottostante, ma è esclusivamente un riflesso della fluttuazione casuale intrinseca al processo di campionamento.
 
-## Simulazione 2: La Distribuzione dei P-value
+## Simulazione 2: la distribuzione dei valori-$p$ e ciò che ci insegna
+
+Questa simulazione mira a chiarire il seguente principio: il comportamento del valore-$p$ dipende in modo critico dal fatto che l'ipotesi nulla sia vera o falsa. Comprendere questa differenza è essenziale per interpretare correttamente i risultati.
 
 ### Sotto l'ipotesi nulla vera
 
-Se $H_0$ è vera ($\mu = 0$), i p-value dovrebbero essere **uniformemente distribuiti** tra 0 e 1. Questo significa che il 5% dei p-value sarà < 0.05 per puro caso.
+Quando l'ipotesi nulla è vera, il valore-$p$ è progettato per comportarsi in un modo molto specifico: la sua distribuzione deve essere uniforme tra 0 e 1. In pratica, ciò significa che il 5% dei valori-$p$ sarà inferiore a 0.05 per puro caso: questo è esattamente il tasso di falsi positivi che il livello di significatività $\alpha$ intende controllare.
 
 ```{r}
 #| label: fig-pvalue-under-h0
-#| fig-cap: "Distribuzione dei p-value quando H₀ è vera. I p-value sono uniformi: il 5% cade sotto 0.05 per puro caso."
+#| fig-cap: "Distribuzione uniforme dei valori-p quando H₀ è vera. La linea rossa tratteggiata a y=1 mostra l'andamento atteso di una distribuzione uniforme perfetta. Il 5% dei valori cade a sinistra della linea verticale scura (p < 0.05) per puro caso."
 
 # Simulazione sotto H0 vera
 n_sims_h0 <- 10000
@@ -156,21 +148,20 @@ tibble(p_value = p_values_h0) |>
   labs(
     x = "Valore-p",
     y = "Densità",
-    title = "Distribuzione dei p-value sotto H₀ vera",
-    subtitle = sprintf("%.1f%% dei p-value sono < 0.05 (atteso: 5%%)", 
+    title = "Distribuzione dei valori-p sotto H₀ vera",
+    subtitle = sprintf("Distribuzione uniforme attesa: %.1f%% dei valori-p < 0.05 (atteso: 5%%)", 
                       100 * mean(p_values_h0 < 0.05))
   ) +
   coord_cartesian(ylim = c(0, 1.5))
 ```
 
-### Sotto l'ipotesi nulla falsa
+### Sotto l'ipotesi nulla falsa ($H_1: \mu > 0$)
 
-Se esiste un effetto reale, la distribuzione dei p-value si sposta verso lo zero, ma rimane molto variabile:
+La situazione cambia radicalmente quando esiste un effetto reale nella popolazione. In questo caso, la distribuzione dei valori-$p$ si "sposta" verso lo zero. Tuttavia, questa distribuzione rimane estremamente dispersa per effetti piccoli o moderati e per campioni di piccole dimensioni. La percentuale di valori-$p$ che cadono sotto la soglia di significatività (ad esempio, 0.05) corrisponde alla potenza statistica dello studio.
 
 ```{r}
 #| label: fig-pvalue-distributions
-#| fig-cap: "Distribuzione dei p-value sotto H₀ vera vs falsa. Anche con un effetto reale (d = 0.5), molti studi non raggiungono la significatività."
-#| fig-height: 6
+#| fig-cap: "Come la dimensione dell'effetto modella la distribuzione del valore-p. Con H₀ vera (d=0.0), la distribuzione è uniforme. All'aumentare dell'effetto reale (d), la distribuzione si sposta verso valori più bassi, aumentando la potenza (percentuale di p<0.05)."
 
 # Simulazione sotto H0 falsa (effetto piccolo)
 effect_sizes <- c(0, 0.2, 0.5, 0.8)
@@ -196,27 +187,38 @@ ggplot(pvalue_distributions, aes(x = p_value)) +
   labs(
     x = "Valore-p",
     y = "Frequenza",
-    title = "Come la dimensione dell'effetto influenza la distribuzione dei p-value",
+    title = "Come la dimensione dell'effetto influenza\nla distribuzione dei valori-p",
     subtitle = sprintf("n = %d per campione, %d simulazioni per condizione", n_obs, n_sims)
   )
 ```
 
-Anche con un effetto "medio" ($d = 0.5$), circa il 40% degli studi non raggiunge la significatività. La variabilità dei p-value diminuisce solo con effetti grandi ($d \geq 0.8$).
+### Interpretazione dei risultati
 
-## Simulazione 3: Due Studi "Contraddittori"
+1.  **Il comportamento del valore-$p$ sotto l’ipotesi nulla.** Il primo grafico illustra una proprietà fondamentale dell’inferenza frequentista: quando l’ipotesi nulla ($H_0$) è vera, la distribuzione del valore-$p$ è uniforme nell’intervallo [0,1]. In tale scenario, esattamente il 5% dei valori simulati risulta inferiore a 0.05 per puro effetto del caso. Questo conferma che il livello di significatività $\alpha$ = 0.05 corrisponde al tasso nominale di **errori di tipo I** (falsi positivi) controllato dal test.
 
-### Il paradosso di Gelman & Stern
+2.  **La criticità della potenza statistica con campioni ridotti.** La seconda figura mostra chiaramente l’impatto della dimensione del campione ($n$ = 10) sulla **potenza** del test. Nonostante l’uso della stessa procedura (test *t* per un campione), la probabilità di rifiutare correttamente $H_0$ varia drasticamente in base alla dimensione dell'effetto reale ($d$ di Cohen):
+    *   per un effetto trascurabile (*d* = 0.2), la potenza empirica è solo del **9%**, rendendo il test pressoché incapace di distinguere l’effetto dal rumore casuale;
+    *   per un effetto di entità media (*d* = 0.5), la potenza raggiunge appena il **30%**. In termini pratici, ciò implica che **7 studi replicati su 10** non riuscirebbero a raggiungere la significatività statistica, generando così un **errore di tipo II** (falso negativo);
+    *   solo per un effetto di ampia entità (*d* = 0.8) la potenza supera il 60%, anche se una quota sostanziale (circa il 38%) dei campioni non raggiunge comunque il criterio di rifiuto.
 
-Immaginiamo due studi identici che trovano:
+3.  **L’elevata variabilità campionaria del valore-$p$.** Per dimensioni dell'effetto piccole o moderate, la distribuzione del valore-$p$ rimane dispersa, riflettendo un’**elevata volatilità campionaria**. Di conseguenza, un singolo valore-$p$ costituisce una stima estremamente imprecisa della forza dell'evidenza contro $H_0$. È perfettamente plausibile che due studi identici, condotti sulla stessa popolazione, producano conclusioni statisticamente opposte (ad esempio, $p$ < 0.01 in uno, $p$ > 0.50 nell’altro) unicamente a causa della variabilità intrinseca del campionamento.
 
-- Studio A: $p = 0.04$ → "Effetto significativo!"
-- Studio B: $p = 0.06$ → "Nessun effetto"
+**In sintesi**, la simulazione mette in guardia da un'interpretazione semplicistica del valore-$p$, ricordandone la natura probabilistica. Il valore-$p$ non fornisce un verdetto binario sulla presenza o sull'entità di un effetto: un risultato non significativo non implica l'assenza di un effetto, così come un risultato significativo non garantisce che l'effetto sia di ampia portata. Con campioni di  dimensioni ridotte -- una condizione frequente nella ricerca psicologica -- il valore-$p$ si rivela una statistica fortemente instabile, la cui interpretazione dipende in modo critico dalla potenza statistica dello studio. Questi risultati sottolineano pertanto la necessità di integrare il valore-$p$ con stime puntuali e intervalli di confidenza, di progettare la ricerca mediante un'analisi di potenza a priori e, soprattutto, di fondare le inferenze non sul singolo esperimento, ma su una **replicabilità** sistematica e su una sintesi cumulativa delle evidenze.
 
-Questi risultati sono davvero contraddittori? Simuliamo cosa succede quando due ricercatori studiano lo stesso effetto:
+## Simulazione 3: due studi "contraddittori"
+
+Nella pratica dell’inferenza statistica, una delle osservazioni più controintuitive riguarda il confronto dei risultati di studi empirici. Nella letteratura scientifica è comune incontrare affermazioni del tipo:
+
+* **Studio A**: $p = 0.04$ → *“L’effetto è statisticamente significativo”*
+* **Studio B**: $p = 0.06$ → *“Non vi è evidenza di un effetto”*
+
+Questa contrapposizione suggerisce che i due studi giungano a conclusioni opposte. Tuttavia, come mostrato da @gelman2006difference, tale interpretazione è fuorviante: **la differenza tra un risultato “significativo” e uno “non significativo” non implica necessariamente una differenza sostanziale tra gli effetti osservati**. Spesso, tale differenza può essere spiegata dalla sola variabilità campionaria.
+
+Per capire quanto questo fenomeno sia frequente, possiamo simulare coppie di studi che esaminano **lo stesso effetto reale** utilizzando lo stesso disegno sperimentale e la stessa numerosità campionaria. Questa simulazione permette di valutare con quanta frequenza differenze minime nei dati portino a conclusioni apparentemente opposte a causa della soglia arbitraria di $p$ < 0.05.
 
 ```{r}
 #| label: fig-two-studies
-#| fig-cap: "1000 coppie di studi identici. Spesso uno trova p < 0.05 e l'altro no, pur studiando lo stesso effetto."
+#| fig-cap: "Simulazione di 1000 coppie di studi che esaminano lo stesso effetto reale. Spesso uno studio risulta “significativo” e l’altro no."
 
 # Simula coppie di studi
 n_pairs <- 1000
@@ -242,10 +244,8 @@ study_pairs <- tibble(pair_id = 1:n_pairs) |>
 
 # Statistiche
 concordance_stats <- study_pairs |>
-  count(concordance) |>
+  dplyr::count(concordance) |>
   mutate(pct = n / sum(n) * 100)
-
-print(concordance_stats)
 
 # Visualizzazione
 ggplot(study_pairs, aes(x = p_a, y = p_b, color = concordance)) +
@@ -263,23 +263,32 @@ ggplot(study_pairs, aes(x = p_a, y = p_b, color = concordance)) +
     y = "P-value Studio B",
     color = "",
     title = "Coppie di studi sullo stesso effetto",
-    subtitle = sprintf("%.0f%% delle coppie dà risultati discordanti", 
+    subtitle = sprintf("Circa %.0f%% delle coppie produce risultati discordanti", 
                       concordance_stats$pct[concordance_stats$concordance == "Risultati discordanti"])
   ) +
-  coord_fixed() 
+  coord_fixed()
 ```
 
-I **risultati discordanti** sono comuni! Due ricercatori che studiano lo stesso fenomeno con lo stesso protocollo possono facilmente arrivare a conclusioni opposte, semplicemente a causa della variabilità campionaria.
+### Interpretazione
 
-## Simulazione 4: Confronto con l'Approccio Bayesiano
+La simulazione evidenzia un punto cruciale: **conclusioni apparentemente discordanti possono emergere anche quando due studi indagano lo stesso effetto reale con il medesimo protocollo sperimentale**. In assenza di differenze sostanziali tra i fenomeni esaminati, la sola variabilità campionaria può generare stime che, a seconda che il valore-$p$ superi o meno una soglia convenzionale, portano a interpretazioni diametralmente opposte.
 
-L'approccio bayesiano non usa soglie arbitrarie, ma produce una **distribuzione a posteriori** che quantifica l'incertezza. Confrontiamo la stabilità delle due inferenze.
+Come osservano @gelman2006difference, il problema non risiede nel valore-$p$ in sé, ma nell'uso della soglia di significatività come criterio di confronto inferenziale tra studi. Dal punto di vista statistico, confrontare un risultato “significativo” con uno “non significativo” non fornisce alcuna informazione sulla differenza tra gli effetti sottostanti. L’elemento appropriato da valutare non è il superamento della soglia dello 0.05, ma **la differenza stimata tra gli effetti e la relativa incertezza inferenziale**.
+
+In termini sintetici:
+
+> **La differenza tra significativo e non significativo non è statisticamente significativa.**
+
+Questa considerazione ha importanti implicazioni per la metodologia della ricerca empirica. La dicotomizzazione dei risultati sulla base di una soglia di significatività si rivela un criterio debole e potenzialmente fuorviante per valutare la coerenza tra gli studi. Una pratica inferenziale adeguata richiede invece di focalizzarsi sulle stime degli effetti, sui loro intervalli di incertezza e sulla quantificazione comparativa delle differenze, abbandonando l'uso di soglie arbitrarie come strumento decisionale primario.
+
+## Simulazione 4: confronto con l’approccio bayesiano
+
+L’approccio frequentista tradizionale richiede spesso l’adozione di soglie decisionali rigide (ad esempio, $p$ < 0.05). Al contrario, l’inferenza bayesiana non impone dicotomie: essa fornisce una **distribuzione a posteriori** dei parametri e consente di esprimere in modo diretto la probabilità che un effetto sia positivo, tenendo conto sia dei dati sia dell’incertezza pre-esistente.
+
+Di seguito, confrontiamo l’instabilità dei valori-$p$ con la stabilità della probabilità a posteriori che l’effetto sia positivo, calcolata assumendo come prior una distribuzione normale centrata sullo zero.
+
 
 ```{r}
-#| label: fig-freq-vs-bayes-stability
-#| fig-cap: "Confronto della stabilità: il p-value varia enormemente, mentre la probabilità a posteriori è più stabile."
-#| fig-height: 5
-
 # Funzione per calcolo bayesiano approssimato
 # Prior: mu ~ N(0, prior_sd)
 # Likelihood: x_bar | mu ~ N(mu, sigma/sqrt(n))
@@ -299,74 +308,131 @@ bayesian_posterior_prob <- function(data, prior_sd = 0.2) {
   pnorm(0, mean = post_mean, sd = post_sd, lower.tail = FALSE)
 }
 
-# Calcola entrambe le misure per i 100 campioni
+# Calcola entrambe le misure per i campioni simulati
 comparison <- simulation |>
   rowwise() |>
-  mutate(
-    prob_positive = bayesian_posterior_prob(data)
-  ) |>
+  mutate(prob_positive = bayesian_posterior_prob(data)) |>
   ungroup()
+```
 
-# Visualizzazione side-by-side
-p1 <- ggplot(comparison, aes(x = p_value)) +
-  geom_histogram(bins = 25, fill = "coral", color = "white", alpha = 0.8) +
+Statistiche descrittive:
+
+```{r}
+pv_min <- min(comparison$p_value); pv_max <- max(comparison$p_value)
+pv_mean <- mean(comparison$p_value); pv_sd <- sd(comparison$p_value); pv_cv <- pv_sd / pv_mean
+
+post_min <- min(comparison$prob_positive); post_max <- max(comparison$prob_positive)
+post_mean <- mean(comparison$prob_positive); post_sd <- sd(comparison$prob_positive); post_cv <- post_sd / post_mean
+
+pct_p_below05 <- mean(comparison$p_value < 0.05) * 100
+pct_post_above095 <- mean(comparison$prob_positive > 0.95) * 100
+```
+
+Grafici comparativi:
+
+```{r}
+# (A) histogram p-value con rug e annotazioni
+pA <- ggplot(comparison, aes(x = p_value)) +
+  geom_histogram(bins = 30, fill = "#F39C79", color = "white", alpha = 0.9) +
+  geom_rug(sides = "b", alpha = 0.2) +
   geom_vline(xintercept = 0.05, linetype = "dashed", color = "black") +
-  labs(
-    title = "A) Distribuzione dei p-value",
-    x = "P-value",
-    y = "Frequenza",
-    subtitle = sprintf("Range: [%.3f, %.3f]", min(comparison$p_value), max(comparison$p_value))
-  )
+  annotate("text", x = 0.65, y = Inf, label = sprintf("Range: [%.3f, %.3f]\nMean: %.3f\nCV: %.2f\n%% p<0.05: %.1f%%",
+                                                      pv_min, pv_max, pv_mean, pv_cv, pct_p_below05),
+           hjust = 1, vjust = 1.1, size = 3.5) +
+  labs(title = "A) Distribuzione dei p-value",
+       x = "p-value", y = "Frequenza") +
+  theme_minimal()
 
-p2 <- ggplot(comparison, aes(x = prob_positive)) +
-  geom_histogram(bins = 25, fill = "steelblue", color = "white", alpha = 0.8) +
-  geom_vline(xintercept = 0.95, linetype = "dashed", color = "black") +
-  labs(
-    title = "B) Distribuzione P(μ > 0 | dati)",
-    x = "Probabilità a posteriori",
-    y = "Frequenza",
-    subtitle = sprintf("Range: [%.2f, %.2f]", min(comparison$prob_positive), max(comparison$prob_positive))
-  )
+# (B) histogram posterior probabilities con rug e annotazioni
+pB <- ggplot(comparison, aes(x = prob_positive)) +
+  geom_histogram(bins = 30, fill = "#4C7BD9", color = "white", alpha = 0.9) +
+  geom_rug(sides = "b", alpha = 0.2) +
+  geom_vline(xintercept = 0.5, linetype = "dotted", color = "gray40") +
+  annotate("text", x = 0.98, y = Inf, label = sprintf("Range: [%.2f, %.2f]\nMean: %.2f\nCV: %.2f\n%%",
+                                                      post_min, post_max, post_mean, post_cv),
+           hjust = 1, vjust = 1.1, size = 3.5) +
+  labs(title = "B) Distribuzione P(μ > 0 | dati)",
+       x = "Probabilità a posteriori", y = "Frequenza") +
+  theme_minimal()
 
-p1 + p2
+# (C) scatter p-value vs posterior probability + 2D density contours
+# color by 2D density (using stat_density_2d)
+pC <- ggplot(comparison, aes(x = p_value, y = prob_positive)) +
+  geom_point(alpha = 0.45, size = 1.8) +
+  stat_density_2d(aes(fill = ..level..), geom = "polygon", alpha = 0.25, color = NA) +
+  scale_fill_viridis_c(option = "A", direction = -1) +
+  geom_smooth(method = "loess", se = FALSE, color = "black", linetype = "dashed", size = 0.6) +
+  geom_vline(xintercept = 0.05, linetype = "dashed", color = "gray50") +
+  geom_hline(yintercept = 0.5, linetype = "dotted", color = "gray50") +
+  labs(title = "C) p-value vs P(μ>0 | dati)",
+       x = "p-value", y = "Probabilità a posteriori") +
+  coord_cartesian(xlim = c(0, 1), ylim = c(0, 1)) +
+  theme_minimal() +
+  theme(legend.position = "none")
 ```
 
 ```{r}
 #| echo: false
-# Confronto quantitativo della variabilità
-cat("═══════════════════════════════════════════════════════\n")
-cat("    CONFRONTO VARIABILITÀ: FREQUENTISTA VS BAYESIANO\n")
-cat("═══════════════════════════════════════════════════════\n")
-cat(sprintf("Coefficiente di variazione p-value:     %.2f\n", 
+#| label: fig-freq-stability
+#| fig-cap: "Distribuzione dei valori-p: oscillazioni ampie tra campioni e forte dipendenza da una soglia arbitraria."
+pA
+```
+
+```{r}
+#| echo: false
+#| label: fig-bayes-stability
+#| fig-cap: "Distribuzione di P(μ > 0 | dati): variabilità più contenuta e interpretazione continua."
+pB
+```
+
+```{r}
+#| echo: false
+#| label: fig-freq-vs-bayes-stability
+#| fig-cap: "Relazione tra valore-p e probabilità a posteriori. I due metodi non producono interpretazioni equivalenti."
+pC
+```
+
+Confronto numerico:
+
+```{r}
+#| echo: false
+cat(sprintf("Coefficiente di variazione del valore-p:     %.2f\n", 
             sd(comparison$p_value) / mean(comparison$p_value)))
 cat(sprintf("Coefficiente di variazione P(μ>0|dati): %.2f\n", 
             sd(comparison$prob_positive) / mean(comparison$prob_positive)))
-cat("───────────────────────────────────────────────────────\n")
-cat(sprintf("Conclusioni discordanti (p-value):      %.0f%%\n",
-            100 * mean(comparison$significant != (comparison$significant[1]))))
-cat(sprintf("Conclusioni discordanti (Bayes, >0.95): %.0f%%\n",
-            100 * mean((comparison$prob_positive > 0.95) != (comparison$prob_positive[1] > 0.95))))
-cat("═══════════════════════════════════════════════════════\n")
+cat(sprintf("Campo di variazione del valore-p:        [%.3f, %.3f]\n", 
+            min(comparison$p_value), max(comparison$p_value)))
+cat(sprintf("Campo di variazione di P(μ>0|dati):    [%.2f, %.2f]\n", 
+            min(comparison$prob_positive), max(comparison$prob_positive)))
 ```
 
-La probabilità a posteriori è **più stabile** del valore-$p$ perché:
+### Interpretazione
 
-1. lo **shrinkage** verso la prior attenua le stime estreme;
-2. non c'è una trasformazione non lineare che amplifica le fluttuazioni;
-3. l'inferenza è su una **scala interpretabile** (probabilità dell'ipotesi).
+I risultati mostrano una differenza cruciale: i valori-$p$ oscillano considerevolmente da un campione all’altro. Per questo motivo, conclusioni opposte possono dipendere unicamente dal superamento o meno della soglia convenzionale di 0.05. La probabilità a posteriori che l’effetto sia positivo, invece, varia in modo più graduale e raramente porta a decisioni drasticamente opposte tra campioni simili.
 
-::: callout-warning
-## Avvertimento importante
+La maggiore stabilità è dovuta al fatto che l'approccio bayesiano incorpora l'incertezza preesistente tramite uno *shrinkage* naturale verso la distribuzione a priori. Inoltre, evita la trasformazione non lineare che porta al valore-$p$, la quale tende ad amplificare le fluttuazioni campionarie. Infine, l'approccio bayesiano esprime l'evidenza in una scala direttamente interpretabile, ossia come probabilità dell'ipotesi di interesse, piuttosto che come risultato di un test controfattuale.
 
-Anche l'approccio bayesiano non è immune dalla variabilità campionaria. Se usassimo una soglia arbitraria (es. "concludi che l'effetto esiste se $P(\mu > 0 | \text{dati}) > 0.95$"), ricadremmo negli stessi problemi del valore-$p$. Il vantaggio bayesiano sta nel **quantificare l'incertezza** in modo continuo, non nel fornire certezze.
+::: {.callout-warning title="Avvertenza metodologica"}
+Anche l’inferenza bayesiana è soggetta alla variabilità campionaria. Introdurre una regola decisionale arbitraria, come ad esempio "concludere che l'effetto esiste se $P(\mu > 0 \mid \text{dati}) > 0.95$", riprodurrebbe esattamente i problemi concettuali legati all'uso dicotomico del valore-$p$. Il vero vantaggio del metodo bayesiano non risiede nel fornire certezze definitive, ma nell'offrire una rappresentazione continua e trasparente dell'incertezza a posteriori.
 :::
 
-## Simulazione 5: L'Effetto della Dimensione Campionaria
+In sintesi, l’approccio bayesiano non elimina l’incertezza, ma la **quantifica** in modo esplicito, mentre la soglia frequentista tende a **mascherarla**, trasformando la naturale variabilità dei risultati in un conflitto artificiale tra studi apparentemente contraddittori.
+
+
+## Simulazione 5: l'effetto della dimensione campionaria
+
+Un argomento spesso avanzato a sostegno dell'uso del valore-$p$ è che, aumentando la dimensione campionaria, le inferenze diventano più stabili. In parte questa affermazione è vera: campioni più ampi, infatti, offrono una maggiore potenza statistica, il che rende più frequenti i risultati "statisticamente significativi" quando esiste un effetto reale. Tuttavia, questa osservazione rischia di nascondere un fatto meno intuitivo, ma altrettanto importante: anche con campioni molto grandi, il valore-$p$ conserva una sostanziale variabilità e rimane strettamente dipendente dalle caratteristiche specifiche del singolo campione osservato.
+
+Per illustrare questo fenomeno, abbiamo condotto 1000 simulazioni per quattro diverse dimensioni campionarie crescenti (da $n = 10$ a $n = 300$), ipotizzando un effetto reale di piccola entità, $d = 0.2$. Per ciascuna delle simulazioni, abbiamo calcolato il valore-$p$ associato a un test $t$ di Student a una coda.
 
 ```{r}
 #| label: fig-sample-size-pvalue
 #| fig-cap: "La variabilità del p-value diminuisce con n, ma rimane sostanziale anche con campioni grandi."
+#| fig.height: 5
 
+set.seed(123)
+true_mean <- 0.2
+true_sd <- 1
 sample_sizes <- c(10, 30, 100, 300)
 n_sims <- 1000
 
@@ -390,10 +456,12 @@ ggplot(sample_size_effect, aes(x = p_value)) +
   labs(
     x = "Valore-p",
     y = "Frequenza",
-    title = "Distribuzione dei p-value per diverse dimensioni campionarie",
+    title = "Distribuzione dei valori-p\nper diverse dimensioni campionarie",
     subtitle = sprintf("Effetto vero: d = %.1f", true_mean/true_sd)
   )
+```
 
+```{r}
 # Statistiche riassuntive
 sample_size_effect |>
   group_by(n) |>
@@ -406,22 +474,21 @@ sample_size_effect |>
   knitr::kable(caption = "Variabilità del p-value in funzione di n")
 ```
 
-Anche con $n = 300$, i p-value variano da quasi 0 a quasi 1. La potenza aumenta (più studi trovano $p < 0.05$), ma la **variabilità intrinseca** del p-value rimane.
+I risultati mostrano che, anche con $n$ = 300, i valori-$p$ oscillano da 0.0 a 0.895. Mentre la potenza statistica aumenta effettivamente (come evidenziato dalla maggiore percentuale di studi che superano la soglia convenzionale), la variabilità intrinseca del valore-$p$ persiste. Questi risultati confermano che il valore-$p$ **non è una misura stabile dell'evidenza**, ma piuttosto una statistica estremamente sensibile alle fluttuazioni campionarie specifiche.
 
 ## Riflessioni conclusive
 
-Le simulazioni presentate in questo capitolo offrono una dimostrazione empirica illuminante della profonda fragilità del valore-$p$ come strumento inferenziale. La prima evidenza riguarda la **variabilità estrema** delle stime. Lo stesso effetto reale, investigato attraverso lo stesso protocollo sperimentale, può produrre risultati statistici diametralmente opposti: un p-value di 0.001 in un campione, suggerendo evidenza schiacciante, e un valore-$p$ di 0.90 in un altro campione, indicando completa assenza di segnale. Questa oscillazione estrema non riflette necessariamente qualità metodologica differenziale, ma piuttosto l'aleatorietà intrinseca del processo di campionamento.
+Le simulazioni presentate in questo capitolo illustrano in modo concreto la fragilità del valore-$p$ come strumento inferenziale. Un primo aspetto riguarda la **marcata instabilità dei valori campionari del valore-$p$**. A parità di effetto reale e applicando la medesima procedura statistica, è possibile ottenere risultati radicalmente discordanti: lo stesso fenomeno può generare un valore-$p$ pari a 0.001 in un campione, interpretato come un’evidenza molto forte a sostegno dell’effetto, e in un altro campione un valore-$p$ di 0.90, interpretato come totale assenza di supporto. Queste oscillazioni non derivano da differenze metodologiche tra le analisi né da variazioni dell’effetto studiato, ma sono  una conseguenza diretta della **variabilità intrinseca del processo di campionamento**. Il valore-$p$, quindi, non fornisce un indicatore stabile dell’evidenza empirica, ma rimane altamente sensibile alla fluttuazione casuale insita nei dati osservati.
 
-La seconda evidenza concerne la **discordanza sistematica tra studi**. Due ricercatori che investigano il medesimo fenomeno utilizzando protocolli metodologicamente solidi hanno una probabilità sostanziale di giungere a conclusioni statisticamente opposte. Questo fenomeno non costituisce un'eccezione ma una proprietà strutturale della inferenza basata sul p-value, minando la coerenza cumulativa della conoscenza scientifica.
+La seconda evidenza riguarda la **discordanza sistematica tra gli studi**. Due ricercatori che indagano lo stesso fenomeno, utilizzando protocolli metodologicamente solidi, possono facilmente giungere a conclusioni statisticamente opposte. Questo non rappresenta un caso eccezionale, ma una caratteristica intrinseca dell’inferenza basata sul valore-$p$, che compromette la coerenza e la cumulatività della conoscenza scientifica.
 
-La terza evidenza rivela la **natura uniforme della distribuzione sotto l'ipotesi nulla**. Quando l'ipotesi nulla è vera, i p-value si distribuiscono uniformemente tra 0 e 1, garantendo per pura legge probabilistica che esattamente il 5% dei risultati verrà dichiarato "significativo" per effetto del caso. Questo meccanismo trasforma la soglia del 5% non in un filtro che separa segnale da rumore, ma in un generatore sistematico di falsi positivi.
+La terza evidenza riguarda la **distribuzione uniforme dei valori-$p$ sotto l’ipotesi nulla**. Quando l’ipotesi nulla è vera, i valori-$p$ si distribuiscono in modo uniforme tra 0 e 1, il che implica che, per puro caso, circa il 5% dei risultati supererà inevitabilmente la soglia convenzionale del 5%. In altre parole, questa soglia non agisce come un filtro affidabile per distinguere il segnale dal rumore, ma funziona piuttosto come un generatore sistematico di falsi positivi.
 
-La quarta evidenza emerge dal **confronto con l'approccio bayesiano**. La probabilità a posteriori dimostra una maggiore stabilità rispetto al p-value, ma questa stabilità non equivale a certezza. L'inferenza bayesiana riduce ma non elimina l'incertezza intrinseca all'inferenza da dati campionari, offrendo una quantificazione più sfumata ma non infallibile dell'evidenza.
+La quarta evidenza emerge dal **confronto con l'approccio bayesiano**. Le probabilità a posteriori presentano una stabilità molto maggiore rispetto ai valori-$p$, fornendo stime più coerenti dell'evidenza a partire dai dati. Tuttavia, questa maggiore stabilità non implica certezza: l'inferenza bayesiana riduce, ma non elimina, l'incertezza intrinseca derivante dal campionamento, offrendo una quantificazione dell'evidenza più sfumata e trasparente, pur rimanendo soggetta alla variabilità dei dati osservati.
 
-La quinta evidenza riguarda l'**effetto della dimensione campionaria**. Campioni più grandi aumentano la potenza statistica, riducendo la probabilità di falsi negativi, ma non eliminano la variabilità fondamentale delle stime. Anche studi con migliaia di partecipanti producono risultati che fluttuano attorno al vero valore del parametro, sebbene con oscillazioni più contenute.
+La quinta evidenza riguarda l'**effetto della dimensione campionaria**. L’aumento del numero di osservazioni aumenta la potenza statistica e riduce la probabilità di falsi negativi, ma non elimina la variabilità intrinseca delle stime. Anche gli studi che coinvolgono migliaia di partecipanti producono risultati che oscillano attorno al vero valore del parametro, sebbene tali fluttuazioni siano più contenute rispetto a campioni più piccoli.
 
-La lezione fondamentale che emerge da queste simulazioni è che la distinzione binaria tra "significativo" e "non significativo" rappresenta una convenzione **arbitraria nella sua definizione e fragile nella sua applicazione**. Come affermano acutamente @gelman2006difference, interpretare questa distinzione artificiale come se riflettesse una differenza ontologica nel fenomeno studiato costituisce un errore logico di proporzioni epistemologiche rilevanti. Trattare valori-$p$ di 0.049 e 0.051 come portatori di significati scientifici antitetici equivale a confondere un artefatto della procedura statistica con una proprietà della realtà studiata.
-
+La lezione principale che emerge da queste simulazioni è che la distinzione binaria tra "significativo" e "non significativo" è arbitraria nella sua definizione e fragile nella sua applicazione. Come osservato da @gelman2006difference, interpretare questa separazione artificiale come se riflettesse una differenza sostanziale nel fenomeno studiato costituisce un grave errore epistemologico. Considerare valori-$p$ di 0.049 e 0.051 come portatori di significati scientifici opposti significa confondere un artefatto della procedura statistica con una proprietà effettiva della realtà studiata.
 
 ## Esercizi
 

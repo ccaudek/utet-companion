@@ -1,31 +1,14 @@
 # Errore di misurazione e attenuazione: una soluzione bayesiana {#sec-meas-error-regr}
 
-## Introduzione {.unnumbered .unlisted}
+::: {.callout-note appearance="minimal"}
 
-La ricerca psicologica si confronta costantemente con una sfida epistemologica e metodologica fondamentale: i costrutti d'interesse – quali l'ansia, l'intelligenza o la motivazione – sono entità latenti, non direttamente osservabili. La loro rilevazione avviene necessariamente attraverso approssimazioni operative, quali questionari, test psicometrici e scale di valutazione, che incorporano inevitabilmente una componente di errore di misura.  
+La ricerca psicologica si confronta costantemente con una sfida epistemologica e metodologica fondamentale: i costrutti d'interesse, quali l'ansia, l'intelligenza o la motivazione, sono entità latenti, non direttamente osservabili. La loro misurazione richiede pertanto approssimazioni operative, quali questionari, test psicometrici e scale di valutazione, che incorporano inevitabilmente una componente di errore.
 
-Trascurare la bassa affidabilità psicometrica di tali strumenti non costituisce un mero dettaglio tecnico, bensì un problema metodologico sostanziale, in grado di alterare in maniera sistematica la validità delle inferenze scientifiche. Un esempio paradigmatico è fornito dal fenomeno dell'*attenuazione* della stima: quando una variabile predittiva continua, affetta da errore di misura, viene trattata in un'analisi di regressione come se fosse misurata in modo perfetto, il coefficiente di regressione stimato risulta sistematicamente distorto verso lo zero. Questa distorsione statistica, nota come *attenuazione del coefficiente di regressione*, sottostima artificialmente l'entità della relazione tra il costrutto latente e l'esito di interesse, compromettendo l'accuratezza delle conclusioni.
+Trascurare la limitata affidabilità psicometrica di tali strumenti non costituisce un mero dettaglio tecnico, bensì un problema metodologico sostanziale, in grado di alterare sistematicamente la validità delle inferenze scientifiche. Un esempio paradigmatico è il fenomeno dell'*attenuazione* della stima: quando una variabile predittiva continua affetta da errore di misura viene trattata in un'analisi di regressione come se fosse misurata perfettamente, il coefficiente di regressione stimato risulta  distorto verso lo zero. Questa distorsione statistica, nota come *attenuazione del coefficiente di regressione*, sottostima artificialmente l'entità della relazione tra il costrutto latente e l'esito di interesse, compromettendo l'accuratezza delle conclusioni.
 
-Il presente capitolo illustra l'utilità di un approccio bayesiano come metodo operativo per contrastare tale problematica. Modellizzando esplicitamente il processo di misura, possiamo correggere queste distorsioni e recuperare stime più veritiere della relazione tra i costrutti latenti di interesse. In pratica, questo ci permette di riportare l'analisi statistica sul piano del *tratto latente* che ci interessa davvero, propagando in modo coerente l'incertezza legata alla sua misurazione.
+Il presente capitolo illustra come un approccio bayesiano possa offrire una soluzione operativa a tale problematica. Modellizzando esplicitamente il processo di misurazione, è possibile correggere queste distorsioni e ottenere stime più veritiere delle relazioni tra costrutti latenti. In pratica, ciò consente di condurre l'analisi statistica sul piano del *tratto latente* effettivamente rilevante, propagando in modo coerente l'incertezza derivante dalla sua misurazione.
 
-Per fissare le idee, si consideri un caso semplice: una regressione lineare in cui un esito $y$ è regredito su un predittore latente $x$. Nei dati osservativi, tuttavia, non si misura $x$ ma una sua versione contaminata da errore, $x^*$. L'utilizzo di $x^*$ al posto di $x$ produce una stima attenuata del coefficiente di regressione.
-
-La soluzione bayesiana consiste nel *separare esplicitamente il modello strutturale dal modello di misura*. Si specifica un modello tale per cui:
-
-1.  *il modello strutturale* regredisce $y$ sul costrutto latente $x$,
-2.  *il modello di misura* definisce come il punteggio osservato $x^*$ sia generato a partire da $x$ (ad esempio, $x^* \sim \mathcal{N}(x, \sigma^2_{errore})$).
-
-In questo framework, l'errore di misura viene modellato e isolato nella componente di misura, prevenendo l'attenuazione della stima della relazione strutturale tra $x$ e $y$. Nel presente capitolo, questo approccio sarà dimostrato tramite simulazioni e implementato in Stan.
-
-Nella seconda parte del capitolo, estenderemo il quadro concettuale precedentemente delineato al contesto dell'analisi della *correlazione* tra due costrutti psicologici latenti. La *Teoria Classica dei Test* (CTT) fornisce una soluzione formale a questo problema mediante la procedura nota come *correzione per disattenuazione*. Questo metodo permette di stimare il coefficiente di correlazione "vero" tra i costrutti latenti, partendo dal coefficiente di correlazione osservato tra le misurazioni empiriche e correggendolo in funzione dell'affidabilità degli strumenti di misura utilizzati. Formalmente, la correzione si esprime come il rapporto tra la correlazione osservata e la radice quadrata del prodotto delle attendibilità delle due scale. Questa procedura, tuttavia, è valida solo sotto forti assunzioni, tra cui l'indipendenza degli errori di misura (ad esempio, l'assenza di bias da metodo condiviso) e la conoscenza esatta dell’attendibilità (condizione difficilmente verificabile nella pratica, dato che l'alfa di Cronbach o l'omega di McDonald sono essi stessi delle stime campionarie).
-
-Quando queste assunzioni non sono soddisfatte – ad esempio, in presenza di un *effetto di metodo* o di una fonte di varianza condivisa che induce correlazione tra gli errori – la formula classica tende a *sovracorreggere*, producendo stime della correlazione vera distorte e instabili [@carroll2006measurement]. L'approccio bayesiano supera questi limiti specificando un *modello di misurazione congiunto* in cui entrambi i costrutti sono trattati come variabili latenti. Questo modello permette di esplicitare la struttura di covarianza degli errori (ammettendo, se necessario, correlazioni residue) e di incorporare eventuali *fattori di metodo* latenti.
-
-In questo framework, la *correlazione di tratto* viene stimata direttamente, evitando i bias della CTT e propagando l'incertezza sulle attendibilità in modo appropriato. È importante sottolineare che, se le assunzioni della CTT sono verificate, il modello bayesiano converge verso la stima classica; in caso contrario, esso fornisce un'alternativa più robusta e generalizzabile.
-
-In sintesi, il capitolo svilupperà una progressione concettuale e metodologica articolata in tre fasi. In primo luogo, mediante dati simulati, verrà illustrato il fenomeno dell'attenuazione nei modelli di regressione e verrà dimostrato come un modello bayesiano che incorpori il predittore latente consenta di recuperare il parametro strutturale corretto. In seguito, estenderemo l'analisi al contesto della correlazione, mettendo in luce i limiti della correzione per disattenuazione nella CTT e i vantaggi di una modellazione congiunta con variabili latenti. Infine, presenteremo modelli bayesiani implementati in Stan in cui la distinzione tra tratto latente e la componente metodologica è resa esplicita, anche per costrutti multidimensionali misurati da più indicatori. L’adeguatezza dei modelli sarà valutata mediante strumenti diagnostici quali i *posterior predictive checks*.
-
-L’obiettivo finale è mostrare come la modellazione della misura – ovvero la specificazione esplicita di un *modello di misurazione* – costituisca un autentico *cambio di prospettiva* epistemologica. Questo approccio non è un esercizio tecnico formale, ma una pratica che migliora l'interpretazione sostanziale e l'affidabilità inferenziale, in quanto consente di dichiarare il processo di generazione dei dati e di distinguere, in modo probabilistico, la varianza attribuibile al costrutto da quella dovuta all'errore o al metodo di misurazione.
+:::
 
 ::: {.callout-caution collapse=true title="Preparazione del notebook"}
 
@@ -42,6 +25,27 @@ conflicts_prefer(stats::sd)
 ```
 
 :::
+
+## La modellazione della misura
+
+Per fissare le idee, si consideri un caso semplice: una regressione lineare in cui un esito $y$ è regredito su un predittore latente $x$. Nei dati osservativi, tuttavia, non si misura $x$ ma una sua versione contaminata da errore, $x^*$. L'utilizzo di $x^*$ al posto di $x$ produce una stima attenuata del coefficiente di regressione.
+
+La soluzione bayesiana consiste nel *separare esplicitamente il modello strutturale dal modello di misura*. Si specifica un modello tale per cui:
+
+1.  *il modello strutturale* regredisce $y$ sul costrutto latente $x$,
+2.  *il modello di misura* definisce come il punteggio osservato $x^*$ sia generato a partire da $x$ (ad esempio, $x^* \sim \mathcal{N}(x, \sigma^2_{errore})$).
+
+In questo framework, l'errore di misura viene modellato e isolato nella componente di misura, prevenendo l'attenuazione della stima della relazione strutturale tra $x$ e $y$. Nel presente capitolo, questo approccio sarà dimostrato tramite simulazioni e implementato in Stan.
+
+Nella seconda parte del capitolo, estenderemo il quadro concettuale precedentemente delineato al contesto dell'analisi della *correlazione* tra due costrutti psicologici latenti. La *Teoria Classica dei Test* (CTT) fornisce una soluzione formale a questo problema mediante la procedura nota come *correzione per disattenuazione*. Questo metodo permette di stimare il coefficiente di correlazione "vero" tra i costrutti latenti, partendo dal coefficiente di correlazione osservato tra le misurazioni empiriche e correggendolo in funzione dell'affidabilità degli strumenti di misura utilizzati. Formalmente, la correzione si esprime come il rapporto tra la correlazione osservata e la radice quadrata del prodotto delle attendibilità delle due scale. Questa procedura, tuttavia, è valida solo sotto forti assunzioni, tra cui l'indipendenza degli errori di misura (ad esempio, l'assenza di bias da metodo condiviso) e la conoscenza esatta dell’attendibilità (condizione difficilmente verificabile nella pratica, dato che l'alfa di Cronbach o l'omega di McDonald sono essi stessi delle stime campionarie).
+
+Quando queste assunzioni non sono soddisfatte, ad esempio, in presenza di un *effetto di metodo* o di una fonte di varianza condivisa che induce correlazione tra gli errori, la formula classica tende a *sovracorreggere*, producendo stime della correlazione vera distorte e instabili [@carroll2006measurement]. L'approccio bayesiano supera questi limiti specificando un *modello di misurazione congiunto* in cui entrambi i costrutti sono trattati come variabili latenti. Questo modello permette di esplicitare la struttura di covarianza degli errori (ammettendo, se necessario, correlazioni residue) e di incorporare eventuali *fattori di metodo* latenti.
+
+In questo framework, la *correlazione di tratto* viene stimata direttamente, evitando i bias della CTT e propagando l'incertezza sulle attendibilità in modo appropriato. È importante sottolineare che, se le assunzioni della CTT sono verificate, il modello bayesiano converge verso la stima classica; in caso contrario, esso fornisce un'alternativa più robusta e generalizzabile.
+
+In sintesi, il capitolo svilupperà una progressione concettuale e metodologica articolata in tre fasi. In primo luogo, mediante dati simulati, verrà illustrato il fenomeno dell'attenuazione nei modelli di regressione e verrà dimostrato come un modello bayesiano che incorpori il predittore latente consenta di recuperare il parametro strutturale corretto. In seguito, estenderemo l'analisi al contesto della correlazione, mettendo in luce i limiti della correzione per disattenuazione nella CTT e i vantaggi di una modellazione congiunta con variabili latenti. Infine, presenteremo modelli bayesiani implementati in Stan in cui la distinzione tra tratto latente e la componente metodologica è resa esplicita, anche per costrutti multidimensionali misurati da più indicatori. L’adeguatezza dei modelli sarà valutata mediante strumenti diagnostici quali i *posterior predictive checks*.
+
+L’obiettivo finale è mostrare come la modellazione della misura – ovvero la specificazione esplicita di un *modello di misurazione* – costituisca un autentico *cambio di prospettiva* epistemologica. Questo approccio non è un esercizio tecnico formale, ma una pratica che migliora l'interpretazione sostanziale e l'affidabilità inferenziale, in quanto consente di dichiarare il processo di generazione dei dati e di distinguere, in modo probabilistico, la varianza attribuibile al costrutto da quella dovuta all'errore o al metodo di misurazione.
 
 ## Perché l’errore di misurazione conta
 
