@@ -1,18 +1,17 @@
 # Modello bayesiano di regressione lineare bivariata {#sec-linmod-bayesian-reg}
 
 ::: {.callout-note appearance="minimal"}
+Nei capitoli precedenti, abbiamo analizzato la regressione lineare bivariata da una prospettiva frequentista, descrivendo la relazione tra due variabili tramite il metodo dei minimi quadrati. Pur essendo una procedura consolidata, questo approccio presenta alcune limitazioni pratiche e concettuali: si basa sulla logica del test dell'ipotesi nulla, non consente di incorporare conoscenze pregresse e comunica l'incertezza in modo indiretto, tramite errori standard e intervalli di confidenza.
 
-Nei capitoli precedenti abbiamo appreso come, nella prospettiva frequentista, la regressione lineare bivariata stimi la relazione tra due variabili ricorrendo al metodo dei minimi quadrati. Sebbene robusto, questo paradigma mostra dei limiti intrinseci: poggia su test d'ipotesi e valori-p, non consente di incorporare conoscenze pregresse e fornisce una caratterizzazione solo indiretta dell'incertezza parametrica.
+L’approccio bayesiano affronta questi limiti proponendo un tipo diverso di inferenza: i parametri del modello (come l’intercetta, la pendenza e la varianza dell’errore) non sono considerati valori fissi e sconosciuti, ma **quantità su cui esprimere un grado di credenza**. A ciascun parametro viene quindi associata una distribuzione di probabilità che rappresenta **il nostro stato di conoscenza e di incertezza epistemica su quel valore**. Non si sta affermando che il parametro sia variabile nella realtà, ma che sia incerto per noi e che questa incertezza possa essere modellata e aggiornata in modo razionale.
 
-L'approccio bayesiano alla regressione introduce una prospettiva alternativa, coerentemente con il quadro concettuale già esplorato nei modelli precedenti. Il principio cardine rimane la combinazione di informazioni a priori con i dati osservati per derivare una distribuzione a posteriori. In questo contesto, i parametri del modello di regressione—intercetta, pendenza e varianza dell'errore—non sono trattati come quantità fisse, bensì come variabili aleatorie, ciascuna caratterizzata da una propria distribuzione di probabilità.
+In questa prospettiva, la regressione bayesiana non fornisce una stima puntuale, ma una distribuzione a posteriori che sintetizza sia le informazioni note in anticipo, sia quelle apprese dai dati. Ciò consente di:
 
-Tale impostazione consente di:
+- integrare formalmente informazioni pregresse, come i risultati della letteratura o i vincoli teorici;
+- aggiornare la conoscenza in modo coerente man mano che vengono raccolti nuovi dati;
+- quantificare l'incertezza in modo diretto, rispondendo a domande intuitive come: "Qual è la probabilità che la pendenza sia positiva?".
 
-- dichiarare esplicitamente le aspettative iniziali riguardo ai parametri, formalizzandole attraverso distribuzioni a priori;
-- aggiornare coerentemente tali aspettative sulla base dell'evidenza empirica;
-- quantificare l'incertezza rimanente servendosi delle distribuzioni a posteriori complete, superando la logica dicotomica dei test e l'interpretazione indiretta degli intervalli di confidenza.
-
-In questo capitolo, illustreremo come specificare e stimare un modello bayesiano di regressione lineare bivariata a partire da ipotesi iniziali semplici, mettendo a confronto i risultati con l'approccio frequentista. Questo confronto ci permetterà di apprezzare i vantaggi del quadro bayesiano e di approfondire l'interpretazione probabilistica dei coefficienti di regressione.
+In questo capitolo vedremo come specificare e stimare un modello bayesiano di regressione lineare bivariata, confrontando i risultati con l'analisi frequentista e approfondendo l'interpretazione probabilistica dei coefficienti.
 :::
 
 ## Panoramica del capitolo {.unnumbered .unlisted}
@@ -47,78 +46,164 @@ pacman::p_load(cmdstanr, posterior, see, brms)
 
 ## L’approccio bayesiano
 
-Nella statistica frequentista, i parametri di un modello – come l'intercetta, la pendenza o la deviazione standard degli errori – vengono trattati come quantità fisse sebbene sconosciute. L'incertezza associata alle loro stime viene espressa indirettamente attraverso concetti quali intervalli di confidenza o valori-$p$ nei test di ipotesi.
+Nella statistica frequentista i parametri di un modello sono considerati quantità **fisse ma sconosciute**. L’incertezza deriva dalla variabilità campionaria e viene comunicata attraverso procedure come intervalli di confidenza o valori-$p$*.
 
-L'approccio bayesiano propone una prospettiva radicalmente diversa: i parametri sono considerati variabili aleatorie, ciascuna descritta da una propria distribuzione di probabilità. Questo framework consente di rappresentare l'incertezza in modo esplicito e diretto. Il processo inferenziale bayesiano si articola fondamentalmente in tre fasi.
+L’inferenza bayesiana adotta invece una prospettiva epistemica: la nostra incertezza sui parametri viene modellata tramite **variabili aleatorie**. Non si tratta quindi di descrivere una fluttuazione oggettiva dei parametri, ma di rappresentare **il grado di credibilità che attribuiamo ai loro possibili valori**. L’inferenza consiste nell’aggiornamento coerente di questa conoscenza a partire dai dati.
 
-La prima fase riguarda la scelta delle distribuzioni a priori. Prima di osservare i dati, viene assegnata a ciascun parametro una distribuzione di probabilità iniziale, detta prior, che incorpora ogni conoscenza preesistente o ipotesi plausibili sul fenomeno in studio. Ad esempio, se la letteratura scientifica suggerisce consistentemente che l'ansia riduca la performance, è possibile specificare un prior informativo per il coefficiente di regressione corrispondente, come una distribuzione normale centrata su un valore negativo con deviazione standard moderata, formalmente indicata come $b \sim \mathcal{N}(-0.7, 0.3)$. Al contrario, in assenza di informazioni preliminari solide, si può ricorrere a un prior debole o vago, che esprima una grande incertezza iniziale. Un prior di questo tipo, ad esempio $b \sim \mathcal{N}(0, 100)$, assegna probabilità pressoché uniformi a un ampio spettro di valori, permettendo ai dati osservati di dominare completamente la stima finale, che risulterà quindi molto vicina a quella ottenuta con metodi frequentisti.
+Il processo inferenziale si articola in tre passaggi fondamentali.
 
-La seconda fase consiste nell'aggiornamento delle credenze attraverso i dati osservati. Applicando il teorema di Bayes, le distribuzioni a priori vengono combinate con la verosimiglianza dei dati, dando origine alla distribuzione a posteriori dei parametri. Formalmente, questo si esprime attraverso la proporzionalità:
+**1. Specificazione delle distribuzioni a priori.** 
+Prima di osservare i dati, assegniamo a ogni parametro una distribuzione **a priori**, che formalizza ciò che riteniamo plausibile.
+
+* **Prior informativo**: quando la letteratura fornisce indicazioni credibili (es. un effetto negativo dell’ansia sulle prestazioni), possiamo specificare un prior centrato su un valore atteso:
+  $$
+  b \sim \mathcal N(-0.7,0.3).
+  $$
+* **Prior debole o vago**: in assenza di evidenza accumulata, possiamo specificare un prior ad ampia varianza, lasciando che i dati guidino l’aggiornamento:
+  $$
+  b \sim \mathcal N(0,100).
+  $$
+
+**2. Aggiornamento mediante i dati osservati.**
+Le credenze iniziali vengono combinate con la **verosimiglianza** tramite il teorema di Bayes, ottenendo la distribuzione a posteriori:
 
 $$
-P(a, b, \sigma \mid \text{dati}) \propto P(\text{dati} \mid a, b, \sigma) \cdot P(a, b, \sigma).
+P(a, b, \sigma \mid \text{dati}) \propto P(\text{dati} \mid a, b, \sigma),P(a, b, \sigma).
 $$
 
-Il risultato di questo aggiornamento bayesiano è una distribuzione di probabilità congiunta per i parametri, che quantifica in modo probabilistico la plausibilità dei loro diversi valori, alla luce sia dell'evidenza empirica sia delle assunzioni iniziali.
+La distribuzione a posteriori misura la plausibilità dei valori dei parametri dopo aver preso in considerazione sia la conoscenza pregressa sia i nuovi dati.
 
-La terza fase è dedicata all'interpretazione della distribuzione a posteriori. In questo approccio, non si ottiene un'unica stima puntuale per la retta di regressione, bensì un'intera famiglia di rette plausibili, ciascuna associata a un differente grado di credibilità probabilistica. L'incertezza viene sintetizzata e comunicata attraverso intervalli di credibilità. A differenza degli intervalli di confidenza di impostazione frequentista, un intervallo di credibilità bayesiano del 95% ammette un'interpretazione probabilistica diretta: esiste una probabilità del 95% che il vero valore del parametro sia contenuto al suo interno, dato il modello, i prior specificati e i dati osservati.
+**3. Interpretazione della distribuzione a posteriori.**
+L’esito dell’analisi non è una sola retta, ma **un insieme di rette plausibili**, pesate dalla loro credibilità. L’incertezza viene sintetizzata mediante intervalli di credibilità, che ammettono un’interpretazione diretta: dato il modello e i dati osservati, esiste una probabilità specificata (ad esempio 95%) che il parametro appartenga a quell’intervallo.
 
-L'approccio bayesiano offre diversi vantaggi, sia di natura pratica che teorica. Permette l'integrazione formale di conoscenze pregresse, facilitando la cumulatività della ricerca, ad esempio attraverso l'incorporazione di risultati di meta-analisi in nuovi studi. Mostra una notevole robustezza in presenza di campioni di piccole dimensioni, poiché i prior svolgono una funzione di regolarizzazione che stabilizza le stime, mitigando il rischio di overfitting. Fornisce, infine, interpretazioni intuitive dell'incertezza, allineate al ragionamento probabilistico naturale. Per queste ragioni, la statistica bayesiana risulta particolarmente adatta alla ricerca psicologica, un campo che spesso deve operare con campioni limitati e nel quale i nuovi risultati devono essere costantemente integrati in un corpus di conoscenze in evoluzione.
+### Perché adottare l’approccio bayesiano?
+
+L’inferenza bayesiana offre rilevanti vantaggi per la ricerca psicologica:
+
+*   **integrazione formale delle conoscenze pregresse**: consente di incorporare in modo coerente risultati di studi precedenti (ad esempio, meta-analisi) nel disegno di nuovi studi, favorendo la cumulatività della ricerca.
+*   **robustezza con campioni piccoli**: i prior svolgono una funzione di regolarizzazione, stabilizzando le stime e mitigando il rischio di *overfitting* quando i dati sono limitati;
+*   **interpretazione intuitiva dell’incertezza**: le distribuzioni a posteriori e gli intervalli di credibilità forniscono risposte probabilistiche dirette alle domande di ricerca, allineandosi al ragionamento naturale degli scienziati.
+
+Per questi motivi, l’approccio bayesiano si rivela particolarmente adatto alla complessità dei dati psicologici, dove spesso si lavora con campioni ridotti e dove i nuovi risultati devono essere integrati in un corpus di conoscenze in continua evoluzione.
 
 ## Il modello di regressione lineare semplice
 
-Per illustrare concretamente il modello di regressione lineare semplice, consideriamo un esempio di comune interesse in psicologia: prevedere il livello di ansia di un individuo (indicato con $y$) in base al numero di ore di sonno (indicato con $x$) da egli riportate. La relazione lineare tra queste due variabili viene formalizzata attraverso il modello:
+Per introdurre la regressione lineare semplice da una prospettiva baysiana, consideriamo un esempio molto studiato in psicologia: prevedere il livello di ansia di una persona (variabile risposta, $y$) a partire dal numero di ore di sonno che essa dichiara (variabile predittore, $x$). L’ipotesi è che, in media, dormire di più sia associato a livelli inferiori di ansia.
+
+Questo rapporto viene formalizzato dal modello:
 
 $$
 y_i = \beta_0 + \beta_1 x_i + \varepsilon_i,
 $$
-dove $\beta_0$ rappresenta l'intercetta, ovvero il valore atteso della variabile ansia quando il numero di ore di sonno è pari a zero. Il parametro $\beta_1$ è il coefficiente di regressione, che quantifica la variazione attesa nel livello di ansia per ogni ora aggiuntiva di sonno. Il termine $\varepsilon_i$ costituisce l'errore casuale, capace di catturare la deviazione del punteggio osservato di ansia del singolo individuo rispetto al valore predetto dalla retta di regressione.
+dove:
 
-Un'assunzione fondamentale del modello riguarda proprio il termine di errore. Si assume che gli errori $\varepsilon_i$ siano tra loro indipendenti e seguano una distribuzione normale con media zero e varianza costante $\sigma^2$. Questa assunzione implica a sua volta che, per un dato valore di $x$, i valori osservati della variabile $y$ siano distribuiti normalmente attorno alla media condizionata $\mu_i$. Formalmente:
+* $\beta_0$ (intercetta) rappresenta il valore atteso dell’ansia quando le ore di sonno sono pari a zero;
+* $\beta_1$ (coefficiente di regressione) indica di quanto ci si aspetta che cambi il livello di ansia per ogni ora aggiuntiva di sonno;
+* $\varepsilon_i$ è il termine di errore, che descrive l’imprevedibile scostamento del punteggio osservato rispetto alla media descritta dalla retta.
+
+### Assunzioni sul termine di errore
+
+Per rendere il modello operativo, si assume, ad esempio, che gli errori siano **indipendenti** tra individui, che siano **distribuiti normalmente** con media zero e che siano **caratterizzati da una varianza costante** $\sigma^2$.
+
+Queste ipotesi implicano che, dato un determinato valore di $x_i$, i possibili punteggi di ansia non siano mai identici, ma si distribuiscano in maniera probabilistica attorno a una media condizionata:
 
 $$
-y_i \mid x_i \sim \mathcal{N}(\mu_i, \sigma^2), \quad \text{dove} \quad \mu_i = \beta_0 + \beta_1 x_i.
+y_i \mid x_i \sim \mathcal{N}(\mu_i, \sigma^2),
+\qquad \text{dove} \qquad
+\mu_i = \beta_0 + \beta_1 x_i.
 $$
 
-In termini sostanziali, il modello non presuppone che tutti gli individui con lo stesso numero di ore di sonno presentino un identico livello di ansia. Piuttosto, esso descrive come i loro punteggi si distribuiscano in modo aleatorio attorno a un valore medio, il quale è deterministicamente determinato dalla relazione lineare con la variabile esplicativa. La retta di regressione rappresenta dunque la tendenza centrale di questa relazione, mentre la variabilità residua attorno alla retta è attribuita a fattori non misurati o al caso.
+### Interpretazione sostanziale
+
+Il modello non sostiene che "le ore di sonno determinino in modo deterministico il livello di ansia" né che individui con la stessa durata del sonno abbiano un'ansia identica. Piuttosto, esso quantifica **come il livello medio atteso di ansia vari in funzione delle ore di sonno**, riconoscendo esplicitamente l'esistenza di una variabilità residua dovuta a differenze individuali, errori di misurazione e fattori non controllati.
+
+La retta $\beta_0 + \beta_1 x$ rappresenta dunque **la media teorica** della relazione psicologica studiata, mentre $\sigma^2$ quantifica **quanto i dati reali si discostano da essa**. Insieme, questi tre elementi, ovvero la tendenza centrale, la pendenza e la variabilità residua, definiscono la struttura completa del modello di regressione lineare.
+
+Ecco una versione più chiara, più aderente alla prospettiva bayesiana e meno “operativa-frequentista” della sezione sulla verosimiglianza. Mantiene rigore, ma spiega il ruolo concettuale senza enfasi su massimizzazione o stima puntuale.
 
 ### Cos’è la verosimiglianza?
 
-Il concetto di verosimiglianza rappresenta una misura fondamentale dell'adeguatezza di un insieme di parametri nel descrivere i dati osservati. Nel contesto della regressione lineare, la verosimiglianza dipende specificamente dai parametri β₀, β₁ e σ. 
+Nell’inferenza bayesiana, la **verosimiglianza** descrive quanto siano plausibili i dati osservati per un certo insieme di valori dei parametri. Non valuta quanto siano plausibili i parametri in sé: indica invece *quanto bene quei parametri renderebbero probabili i dati che abbiamo osservato*.
 
-Per ciascuna osservazione yᵢ, la probabilità di osservare quel particolare dato è espressa dalla funzione di densità di una distribuzione normale. Supponendo l'indipendenza delle osservazioni, la verosimiglianza congiunta per l'intero campione si ottiene attraverso il prodotto delle densità individuali:
-
-$$
-\mathcal{L}(\beta_0, \beta_1, \sigma \mid \mathbf{y}, \mathbf{x}) = \prod_{i=1}^n \frac{1}{\sqrt{2\pi \sigma^2}} \exp\!\left(-\frac{(y_i - \beta_0 - \beta_1 x_i)^2}{2\sigma^2}\right).
-$$
-
-Data la complessità computazionale che deriva dal lavorare con prodotti di molteplici termini, nella pratica statistica si ricorre frequentemente alla log-verosimiglianza. Questa trasformazione, mantenendo le proprietà di ottimizzazione della funzione originale, converte il prodotto in una somma, semplificando notevolmente i calcoli:
+Nel modello di regressione lineare con errore normale, per ogni osservazione $y_i$ la plausibilità è data dalla densità della distribuzione normale centrata sulla media condizionata $\mu_i = \beta_0 + \beta_1 x_i$. Supponendo che le osservazioni siano indipendenti:
 
 $$
-\log \mathcal{L}(\beta_0, \beta_1, \sigma \mid \mathbf{y}, \mathbf{x}) = -\frac{n}{2}\log(2\pi) - n\log\sigma - \frac{1}{2\sigma^2}\sum_{i=1}^n (y_i - \beta_0 - \beta_1 x_i)^2.
+\mathcal{L}(\beta_0, \beta_1, \sigma \mid \mathbf{y}, \mathbf{x}) = \prod_{i=1}^n
+\mathcal{N}\bigl(y_i \mid \beta_0 + \beta_1 x_i,\ \sigma^2\bigr).
 $$
 
-#### Verosimiglianza: confronto tra approccio frequentista e bayesiano
+Espressa in forma esplicita:
 
-Il ruolo della verosimiglianza assume significati differenti nei due paradigmi statistici principali. Nell'approccio frequentista, la procedura di stima si basa sull'identificazione dei valori parametrici che massimizzano la funzione di verosimiglianza, dando origine al metodo della massima verosimiglianza. Questi valori costituiscono le stime puntuali considerate ottimali per i parametri del modello.
+$$
+\mathcal{L}(\beta_0, \beta_1, \sigma \mid \mathbf{y}, \mathbf{x})
+= \prod_{i=1}^n
+\frac{1}{\sqrt{2\pi \sigma^2}}
+\exp!\left(-\frac{(y_i - \beta_0 - \beta_1 x_i)^2}{2\sigma^2}\right).
+$$
 
-Nell'approccio bayesiano, la verosimiglianza rappresenta soltanto uno dei componenti del processo inferenziale. Essa viene integrata con le distribuzioni a priori assegnate ai parametri, attraverso l'applicazione del teorema di Bayes. Questa combinazione produce la distribuzione a posteriori, che costituisce la base per tutte le inferenze successive, fornendo una rappresentazione completa dell'incertezza associata ai parametri del modello.
+Per semplificare i calcoli è comune utilizzare la **log-verosimiglianza**, che trasforma il prodotto in una somma:
+
+$$
+\log \mathcal{L}(\beta_0, \beta_1, \sigma \mid \mathbf{y}, \mathbf{x})
+= -\frac{n}{2}\log(2\pi) - n\log\sigma
+* \frac{1}{2\sigma^2} \sum_{i=1}^n (y_i - \beta_0 - \beta_1 x_i)^2.
+$$
+
+### Il ruolo della verosimiglianza nell’approccio bayesiano
+
+Nell’inferenza bayesiana, la verosimiglianza costituisce uno dei due pilastri fondamentali del teorema di Bayes, insieme alla distribuzione a priori. A differenza della massima verosimiglianza frequentista, la sua funzione non è quella di determinare direttamente le stime puntuali dei parametri. Piuttosto, la verosimiglianza fornisce l'evidenza empirica che viene integrata con le nostre conoscenze o ipotesi iniziali (il *prior*) mediante la formula bayesiana:
+
+$$
+\text{Posterior} \;\propto\; \text{Likelihood} \times \text{Prior}.
+$$
+
+In altri termini, la verosimiglianza rappresenta *ciò che i dati ci dicono*, mentre il prior codifica *ciò che già ritenevamo plausibile*. L'aggiornamento bayesiano combina queste due fonti di informazione dando luogo a una distribuzione a posteriori che rappresenta il nostro stato di conoscenza aggiornato.
+
+La distribuzione a posteriori non è quindi determinata esclusivamente dalla verosimiglianza, ma dalla sua interazione con il *prior*. È questa integrazione sistematica tra evidenza empirica e conoscenza pregressa a costituire il tratto distintivo dell’inferenza bayesiana.
 
 ### Le distribuzioni a priori
 
-Un elemento caratterizzante dell'approccio bayesiano risiede nella specificazione delle distribuzioni a priori. Queste distribuzioni formalizzano matematicamente le credenze iniziali riguardo ai parametri del modello, prima di prendere in considerazione i dati osservati. È possibile identificare tre categorie principali di distribuzioni a priori.
+Nel contesto della regressione lineare bayesiana, le distribuzioni a priori devono essere scelte per ciascun parametro del modello: l’intercetta $\beta_0$, la pendenza $\beta_1$ e la deviazione standard residua $\sigma$. La scelta non riguarda solo il “grado di informazione” dei prior, ma anche la loro coerenza con l'interpretazione psicologica dei parametri.
 
-Le distribuzioni non informative intendono rappresentare una situazione di massima ignoranza o neutralità iniziale. Il loro obiettivo è permettere ai dati osservati di determinare completamente le stime finali, senza esercitare alcuna influenza sostanziale. Un esempio tipico è una distribuzione normale con media zero e varianza molto ampia, come $\mathcal{N}(0, 1000)$.
+Ad esempio, se il predittore viene **centrato intorno alla media** (operazione consigliabile nell'analisi bayesiana), l’intercetta $\beta_0$ non rappresenta più l’ansia prevista a “zero ore di sonno”, ma il livello atteso per una persona con *media quantità di sonno*. In questo caso, diventa ragionevole assegnare a $\beta_0$ un **prior moderato**, come una distribuzione normale centrata vicino alla media attesa del costrutto psicologico:
+$$
+\beta_0 \sim \mathcal{N}(50, 20),
+$$
+se l’ansia, ad esempio, è misurata su scala 0–100. Questo rende il modello più stabile e coerente con i dati plausibili.
 
-Le distribuzioni debolmente informative forniscono una regolarizzazione moderata, imponendo dei vincoli molto larghi ma in grado di evitare stime parametriche in regioni chiaramente implausibili o numericamente instabili. Questo tipo di prior può migliorare la stabilità delle stime, specialmente con campioni di piccole dimensioni, senza introdurre forti assunzioni sostanziali. Un esempio comune per un coefficiente di regressione potrebbe essere $\mathcal{N}(0, 2.5)$.
+La pendenza $\beta_1$, che quantifica l'effetto delle ore di sonno sull’ansia, è invece un coefficiente la cui direzione potrebbe essere supportata dalla teoria o dalla letteratura (più ore di sonno → meno ansia). In tal caso, si può adottare un prior **asimmetrico** o **troncato** che esclude valori implausibili, come grandi aumenti dell’ansia con più ore di sonno:
 
-Le distribuzioni informative incorporano in modo esplicito conoscenze provenienti da letteratura preesistente, teorie consolidate o esperienza empirica. Sono caratterizzate da una varianza ridotta, che riflette un grado di certezza iniziale più elevato. Il loro utilizzo può aumentare notevolmente l'efficienza dell'inferenza ma richiede una solida giustificazione teorica o empirica per la scelta dei loro iperparametri.
+$$
+\beta_1 \sim \mathcal{N}(-2, 2.5)\; \text{troncata a valori positivi}.
+$$
+
+Infine, per il parametro $\sigma$, sempre non negativo, è comune usare prior definiti su valori positivi, come una distribuzione half-Cauchy o half-Normal:
+
+$$
+\sigma \sim \text{Half-Cauchy}(0, 5),
+$$
+che permette grande variabilità ma evita valori estremamente prossimi a zero, incompatibili con dati psicologici realistici. In sintesi, i *prior* non forniscono solo informazioni al modello, ma lo guidano verso stime psicologicamente credibili e numericamente stabili.
 
 ### Le distribuzioni a posteriori
 
-La distribuzione a posteriori rappresenta il risultato fondamentale dell'inferenza bayesiana. Essa sorge dalla combinazione di due componenti: la verosimiglianza, che quantifica l'informazione contenuta nei dati osservati in relazione ai parametri, e le distribuzioni a priori, che esprimono le credenze iniziali.
+Nel modello di regressione lineare bayesiana, la distribuzione a posteriori sintetizza simultaneamente l’incertezza sui tre parametri fondamentali ($\beta_0$, $\beta_1$ e $\sigma$), tenendo conto sia dell’evidenza dei dati sia delle conoscenze iniziali codificate nei *prior*.
 
-Questa distribuzione congiunta a posteriori costituisce una rappresentazione probabilistica completa e aggiornata della nostra conoscenza riguardo ai parametri, condizionata all'evidenza empirica. A differenza delle tradizionali stime puntuali dell'approccio frequentista, il risultato bayesiano fornisce un'intera distribuzione di probabilità per ogni parametro. Questa ricchezza di informazione permette di quantificare l'incertezza in modo diretto e intuitivo, facilitando la costruzione di intervalli di credibilità e supportando un processo decisionale che integra coerentemente tutte le fonti di informazione disponibili.
+Il comportamento di questa distribuzione dipende in modo cruciale dalla **quantità di informazione contenuta nei dati** rispetto alla forza dei *prior*. Questo bilanciamento si manifesta in due casi estremi:
+
+*   **Dati poco informativi** (campioni piccoli, variabilità ridotta della $X$): la distribuzione a posteriori rimane vicina alla forma dei *prior*. In assenza di un segnale forte da parte dei dati, il nostro stato di conoscenza rimane simile a quello iniziale, poiché i dati hanno contribuito poco a modificarlo.
+*   **Dati molto informativi** (campioni grandi, buona variabilità e chiare associazioni): la componente di verosimiglianza domina completamente il processo. In questo caso, la distribuzione a posteriori sarà determinata quasi esclusivamente dall'evidenza empirica, assumendo una forma che ne rispecchia l'andamento, a prescindere dai *prior* utilizzati (purché questi non siano eccessivamente restrittivi).
+
+Questo meccanismo dinamico mostra come l'inferenza bayesiana realizzi automaticamente un bilanciamento tra l'evidenza nuova e la conoscenza pregressa, evitando conclusioni estreme in presenza di poche osservazioni e consentendo ai dati di "parlare con forza" quando l'evidenza empirica è solida.
+
+Un aspetto cruciale è che la distribuzione a posteriori cattura l'interdipendenza tra i parametri. La pendenza $\beta_1$ e la deviazione residua $\sigma$ **non sono indipendenti** nella distribuzione congiunta: se i dati suggeriscono una relazione debole tra sonno e ansia (con un valore di $\beta_1$ vicino a zero), la variabilità osservata sarà attribuita principalmente attribuibile all'errore residuo (con un valore di $\sigma$ elevato). Al contrario, una pendenza marcata ($\beta_1$ elevato) ridurrà la necessità di una grande varianza residua per spiegare la dispersione dei dati. L'approccio bayesiano non fornisce semplicemente stime separate per $\beta_1$ e $\sigma$, ma produce una distribuzione congiunta che incorpora automaticamente queste compensazioni tra i parametri.
+
+La vera potenza della distribuzione a posteriori risiede tuttavia nella possibilità di formulare **affermazioni probabilistiche sostantive** sul fenomeno psicologico. Ad esempio:
+
+$$
+\Pr(\beta_1 < 0 \mid \text{dati}) = 0.97
+$$
+
+significa che, alla luce dei dati osservati, esiste una probabilità del 97% che dormire di più sia associato a un livello di ansia inferiore. Questa non è un'inferenza su uno zero teorico (come in un test di ipotesi), ma una quantificazione diretta dell'evidenza a favore di un effetto reale nella popolazione studiata. È proprio questa capacità di rispondere in modo naturale a domande probabilistiche che trasforma la regressione da uno strumento puramente numerico in uno strumento per inferenze scientificamente coerenti sul comportamento umano.
 
 ## Implementazione con `brms`
 
