@@ -1,304 +1,209 @@
-# Per liberarvi dai terrori preliminari {#sec-apx-calculus}
-
-## Integrali
-
-In questo capitolo, traduciamo e adattiamo il capitolo *Per liberarvi dai terrori preliminari* tratto da [Calculus made easy](https://calculusmadeeasy.org/1.html).
-
-::: {.callout-important}
-Il terrore preliminare, che spesso impedisce agli studenti di avvicinarsi all'analisi matematica, può essere superato comprendendo il significato intuitivo dei due simboli principali utilizzati in questo campo.
-
-Questi simboli, che possono sembrare intimidatori, sono in realtà molto semplici:
-
-1. **$d$**: Questo simbolo significa semplicemente "un po' di". Ad esempio, $\operatorname{d}\!x$ indica un piccolo incremento di $x$, mentre $\operatorname{d}\!u$ rappresenta un piccolo incremento di $u$. I matematici preferiscono dire "un elemento di" invece di "un po' di", ma il concetto è lo stesso. Questi piccoli incrementi possono essere considerati infinitamente piccoli.
-
-2. **$\int$**: Questo simbolo è una S allungata e rappresenta "la somma di". Quindi, $\int \operatorname{d}\!x$ significa la somma di tutti i piccoli incrementi di $x$, mentre $\int \operatorname{d}\!t$ indica la somma di tutti i piccoli incrementi di $t$. I matematici chiamano questo simbolo "integrale". Se consideri $x$ come composto da tanti piccoli pezzi $\operatorname{d}\!x$, sommandoli tutti otterrai l'intero valore di $x$. La parola "integrale" significa semplicemente "il tutto". Ad esempio, se pensi a un'ora come composta da 3600 secondi, la somma di tutti questi secondi ti darà un'ora. Quando vedi un'espressione che inizia con $\int$, significa che devi sommare tutti i piccoli pezzi indicati dai simboli che seguono.
-
-Ecco, il terrore è svanito!
-:::
-
-### Verifica con Simulazioni in R
-
-Per calcolare e visualizzare l'integrale di una funzione di densità, possiamo utilizzare il linguaggio di programmazione R. Consideriamo come esempio la funzione di densità gaussiana, definita dalla seguente formula:
-
-$$
-f(x; \mu, \sigma) = \frac{1}{\sigma \sqrt{2 \pi}} e^{-\frac{(x - \mu)^2}{2 \sigma^2}}.
-$$
-
-In R, possiamo definire questa funzione come segue:
+# Introduzione agli integrali {#sec-apx-calculus}
 
 ```{r}
-gaussian <- function(x, mu, sigma) {
-  1 / (sigma * sqrt(2 * pi)) * exp(-((x - mu)^2) / (2 * sigma^2))
+#| echo: false
+here::here("code", "_common.R") |>
+    source()
+```
+
+Questa appendice riprende e adatta il celebre approccio di [Calculus Made Easy](https://calculusmadeeasy.org/) per superare quella che spesso viene percepita come una barriera iniziale nell'interpretazione delle formule che contengono integrali. Il terrore preliminare che molti provano di fronte ai simboli presenti in queste formule può essere superato comprendendone il significato intuitivo.
+
+I due simboli fondamentali sono in realtà concetti molto semplici:
+
+1. **$d$**: rappresenta un "piccolo incremento" o "un po' di". La scrittura $\operatorname{d}\!x$ indica una quantità infinitesimale di $x$. I matematici preferiscono il termine "differenziale", ma l'idea intuitiva di "un pezzettino molto piccolo" è perfettamente corretta.
+
+2. **$\int$**: questo simbolo, una S allungata, significa "somma di". L'espressione $\int \operatorname{d}\!x$ rappresenta quindi la somma di tutti i piccoli incrementi di $x$. Quando si considera $x$ come composta da innumerevoli piccoli pezzi $\operatorname{d}\!x$, la loro somma fornisce il valore totale di $x$. Questo processo di somma continua è ciò che chiamiamo **integrazione**.
+
+In questo senso, l'integrazione ci permette di ricostruire il "tutto" (l'integrale) a partire dalle sue "parti infinitesimali" (i differenziali).
+
+## Verifica empirica con simulazioni in R
+
+Per illustrare concretamente il concetto di integrazione, consideriamo l'esempio della funzione di densità della distribuzione normale (gaussiana):
+
+$$
+f(x; \mu, \sigma) = \frac{1}{\sigma \sqrt{2\pi}} e^{-\frac{(x-\mu)^2}{2\sigma^2}}.
+$$
+
+### Implementazione della funzione
+
+```{r}
+# Definizione della funzione di densità gaussiana
+gaussiana <- function(x, mu = 0, sigma = 1) {
+  coef <- 1 / (sigma * sqrt(2 * pi))
+  esponente <- -((x - mu)^2) / (2 * sigma^2)
+  coef * exp(esponente)
 }
 ```
 
-Definiamo i parametri e generiamo i valori per il calcolo della funzione di densità su un intervallo:
+### Visualizzazione della funzione
 
 ```{r}
-mu <- 0      # Media
-sigma <- 1   # Deviazione standard
-a <- -10     # Limite inferiore
-b <- 10      # Limite superiore
-n <- 10000   # Numero di punti
+# Parametri
+mu <- 0
+sigma <- 1
+x_valori <- seq(-4, 4, length.out = 1000)
+y_valori <- gaussiana(x_valori, mu, sigma)
 
-x_range <- seq(a, b, length.out = n)  # Valori x
-fx <- gaussian(x_range, mu, sigma)   # Ordinata della funzione
-```
-
-Visualizziamo la funzione utilizzando il pacchetto `ggplot2`:
-
-```{r}
-library(ggplot2)
-library(scales)
-
-ggplot(data.frame(x = x_range, fx = fx), aes(x, fx)) +
-  geom_line(color = "blue") +
+# Grafico
+ggplot(data.frame(x = x_valori, y = y_valori), aes(x, y)) +
+  geom_line(color = "steelblue", linewidth = 1) +
+  geom_area(fill = "steelblue", alpha = 0.3) +
   labs(
-    title = "Funzione di densità gaussiana", 
-    x = "x", 
+    title = "Funzione di Densità Gaussiana Standard",
+    x = "x",
     y = "f(x)"
-  )
+  ) +
+  theme_minimal()
 ```
 
-Creiamo una funzione per approssimare l'integrale sommando i prodotti $\Delta x \cdot f(x)$:
+### Approssimazione dell'integrale mediante somma di rettangoli
+
+L'idea fondamentale dell'integrazione numerica è approssimare l'area sotto la curva come somma di aree di rettangoli sottili. Questo metodo, noto come **metodo dei rettangoli**, implementa concretamente il concetto di integrale come "somma di piccole parti".
+
+#### Spiegazione dettagliata dell'algoritmo
+
+La funzione `integrale_approssimato` implementa il seguente procedimento:
 
 ```{r}
-integral_approximation <- function(f, a, b, n) {
-  delta <- (b - a) / n
-  sum(delta * f)
+# Funzione per approssimare l'integrale con il metodo dei rettangoli
+integrale_approssimato <- function(f, a, b, n = 10000) {
+  # 1. Calcolo della larghezza di ciascun rettangolo
+  delta_x <- (b - a) / n
+  
+  # 2. Creazione dei punti medi di ciascun intervallo
+  x_punti <- seq(a + delta_x/2, b - delta_x/2, length.out = n)
+  
+  # 3. Calcolo delle altezze dei rettangoli nei punti medi
+  # 4. Somma delle aree di tutti i rettangoli
+  somme <- sum(f(x_punti)) * delta_x
+  
+  return(somme)
+}
+```
+
+1. **Suddivisione dell'intervallo.**
+   L'intervallo $[a, b]$ viene diviso in $n$ sottointervalli uguali. La larghezza di ciascun sottointervallo è $\Delta x = \frac{b-a}{n}$. Più grande è $n$, più stretti saranno i rettangoli e migliore sarà l'approssimazione.
+
+2. **Selezione dei punti di valutazione.**
+   Per ciascun sottointervallo, si sceglie il **punto medio** come rappresentativo dell'intero intervallo. I punti medi sono calcolati come: $x_i = a + \frac{\Delta x}{2} + (i-1)\Delta x$, per $i = 1, 2, \dots, n$. La scelta del punto medio garantisce una migliore approssimazione rispetto all'uso dell'estremo sinistro o destro.
+
+3. **Calcolo delle altezze.** Per ciascun punto medio $x_i$, si valuta la funzione: $f(x_i)$. Questi valori rappresentano le altezze dei rettangoli.
+
+4. **Calcolo delle aree e somma.** L'area di ciascun rettangolo è: $\text{Area}_i = f(x_i) \cdot \Delta x$. L'area totale approssimata è: $\text{Area}_{\text{tot}} = \sum_{i=1}^n f(x_i) \cdot \Delta x$.
+
+#### Illustrazione grafica del metodo
+
+```{r}
+# Visualizzazione del metodo dei rettangoli
+visualizza_rettangoli <- function(f, a, b, n = 10) {
+  delta_x <- (b - a) / n
+  x_punti <- seq(a + delta_x/2, b - delta_x/2, length.out = n)
+  y_punti <- f(x_punti)
+  
+  # Creazione dei rettangoli per la visualizzazione
+  rettangoli <- data.frame(
+    x_min = x_punti - delta_x/2,
+    x_max = x_punti + delta_x/2,
+    y_min = 0,
+    y_max = y_punti
+  )
+  
+  # Punti della funzione per il grafico
+  x_fine <- seq(a, b, length.out = 1000)
+  y_fine <- f(x_fine)
+  
+  ggplot() +
+    # Area sotto la curva
+    geom_area(
+      data = data.frame(x = x_fine, y = y_fine),
+      aes(x = x, y = y),
+      fill = "steelblue",
+      alpha = 0.2
+    ) +
+    # Rettangoli approssimanti
+    geom_rect(
+      data = rettangoli,
+      aes(xmin = x_min, xmax = x_max, ymin = y_min, ymax = y_max),
+      fill = "red",
+      alpha = 0.3,
+      color = "darkred"
+    ) +
+    # Linea della funzione
+    geom_line(
+      data = data.frame(x = x_fine, y = y_fine),
+      aes(x = x, y = y),
+      color = "steelblue",
+      linewidth = 1
+    ) +
+    labs(
+      title = paste("Approssimazione dell'integrale con", n, "rettangoli"),
+      x = "x",
+      y = "f(x)"
+    ) +
+    theme_minimal()
 }
 
-# Calcolo dell'integrale approssimato
-approx <- integral_approximation(fx, a, b, n)
-approx
+# Esempio con pochi rettangoli per visualizzare il metodo
+visualizza_rettangoli(gaussiana, -2, 2, n = 10)
 ```
 
-Confrontiamo il risultato con il calcolo fornito dalla funzione `integrate` di R:
+#### Analisi dell'errore di approssimazione
+
+L'errore commesso dal metodo dei rettangoli diminuisce all'aumentare del numero di suddivisioni $n$:
 
 ```{r}
-integrate(
-  function(x) gaussian(x, mu, sigma),
-  lower = a,
-  upper = b
-)
+# Studio della convergenza al variare di n
+studi_convergenza <- function(f, a, b, n_valori = c(10, 50, 100, 500, 1000, 5000, 10000)) {
+  risultati <- data.frame(
+    n = n_valori,
+    approssimato = numeric(length(n_valori)),
+    errore_relativo = numeric(length(n_valori))
+  )
+  
+  # Valore "esatto" (calcolato con n molto grande)
+  valore_rif <- integrate(f, lower = a, upper = b)$value
+  
+  for (i in seq_along(n_valori)) {
+    approx <- integrale_approssimato(f, a, b, n = n_valori[i])
+    risultati$approssimato[i] <- approx
+    risultati$errore_relativo[i] <- abs(approx - valore_rif) / valore_rif
+  }
+  
+  return(risultati)
+}
+
+# Applicazione alla gaussiana tra -1.96 e 1.96
+convergenza <- studi_convergenza(gaussiana, -1.96, 1.96)
+
+# Visualizzazione della convergenza
+ggplot(convergenza, aes(x = n, y = errore_relativo)) +
+  geom_point(color = "red", size = 3) +
+  geom_line(color = "red", alpha = 0.5) +
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(
+    title = "Convergenza del metodo dei rettangoli",
+    x = "Numero di rettangoli (scala logaritmica)",
+    y = "Errore relativo (scala logaritmica)"
+  ) +
+  theme_minimal()
 ```
 
-Calcoliamo l'area sotto la curva in intervalli di interesse. Ad esempio, per $[-1.96, 1.96]$, che corrisponde al 95% dell'area nella distribuzione normale standard:
+#### Interpretazione matematica
 
-```{r}
-a <- -1.96
-b <- 1.96
-x_range <- seq(a, b, length.out = n)
-fx <- gaussian(x_range, mu, sigma)
-
-approx <- integral_approximation(fx, a, b, n)
-approx
-```
-
-Confrontiamo con il risultato fornito da `integrate()`:
-
-```{r}
-integrate(
-  function(x) gaussian(x, mu, sigma),
-  lower = a,
-  upper = b
-)
-```
-
-Verifichiamo l'area sotto la curva per $[-1, 1]$, che rappresenta circa il 68% dell'area totale:
-
-```{r}
-a <- -1.0
-b <- 1.0
-x_range <- seq(a, b, length.out = n)
-fx <- gaussian(x_range, mu, sigma)
-
-approx <- integral_approximation(fx, a, b, n)
-approx
-```
-
-Confronto:
-
-```{r}
-integrate(
-  function(x) gaussian(x, mu, sigma),
-  lower = a,
-  upper = b
-)
-```
-
-In sintesi, questo approccio dimostra come calcolare l'integrale di una funzione di densità in un intervallo utilizzando sia un metodo approssimativo basato sulla somma dei rettangoli sia il metodo numerico integrato. In entrambi i casi, l'obiettivo è calcolare l'area sotto la curva, che corrisponde all'integrale della funzione di densità.
-
-## Potenze
-
-Le potenze sono un'operazione matematica che rappresenta un prodotto ripetuto. Si indicano generalmente come:
+Matematicamente, l'approssimazione converge all'integrale vero quando $n \to \infty$:
 
 $$
-a^n,
+\lim_{n \to \infty} \sum_{i=1}^n f(x_i) \cdot \Delta x = \int_a^b f(x) \, dx,
 $$
+dove $x_i$ sono i punti medi degli intervalli. Questo è precisamente il significato dell'integrale definito secondo Riemann: la somma delle aree di rettangoli infinitamente sottili che approssimano sempre meglio l'area sotto la curva.
 
-dove:
+#### Vantaggi e limiti del metodo
 
-- $a$ è la **base**,
-- $n$ è l'**esponente**.
+Il metodo dei rettangoli presenta diversi aspetti positivi. La sua implementazione è semplice e intuitiva, in quanto si basa direttamente sull'idea geometrica di approssimare un'area con la somma di aree rettangolari. La sua chiarezza concettuale lo rende anche facile da visualizzare, facilitando la comprensione del principio di integrazione numerica. Per funzioni sufficientemente regolari, il metodo può garantire un'elevata accuratezza, a condizione che si utilizzi un numero adeguato di suddivisioni.
 
-La potenza rappresenta il prodotto della base $a$ ripetuto $n$ volte.
+Tuttavia, il metodo presenta anche notevoli limitazioni. La sua velocità di convergenza è relativamente lenta, dell'ordine di $O(1/n)$, il che significa che per dimezzare l'errore è necessario raddoppiare il numero di rettangoli. Ciò lo rende poco efficiente per le funzioni dal comportamento irregolare o con punti di discontinuità. Per ottenere un'elevata precisione, è necessario un numero considerevole di valutazioni della funzione, il che comporta un aumento del costo computazionale.
 
-### Definizione di potenza
+Esistono metodi di integrazione numerica più sofisticati, come quelli implementati nella funzione `integrate()` di R. La regola di Simpson, per esempio, utilizza parabole anziché di rettangoli per approssimare la funzione, raggiungendo una velocità di convergenza superiore ($O(1/n^4)$). Le tecniche di quadratura adattiva modificano dinamicamente la densità dei punti di valutazione in base alle caratteristiche locali della funzione, concentrando il calcolo nelle regioni più problematiche. Per problemi di integrazione multidimensionale, l'integrazione Monte Carlo è spesso un'alternativa efficace.
 
-$$
-a^n = \underbrace{a \cdot a \cdot \dots \cdot a}_{n \text{ fattori}} \quad \text{con } n \in \mathbb{N}.
-$$
-
-Ad esempio:
-
-- $2^3 = 2 \cdot 2 \cdot 2 = 8$,
-- $3^4 = 3 \cdot 3 \cdot 3 \cdot 3 = 81$.
-
----
-
-### Proprietà delle potenze
-
-1. **Moltiplicazione di potenze con la stessa base**:
-
-   $$
-   a^m \cdot a^n = a^{m+n}
-   $$
-   
-   **Esempio**: $2^3 \cdot 2^2 = 2^{3+2} = 2^5 = 32$.
-
-2. **Divisione di potenze con la stessa base**:
-
-   $$
-   \frac{a^m}{a^n} = a^{m-n}, \quad \text{con } m \geq n.
-   $$
-   
-   **Esempio**: $\frac{5^4}{5^2} = 5^{4-2} = 5^2 = 25$.
-
-3. **Potenze di potenze**:
-
-   $$
-   (a^m)^n = a^{m \cdot n}.
-   $$
-   
-   **Esempio**: $(3^2)^3 = 3^{2 \cdot 3} = 3^6 = 729$.
-
-4. **Prodotto di potenze con basi diverse ma lo stesso esponente**:
-
-   $$
-   a^n \cdot b^n = (a \cdot b)^n.
-   $$
-   
-   **Esempio**: $2^3 \cdot 3^3 = (2 \cdot 3)^3 = 6^3 = 216$.
-
-5. **Divisione di potenze con basi diverse ma lo stesso esponente**:
-
-   $$
-   \frac{a^n}{b^n} = \left(\frac{a}{b}\right)^n.
-   $$
-   
-   **Esempio**: $\frac{4^2}{2^2} = \left(\frac{4}{2}\right)^2 = 2^2 = 4$.
-
-6. **Esponente zero**:
-
-   $$
-   a^0 = 1, \quad \text{con } a \neq 0.
-   $$
-   
-   **Esempio**: $5^0 = 1$.
-
-7. **Esponente negativo**:
-
-   $$
-   a^{-n} = \frac{1}{a^n}.
-   $$
-   
-   **Esempio**: $2^{-3} = \frac{1}{2^3} = \frac{1}{8}$.
-
-8. **Radice come potenza frazionaria**:
-
-   $$
-   a^{\frac{1}{n}} = \sqrt[n]{a}, \quad a^{\frac{m}{n}} = \sqrt[n]{a^m}.
-   $$
-   
-   **Esempio**: $8^{\frac{1}{3}} = \sqrt[3]{8} = 2$.
-
----
-
-### Esempi pratici
-
-1. **Calcolo semplice**:
-
-   $$
-   4^3 = 4 \cdot 4 \cdot 4 = 64.
-   $$
-
-2. **Utilizzo delle proprietà**:
-
-   $$
-   3^5 \cdot 3^2 = 3^{5+2} = 3^7 = 2187.
-   $$
-
-3. **Divisione**:
-
-   $$
-   \frac{6^4}{6^2} = 6^{4-2} = 6^2 = 36.
-   $$
-
-4. **Esponente negativo**:
-
-   $$
-   10^{-2} = \frac{1}{10^2} = \frac{1}{100} = 0.01.
-   $$
-
-5. **Radice come potenza**:
-
-   $$
-   16^{\frac{1}{2}} = \sqrt{16} = 4.
-   $$
-
----
-
-### Nota sui numeri razionali e reali
-
-- Le potenze con esponenti interi sono definite per ogni base.
-- Le potenze con esponenti frazionari o reali richiedono che la base sia positiva per evitare ambiguità.
-
-## Logaritmi
-
-Il logaritmo è una funzione matematica che risponde alla domanda: "quante volte devo moltiplicare un certo numero (chiamato "base") per ottenere un altro numero?" Matematicamente, questo è espresso come:
-
-$$
-\log_b(a) = x \iff b^x = a
-$$
-
-Ad esempio, $\log_2(8) = 3$ perché $2^3 = 8$.
-
-Nel contesto dei logaritmi, i valori molto piccoli (compresi tra 0 e 1) diventano più grandi (in termini assoluti) e negativi quando applichiamo una funzione logaritmica. Questo è utile per stabilizzare i calcoli, specialmente quando lavoriamo con prodotti di numeri molto piccoli che potrebbero portare a problemi di underflow.
-
-Per esempio:
-
-- $\log(1) = 0$
-- $\log(0.1) = -1$
-- $\log(0.01) = -2$
-- $\log(0.001) = -3$
-
-Come si può vedere, i valori assoluti dei logaritmi crescono man mano che il numero originale si avvicina a zero.
-
-Una delle proprietà più utili dei logaritmi è che consentono di trasformare un prodotto in una somma:
-
-$$
-\log_b(a \times c) = \log_b(a) + \log_b(c)
-$$
-
-Questa proprietà è estremamente utile in calcoli complessi, come nella statistica bayesiana, dove il prodotto di molte probabilità potrebbe diventare un numero molto piccolo e causare problemi numerici.
-
-Un'altra proprietà utile dei logaritmi è che un rapporto tra due numeri diventa la differenza dei loro logaritmi:
-
-$$
-\log_b\left(\frac{a}{c}\right) = \log_b(a) - \log_b(c)
-$$
-
-Anche questa proprietà è molto utilizzata in matematica, specialmente in situazioni in cui è necessario normalizzare i dati.
-
-In sintesi, i logaritmi sono strumenti potenti per semplificare e stabilizzare i calcoli matematici. Essi consentono di lavorare più agevolmente con numeri molto grandi o molto piccoli e di trasformare operazioni complesse come prodotti e divisioni in somme e differenze, rendendo i calcoli più gestibili e meno inclini a errori numerici.
+Questo esempio mostra chiaramente come il concetto astratto di integrale possa essere implementato in modo computazionale, collegando la definizione matematica formale alla sua applicazione pratica nell'analisi numerica.

@@ -1,224 +1,292 @@
-# Implementazione di modelli Bayesiani con Stan tramite `cmdstanr` {#sec-apx-cmdstanr-intro}
+# Implementazione di modelli bayesiani con Stan tramite `cmdstanr` {#sec-apx-cmdstanr-intro}
 
+## Obiettivo {.unnumbered .unlisted}
 
-## Obiettivo {.unnumbered .unlisted} 
+Questa appendice fornisce un **template operativo** per eseguire un'analisi bayesiana in R utilizzando Stan attraverso l'interfaccia `cmdstanr`. L'obiettivo è mostrare, passo dopo passo, il flusso di lavoro completo: dalla preparazione dei dati fino all'interpretazione dei risultati.
 
-In questa sezione dell'appendice presentiamo una guida pratica all'implementazione di modelli Bayesiani utilizzando *Stan* attraverso l'interfaccia *cmdstanr* in R. Il framework `cmdstanr` rappresenta l'evoluzione moderna delle interfacce R per Stan, offrendo prestazioni ottimizzate e un workflow semplificato per l'inferenza Bayesiana.
+Il flusso di lavoro si articola in **cinque fasi**:
 
-Illustreremo il flusso di lavoro completo attraverso i seguenti passaggi:
+1. **preparazione dei dati**: organizzare le informazioni nel formato richiesto da Stan;
+2. **scrittura del modello**: definire prior, verosimiglianza e quantità derivate;
+3. **compilazione**: trasformare il codice Stan in un programma eseguibile;
+4. **campionamento MCMC**: generare campioni dalla distribuzione a posteriori;
+5. **analisi dei risultati**: estrarre, riassumere e visualizzare i campioni.
 
-1. *Preparazione e input dei dati*: strutturare i dati per l'analisi in Stan.
-2. *Compilazione del modello*: trasformazione del codice Stan in eseguibile ottimizzato.
-3. *Campionamento MCMC*: esecuzione efficiente degli algoritmi di campionamento.
-4. *Estrazione e analisi dei risultati*: elaborazione degli output campionati.
-5. *Diagnostica e visualizzazione*: validazione del modello e rappresentazione grafica.
+Questo schema è valido per qualunque modello bayesiano: una volta compreso, può essere adattato a problemi di complessità crescente.
 
+## Perché usare `cmdstanr`
 
-## Perché usare CmdStanR
+`cmdstanr` è l'interfaccia R raccomandata dagli sviluppatori di Stan. A differenza della precedente interfaccia `rstan`, `cmdstanr` si appoggia direttamente a CmdStan (la versione "a riga di comando" di Stan), offrendo diversi vantaggi pratici:
 
-`CmdStanR` è l'interfaccia R per CmdStan, la versione più leggera e flessibile di Stan. A differenza di `rstan`, che integra il compilatore C++ dentro R, `CmdStanR` utilizza direttamente gli eseguibili di CmdStan. Questo porta diversi vantaggi:
-
--   *Maggiore stabilità e velocità di compilazione*, grazie all'uso diretto di CmdStan.
--   *Aggiornamenti indipendenti*: CmdStanR si appoggia a CmdStan, che può essere aggiornato separatamente.
--   *Controllo avanzato* sulle opzioni di campionamento, diagnostica e gestione dei file di output.
--   *Portabilità*: funziona in modo coerente su diversi sistemi operativi.
-
-Inoltre, `CmdStanR` rappresenta oggi la soluzione consigliata dagli sviluppatori Stan, in quanto più manutenuta e allineata con le versioni più recenti del linguaggio.
-
+- **stabilità**: la compilazione dei modelli è più affidabile e veloce;
+- **aggiornamenti semplici**: CmdStan può essere aggiornato indipendentemente da R;
+- **diagnostica avanzata**: accesso diretto a tutte le informazioni sul campionamento;
+- **portabilità**: funziona in modo coerente su Windows, macOS e Linux.
 
 ## Installazione
 
-Per prima cosa, installiamo il pacchetto `cmdstanr` da GitHub:
-
-``` r
-# install.packages("pak")
-pak::pak("stan-dev/cmdstanr")
-```
-
-Dopodiché, occorre installare CmdStan:
-
-``` r
-cmdstanr::install_cmdstan()
-```
-
-Questo comando scarica e compila CmdStan localmente. La prima installazione può richiedere qualche minuto, ma successivamente sarà sufficiente aggiornare all’occorrenza con:
-
-``` r
-cmdstanr::install_cmdstan(update = TRUE)
-```
-
-Per verificare la corretta installazione:
-
-```{r}
-library(cmdstanr)
-cmdstanr::cmdstan_version()
-```
-
+Prima di procedere, è necessario installare CmdStan seguendo le istruzioni riportate nell'@sec-apx-install-cmdstan.
 
 ## Pacchetti necessari
 
-Per lavorare ci servono alcuni pacchetti:
+Carichiamo i pacchetti che utilizzeremo:
 
 ```{r}
 suppressPackageStartupMessages({
-  library(tidyverse)   # per manipolare i dati
-  library(cmdstanr)    # interfaccia R per Stan
-  library(posterior)   # per lavorare con i campioni MCMC
-  library(bayesplot)   # per visualizzare i risultati
-  library(here)        # per gestire i percorsi ai file
+  library(tidyverse)
+  library(cmdstanr)  # interfaccia per Stan
+  library(posterior) # funzioni per manipolare i campioni MCMC
+  library(bayesplot) # grafici per l'analisi bayesiana
+  library(here)
 })
 
-set.seed(42) # per riproducibilità
+set.seed(42)
 ```
 
 ```{r}
 #| echo: false
-here::here("code", "_common.R") |> 
-  source()
+here::here("code", "_common.R") |> source()
 ```
 
+## Esempio: il modello beta-binomiale
 
-## Un esempio semplice: modello beta-binomiale
+Per illustrare il flusso di lavoro, consideriamo un problema elementare. Supponiamo di aver condotto un esperimento con **9 prove indipendenti**, ciascuna con esito "successo" o "insuccesso", e di aver osservato **6 successi**. Vogliamo stimare la probabilità di successo $\theta$, che assume valori nell'intervallo $[0, 1]$.
 
-Consideriamo il seguente scenario sperimentale: in un esperimento bernoulliano abbiamo osservato *6 successi su 9 prove*. L'obiettivo dell'analisi è stimare la distribuzione a posteriori della probabilità di successo $\theta$. 
+### Il modello statistico
 
-A questo scopo, adottiamo come distribuzione a priori una *Beta(2, 2)*, scelta in quanto debolmente informativa e in grado di esprimere una moderata convinzione preliminare sulla simmetria della probabilità di successo, pur mantenendo una sufficiente flessibilità per permettere ai dati di guidare l'inferenza.
+Il modello che adottiamo è il seguente:
 
-Il modello Stan è già stato scritto in un file `beta_binomial_model.stan`. Il codice Stan è identico indipendentemente dall’interfaccia (R, Python, Julia, …).
+- **verosimiglianza**: il numero di successi $y$ segue una distribuzione binomiale:
+$$
+y \sim \text{Binomiale}(N, \theta)
+$$
 
+- **prior**: per $\theta$ scegliamo una distribuzione Beta(2, 2), che esprime una credenza iniziale moderata verso valori centrali, senza escludere valori estremi:
+$$
+\theta \sim \text{Beta}(2, 2)
+$$
 
-### Passare i dati a Stan
+La distribuzione a posteriori, combinando *prior* e verosimiglianza, ci dirà quali valori di $\theta$ sono plausibili alla luce dei dati osservati.
 
-Stan richiede che i dati siano in una *lista* di R con i nomi esattamente uguali a quelli usati nel file `.stan`.
+### Passo 1: scrivere il modello Stan
+
+Un programma Stan è suddiviso in **blocchi**, ciascuno con una funzione specifica. Ecco il codice completo, commentato:
+
+```{r}
+stancode <- "
+data {
+  // Questo blocco dichiara i dati che passeremo a Stan.
+  // I vincoli (lower, upper) aiutano Stan a verificare la correttezza dei dati.
+  
+  int<lower=1> N;                       // numero totale di prove (almeno 1)
+  int<lower=0, upper=N> y;              // successi osservati (tra 0 e N)
+  real<lower=0> alpha_prior;            // parametro alpha del prior Beta
+  real<lower=0> beta_prior;             // parametro beta del prior Beta
+}
+
+parameters {
+  // Questo blocco dichiara i parametri da stimare.
+  // Stan esplorerà i valori possibili di theta.
+  
+  real<lower=0, upper=1> theta;         // probabilità di successo
+}
+
+model {
+  // Questo blocco definisce il modello statistico:
+  // prima la distribuzione a priori, poi la verosimiglianza.
+  
+  theta ~ beta(alpha_prior, beta_prior);   // prior
+  y ~ binomial(N, theta);                  // verosimiglianza
+}
+
+generated quantities {
+  // Questo blocco calcola quantità aggiuntive dopo il campionamento.
+  // Utili per la verifica del modello e il confronto tra modelli.
+  
+  int y_rep = binomial_rng(N, theta);           // dato replicato (per posterior predictive check)
+  real log_lik = binomial_lpmf(y | N, theta);   // log-verosimiglianza (per LOO-CV)
+}
+"
+```
+
+**Nota sulla sintassi**: in Stan, l'operatore `~` si legge "è distribuito come". L'istruzione `theta ~ beta(2, 2)` significa che $\theta$ ha distribuzione a priori Beta(2, 2).
+
+### Passo 2: preparare i dati
+
+Stan richiede che i dati siano organizzati in una **lista di R**. I nomi degli elementi della lista devono corrispondere esattamente ai nomi dichiarati nel blocco `data` del modello:
 
 ```{r}
 data_list <- list(
-  N = 9,          # numero di prove
-  y = 6,          # numero di successi
-  alpha_prior = 2, # parametri del prior
+  N = 9,
+  y = 6,
+  alpha_prior = 2,
   beta_prior = 2
 )
 ```
 
+### Passo 3: compilare il modello
 
-### Leggere e compilare il modello
-
-Diciamo a R dove si trova il file `.stan` e lo compiliamo:
+La compilazione trasforma il codice Stan in un programma eseguibile ottimizzato. Questa operazione richiede alcuni secondi e viene eseguita una sola volta per ogni modello:
 
 ```{r}
 #| output: false
-file <- file.path(here::here("stan", "beta_binomial_model.stan"))
-file
-
-mod <- cmdstan_model(file)  # compila il modello
+mod <- cmdstan_model(
+  write_stan_file(stancode),
+  compile = TRUE
+)
 ```
 
-L’oggetto `mod` rappresenta il modello Stan compilato. Possiamo visualizzarne le informazioni:
+L'oggetto `mod` contiene il modello compilato. Possiamo visualizzarne il contenuto:
 
 ```{r}
 mod$print()
 ```
 
+### Passo 4: eseguire il campionamento MCMC
 
-### Eseguire l’algoritmo MCMC
-
-Per stimare i parametri usiamo il metodo `$sample()`. Questo esegue l’algoritmo MCMC di Stan:
+Il metodo `$sample()` avvia l'algoritmo MCMC, che genera campioni dalla distribuzione a posteriori:
 
 ```{r}
 #| output: false
 fit <- mod$sample(
   data = data_list,
   seed = 123,
-  chains = 4,            # numero di catene
-  parallel_chains = 4    # quante catene girano in parallelo
+  chains = 4,
+  parallel_chains = 4
 )
 ```
 
-**Nota:** per default ogni catena produce 1000 campioni dopo il warmup, quindi avremo 4000 campioni posteriori.
+**Cosa significano questi argomenti?**
 
+| Argomento | Significato |
+|-----------|-------------|
+| `data` | La lista con i dati osservati |
+| `seed` | Seme per il generatore casuale (per riproducibilità) |
+| `chains` | Numero di catene MCMC indipendenti |
+| `parallel_chains` | Quante catene eseguire simultaneamente |
 
-### Estrarre i campioni
+Per default, ogni catena produce 1000 campioni dopo la fase di warmup. Con 4 catene, otteniamo quindi **4000 campioni** dalla distribuzione a posteriori.
 
-I campioni possono essere estratti in diversi formati.
-Per esempio, come *array a 3 dimensioni* (iterazioni × catene × variabili):
+### Passo 5: analizzare i risultati
+
+#### Verifica della convergenza
+
+Prima di analizzare i risultati, è necessario verificare che il campionamento sia andato a buon fine:
 
 ```{r}
-draws_arr <- fit$draws()
-str(draws_arr)
-dim(draws_arr)
+fit$diagnostic_summary()
 ```
 
-Oppure come *data frame lungo*:
+**Cosa controllare:**
+
+- `num_divergent`: deve essere 0 (o molto basso). Le divergenze indicano problemi nell'esplorazione della distribuzione;
+- `num_max_treedepth`: valori alti suggeriscono che il campionatore ha difficoltà;
+- `ebfmi` (energy Bayesian fraction of missing information): valori sotto 0.2 indicano problemi.
+
+#### Statistiche riassuntive
+
+Il metodo `$summary()` calcola le principali statistiche descrittive della distribuzione a posteriori:
+
+```{r}
+fit$summary(variables = "theta")
+```
+
+**Interpretazione delle colonne:**
+
+| Colonna | Significato |
+|---------|-------------|
+| `mean` | Media a posteriori di $\theta$ |
+| `median` | Mediana a posteriori |
+| `sd` | Deviazione standard a posteriori |
+| `q5`, `q95` | Intervallo di credibilità al 90% |
+| `rhat` | Indice di convergenza (deve essere < 1.01) |
+| `ess_bulk`, `ess_tail` | Dimensione effettiva del campione |
+
+Un valore di `rhat` vicino a 1 indica che le catene hanno raggiunto la stessa distribuzione stazionaria. Valori di `ess` (effective sample size) elevati indicano campioni poco autocorrelati.
+
+#### Statistiche personalizzate
+
+Possiamo calcolare qualunque statistica sui campioni. Ad esempio, la probabilità che $\theta$ sia minore o uguale a 0.5:
+
+```{r}
+fit$summary("theta", pr_less_05 = ~ mean(. <= 0.5))
+```
+
+Questo calcolo sfrutta il fatto che, con i campioni MCMC, le probabilità si stimano come proporzioni: contiamo quanti campioni soddisfano la condizione e dividiamo per il totale.
+
+#### Estrarre i campioni
+
+I campioni possono essere estratti in diversi formati. Il formato data frame è spesso il più comodo per analisi successive:
 
 ```{r}
 draws_df <- as_draws_df(fit)
 head(draws_df)
 ```
 
+Ogni riga rappresenta un campione; le colonne `.chain`, `.iteration` e `.draw` identificano la provenienza di ciascun campione.
 
-### Statistiche riassuntive
+#### Visualizzazione grafica
 
-Il metodo `$summary()` calcola statistiche posteriori (medie, deviazioni standard, quantili, ecc.):
-
-```{r}
-fit$summary(variables = "theta")
-```
-
-Possiamo specificare statistiche personalizzate, ad esempio:
+Il pacchetto `bayesplot` offre funzioni specializzate per visualizzare i risultati. Un istogramma della distribuzione a posteriori:
 
 ```{r}
-fit$summary(
-  variables = "theta", 
-  mean, 
-  sd,
-  ~quantile(.x, probs = c(0.03, 0.97))
-)
+mcmc_hist(fit$draws("theta"), binwidth = 0.02) +
+  labs(
+    x = expression(theta),
+    y = "Frequenza",
+    title = "Distribuzione a posteriori di θ"
+  ) +
+  theme_minimal()
 ```
 
-### Esempio di test bayesiano
-
-Possiamo stimare la probabilità che $\theta \leq 0.5$:
+Per verificare visivamente la convergenza, possiamo esaminare i trace plot (tracciati delle catene):
 
 ```{r}
-fit$summary("theta", pr_less_05 = ~ mean(. <= 0.5))
+mcmc_trace(fit$draws("theta")) +
+  labs(
+    x = "Iterazione",
+    y = expression(theta),
+    title = "Trace plot delle 4 catene"
+  ) +
+  theme_minimal()
 ```
 
+Le catene dovrebbero apparire come "rumore" sovrapposto, senza trend o differenze sistematiche tra loro.
 
-### Visualizzare i campioni
+## Riepilogo del flusso di lavoro
 
-Il pacchetto `bayesplot` semplifica la creazione di grafici. Ad esempio, un istogramma della distribuzione posteriore di $\theta$:
+Il diagramma seguente riassume le fasi dell'analisi:
 
-```{r}
-mcmc_hist(fit$draws("theta"))
+```
+┌─────────────────────┐
+│   1. DATI           │  Organizzare i dati in una lista R
+│   data_list <- ...  │  con nomi corrispondenti al modello
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│   2. MODELLO        │  Scrivere il codice Stan:
+│   stancode <- "..." │  data, parameters, model
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│   3. COMPILAZIONE   │  Trasformare Stan in eseguibile
+│   cmdstan_model()   │
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│   4. CAMPIONAMENTO  │  Generare campioni MCMC
+│   mod$sample()      │  dalla distribuzione a posteriori
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│   5. ANALISI        │  Diagnostica, statistiche,
+│   fit$summary()     │  visualizzazioni
+└─────────────────────┘
 ```
 
-
-### Diagnostica del campionatore
-
-Per verificare che l’MCMC abbia funzionato correttamente:
-
-```{r}
-fit$diagnostic_summary()
-```
-
-È anche possibile accedere alle variabili interne del campionatore (es. profondità dell’albero, divergenze):
-
-```{r}
-head(fit$sampler_diagnostics(format = "df"))
-```
-
-Se ci sono problemi (molte divergenze, R-hat alto, ecc.), occorre rivedere il modello o i parametri di campionamento.
-
-
-### Conclusioni
-
-In conclusione, abbiamo visto i passaggi fondamentali per usare *cmdstanr*:
-
-1. preparare i dati in una lista;
-2. compilare il modello Stan;
-3. lanciare il campionamento MCMC;
-4. estrarre e riassumere i campioni;
-5. visualizzare i risultati e controllare la diagnostica.
-
-Questa procedura è la base di ogni analisi con Stan via R: indipendentemente dal modello, i passaggi saranno sempre questi.
+Questo schema rimane invariato indipendentemente dalla complessità del modello. Una volta padroneggiato su un esempio semplice, può essere applicato a regressioni, modelli gerarchici e qualunque altra analisi bayesiana.
 

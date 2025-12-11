@@ -1,0 +1,372 @@
+# Controlli predittivi a posteriori {#sec-apx-posterior-predictive}
+
+I **controlli predittivi a posteriori** (*Posterior Predictive Checks*, PPC) costituiscono un metodo fondamentale per valutare la bontà di adattamento di un modello bayesiano. L'idea è semplice: se un modello rappresenta adeguatamente il processo generativo dei dati osservati, allora dati *nuovi*, simulati a partire dalla distribuzione a posteriori dei parametri, dovrebbero essere statisticamente simili ai dati *osservati*.
+
+In termini operativi, la procedura implica la generazione di repliche predittive condizionate ai valori campionati dalla distribuzione a posteriori. Il confronto sistematico tra queste repliche e i dati osservati consente di identificare discrepanze tra il modello e la realtà empirica, guidando così eventuali raffinamenti della specificazione del modello.
+
+Questo capitolo è dedicato specificamente alla *distribuzione predittiva a posteriori*, cioè alla generazione di dati simulati *dopo* aver aggiornato le nostre credenze sui parametri attraverso l'evidenza dei dati osservati. Per un'analisi complementare che valuta la plausibilità dei dati *prima* di osservarli, incentrata sulla scelta delle distribuzioni a priori, si rimanda alla sezione sui controlli predittivi a priori (@sec-apx-prior-predictive-check).
+
+::: {.callout-tip title="Domanda chiave"}
+Il modello, una volta informato dai dati, è in grado di generare osservazioni che assomigliano a quelle reali?
+:::
+
+::: {.callout-caution collapse="true" title="Preparazione del Notebook"}
+```{r}
+#| label: setup
+#| output: false
+
+suppressPackageStartupMessages({
+  library(cmdstanr)
+  library(posterior)
+  library(bayesplot)
+  library(ggplot2)
+  library(dplyr)
+})
+
+theme_set(theme_minimal(base_size = 12))
+color_scheme_set("brightblue")
+```
+:::
+
+## La distribuzione predittiva a posteriori
+
+La distribuzione predittiva a posteriori formalizza l'incertezza riguardo a future osservazioni, integrando le informazioni apprese dai dati già osservati. La sua definizione formale è:
+
+$$
+p(\tilde{y} \mid y) = \int_{\Theta} p(\tilde{y} \mid \theta)\, p(\theta \mid y)\, d\theta,
+$$
+
+dove i simboli rappresentano:
+
+- $\tilde{y}$: i dati replicati (nuove osservazioni predette);
+- $y$: il vettore dei dati osservati;
+- $\theta$: i parametri del modello;
+- $p(\theta \mid y)$: la distribuzione a posteriori dei parametri, data l'evidenza osservata;
+- $\Theta$: lo spazio dei parametri.
+
+L'interpretazione operativa di questa formula è chiara: per ottenere la previsione su nuovi dati, si **media** la verosimiglianza condizionata $p(\tilde{y} \mid \theta)$ su tutti i possibili valori del parametro $\theta$, utilizzando come pesi la loro plausibilità a posteriori $p(\theta \mid y)$. In altre parole, non si sceglie un singolo "migliore" valore dei parametri (come una stima puntuale), ma si considera l'intera distribuzione a posteriori, riconoscendo l'incertezza residua sul loro vero valore dopo aver osservato i dati.
+
+Questa media integrale equivale a generare previsioni in due fasi, che riflettono il processo inferenziale bayesiano:
+
+1.  campionare un valore $\theta^{(s)}$ dalla distribuzione a posteriori $p(\theta \mid y)$;
+2.  campionare una nuova osservazione $\tilde{y}^{(s)}$ dalla distribuzione dei dati condizionata a quel parametro, $p(\tilde{y} \mid \theta^{(s)})$.
+
+La collezione $\{\tilde{y}^{(1)}, \tilde{y}^{(2)}, \dots\}$ così ottenuta approssima la distribuzione predittiva a posteriori $p(\tilde{y} \mid y)$, che incorpora sia l'incertezza sui parametri (tramite il campionamento a posteriori) sia la variabilità intrinseca del processo generativo dei dati (tramite la verosimiglianza).
+
+In Stan, le repliche si generano nel blocco `generated quantities` usando le funzioni `_rng()`.
+
+## Esempio: modello normale
+
+### Il modello Stan
+
+Consideriamo un modello per la stima della media di una distribuzione normale con varianza nota.
+
+```{r}
+#| label: stan-code
+stan_code <- "
+data {
+  int<lower=0> N;
+  vector[N] y;
+  real mu0;                // media del prior
+  real<lower=0> tau0;      // SD del prior
+  real<lower=0> sigma;     // SD nota dei dati
+  int<lower=0, upper=1> prior_only;  // flag per prior predictive
+}
+
+parameters {
+  real mu;
+}
+
+model {
+  mu ~ normal(mu0, tau0);
+  if (prior_only == 0)
+    y ~ normal(mu, sigma);
+}
+
+generated quantities {
+  vector[N] y_rep;
+  for (n in 1:N)
+    y_rep[n] = normal_rng(mu, sigma);
+}
+"
+```
+
+::: {.callout-note title="Il parametro prior_only"}
+Impostando `prior_only = 1`, il modello ignora la verosimiglianza e campiona solo dal prior. Questo permette di usare lo stesso file Stan sia per i controlli a priori che per quelli a posteriori.
+:::
+
+### Compilazione e adattamento
+
+```{r}
+#| label: compile-model
+#| output: false
+mod <- cmdstanr::cmdstan_model(
+  cmdstanr::write_stan_file(stan_code),
+  compile = TRUE
+)
+```
+
+```{r}
+#| label: simulate-data
+set.seed(123)
+N <- 100
+y_obs <- rnorm(N, mean = 170, sd = 10)
+
+stan_data <- list(
+  N = N,
+  y = y_obs,
+  mu0 = 175,      # media a priori
+  tau0 = 5,       # incertezza a priori
+  sigma = 10,     # varianza nota
+  prior_only = 0  # usa i dati osservati
+)
+```
+
+```{r}
+#| label: fit-model
+#| output: false
+fit <- mod$sample(
+  data = stan_data,
+  chains = 4,
+  iter_sampling = 1000,
+  iter_warmup = 500,
+  refresh = 0,
+  seed = 123
+)
+```
+
+### Estrazione delle repliche
+
+Per i controlli predittivi con `bayesplot`, le repliche devono essere organizzate in una matrice con:
+
+- **righe**: draw posteriori (`S` draw totali);
+- **colonne**: osservazioni (`N` osservazioni).
+
+```{r}
+#| label: extract-yrep
+y_rep <- fit$draws("y_rep", format = "matrix")
+dim(y_rep)
+```
+
+### Sovrapposizione delle densità
+
+Il confronto visivo più immediato consiste nel sovrapporre la distribuzione empirica dei dati osservati alla distribuzione di un campione di repliche predittive generate dal modello. In questo tipo di grafico:
+
+- i **dati osservati** ($y$) sono rappresentati da una singola linea scura (tipicamente nera o blu scuro);
+- le **repliche predittive** ($\tilde{y}^{(s)}$) sono rappresentate da più linee chiare (tipicamente grigie o trasparenti), ciascuna corrispondente a un diverso set di parametri campionato dalla posterior.
+
+```{r}
+#| label: ppc-dens-overlay
+#| fig-width: 7
+#| fig-height: 5
+ppc_dens_overlay(y_obs, y_rep[1:50, ]) +
+  labs(
+    title = "Posterior predictive check: sovrapposizione densità",
+    subtitle = "Linea scura = dati osservati, linee chiare = repliche",
+    x = "y",
+    y = "Densità"
+  )
+```
+
+### Interpretazione
+
+Se il modello è adeguato, la densità dei dati osservati dovrebbe essere sostanzialmente sovrapponibile al "nube" delle densità delle repliche. Un dato osservato che cade sistematicamente fuori dall'insieme delle repliche suggerisce una discrepanza tra modello e realtà.
+
+Discrepanze sistematiche indicano problemi:
+
+- **repliche troppo strette**: il modello sottostima la variabilità;
+- **repliche troppo larghe**: il modello sovrastima la variabilità;
+- **repliche sistematicamente spostate**: bias nella stima della posizione.
+
+### Controlli su statistiche riassuntive
+
+Possiamo verificare se specifiche statistiche dei dati simulati sono compatibili con quelle osservate.
+
+#### Media
+
+```{r}
+#| label: ppc-stat-mean
+#| fig-width: 6
+#| fig-height: 4
+ppc_stat(y_obs, y_rep, stat = "mean") +
+  labs(title = "PPC: distribuzione della media")
+```
+
+#### Deviazione standard
+
+```{r}
+#| label: ppc-stat-sd
+#| fig-width: 6
+#| fig-height: 4
+ppc_stat(y_obs, y_rep, stat = "sd") +
+  labs(title = "PPC: distribuzione della SD")
+```
+
+#### Quantili estremi
+
+```{r}
+#| label: ppc-stat-q95
+#| fig-width: 6
+#| fig-height: 4
+ppc_stat(y_obs, y_rep, stat = function(x) quantile(x, 0.95)) +
+  labs(title = "PPC: distribuzione del 95° percentile")
+```
+
+### Intervalli predittivi
+
+Gli intervalli predittivi mostrano se la dispersione generata dal modello è compatibile con i dati.
+
+```{r}
+#| label: ppc-intervals
+#| fig-width: 8
+#| fig-height: 5
+# Selezioniamo un sottoinsieme di osservazioni per chiarezza
+idx <- sample(1:N, 30)
+ppc_intervals(y_obs[idx], y_rep[, idx], prob = 0.5, prob_outer = 0.9) +
+  labs(
+    title = "Intervalli predittivi a posteriori",
+    subtitle = "Punti = dati osservati, bande = intervalli 50% e 90%",
+    x = "Osservazione",
+    y = "y"
+  )
+```
+
+## Confronto tramite istogrammi
+
+Un'alternativa efficace al grafico di sovrapposizione delle densità è il confronto diretto tra l'istogramma dei dati osservati e quelli delle repliche predittive. Questo approccio è particolarmente utile quando si desidera visualizzare la distribuzione dei dati in termini di frequenze assolute piuttosto che di densità.
+
+```{r}
+#| label: ppc-hist
+#| fig-width: 8
+#| fig-height: 6
+ppc_hist(y_obs, y_rep[1:8, ], binwidth = 5) +
+  labs(title = "PPC: confronto istogrammi (8 repliche)")
+```
+
+Se il modello è appropriato, l'istogramma dei dati osservati dovrebbe apparire simile nella forma e nella dispersione agli istogrammi delle repliche. Differenze sistematiche (ad esempio, un picco più alto, code più lunghe o una diversa asimmetria nei dati osservati) segnalano potenziali inadeguatezze del modello.
+
+## Diagnosticare i problemi tramite i PPC
+
+Quando i controlli predittivi a posteriori rivelano discrepanze sistematiche tra i dati osservati e le repliche generate dal modello, è necessario indagare le possibili cause. Queste possono essere ricondotte a quattro categorie principali, ciascuna delle quali suggerisce specifiche azioni correttive.
+
+### 1. Distribuzioni a priori inadeguate
+
+Anche dopo aver osservato i dati, distribuzioni a priori eccessivamente informative o mal collocate possono "trascinare" la distribuzione a posteriori e quindi le predizioni verso regioni inadeguate. Allo stesso modo, *prior* eccessivamente diffuse possono causare problemi di identificazione.
+
+**Strategia di intervento**: riesaminare la scelta delle prior, ricorrendo ai *prior predictive checks* (@sec-apx-prior-predictive-check) per valutarne la plausibilità indipendentemente dai dati. Spesso si rivela utile passare a *prior* debolmente informativi che escludono valori assolutamente impossibili senza imporre vincoli troppo forti.
+
+### 2. Specificazione impropria della verosimiglianza
+
+La famiglia distributiva scelta per il modello potrebbe non essere in grado di catturare le caratteristiche salienti dei dati osservati:
+
+- **Code troppo leggere**: se i dati mostrano outliers o code più pesanti del previsto, una distribuzione normale è inadeguata. Una distribuzione $t$ di Student, con parametro di gradi di libertà stimato, offre maggiore robustezza.
+- **Asimmetria**: distribuzioni simmetriche (come la normale) falliscono nel modellare dati asimmetrici. Occorre considerare famiglie asimmetriche come la Gamma, la Log-normale o la Beta.
+- **Eteroschedasticità**: modelli che assumono varianza costante ($\sigma^2$ fissa) falliscono quando la variabilità cambia sistematicamente con la media o con una covariata. È necessario modellare esplicitamente la varianza.
+
+**Strategia di intervento**: condurre un confronto formale (ad esempio, tramite LOO-CV) tra modelli basati su diverse famiglie distributive, dando priorità a quelle che incorporano flessibilità per le caratteristiche osservate nei PPC.
+
+### 3. Struttura del modello incompleta
+
+Il modello potrebbe essere specificato correttamente a livello distributivo ma non includere componenti strutturali necessarie per catturare i pattern presenti nei dati:
+
+- **trend o effetti temporali non modellati**;
+- **variazione tra gruppi** (ad esempio, tra soggetti o scuole) non catturata, che richiederebbe una struttura gerarchica;
+- **dipendenze spaziali, temporali o di altro tipo** tra le osservazioni, che violano l'assunzione di indipendenza.
+
+**Strategia di intervento**: espandere la specificazione del modello per includere i termini strutturali rilevanti (effetti fissi per covariate, effetti casuali per gruppi, termini di correlazione spaziale/temporale).
+
+### 4. Parametri di dispersione fissati in modo errato
+
+Nell'esempio discusso, si è assunta la deviazione standard $\sigma$ nota. Se il valore fissato è troppo grande o troppo piccolo rispetto alla variabilità reale dei dati, le predizioni avranno sistematicamente una dispersione errata.
+
+**Strategia di intervento**: in una modellazione realistica, il parametro di dispersione (come $\sigma$ in un modello normale) dovrebbe essere stimato dai dati, non fissato a priori, a meno che non esista una ragione teorica solida per farlo.
+
+L'identificazione della causa più probabile attraverso i PPC guida uno sviluppo del modello iterativo e informato, spostando l'attenzione dalla semplice stima dei parametri alla costruzione di un modello statisticamente adeguato.
+
+## Esempio con varianza stimata
+
+Estendiamo il modello per stimare anche $\sigma$:
+
+```{r}
+#| label: stan-code-sigma
+stan_code_sigma <- "
+data {
+  int<lower=0> N;
+  vector[N] y;
+}
+
+parameters {
+  real mu;
+  real<lower=0> sigma;
+}
+
+model {
+  mu ~ normal(170, 20);     // prior debolmente informativo
+  sigma ~ exponential(0.1); // prior su sigma
+  y ~ normal(mu, sigma);
+}
+
+generated quantities {
+  vector[N] y_rep;
+  for (n in 1:N)
+    y_rep[n] = normal_rng(mu, sigma);
+}
+"
+```
+
+```{r}
+#| label: fit-sigma-model
+#| output: false
+mod_sigma <- cmdstanr::cmdstan_model(
+  cmdstanr::write_stan_file(stan_code_sigma),
+  compile = TRUE
+)
+
+fit_sigma <- mod_sigma$sample(
+  data = list(N = N, y = y_obs),
+  chains = 4,
+  iter_sampling = 1000,
+  refresh = 0,
+  seed = 123
+)
+```
+
+```{r}
+#| label: ppc-sigma
+#| fig-width: 7
+#| fig-height: 5
+y_rep_sigma <- fit_sigma$draws("y_rep", format = "matrix")
+
+ppc_dens_overlay(y_obs, y_rep_sigma[1:50, ]) +
+  labs(
+    title = "PPC con varianza stimata",
+    x = "y",
+    y = "Densità"
+  )
+```
+
+::: {.callout-note title="Workflow per i PPC"}
+1. **Definire `y_rep`** nel blocco `generated quantities` del modello Stan
+2. **Estrarre le repliche** come matrice: `fit$draws("y_rep", format = "matrix")`
+3. **Verificare le dimensioni**: deve essere [S × N]
+4. **Applicare i controlli**:
+   - `ppc_dens_overlay()`: confronto densità globale
+   - `ppc_stat()`: verifiche su statistiche specifiche
+   - `ppc_intervals()`: copertura degli intervalli
+5. **Interpretare** le discrepanze e iterare sul modello
+:::
+
+## Riflessioni conclusive {.unnumbered}
+
+I controlli predittivi a posteriori rappresentano un cambio di paradigma fondamentale nell'analisi statistica, spostando il focus dalla mera stima dei parametri alla valutazione della capacità generativa del modello. È perfettamente possibile che un modello produca stime parametriche ragionevoli e inferenze statisticamente significative, ma fallisca comunque nel riprodurre aspetti essenziali della struttura osservata nei dati. I PPC rivelano proprio queste discrepanze tra il modello e la realtà empirica.
+
+I PPC non vanno interpretati come un test formale di ipotesi che produce un valore-$p$ per rigettare un modello. Piuttosto, costituiscono uno strumento diagnostico esplorativo che risponde a una domanda più pratica e profonda: le predizioni del modello sono plausibili alla luce dei dati che abbiamo effettivamente osservato? Questo approccio è perfettamente in linea con la filosofia bayesiana, che considera il modello non come una "verità" da verificare, ma come uno strumento di ragionamento la cui utilità va giudicata in base alla sua capacità di aiutarci a comprendere e prevedere il fenomeno in studio.
+
+Nella pratica di ricerca, i PPC sono particolarmente preziosi nelle fasi esplorative iniziali della modellazione, quando si stanno prendendo in considerazione diverse specifiche alternative. Forniscono un riscontro rapido e intuitivo per affinare il modello. Una volta individuata una famiglia di modelli con proprietà predittive soddisfacenti, è possibile ricorrere a metodi di confronto più formali e quantitativi, come la *Leave-One-Out Cross-Validation* (LOO-CV) o il *Watanabe-Akaike Information Criterion* (WAIC), per effettuare una scelta finale tra le alternative più promettenti.
+
+::: {.callout-note collapse="true" title="Informazioni sull'ambiente di sviluppo"}
+```{r}
+#| label: session-info
+sessionInfo()
+```
+:::
