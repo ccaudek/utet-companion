@@ -1,14 +1,13 @@
 # Analisi bayesiana dell'odds ratio {#sec-bayes-odds-ratio}
 
 ::: {.callout-note appearance="minimal"}
-
 Questo approfondimento sviluppa ulteriormente il tema dell'inferenza sulle proporzioni, già affrontato nel manuale didattico tramite il modello Beta-Binomiale. In quel contesto, la proprietà della coniugazione aveva permesso di ottenere una soluzione analitica esatta per la distribuzione a posteriori, mentre l'approccio a griglia aveva reso evidente il meccanismo di aggiornamento bayesiano.
 
-Procediamo ora nell'applicazione pratica degli strumenti computazionali, utilizzando Stan per la specificazione dei modelli e il campionamento MCMC. Come passo successivo del nostro percorso, implementeremo un modello focalizzato su una misura di fondamentale importanza per le scienze psicologiche: l'odds ratio.
+Ora passiamo all'applicazione pratica degli strumenti computazionali, utilizzando Stan per la specificazione dei modelli e il campionamento MCMC. Il passo successivo del nostro percorso sarà l'implementazione di un modello focalizzato su una misura di fondamentale importanza per le scienze psicologiche: l'odds ratio.
 
 L'odds ratio è una metrica fondamentale per confrontare la probabilità di un determinato esito tra due gruppi. In psicologia, viene comunemente utilizzato per quantificare, ad esempio, la differenza nella probabilità di successo in un compito sperimentale tra il gruppo sperimentale e il gruppo di controllo o per misurare l'associazione tra variabili categoriali in studi osservazionali.
 
-Questo esempio applicativo persegue un duplice obiettivo didattico. In primo luogo, mostra come implementare in Stan un modello concettualmente noto, confermando che i principi bayesiani (la combinazione di distribuzione a priori, verosimiglianza e dati osservati) restano invariati anche quando si utilizza questo potente strumento computazionale. In secondo luogo, costituisce un'introduzione pratica alla sintassi di Stan e alla gestione dei campionamenti MCMC, gettando le basi per affrontare in seguito modelli statistici più complessi.
+Questo esempio applicativo persegue un duplice obiettivo didattico. In primo luogo, mostra come implementare in Stan un modello concettualmente noto, confermando che i principi bayesiani (la combinazione di distribuzione a priori, verosimiglianza e dati osservati) rimangono invariati anche quando si utilizza questo potente strumento computazionale. In secondo luogo, costituisce un'introduzione pratica alla sintassi di Stan e alla gestione dei campionamenti MCMC, gettando le basi per affrontare in seguito modelli statistici più complessi.
 :::
 
 ## Panoramica del capitolo {.unnumbered .unlisted}
@@ -25,9 +24,11 @@ Questo esempio applicativo persegue un duplice obiettivo didattico. In primo luo
 
 here::here("code", "_common.R") |> 
   source()
+library(cmdstanr)
+library(posterior)
+library(bayesplot)
+library(tibble)
 
-if (!requireNamespace("pacman")) install.packages("pacman")
-pacman::p_load(cmdstanr, posterior, bayesplot, ggplot2, dplyr, tibble)
 conflicts_prefer(posterior::ess_bulk)
 conflicts_prefer(posterior::ess_tail)
 ```
@@ -37,8 +38,8 @@ conflicts_prefer(posterior::ess_tail)
 
 Per introdurre l’analisi bayesiana dell’odds ratio, consideriamo il seguente esperimento. Nella prima metà del Novecento, Karl von Frisch si domandò se le api possedessero la *visione dei colori*. Per verificarlo, ideò una serie di esperimenti in cui le api potevano associare un colore a una ricompensa. Ispirandoci a una ricostruzione proposta da @hoffmann2022bayesian, possiamo immaginare una versione semplificata del disegno sperimentale:
 
-- **Gruppo sperimentale**: api addestrate ad associare un disco blu a una soluzione zuccherina.
-- **Gruppo di controllo**: api che non ricevono alcun addestramento.
+- **gruppo sperimentale**: api addestrate ad associare un disco blu a una soluzione zuccherina;
+- **gruppo di controllo**: api che non ricevono alcun addestramento.
 
 Nella fase di *test*, la soluzione zuccherina viene rimossa e si registra il numero di volte in cui le api si avvicinano al disco blu (evento critico).
 
@@ -53,7 +54,7 @@ La domanda di ricerca può essere così formulata: *le api addestrate mostrano u
 
 ### Dalle probabilità agli odds
 
-La probabilità di successo (scelta del blu) nel gruppo sperimentale è:
+La probabilità di successo (scelta del disco blu) nel gruppo sperimentale è:
 
 $$
 p_1 = \frac{130}{200} = 0.65.
@@ -65,7 +66,7 @@ $$
 \text{odds}_1 = \frac{p_1}{1-p_1} = \frac{0.65}{0.35} \approx 1.86.
 $$
 
-Per il gruppo di controllo:
+Per il gruppo di controllo abbiamo:
 
 $$
 p_2 = \frac{100}{200} = 0.50, \quad \text{odds}_2 = \frac{0.50}{0.50} = 1.00.
@@ -74,37 +75,46 @@ $$
 L'odds ratio (OR) confronta i due odds:
 
 $$
-\text{OR} = \frac{\text{odds}_1}{\text{odds}_2} = \frac{1.86}{1.00} \approx 1.86.
+\text{OR} = \frac{\text{odds}_1}{\text{odds}_2} = \frac{1.86}{1.00} = 1.86.
 $$
 
-**Interpretazione:** le api addestrate presentano odds circa 1.9 volte maggiori di scegliere il disco blu rispetto alle api non addestrate. Notiamo che l’odds ratio confronta due rapporti di probabilità di successo/insuccesso, non le probabilità dirette: per questo un OR di 1.86 non significa che la probabilità di successo sia raddoppiata, ma che il rapporto tra successi e insuccessi è quasi doppio.
+**Interpretazione.** 
+Un odds ratio pari a 1.86 indica che il **rapporto tra scelte corrette e scelte errate** nelle api addestrate è circa 1.9 volte quello osservato nel gruppo di controllo. È importante distinguere questo concetto dalla probabilità: l’OR confronta due *odds* (successi/insuccessi), non due probabilità dirette.
 
-Quanto è affidabile questa stima? È a questo punto che l'approccio bayesiano mostra il suo valore: anziché limitarci a una stima puntuale, possiamo ottenere un'intera distribuzione a posteriori per l'OR, che esprime la nostra incertezza dopo aver osservato i dati.
+Per questo motivo un OR di 1.86 **non** implica che la probabilità di scegliere il disco blu sia aumentata dell’86% o che sia quasi raddoppiata. Significa invece che, per ogni errore commesso, le api addestrate producono un numero di scelte corrette quasi doppio rispetto alle api non addestrate. Questo chiarisce perché differenze moderate nelle probabilità possano tradursi in differenze più marcate negli odds.
+
+Tuttavia, l’OR calcolato dai dati è pur sempre una stima puntuale, che non esprime da sola l’incertezza associata all’effetto. È in questo passaggio, ovvero nella necessità di quantificare l’incertezza in modo trasparente, che il paradigma bayesiano offre un contributo decisivo.
 
 ### Approccio bayesiano
 
-Nel paradigma frequentista, l’odds ratio è stimato come rapporto tra stime puntuali, e la sua incertezza è descritta da un intervallo di confidenza basato su approssimazioni asintotiche.
-Nell’approccio bayesiano, invece, otteniamo direttamente la distribuzione a posteriori dell’odds ratio, che rappresenta in modo completo la nostra incertezza. Ciò offre diversi vantaggi interpretativi:
+Nel frequentismo, l’incertezza sull’odds ratio viene stimata per mezzo di intervalli di confidenza, spesso basati su approssimazioni asintotiche. L'approccio bayesiano, invece, fornisce direttamente la **distribuzione a posteriori** dell’OR, che descrive in maniera completa il grado di incertezza dopo aver osservato i dati.
 
-- **Probabilità diretta**: possiamo calcolare la probabilità che l'OR sia maggiore di 1;
-- **Valutazione di equivalenza**: possiamo determinare la probabilità che l'OR ricada in un intervallo di equivalenza pratica (ROPE);
-- **Intervalli di credibilità**: possiamo ottenere intervalli di credibilità esatti (ETI o HDI) senza ricorrere ad approssimazioni asintotiche.
+Ciò consente di eseguire diverse operazioni inferenziali particolarmente utili:
 
-Questo framework consente non solo una rappresentazione più intuitiva dei risultati, ma permette anche di rispondere direttamente a domande inferenziali in termini probabilistici. Ad esempio: qual è la probabilità che le api addestrate mostrino effettivamente una preferenza maggiore per il blu? O, più formalmente: qual è la probabilità che l'OR sia maggiore di 1?
+* **calcolare probabilità direttamente interpretabili**, ad esempio la probabilità che l’OR sia maggiore di 1 (preferenza effettiva per il blu nel gruppo addestrato);
+* **valutare la rilevanza pratica dell’effetto**, stimando la probabilità che l’OR ricada in un intervallo di equivalenza (ROPE);
+* **ottenere intervalli di credibilità esatti**, come l’ETI o l’HDI, non basati su approssimazioni.
+
+In sintesi, mentre l'approccio frequentista fornisce un valore puntuale e un intervallo costruito in termini di ripetizioni ipotetiche, l'approccio bayesiano permette di rispondere direttamente a domande del tipo: "Qual è la probabilità che l'effetto sia reale?" o "Qual è la probabilità che l'odds ratio superi 1?". Queste domande corrispondono più direttamente agli interessi scientifici del ricercatore.
 
 ## Versione binomiale con prior Beta
 
-Per la stima dell'odds ratio un approccio iniziale particolarmente intuitivo consiste nel modellare separatamente le proporzioni di successo nei due gruppi, $\theta_1$ e $\theta_2$, utilizzando distribuzioni binomiali con prior Beta. Questo metodo si rivela particolarmente adatto quando i dati sono naturalmente aggregabili in una tabella $2\times2$. Questa formulazione, in termini di $\theta_1$ e $\theta_2$, mantiene una chiara interpretazione psicologica: ciascun parametro rappresenta la propensione a fornire la risposta ‘corretta’ nel rispettivo gruppo.
+Un modo semplice e intuitivo per stimare l’odds ratio consiste nel modellare separatamente le probabilità di successo nei due gruppi, $\theta_1$ e $\theta_2$, assumendo per ciascuna una distribuzione binomiale con prior di tipo Beta. Questo approccio è particolarmente naturale quando i dati possono essere organizzati in una tabella $2\times 2$, e conserva una chiara interpretazione psicologica: ogni parametro $\theta_g$ rappresenta la propensione del gruppo (g) a fornire la risposta corretta.
 
-L'odds ratio viene calcolato come trasformazione delle due probabilità stimate:
+L’odds ratio viene poi ottenuto come funzione deterministica delle due probabilità a posteriori:
 
 $$
-\text{OR} = \frac{\theta_1/(1-\theta_1)}{\theta_2/(1-\theta_2)} = \exp\left(\operatorname{logit}(\theta_1) - \operatorname{logit}(\theta_2)\right)
+\text{OR} \;=\;
+\frac{\theta_1/(1-\theta_1)}{\theta_2/(1-\theta_2)}
+\;=\;
+\exp\!\bigl[\operatorname{logit}(\theta_1) - \operatorname{logit}(\theta_2)\bigr].
 $$
 
-Questa formulazione offre una trasparenza didattica immediata: stimiamo separatamente le probabilità di successo nei due gruppi per poi derivare l'effetto di interesse. La scelta di prior Beta(2,2) per entrambi i parametri mantiene coerenza con le impostazioni del capitolo, utilizzando prior debolmente informative.
+Questa parametrizzazione ha il vantaggio di rendere immediato il collegamento tra i parametri psicologicamente interpretabili ($\theta_1$, $\theta_2$) e l’effetto comparativo di interesse (OR). In altri termini, il modello non richiede di specificare direttamente una distribuzione per l'odds ratio, ma lo considera come una trasformazione delle probabilità di successo nei due gruppi.
 
-### Implementazione in Stan: modello Beta-Binomiale
+La scelta di *prior* $\text{Beta}(2,2)$ per entrambi i parametri è coerente con l'impostazione generale del capitolo,  in quanto specifica una distribuzione debolmente informativa simmetrica attorno a 0.5, che assegna bassa densità di probabilità agli estremi (0 e 1). Tale configurazione permette ai dati osservati di dominare l'aggiornamento delle stime, fornendo un punto di partenza equilibrato che favorisce un'inferenza guidata dall'evidenza empirica senza introdurre assunzioni forti a priori.
+
+### Implementazione in Stan
 
 ```{r}
 stancode_or_beta <- "
@@ -144,7 +154,7 @@ data_list_beta <- list(
 )
 ```
 
-#### Compilazione ed esecuzione del modello
+Compilazione ed esecuzione del modello:
 
 ```{r}
 #| output: false
@@ -162,7 +172,7 @@ fit_or_beta <- stanmod_or_beta$sample(
 )
 ```
 
-#### Diagnostica essenziale 
+Diagnostica essenziale:
 
 ```{r}
 # Indicatori numerici chiave: Rhat ~ 1, ESS adeguati
@@ -201,24 +211,22 @@ bayesplot::mcmc_areas(fit_or_beta$draws("OR"), prob = 0.95) +
 
 Il grafico mostra chiaramente che la distribuzione dell'odds ratio è concentrata su valori superiori a 1, con alta probabilità.
 
-**Interpretazione:** I risultati forniscono evidenza credibile che l'addestramento aumenta le probabilità che le api scelgano il disco blu rispetto al gruppo di controllo. La distribuzione a posteriori dell’OR è concentrata su valori maggiori di 1, suggerendo che l’effetto è credibilmente diverso dall’assenza di differenza.
+**Interpretazione:** i risultati indicano in modo credibile che l’addestramento aumenti la tendenza delle api a scegliere il disco blu rispetto al gruppo di controllo. La distribuzione a posteriori dell’OR è fortemente concentrata su valori superiori a 1, evidenziando che l’effetto è verosimilmente diverso dall’assenza di differenza e che la preferenza osservata non può essere attribuita al solo caso.
 
 ## Relazione con la regressione logistica
 
-È anche possibile formulare il problema di ottenere la distribuzione a posteriori dell'OR all'interno del modello della *regressione logistica*. Modellando la probabilità di successo $p_i$ mediante un modello logit:
+L’odds ratio può essere stimato in modo del tutto equivalente anche attraverso un modello di *regressione logistica*. Consideriamo il modello:
 
 $$
-\text{logit}(p_i) = \alpha + \beta \cdot x_i,
+\text{logit}(p_i) = \alpha + \beta, x_i,
 $$
-dove $x_i$ è una variabile indicatrice (0 = gruppo di controllo, 1 = gruppo sperimentale), si ottiene che:
+dove $x_i$ è un indicatore del gruppo (0 = controllo, 1 = sperimentale). In questa parametrizzazione, il coefficiente $\beta$ rappresenta la differenza tra i log-odds dei due gruppi, e la quantità $\exp(\beta)$ coincide esattamente con l’odds ratio sperimentale rispetto al controllo.
 
-- $\exp(\beta)$ corrisponde esattamente all’*odds ratio* tra il gruppo sperimentale e quello di controllo.
-
-Ciò implica che la stima di un modello di regressione logistica binaria equivale alla stima dell’odds ratio, con il vantaggio di poter estendere agevolmente il modello all’inclusione di ulteriori predittori, covariate o strutture gerarchiche. Questo collegamento è fondamentale: mostra che la regressione logistica non è altro che una generalizzazione del confronto tra due proporzioni, formulata in termini di log-odds.
+Questo collegamento mostra come la regressione logistica generalizzi il confronto tra due proporzioni: il modello esprime l’effetto in termini di log-odds e consente di incorporare in modo naturale ulteriori predittori, covariate e strutture gerarchiche. La stima dell’OR diventa quindi un caso particolare di un framework più ampio e flessibile, in grado di adattarsi a problemi inferenziali complessi tipici della ricerca psicologica.
 
 ### Versione con modello logistico
 
-I dati vengono rappresentati a livello individuale: ogni ape è codificata come 1 (ha scelto il blu) o 0 (non ha scelto il blu).
+Nel modello logistico, i dati vengono rappresentati a livello individuale: per ciascuna ape registriamo 1 se sceglie il disco blu e 0 in caso contrario.
 
 ```{r}
 # Dati individuali
@@ -257,7 +265,7 @@ generated quantities {
 "
 ```
 
-Nel contesto dell’esperimento sulle api, $\beta$ rappresenta la variazione nei log-odds di scegliere il disco blu dovuta all’addestramento.
+In questo contesto, il coefficiente $\beta$ quantifica la variazione nei log-odds di scegliere il disco blu associata all’addestramento: valori positivi indicano che le api addestrate mostrano una maggiore propensione alla risposta corretta rispetto al gruppo di controllo.
 
 #### Compilazione ed esecuzione del modello
 
@@ -278,112 +286,103 @@ fit_or <- stanmod_or$sample(
 
 #### Interpretazione dei risultati
 
-Riassunto dei parametri di interesse:
+Il riepilogo dei parametri stimati è riportato di seguito:
 
 ```{r}
 print(fit_or$summary(c("alpha", "beta", "OR")), n = Inf)
 ```
 
-- `alpha`: log-odds di successo nel gruppo di controllo
-- `beta`: differenza nei log-odds tra gruppo sperimentale e controllo
-- `OR`: odds ratio (`exp(beta)`)
+Il parametro `alpha` rappresenta i log-odds di successo nel gruppo di controllo; `beta` quantifica la variazione nei log-odds introdotta dall’addestramento; infine, `OR = exp(beta)` fornisce una misura direttamente interpretabile dell’effetto, indicando di quanto variano gli odds di scegliere il disco blu nel gruppo sperimentale rispetto al controllo.
 
-Distribuzione a posteriori dell'OR:
+Per una descrizione più completa dell’incertezza associata all’effetto, consideriamo la distribuzione a posteriori dell’odds ratio:
 
 ```{r}
 posterior::summarise_draws(
-  fit_or$draws("OR"),
-  mean, sd, ~quantile(.x, c(0.025, 0.5, 0.975))
+fit_or$draws("OR"),
+mean, sd, ~quantile(.x, c(0.025, 0.5, 0.975))
 )
 ```
 
-Visualizzazione della distribuzione a posteriori dell'OR:
+La distribuzione può essere visualizzata in modo intuitivo tramite:
 
 ```{r}
 bayesplot::mcmc_areas(fit_or$draws("OR"), prob = 0.95) +
-  xlab("Odds Ratio") + ylab("Densità")
+xlab("Odds Ratio") + ylab("Densità")
 ```
 
-#### Diagnostica essenziale 
+#### Diagnostica del modello
+
+Gli indicatori di convergenza confermano la qualità dell’adattamento:
 
 ```{r}
-# Indicatori numerici chiave: Rhat ~ 1, ESS adeguati
 posterior::summarize_draws(
-  fit_or$draws(c("alpha","beta","OR")),
-  "rhat", "ess_bulk", "ess_tail"
+fit_or$draws(c("alpha","beta","OR")),
+"rhat", "ess_bulk", "ess_tail"
 )
+
+bayesplot::mcmc_trace(fit_or$draws("OR"))
 ```
 
-```{r}
-# Traceplot di controllo su OR
-bayesplot::mcmc_trace(fit_or$draws("OR")) 
-```
+### Analisi comparativa dei risultati
 
-#### Analisi comparativa dei risultati
-
-Confronto degli intervalli di credibilità tra i due approcci:
+Per verificare la coerenza tra i due approcci (modello Beta–Binomiale e regressione logistica), confrontiamo gli intervalli di credibilità:
 
 ```{r}
 summ_logit <- posterior::summarise_draws(
-  fit_or$draws("OR"),
-  mean, sd, ~quantile(.x, c(0.025, 0.5, 0.975))
+fit_or$draws("OR"),
+mean, sd, ~quantile(.x, c(0.025, 0.5, 0.975))
 )
 summ_beta <- posterior::summarise_draws(
-  fit_or_beta$draws("OR"),
-  mean, sd, ~quantile(.x, c(0.025, 0.5, 0.975))
+fit_or_beta$draws("OR"),
+mean, sd, ~quantile(.x, c(0.025, 0.5, 0.975))
 )
 
 list(Regressione_Logistica = summ_logit, Beta_Binomiale = summ_beta)
 ```
 
-Confronto visivo delle distribuzioni posteriori:
+Anche la sovrapposizione delle distribuzioni posteriori evidenzia la sostanziale equivalenza dei due modelli:
 
 ```{r}
 OR_logit <- as.numeric(fit_or$draws("OR"))
 OR_beta <- as.numeric(fit_or_beta$draws("OR"))
 
 tibble(
-  OR = c(OR_logit, OR_beta),
-  Modello = rep(c("Regressione Logistica", "Beta-Binomiale"), 
-                c(length(OR_logit), length(OR_beta)))
+OR = c(OR_logit, OR_beta),
+Modello = rep(c("Regressione Logistica", "Beta-Binomiale"),
+c(length(OR_logit), length(OR_beta)))
 ) |>
-  ggplot(aes(x = OR, fill = Modello)) +
-  geom_density(alpha = 0.4) +
-  labs(x = "Odds Ratio", y = "Densità")
+ggplot(aes(x = OR, fill = Modello)) +
+geom_density(alpha = 0.4) +
+labs(x = "Odds Ratio", y = "Densità")
 ```
 
-Le due distribuzioni si sovrappongono quasi completamente, mostrando che le due specificazioni modellano lo stesso effetto con coerenza. Le differenze minime derivano unicamente dalla parametrizzazione (aggregata vs individuale).
-
-Probabilità a posteriori che l'OR sia maggiore di 1:
+Un confronto diretto della probabilità a posteriori che l’OR sia maggiore di 1 conferma ulteriormente la convergenza dei risultati:
 
 ```{r}
 c(
-  Regressione_Logistica = mean(OR_logit > 1),
-  Beta_Binomiale = mean(OR_beta > 1)
+Regressione_Logistica = mean(OR_logit > 1),
+Beta_Binomiale = mean(OR_beta > 1)
 )
 ```
 
 ## Considerazioni metodologiche
 
-I due approcci producono risultati sostanzialmente equivalenti, confermando la robustezza delle conclusioni inferenziali. La scelta tra le due specificazioni dipende da considerazioni pratiche e comunicative:
+I due modelli restituiscono inferenze pressoché identiche: in entrambi i casi l’addestramento aumenta in modo credibile la probabilità di scegliere il disco blu. La differenza tra i due approcci riguarda soprattutto la parametrizzazione e la struttura dei dati:
 
-- **Regressione logistica**: Ideale per dati individuali e modelli che includono multiple covariate. Offre maggiore flessibilità per estensioni multivariate.
+* **Regressione logistica**: adatta a dati individuali e facilmente estensibile a modelli multivariati o gerarchici; fornisce un quadro generale per analisi più complesse.
+* **Modello Beta–Binomiale**: particolarmente intuitivo quando i dati sono aggregabili in tabelle di contingenza; offre una lettura diretta dei parametri come proporzioni di successo nei gruppi.
 
-- **Modello Beta-Binomiale**: Particolarmente adatto per dati aggregati in tabelle di contingenza. Risulta più intuitivo per comprendere il meccanismo di stima delle proporzioni sottostanti.
-
-Entrambi i modelli arrivano alla stessa conclusione inferenziale: l’addestramento aumenta in modo credibile la probabilità di scelta corretta. La regressione logistica offre una cornice più generale per estendere l’analisi a più predittori, mentre il modello Beta-Binomiale resta la scelta più intuitiva per introdurre il concetto di odds ratio.
+In sintesi, entrambi gli approcci modellano lo stesso effetto in maniera coerente. La scelta tra l’uno e l’altro dipende dal livello di granularità dei dati e dagli obiettivi dell’analisi, non dall’effetto inferenziale finale.
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-Questo capitolo ha dimostrato come l'inferenza bayesiana sulle proporzioni, precedentemente affrontata con soluzioni analitiche e metodi a griglia, possa essere efficacemente implementata in Stan. L'esempio dell'odds ratio ha permesso di riconoscere la continuità concettuale dell'approccio bayesiano: sebbene la logica dell'aggiornamento rimanga invariata, Stan ne estende l'applicabilità a una gamma di modelli notevolmente più ampia.
+Questo capitolo ha mostrato come l’inferenza bayesiana sulle proporzioni, inizialmente introdotta tramite soluzioni analitiche e metodi a griglia, possa essere implementata in modo naturale e altamente flessibile in Stan. L’esempio dell’odds ratio ha messo in luce un aspetto fondamentale: l’approccio bayesiano mantiene inalterate le proprie basi concettuali, mentre l’uso di Stan ne amplia notevolmente il campo di applicazione.
 
-L'analisi condotta ha messo in luce due aspetti particolarmente rilevanti.
+Due aspetti meritano particolare attenzione. In primo luogo, la continuità concettuale. Stan non modifica l’architettura dell’inferenza bayesiana, ma al centro rimane sempre il campionamento dalla distribuzione a posteriori che consente di quantificare in modo trasparente l’incertezza sui parametri. Ciò che cambia è la capacità di applicare lo stesso principio a modelli che non hanno soluzioni chiuse o che sarebbero troppo complessi da trattare con metodi manuali o approssimazioni semplicistiche.
 
-In primo luogo, emerge chiaramente la continuità concettuale: Stan non altera i principi fondamentali dell'inferenza bayesiana, ma ne amplia le applicazioni pratiche. Il nucleo del metodo rimane immutato, ovvero il campionamento dalla distribuzione a posteriori per quantificare l'incertezza sui parametri, mentre la potenza computazionale consente di affrontare modelli complessi senza dover ricorrere a soluzioni analiticamente trattabili.
+In secondo luogo, l’esempio discusso mostra l’importanza pratica di questo ampliamento. La stima dell'odds ratio, un problema metodologico ben noto in psicologia, diventa un'occasione per familiarizzare con Stan in un contesto concettualmente accessibile. Da ciò emerge chiaramente come Stan possa diventare uno strumento di uso quotidiano, dalla modellazione delle proporzioni alle analisi con covariate, fino ai modelli per i conteggi, ai processi dinamici e alle strutture gerarchiche.
 
-In secondo luogo, l'esempio ha messo in luce il valore pratico di questo approccio. Abbiamo constatato che Stan può trasformarsi in uno strumento di routine per l'analisi dei dati psicologici, anche in contesti modellistici relativamente semplici. In questa prospettiva, l'odds ratio funge da ponte metodologico che consente di sviluppare familiarità con Stan in un ambito concettualmente noto, preparando il terreno per applicazioni più sofisticate, quali i modelli di Poisson o le strutture gerarchiche.
-
-In prospettiva, questo capitolo segna una transizione importante: da questo momento l'inferenza bayesiana cessa di essere confinata a modelli semplici, trasformandosi in una metodologia concretamente praticabile e pienamente riproducibile per l'analisi di qualsiasi tipologia di dato psicologico.
+In questa prospettiva, il capitolo rappresenta un punto di svolta metodologico. L’inferenza bayesiana non è più confinata a esempi didattici o modelli elementari, ma si configura come un quadro operativo completo, riproducibile e adatto a qualsiasi tipo di dato psicologico. Stan diventa quindi la piattaforma che rende possibile questa transizione, fornendo gli strumenti per affrontare in modo coerente e rigoroso le analisi più avanzate del volume.
 
 ::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
 ```{r}
