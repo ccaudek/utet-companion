@@ -1,0 +1,327 @@
+# Causalità: intuizioni, controfattuali e perché l'associazione non basta {#sec-causality-propedeutics}
+
+::: {.callout-note appearance="minimal"}
+Nei capitoli precedenti abbiamo sviluppato il modello di regressione come strumento per descrivere le relazioni tra le variabili. Abbiamo imparato a stimare i coefficienti, a quantificare l'incertezza e a verificare l'adeguatezza del modello ai dati. Ma una domanda fondamentale è rimasta sullo sfondo: *cosa significano davvero quei coefficienti?*
+
+La risposta, spesso sottovalutata nella formazione statistica tradizionale, è che i coefficienti di regressione descrivono *associazioni*, non *relazioni causali*. Una pendenza positiva tra ore di studio e voto all'esame ci dice che le due variabili variano insieme, ma non ci autorizza a concludere che "studiare di più *causa* voti migliori". Questa distinzione non è un cavillo filosofico: è la differenza tra descrivere un pattern nei dati e comprendere un meccanismo nel mondo.
+
+Questo capitolo introduce il concetto di causalità in termini controfattuali, preparando il terreno per il @sec-eda-causality che presenterà gli strumenti operativi (DAG, backdoor, propensity score, matching, pesatura e regressione). Basato sul primo capitolo di @hernan2020, il testo sviluppa l'intuizione fondamentale e fissa la notazione minima necessaria.
+:::
+
+::: {.callout-tip title="Take‑home (in 3 righe)"}
+- **Effetto causale medio (ACE)** = differenza tra due mondi: se *tutti* ricevessero il trattamento vs se *nessuno* lo ricevesse.
+- **Associazione** = differenza tra *trattati* e *non trattati* nel mondo osservato: può essere fuorviante per via del **confondimento**.
+- La **randomizzazione** rende i gruppi comparabili "in media" → associazione ≈ causalità (se SUTVA regge).
+:::
+
+## Dalla regressione alla causalità: perché serve un nuovo framework
+
+Nel modello di regressione che abbiamo studiato, scriviamo qualcosa come $y = \alpha + \beta x + \varepsilon$ e interpretiamo $\beta$ come "l'effetto di $x$ su $y$". Ma questa interpretazione è corretta solo in condizioni molto particolari. Per capire perché, consideriamo un esempio concreto.
+
+Immaginiamo di osservare che gli studenti che dormono poco tendono a essere più ansiosi. Stimiamo una regressione e troviamo che $\beta > 0$, ovvero che meno ore di sonno corrispondono a più ansia. Ma cosa possiamo concludere? Almeno tre interpretazioni sono compatibili con questo risultato:
+
+1. *dormire poco causa ansia*: la privazione di sonno altera i meccanismi neurobiologici che regolano le emozioni;
+2. *l'ansia causa insonnia*: chi è ansioso fatica ad addormentarsi e si sveglia durante la notte;
+3. *entrambe dipendono da un terzo fattore*: i periodi di esami universitari, per esempio, aumentano sia l'ansia che la privazione di sonno.
+
+Il coefficiente di regressione non distingue tra queste possibilità. Ci dice solo che le due variabili variano insieme, ma non ci dice il *perché*. Per rispondere a questa domanda, dobbiamo uscire dal linguaggio della regressione ed entrare in quello della *causalità*.
+
+### Cosa cambia con il pensiero causale
+
+Il pensiero causale ci chiede di esplicitare ciò che normalmente lasciamo implicito. Invece di chiederci semplicemente "Qual è la relazione tra $x$ e $y$?", ci chiediamo: "*Se intervenissimo su $x$, cosa succederebbe a $y$?*". Questa è una domanda diversa — e molto più difficile — perché richiede di immaginare scenari che non osserviamo.
+
+La formalizzazione di questa intuizione passa attraverso il concetto di *controfattuale*, ovvero l'esito che si sarebbe verificato se le cose fossero andate diversamente. Si tratta di un'idea che utilizziamo continuamente nella vita di tutti i giorni ("Se avessi studiato di più, avrei preso un voto migliore"), ma che richiede strumenti precisi per poter essere tradotta in un framework statistico.
+
+Nei prossimi paragrafi introdurremo questi strumenti: la notazione dei controfattuali, la definizione di effetto causale medio, e le condizioni necessarie affinché l'associazione osservata nei dati possa essere interpretata in termini causali.
+
+## Fondamenti dell'inferenza causale: controfattuali, effetto medio e SUTVA
+
+Tutti noi, senza rendercene conto, facciamo continuamente inferenze causali nella vita di tutti i giorni. Immaginiamo, per esempio, uno studente che si chiede: "*Se ripeto mentalmente l'argomento prima dell'esame, riuscirò a sentirmi meno ansioso?*". In questa domanda è già presente l'ossatura del ragionamento causale: c'è un'azione possibile, il ripasso mentale, che chiameremo "trattamento", e c'è un esito atteso, ovvero la riduzione dell'ansia.
+
+La statistica formale traduce questa intuizione quotidiana in un linguaggio più preciso, introducendo il concetto di **controfattuale**. Ogni individuo, di fronte a un possibile trattamento, può essere considerato come portatore di due scenari alternativi. Nel primo scenario lo studente riceve il trattamento (per esempio, applica la tecnica di *reappraisal*), e in questo caso l'esito può essere indicato con la notazione $Y^{(1)}$. Nel secondo scenario lo stesso studente non riceve il trattamento (non applica la tecnica), e l'esito corrispondente è indicato con $Y^{(0)}$.
+
+Naturalmente, nella realtà osserviamo soltanto uno di questi due scenari: se lo studente decide di fare il *reappraisal*, conosceremo il valore di $Y^{(1)}$, mentre l'altro scenario resterà invisibile, "controfattuale", cioè non realizzato. La relazione tra ciò che osserviamo e ciò che ipotizziamo è riassunta dal principio di **consistenza**: se il trattamento ricevuto è $A=a$, allora l'esito osservato coincide con il controfattuale corrispondente, $Y = Y^{(a)}$.
+
+Da questo modo di pensare discende la definizione di effetto causale. A livello individuale, l'effetto è la differenza tra i due esiti potenziali: $Y^{(1)} - Y^{(0)}$. Tuttavia, poiché osserviamo sempre e soltanto uno dei due valori per ciascun individuo, l'effetto individuale rimane per lo più inaccessibile. È invece possibile spostarsi a un livello più aggregato, e chiedersi quale sarebbe la differenza media che si osserverebbe in una popolazione intera se tutti ricevessero il trattamento rispetto a se nessuno lo ricevesse. Questa differenza media prende il nome di **effetto causale medio** (*Average Causal Effect*, ACE), ed è definita come
+
+$$
+\text{ACE} = \mathbb{E}[Y^{(1)}] - \mathbb{E}[Y^{(0)}].
+$$
+
+In altre parole, ci chiediamo: *"In media, quale sarebbe la differenza tra il mondo in cui tutti applicano il reappraisal e quello in cui nessuno lo fa?"*.
+
+Perché questa definizione funzioni, è necessario assumere alcune condizioni. La più importante è nota come **SUTVA** (*Stable Unit Treatment Value Assumption*). Nonostante il nome possa sembrare tecnico e astratto, l'idea è semplice. Da un lato, dobbiamo supporre che il trattamento ricevuto da una persona non influenzi direttamente l'esito di un'altra: se Tizio fa reappraisal, questo non dovrebbe modificare il livello di ansia di Caio. Questa è l'ipotesi di **assenza di interferenza**, che in molti contesti psicologici individuali è plausibile, ma non sempre: pensiamo, per esempio, alle terapie di gruppo o alle dinamiche di classe. Dall'altro lato, è necessario assumere che esista una sola versione ben definita del trattamento. Dire che uno studente ha fatto *reappraisal* deve significare che ha seguito una procedura precisa e uguale per tutti; se ci fossero molteplici modalità di "fare reappraisal" molto diverse tra loro, dovremmo distinguerle o modellarle separatamente.
+
+Con queste idee di base, ovvero controfattualità, consistenza, effetto medio e SUTVA, abbiamo gli strumenti per iniziare a parlare in modo più rigoroso di causalità, pur rimanendo ancorati alle intuizioni del senso comune.
+
+## Causale vs associativo: perché differiscono?
+
+Quando parliamo di effetto **causale**, ci riferiamo a un confronto ipotetico tra due mondi alternativi. Nel primo mondo immaginiamo che tutti ricevano il trattamento, nel secondo che nessuno lo riceva. La domanda è: quanto cambia, in media, l'esito se passiamo da un mondo all'altro? Questo è l'effetto causale medio (ACE), espresso come la differenza tra $\mathbb{E}[Y^{(1)}]$ e $\mathbb{E}[Y^{(0)}]$.
+
+Il ragionamento **associativo**, invece, è più vicino a ciò che possiamo osservare direttamente nei dati. Non confronta due mondi ipotetici, ma due gruppi reali: coloro che hanno effettivamente ricevuto il trattamento e coloro che non lo hanno ricevuto. In questo caso guardiamo a $\mathbb{E}[Y \,|\, A=1]$ e lo confrontiamo con $\mathbb{E}[Y \,|\, A=0]$.
+
+La differenza tra i due approcci è sottile, ma fondamentale. Nel confronto causale, invece, si ipotizza che la stessa popolazione viva due scenari diversi: uno con trattamento e uno senza. Nel confronto associativo, invece, si confrontano due sottogruppi che **potrebbero avere caratteristiche molto diverse già all'inizio**. Per esempio, se a ricevere il trattamento sono soprattutto gli individui più ansiosi, la differenza osservata tra i trattati e i non trattati non rifletterà solo l'effetto del trattamento, ma anche il fatto che i due gruppi non partivano dalle stesse condizioni iniziali.
+
+Questa discrepanza prende il nome di **confondimento**: si verifica quando esistono variabili che influenzano sia la probabilità di ricevere il trattamento sia l'esito. In presenza di confondimento, l'associazione osservata può dare un'impressione ingannevole, facendo sembrare che il trattamento abbia un effetto quando in realtà non ce l'ha, o nascondendo un effetto reale dietro a differenze preesistenti tra i gruppi.
+
+### La regressione non risolve automaticamente il problema
+
+A questo punto potremmo chiederci: "Ma la regressione multipla non serve proprio a questo? Se includo le variabili confondenti nel modello, posso stimare l'effetto 'al netto' di queste variabili". Questa intuizione coglie un aspetto vero, ma è incompleta e potenzialmente fuorviante.
+
+Il problema è che non tutte le variabili vanno controllate allo stesso modo. Nel @sec-eda-causality vedremo che esistono configurazioni, come i *collider*, in cui il controllo di una variabile *introduce distorsione* invece di rimuoverla. La decisione di quali variabili includere in un modello di regressione richiede quindi un ragionamento causale esplicito e non può essere delegata a criteri automatici come "includi tutto ciò che è correlato" o "usa la selezione stepwise".
+
+Per questo motivo, è importante distinguere chiaramente tra ciò che possiamo stimare direttamente dai dati, ovvero l'associazione, e ciò che vorremmo davvero conoscere, ovvero l'effetto causale. È proprio la differenza tra queste due prospettive a rendere necessarie le strategie che vedremo in seguito, dal disegno sperimentale ai metodi statistici per i dati osservazionali.
+
+## Quale misura di effetto? Additiva o moltiplicativa
+
+Una volta chiarito che cosa intendiamo per effetto causale medio, rimane da decidere **come descriverlo**. Non esiste una misura unica: la scelta dipende dalla domanda che vogliamo porci e dal modo in cui vogliamo comunicare i risultati.
+
+Se l'esito è dicotomico, come ad esempio "ha avuto un attacco di panico" sì o no, possiamo calcolare la **differenza di rischi**. In pratica confrontiamo la probabilità dell'evento se tutti ricevessero il trattamento con la probabilità se nessuno lo ricevesse. Ciò ci permette di capire *quanti casi in più o in meno* ci si può aspettare a seguito dell'intervento. Si tratta di una misura additiva che sottrae un rischio dall'altro.
+
+Un altro modo di guardare allo stesso fenomeno è chiedersi *quante volte* il rischio cambia con il trattamento. In questo caso si parla di **rapporto di rischi** (*risk ratio*) o, più tecnicamente, di **odds ratio**, che confronta le probabilità relative. Queste misure hanno il vantaggio di essere intuitive quando vogliamo comunicare un "moltiplicatore del rischio": per esempio, "Chi non ha fatto *reappraisal* ha il doppio della probabilità di avere un attacco di panico".
+
+Se invece l'esito non è dicotomico, ma continuo, come un punteggio di ansia su una scala, ha più senso restare sulla scala delle medie e confrontare direttamente la differenza tra i due scenari.
+
+In sintesi, non si tratta tanto di stabilire quale misura sia "migliore", ma di capire quale sia più adatta alla domanda a cui stiamo cercando di rispondere. Se ci interessa la portata assoluta di un intervento, per esempio per pianificare le risorse o valutare l'impatto concreto in termini di casi prevenuti, la differenza di rischio è la misura più efficace. Se invece vogliamo enfatizzare l'aumento o la riduzione proporzionale del rischio, ha senso scegliere il rapporto di rischio. L'importante è evitare gli automatismi: ogni misura racconta la stessa storia su scale diverse e sta a noi decidere quale scala è **più adatta alla nostra domanda di ricerca**.
+
+### Due fonti di variabilità
+
+Quando proviamo a stimare un effetto causale, dobbiamo anche riconoscere che i numeri che otteniamo non sono mai esatti. C'è sempre una certa variabilità e questa può avere almeno due origini.
+
+La prima è legata al **campionamento**. Nella pratica, infatti, non è possibile osservare l'intera popolazione, ma solo un campione di essa. Se ripetessimo lo studio più volte, selezionando gruppi diversi di persone, otterremmo inevitabilmente risultati leggermente diversi. Si tratta della normale oscillazione dovuta al fatto che ogni campione è solo una "fotografia" parziale del fenomeno.
+
+La seconda fonte di variabilità riguarda il fatto che, anche fissando il trattamento, gli esiti non sono identici per tutti. Le persone sono diverse tra loro e i contesti in cui vivono introducono ulteriore eterogeneità. Perciò, anche quando due individui ricevono lo stesso trattamento, le loro risposte possono essere molto diverse, sia per caratteristiche individuali sia per fattori casuali.
+
+Nel nostro corso, per tenere conto di queste fonti di incertezza, useremo gli strumenti della statistica bayesiana. In particolare, ci affideremo agli intervalli di credibilità che permettono di rappresentare in modo chiaro e intuitivo il livello di fiducia nelle nostre stime.
+
+## Mini-simulazioni: confondimento e randomizzazione
+
+Per chiarire meglio i concetti, è utile ricorrere a una simulazione che mostri cosa succede in presenza di confondimento e cosa, invece, quando il trattamento viene assegnato in modo casuale. Le simulazioni proposte di seguito sono volutamente semplificate: il loro scopo non è produrre risultati realistici, ma rendere evidente la logica alla base delle nozioni che stiamo esaminando.
+
+### Il caso del confondimento: quando i trattati sono già diversi all'inizio
+
+Immaginiamo una situazione in cui il trattamento — per esempio, l'uso di una strategia di *reappraisal* per ridurre l'ansia — viene scelto soprattutto da chi è già più ansioso per natura. In questo caso, stiamo assumendo che il trattamento, di per sé, **non abbia alcun effetto causale** sull'esito; tuttavia, poiché le persone con un'elevata ansia tendono a sottoporsi a più trattamenti, il confronto tra i trattati e i non trattati sarà inevitabilmente distorto. Si noterà infatti una differenza nei livelli di ansia osservati, ma questa differenza non sarà dovuta al trattamento, bensì al confondimento.
+
+Il codice seguente genera questo scenario. Prima creiamo una variabile che rappresenta l'ansia di tratto a livello di base. Poi, costruiamo una probabilità di ricevere il trattamento che aumenta con l'aumentare dell'ansia di partenza. Infine, si simula l'esito che dipende solo dall'ansia di tratto e dal caso, ma non dal trattamento.
+
+```{r}
+#| label: sim-confounding
+#| fig-cap: "Confondimento: il gruppo trattato appare peggiore anche senza effetto causale."
+#| fig-width: 7
+#| fig-height: 5
+
+set.seed(42)
+N <- 2000
+# Ansia di tratto a baseline
+anx0 <- rnorm(N, mean = 0, sd = 1)
+
+# Probabilità di ricevere il trattamento aumenta con l'ansia baseline
+logit <- function(x) 1/(1+exp(-x))
+pr_treat <- logit(-0.5 + 1.0*anx0)
+A <- rbinom(N, size = 1, prob = pr_treat)
+
+# Esito: dipende dall'ansia baseline ma non dal trattamento
+Y <- 0.8*anx0 + rnorm(N, 0, 1)
+
+# Differenza media osservata tra trattati e non trattati
+assoc_diff <- mean(Y[A==1]) - mean(Y[A==0])
+
+# Visualizzazione
+par(mfrow = c(1,2))
+boxplot(Y ~ A, names = c("A=0","A=1"),
+        main = "Esito osservato per gruppo",
+        ylab = "Ansia (esito)")
+mtext(sprintf("Differenza osservata = %.3f (confondimento)", assoc_diff),
+      side=3, line=0.5, cex=0.8)
+
+boxplot(anx0 ~ A, names = c("A=0","A=1"),
+        main = "Ansia baseline per gruppo",
+        ylab = "Ansia baseline")
+par(mfrow = c(1,1))
+```
+
+I grafici parlano chiaro. Nel primo grafico vediamo che il gruppo trattato presenta in media livelli di ansia più alti nell'esito, come se il trattamento avesse avuto un effetto negativo. Tuttavia, sappiamo che in questa simulazione il trattamento non aveva alcun effetto causale. Il secondo grafico mostra la ragione di questa apparente differenza: i pazienti trattati presentavano già, alla linea di base, un'ansia più alta.
+
+Questa simulazione mostra chiaramente che l'**associazione osservata** tra trattamento ed esito non coincide necessariamente con l'**effetto causale** del trattamento. In questo caso, la differenza che osserviamo è dovuta esclusivamente al confondimento.
+
+### Randomizzazione: quando associazione e causalità coincidono (se ACE = 0)
+
+Riprendiamo lo stesso scenario della simulazione precedente, ma con una differenza cruciale: invece di lasciare che siano gli individui più ansiosi a scegliere il trattamento, lo assegniamo in modo completamente casuale. In altre parole, lanciamo una moneta: metà del campione riceve l'intervento e l'altra metà no.
+
+In questo contesto, il vero effetto causale del trattamento rimane pari a zero, perché non abbiamo modificato la relazione che lega ansia di tratto ed esito. Tuttavia, grazie alla randomizzazione, i gruppi di trattati e non trattati risultano **in media equivalenti** per quanto riguarda i confondenti, sia quelli misurati sia quelli sconosciuti.
+
+Ecco come appare la simulazione in R:
+
+```{r}
+#| label: sim-randomization-null
+#| fig-cap: "Randomizzazione con ACE=0: l'associazione torna ≈ 0."
+#| fig-width: 7
+#| fig-height: 5
+
+set.seed(43)
+N <- 2000
+anx0 <- rnorm(N, 0, 1)
+A <- rbinom(N, 1, 0.5)  # assegnazione casuale
+Y <- 0.8*anx0 + rnorm(N, 0, 1)
+
+assoc_diff <- mean(Y[A==1]) - mean(Y[A==0])
+
+par(mfrow = c(1,2))
+hist(anx0[A==0], breaks = 30, xlim = range(anx0), main = "Ansia baseline (A=0)",
+     xlab = "anx0")
+hist(anx0[A==1], breaks = 30, xlim = range(anx0), main = "Ansia baseline (A=1)",
+     xlab = "anx0")
+```
+
+```{r}
+#| echo: false
+par(mfrow = c(1,1))
+cat(sprintf("Differenza media osservata (randomized) = %.3f\n", assoc_diff))
+```
+
+Questa volta, se confrontiamo i due gruppi, vediamo che le distribuzioni dell'ansia di tratto sono simili. Infatti, la differenza media osservata negli esiti si avvicina a zero, proprio come il vero effetto causale. In questo esempio, **associazione e causalità coincidono**, perché l'assegnazione casuale ha eliminato il legame spurio con i confondenti.
+
+## Quando l'effetto causale c'è davvero
+
+Finora abbiamo simulato scenari in cui il trattamento non sortiva alcun effetto. Ma cosa succederebbe se introducessimo un vero effetto causale? Supponiamo che l'uso della tecnica di *reappraisal* riduca l'ansia in media di 0,4 punti sulla nostra scala.
+
+In questo caso, grazie alla randomizzazione, la differenza media osservata tra i gruppi riflette proprio questa riduzione. L'effetto stimato con i dati coincide, almeno in media, con l'effetto causale che abbiamo ipotizzato nel modello di simulazione.
+
+Ecco la simulazione:
+
+```{r}
+#| label: sim-true-effect
+#| fig-cap: "Randomizzazione con ACE≠0: la differenza media stima l'effetto causale."
+#| fig-width: 7
+#| fig-height: 5
+
+set.seed(44)
+N <- 2000
+anx0 <- rnorm(N, 0, 1)
+A <- rbinom(N, 1, 0.15)
+
+true_tau <- -0.4               # effetto causale medio
+Y0 <- 0.8*anx0 + rnorm(N, 0, 1)
+Y1 <- Y0 + true_tau
+Y  <- ifelse(A==1, Y1, Y0)
+
+est_diff <- mean(Y[A==1]) - mean(Y[A==0])
+
+par(mfrow = c(1,2))
+boxplot(Y ~ A, names = c("A=0","A=1"),
+        main = "Esito osservato per gruppo\n(ACE<0)",
+        ylab = "Ansia (esito)")
+abline(h = mean(Y), lty = 2, col = "gray")
+plot(jitter(A, 0.1), Y, pch = 16, xaxt = "n",
+     xlab = "A", ylab = "Ansia (esito)", main = "Punti grezzi (jitter)")
+axis(1, at = c(0,1), labels = c("0","1"))
+```
+
+```{r}
+#| echo: false
+par(mfrow = c(1,1))
+cat(sprintf("Differenza media osservata = %.3f (vero effetto = %.3f)\n", est_diff, true_tau))
+```
+
+Il risultato è chiaro: quando esiste un vero effetto causale e i gruppi sono stati resi comparabili mediante la randomizzazione, la differenza media osservata diventa una buona stima dell'ACE. In altre parole, l'esperimento controllato ci permette di trasformare un'associazione in un'inferenza causale credibile.
+
+### Domande guida 
+
+A questo punto, possiamo fare un passo indietro e chiederci: come si traduce tutto ciò nel lavoro concreto di chi fa ricerca psicologica? Quando ci troveremo a discutere di causalità dai dati osservazionali nel @sec-eda-causality, avremo bisogno di un piccolo "kit di domande guida" per orientarci.
+
+La prima domanda riguarda l'obiettivo: *Qual è esattamente la mia domanda causale?* È fondamentale definire con precisione il trattamento che ci interessa, l'esito che vogliamo misurare, la popolazione di cui stiamo parlando e l'arco temporale in cui ci muoviamo. Se non abbiamo una definizione chiara, rischiamo di ragionare su un oggetto vago e di non arrivare a nessuna conclusione solida.
+
+La seconda domanda ci invita a riflettere sui possibili *confondenti*. Quali variabili potrebbero influenzare sia la probabilità di ricevere il trattamento sia l'esito che stiamo misurando? Se pensiamo, per esempio, a un intervento per ridurre l'ansia, il livello iniziale di ansia di tratto o il supporto sociale potrebbero essere variabili da considerare.
+
+Un terzo punto riguarda le assunzioni implicite dietro la nostra definizione di effetto causale. È plausibile che il trattamento di un individuo non interferisca con quello di un altro? Tutti hanno ricevuto lo stesso tipo di trattamento o esistono versioni diverse e non equivalenti? Queste condizioni sono riassunte dall'acronimo SUTVA, che ci ricorda di non dare nulla per scontato, ma di esplicitare tutto.
+
+C'è poi la questione della *scala* su cui misurare l'effetto. Ci interessa l'impatto assoluto, espresso in termini di casi evitati o di sintomi ridotti in media? Oppure ci interessa l'impatto relativo, ovvero di quante volte il rischio cambia tra i trattati e i non trattati? La scelta della scala dipende dalla domanda e dagli scopi pratici dello studio, non da una regola universale.
+
+Infine, se non disponiamo di un esperimento controllato, dobbiamo chiederci: *Come possiamo avvicinarci al "what-if" con i dati osservazionali?* A questo punto entrano in gioco gli strumenti che incontreremo nel @sec-eda-causality: i DAG per chiarire le relazioni causali, il criterio di backdoor per decidere quali variabili controllare, e i metodi statistici per correggere il confondimento.
+
+::: {.callout-tip title="Take-home (riepilogo)"}
+In sintesi, l'effetto causale è un confronto controfattuale su tutta la popolazione, in cui si considerano due mondi: uno con il trattamento e uno senza. L'associazione è un confronto osservazionale tra gruppi reali che può essere distorto dai fattori confondenti. La randomizzazione rende i gruppi comparabili e, in media, elimina il confondimento. Con i dati osservazionali, invece, dobbiamo affidarci a ipotesi e metodi appropriati per avvicinarci il più possibile allo scenario controfattuale.
+:::
+
+## Micro-esercizi
+
+Per consolidare le idee fin qui introdotte, proponiamo due semplici esercizi. Non hanno la pretesa di esaurire la complessità dell'argomento, ma vogliono offrire l'opportunità di "toccare con mano" alcuni concetti che ritroveremo più avanti nel manuale.
+
+### Il paradosso di Simpson
+
+Un classico esempio di come un'associazione osservata possa essere fuorviante è il cosiddetto *paradosso di Simpson*. Immaginiamo di avere due sottogruppi di individui: uno con bassa ansia di tratto e l'altro con alta ansia di tratto. Supponiamo che l'effetto del trattamento sia lo stesso per entrambi i sottogruppi: il trattamento riduce l'esito di una certa quantità. Tuttavia, se la probabilità di ricevere il trattamento non è la stessa per i due sottogruppi, ad esempio se i più ansiosi tendono a sottoporsi più spesso al trattamento, il confronto "marginale", che ignora l'appartenenza ai gruppi, può restituire un effetto apparente diverso da quello reale, arrivando perfino a invertire il segno della stima.
+
+La simulazione seguente mostra come ciò avvenga.
+
+```{r}
+#| label: exercise-simpson
+#| fig-cap: "Paradosso di Simpson: stesso effetto nei sottogruppi, ma diversa prevalenza di trattamento."
+#| fig-width: 7
+#| fig-height: 5
+
+set.seed(123)
+N <- 4000
+group <- rbinom(N, 1, 0.5)     # 0 = basso trait, 1 = alto trait
+A <- ifelse(group==1, rbinom(N,1,0.7), rbinom(N,1,0.3))  # prevalenze diverse
+tau <- -0.3                     # stesso effetto in entrambi i gruppi
+mu  <- ifelse(group==1, 0.8, 0.2)
+Y0  <- mu + rnorm(N,0,1)
+Y1  <- Y0 + tau
+Y   <- ifelse(A==1, Y1, Y0)
+
+# Effetti condizionati per gruppo
+eff_g0 <- mean(Y[group==0 & A==1]) - mean(Y[group==0 & A==0])
+eff_g1 <- mean(Y[group==1 & A==1]) - mean(Y[group==1 & A==0])
+# Effetto marginale (ignorando il gruppo)
+eff_m  <- mean(Y[A==1]) - mean(Y[A==0])
+
+barplot(height = c(eff_g0, eff_g1, eff_m),
+        names.arg = c("Effetto (gruppo=0)", "Effetto (gruppo=1)", "Effetto marginale"),
+        ylab = "Differenza media", main = "Condizionato vs marginale")
+abline(h = 0, lty = 2)
+```
+
+I due grafici a barre relativi ai sottogruppi mostrano un effetto coerente e negativo, come previsto dall'ipotesi di partenza. Tuttavia, il barplot "marginale", che ignora la distinzione tra alto e basso tratto, racconta un'altra storia. Questa discrepanza illustra bene perché, nei dati osservazionali, sia essenziale ragionare sui *confondenti* e sugli *aggiustamenti necessari*: è ciò che faremo con i DAG nel capitolo successivo.
+
+### Misure su scale diverse
+
+Un secondo esercizio ci permette di confrontare direttamente le diverse scale su cui è possibile esprimere un effetto causale. Supponiamo che la probabilità di un certo esito (ad esempio, un attacco d'ansia) sia del 20% tra i soggetti trattati e del 10% tra i soggetti non trattati. Da qui possiamo calcolare tre misure diverse: la differenza di rischio (RD), il rapporto di rischio (RR) e l'odds ratio (OR).
+
+```{r}
+#| label: exercise-scales
+set.seed(7)
+n <- 10000
+p1 <- 0.20; p0 <- 0.10
+A <- rbinom(n, 1, 0.5)
+Y <- ifelse(A==1, rbinom(n,1,p1), rbinom(n,1,p0))
+
+p_hat1 <- mean(Y[A==1]==1)
+p_hat0 <- mean(Y[A==0]==1)
+
+RD <- p_hat1 - p_hat0
+RR <- p_hat1 / p_hat0
+OR <- (p_hat1/(1-p_hat1)) / (p_hat0/(1-p_hat0))
+```
+
+```{r}
+#| echo: false
+cat(sprintf("RD = %.3f; RR = %.2f; OR = %.2f\n", RD, RR, OR))
+```
+
+La differenza di rischio risponde alla domanda: "Quanti casi in più su 100 si osservano tra i trattati rispetto ai non trattati?". Il rapporto di rischio, invece, ci dice "di quante volte cresce il rischio relativo". Infine, l'odds ratio è una misura molto utilizzata nei modelli logistici, ma può risultare meno intuitiva se l'esito non è raro.
+
+Il messaggio è che non esiste una scala "corretta": tutto dipende dalla domanda che vogliamo porre e dal contesto in cui intendiamo comunicare i risultati.
+
+## Riflessioni conclusive
+
+Con queste simulazioni ed esercizi abbiamo compreso quanto sia facile confondere associazione e causalità, e quanto sia importante distinguere tra le due prospettive. Abbiamo anche introdotto le principali misure di effetto e osservato come la loro interpretazione cambi a seconda della scala.
+
+Nel @sec-eda-causality ci chiederemo come affrontare questi stessi problemi in assenza di randomizzazione. Impareremo a usare i DAG per ragionare in termini causali, a identificare i fattori confondenti da controllare tramite il criterio di backdoor e a utilizzare strumenti statistici quali il matching, la pesatura, la regressione e il propensity score. L'obiettivo sarà quello di avvicinare il più possibile i dati osservazionali, imperfetti e confusi che abbiamo all'esperimento ideale che non possiamo condurre.
+
+::: {.callout-tip collapse=true title="Informazioni sull'ambiente di sviluppo"}
+```{r}
+sessionInfo()
+```
+:::
+
+## Bibliografia {.unnumbered .unlisted}
