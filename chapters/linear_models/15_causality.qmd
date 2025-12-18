@@ -1,11 +1,13 @@
 # Causalità dai dati osservazionali {#sec-eda-causality}
 
 ::: {.callout-note appearance="minimal"}
-Nel capitolo precedente abbiamo introdotto il framework controfattuale e abbiamo mostrato come la randomizzazione permetta di interpretare l'associazione osservata in termini causali. Tuttavia, nella ricerca psicologica gli esperimenti controllati sono spesso impossibili: non è possibile assegnare casualmente i traumi, i livelli di stress o i disturbi della personalità.
+Nel @sec-causality-propedeutics abbiamo introdotto il framework controfattuale e dimostrato come la randomizzazione, ovvero l'assegnazione casuale del trattamento, permetta di interpretare le differenze osservate tra i gruppi come effetti causali diretti. Tuttavia, nella realtà della ricerca psicologica, questo ideale sperimentale è difficile da raggiungere: non è possibile assegnare casualmente traumi infantili, tratti di personalità o esperienze di vita stressanti.
 
-In questo capitolo affronteremo la domanda cruciale: *cosa possiamo concludere dai dati osservazionali?* La risposta dipende dalla nostra capacità di ragionare esplicitamente sulle strutture causali sottostanti. Introdurremo i *DAG* (Directed Acyclic Graphs) come strumento per formalizzare le nostre ipotesi causali e per decidere quali variabili controllare — e quali *non* controllare — in un'analisi di regressione.
+In questo capitolo, ci si chiede: "Come possiamo procedere verso un'inferenza causale quando abbiamo solo dati osservazionali?" La risposta non risiede in formule statistiche automatiche, ma in una capacità di ragionamento esplicito sulle strutture causali sottostanti. A tale scopo, introduciamo i DAG (*Directed Acyclic Graphs*) come strumento fondamentale. Un DAG traduce visivamente le nostre ipotesi teoriche in un insieme strutturato di relazioni causali tra variabili, mappando percorsi diretti, confondenti e mediatori.
 
-Vedremo che il modello di regressione, studiato nei capitoli precedenti come strumento descrittivo, può diventare uno strumento per l'inferenza causale, ma solo se guidato da un ragionamento causale esplicito. La scelta dei predittori da includere non è una questione puramente statistica, ma richiede un ragionamento teorico che dichiari le nostre assunzioni sul processo che ha generato i dati.
+Questo formalismo grafico non è un semplice diagramma, ma la chiave per prendere decisioni analitiche rigorose. Ci permette di determinare, attraverso il *criterio backdoor*, quali variabili includere in un modello per bloccare i percorsi di confondimento e isolare l'effetto di interesse e, altrettanto importante, quali variabili **escludere** per evitare di introdurre nuovi bias, come avviene nel controllo di una variabile *collider*.
+
+In questo contesto, il modello di regressione standard assume una nuova funzione. Non è più solo uno strumento per descrivere associazioni, ma può diventare un mezzo per l'inferenza causale. Tale trasformazione, tuttavia, è subordinata a una premessa: la regressione deve essere guidata da un ragionamento causale esplicito. La scelta dei predittori da includere (e di quelli da escludere) non può quindi essere risolta con criteri puramente statistici, come la massimizzazione della bontà di adattamento del modello, ma richiede un'attenta riflessione teorica che renda esplicite e giustifichi le nostre ipotesi sul processo che ha generato i dati osservati.
 :::
 
 ### Panoramica del capitolo {.unnumbered .unlisted}
@@ -37,103 +39,160 @@ conflicts_prefer(ggplot2::theme_void)
 
 ## Il ruolo dei modelli
 
-Immaginiamo di osservare che gli studenti che dormono poco tendono a manifestare più ansia. Possiamo concludere che sia il **dormire poco a causare l'ansia**? Oppure è vero il contrario: **l'ansia provoca insonnia**? Oppure entrambe potrebbero essere influenzate da un fattore comune, come i **periodi di esame**? Questo semplice esempio mette in evidenza un punto cruciale: i dati osservati da soli non permettono di stabilire una relazione causale. Per interpretarli correttamente, abbiamo bisogno di un **modello teorico** un modello teorico che ci guidi nell'interpretazione.
+Osservare che gli studenti che dormono poco mostrano livelli più elevati di ansia non è sufficiente per stabilire un rapporto di causa ed effetto. La relazione potrebbe essere inversa, bidirezionale o dipendere da una terza variabile, come la pressione legata agli esami. Se ci limitassimo ai dati osservati, dovremmo fermarci al livello delle associazioni, ovvero a una fotografia della realtà priva di indicazioni sul meccanismo che la genera.
 
-I modelli statistici ci aiutano a formalizzare le nostre ipotesi causali:
+La possibilità di formulare inferenze causali dipende invece da un elemento aggiuntivo: la presenza di un *modello teorico esplicito*. Sono i modelli, intesi come rappresentazioni di ipotesi sul funzionamento psicologico, a permetterci di interpretare i dati come il risultato di processi sottostanti e non solo come covariazioni superficiali.pretare i dati come risultati di processi sottostanti e non soltanto come covariazioni superficiali.
 
-- un **modello puramente descrittivo** si limita a documentare l’associazione tra le variabili;  
-- un **modello causale** esplicita invece le ipotesi sul *come* e sul *perché* una variabile influenza un’altra.
+In questo capitolo vedremo come i diversi tipi di modelli svolgono funzioni differenti:
 
-L’obiettivo di questo capitolo è introdurre alcuni strumenti concettuali di base per **distinguere tra correlazione e causalità** e mostrare come la modellazione statistica possa essere utilizzata in psicologia per rispondere a domande di natura causale.
+* i modelli **descrittivi** quantificano le relazioni osservate, senza specificare meccanismi causali;
+* i modelli **causali** integrano invece ipotesi sul modo in cui le variabili interagiscono, permettendo di distinguere spiegazioni alternative.
 
-## Correlazione non significa causalità
+In altre parole, non considereremo la causalità come una proprietà "che emerge" dai dati, ma come un'ipotesi strutturata che riguarda il processo generativo che sta dietro ai dati stessi.
 
-Uno degli errori più comuni in psicologia è confondere la correlazione con la causalità. Il fatto che due variabili covarino non implica che una sia la causa dell'altra.
+## Correlazione e causalità: perché i dati non bastano
 
-### Esempio classico
+Il fatto che due variabili varino insieme non implica necessariamente che una sia la causa dell’altra. Questa nozione è familiare anche ai non specialisti, ma nella pratica psicologica rimane fonte di fraintendimenti ricorrenti. Il motivo è che, quando osserviamo covariazioni robuste e replicabili, l’interpretazione causale risulta intuitiva: la mente umana tende a cercare spiegazioni direzionali.
 
-Supponiamo che durante l'estate aumentino sia il consumo di gelati che il numero di persone colpite da colpi di calore. Forse è il consumo di gelati a causare i colpi di calore? Oppure sono i colpi di calore a spingere le persone a mangiare più gelati? La risposta è che entrambe le variabili sono influenzate da un fattore esterno: la temperatura. Il caldo estivo aumenta sia la voglia di gelato sia il rischio di colpo di calore.  
+Tuttavia, una stessa correlazione può essere compatibile con più scenari causali. Nel caso dello stress accademico e dei disturbi del sonno, per esempio, si possono avanzare almeno tre spiegazioni plausibili:
 
-### Un esempio psicologico
+1. lo stress compromette la qualità del sonno;
+2. la deprivazione di sonno aumenta lo stress;
+3. un fattore comune (come gli esami) influenza entrambe le variabili.
 
-Durante i periodi d'esame universitari aumentano sia lo *stress* sia i *disturbi del sonno*. Dobbiamo concludere che lo stress causa direttamente l'insonnia? Oppure che l'insonnia genera stress? La spiegazione più plausibile è che entrambe le variabili dipendano da un *fattore esterno comune*: la pressione del contesto degli esami.  
+Tutte e tre producono un'associazione statistica, ma ciascuna postula un processo causale diverso.
 
-Questa situazione, in cui due variabili sono legate da una causa comune, si chiama *confondimento*.
+Questa ambiguità non è un dettaglio metodologico: se si inverte la direzione causale, cambiano sia le interpretazioni teoriche sia le implicazioni pratiche (interventi clinici, programmi di prevenzione, politiche educative, ecc.).
 
-### Perché è importante in psicologia
+La presenza di fattori comuni non osservati, il cosiddetto "confondimento", è uno dei motivi per cui la correlazione da sola non può supportare conclusioni causali. Anche associazioni molto stabili nel tempo o riscontrate su campioni indipendenti possono essere spiegate da variabili latenti non misurate.
 
-Negli studi psicologici, spesso si osservano correlazioni interessanti, come quella tra l'uso dei social media e il benessere psicologico. Tuttavia, senza un *modello causale*, non possiamo affermare con certezza se:   
+Il messaggio chiave è che il dato associativo è necessario, ma non sufficiente: suggerisce ipotesi causali possibili senza identificarne una come vera.
 
-- sono i social media a ridurre il benessere,  
-- se chi ha meno benessere tende a usare di più i social,  
-- oppure se entrambe le cose dipendono da un terzo fattore, come la solitudine.
+## Perché i modelli diventano indispensabili
 
-### La lezione da ricordare
+Per affrontare questa ambiguità concettuale, abbiamo bisogno di strumenti che rendano esplicite le ipotesi sul modo in cui le variabili interagiscono. In psicologia sperimentale, clinica e sociale, questa formalizzazione è particolarmente importante: la maggior parte delle variabili rilevanti sono di natura psicologica, non direttamente osservabili e spesso influenzate da strutture latenti, difficili da manipolare.
 
-La correlazione è un punto di partenza utile, ma non è sufficiente per stabilire una relazione di causa ed effetto. Per andare oltre, dobbiamo introdurre strumenti che ci aiutino a rappresentare e testare le ipotesi causali, come vedremo nelle sezioni successive.
+I modelli causali consentono di:
 
-## Rappresentare le relazioni causali
+* rappresentare ipotesi direzionali;
+* valutare quali relazioni sono compatibili con i dati e quali no;
+* individuare condizioni che permettono di discriminare tra spiegazioni alternative;
+* progettare studi che massimizzano l’identificabilità causale.
 
-Per ragionare in modo chiaro sulle relazioni di causa ed effetto, è utile avere un linguaggio formale. Uno degli strumenti più potenti a questo scopo è rappresentato dai *grafi causali*, che permettono di visualizzare le relazioni tra le variabili.
+Senza questa struttura, si rischia di confondere spiegazioni plausibili con spiegazioni dimostrate.
 
-### Che cos'è un grafo causale
+## Rappresentare le ipotesi causali: Una guida visiva al ragionamento scientifico
 
-Un grafo causale è un diagramma costituito da:  
+Per sviluppare e testare ipotesi causali in modo rigoroso è necessario un linguaggio formale. I **grafi causali** (o diagrammi causali) sono lo strumento moderno più diffuso per questo scopo. Si tratta di strutture composte da nodi (variabili) e archi direzionati (relazioni causali dirette ipotizzate).
 
-- *nodi*, che rappresentano le variabili di interesse (ad esempio: stress, ansia, sonno);  
-- *frecce*, che indicano le ipotesi di influenza causale (ad esempio: lo stress → ansia).
+### La natura operativa dei grafi causali
 
-Questi grafi non sono semplici figure illustrative, ma veri e propri modelli che esplicitano le nostre ipotesi su come le variabili si influenzano a vicenda.
+Queste rappresentazioni non sono semplici illustrazioni, ma **modelli operativi** con due funzioni fondamentali:
 
-### Un esempio psicologico
+1.  **chiarezza espositiva:** rendono immediatamente visibile la struttura causale assunta, esplicitando quali relazioni dirette sono ipotizzate e, altrettanto cruciale, quali sono assenti;
+2.  **potere deduttivo:** forniscono un calcolo per derivare le conseguenze verificabili del modello. Attraverso regole formali (come le *regole di d-separazione*), permettono di dedurre quali relazioni di indipendenza condizionale ci si aspetterebbe di osservare nei dati se il modello fosse corretto.
 
-Immaginiamo di voler studiare il legame tra stress e rendimento universitario. Possiamo rappresentare il legame con un grafo causale come questo:
+In sintesi, i grafi sono strumenti per il **ragionamento**. Offrono criteri precisi per stabilire quando un'associazione osservata tra due variabili può essere interpretata come potenzialmente causale e quando, invece, è compatibile con la presenza di fattori confondenti o altri fenomeni.
 
-- Stress → Qualità del sonno → Rendimento agli esami.
+### Anatomia di un grafo causale
 
-In questo caso, ipotizziamo che lo stress riduca la qualità del sonno e che, a sua volta, un sonno di scarsa qualità abbassi il rendimento. In altre parole, il sonno agisce da *variabile mediatrice*.
+Un grafo causale è un diagramma costituito da:
 
-### Perché è utile
+- **nodi (vertici):** rappresentano le variabili misurabili o latenti di interesse (es.: livello di stress, sintomi d'ansia, qualità del sonno).
+- **archi diretti (frecce →):** indicano un'influenza causale diretta ipotizzata dalla variabile di origine verso quella di destinazione.
 
-Rappresentare i dati in questo modo ci permette di: 
+L'assenza di un arco diretto tra due nodi implica che non esiste un effetto causale diretto tra le due variabili.
 
-1. distinguere tra relazioni dirette e indirette;
-2. chiarire il ruolo di possibili variabili di confondimento;
-3. progettare meglio i nostri studi (per esempio, decidere quali variabili misurare per testare una certa ipotesi).
+### Un esempio nel contesto psicologico
 
-### Un avvertimento
+Consideriamo uno studio sul legame tra **Stress percepito** e **Rendimento accademico**. Un'ipotesi plausibile può essere rappresentata dal seguente grafo:
 
-Un grafo causale non ci dice automaticamente quale ipotesi sia vera, ma rappresenta solo ciò che *riteniamo plausibile*. Saranno poi i dati e le analisi statistiche a confermare o mettere in discussione queste ipotesi.
+`Stress Percepito` → `Qualità del Sonno` → `Rendimento Accademico`
 
-## Confondimento, mediazione e altre relazioni causali
+In questo modello:
 
-Nei modelli causali, non tutte le variabili hanno lo stesso ruolo. È importante distinguere i diversi tipi di relazione, perché ognuno porta a interpretazioni diverse.
+- Lo Stress influenza direttamente (e negativamente) la Qualità del Sonno.
+- La Qualità del Sonno influenza direttamente il Rendimento Accademico.
+- Lo Stress influisce sul Rendimento **solo indirettamente**, attraverso la mediazione del Sonno.
+- **Assunzione cruciale:** non esiste un effetto causale diretto dello Stress sul Rendimento (nessuna freccia diretta). Questa ipotesi può essere messa verificata empiricamente.
 
-### Variabili di confondimento
+### Valore pratico nell'indagine scientifica
 
-Una *variabile di confondimento* è una variabile che influenza sia la presunta causa sia l'effetto. Se non la consideriamo, rischiamo di attribuire una relazione causale laddove in realtà non c'è.
+Esplicitare visivamente le ipotesi consente di:
 
-**Esempio.**
-Osserviamo che gli studenti che usano più spesso i social media riportano più sintomi depressivi.  Potremmo pensare che siano i social media a causare la depressione. Tuttavia, un possibile *confondente* è la *solitudine*: gli studenti più soli potrebbero usare di più i social media e, allo stesso tempo, sentirsi più depressi. Se non teniamo conto della solitudine, rischiamo di trarre conclusioni errate.
+1.  **identificare le vie causali:** distinguere chiaramente effetti diretti, indiretti e totali tra le variabili;
+2.  **Identificare confonditori:** visualizzare variabili comuni che, se non misurate o controllate, creano associazioni spurie (es.: un fattore ambientale che causa sia stress che peggiora il sonno).
+3.  **Guidare la progettazione dello studio:** definire quali variabili misurare, controllare o randomizzare per testare una relazione specifica. Ad esempio, per testare l'effetto diretto del sonno sul rendimento, bisognerebbe controllare statisticamente lo stress.
+4.  **Prevenire errori analitici:** il grafo chiarisce se e quando è lecito "controllare per" una certa variabile. Controllare inappropriatamente una variabile mediatrice o una *collider* può introdurre bias invece che rimuoverlo.
 
-### Variabili mediatrici
+### Un chiaro avvertimento epistemologico
 
-Una *variabile mediatrice*, invece, è un "anello di passaggio" nella catena causale. Non distorce la relazione, ma la spiega.
+Un grafo causale è un'**ipotesi strutturata**, non una verità rivelata. Non determina automaticamente la causalità, ma formalizza ciò che *riteniamo plausibile* in base alla teoria e alla conoscenza pregressa. Il suo valore risiede nella sua capacità di generare **predizioni verificabili** (sulle indipendenze condizionali) che i dati possono confermare o falsificare. In questo senso, il grafo rappresenta il punto di partenza per un dialogo rigoroso tra teoria ed evidenza empirica.
 
-**Esempio.**
+## Confondimento, mediazione e moderazione: i ruoli delle variabili nei modelli causali
 
-Stress → Qualità del sonno → Ansia. 
+Nei modelli causali, non tutte le variabili svolgono la stessa funzione. È fondamentale distinguere i diversi ruoli causali, in quanto ciascuno richiede approcci analitici differenti e porta a interpretazioni sostanzialmente diverse dei risultati osservati.
 
-In questo caso, il sonno funge da mediatore tra lo stress e l'ansia: lo stress peggiora la qualità del sonno e la cattiva qualità del sonno aumenta l'ansia.
+### Variabili di confondimento: la fonte delle associazioni spurie
 
-### Variabili moderatrici
+Una **variabile di confondimento** è un fattore che influenza in modo causale sia la presunta causa che l'effetto. Se non viene misurata e controllata adeguatamente, crea un'associazione statistica tra le due variabili, anche in assenza di una relazione causale diretta tra di esse.
 
-Un'altra distinzione utile è quella delle *variabili moderatrici*, ovvero fattori che non spiegano la relazione, ma ne modificano la forza o la direzione.
+**Esempio:** si osserva una correlazione tra l'uso intensivo dei social media e i sintomi depressivi in un campione di studenti. Un'interpretazione ingenua suggerirebbe che i social media causano la depressione.
 
-**Esempio.**
-L'effetto dello stress sull'ansia potrebbe essere più forte negli studenti del primo anno rispetto a quelli degli anni successivi. In questo caso, l'"anno di corso" agisce da moderatore.
+Tuttavia, un potenziale **confonditore** è la **solitudine percepita**:
 
-Capire se una variabile è un confondente, un mediatore o un moderatore è fondamentale per interpretare correttamente i dati psicologici e per costruire modelli causali realistici.
+- gli studenti che si sentono più soli tendono a usare i social media più frequentemente (come tentativo di connessione);
+- la solitudine è essa stessa un fattore di rischio per sintomi depressivi.
+
+In questo grafo: `Solitudine → Uso Social Media` e `Solitudine → Sintomi Depressivi`.
+Non c'è una freccia diretta dai social media alla depressione. Se non si controlla la variabile "solitudine", si osserva un'associazione spuria tra "social media" e "depressione" che può portare a conclusioni errate dal punto di vista causale.
+
+### Variabili mediatrici: il meccanismo della causalità
+
+Una **variabile mediatrice** trasmette l'effetto di una variabile indipendente su una variabile dipendente. Non è una fonte di distorsione, ma il **meccanismo** attraverso il quale opera la relazione causale.
+
+**Esempio**
+Stress → Qualità del sonno → Sintomi d'ansia.
+
+- Lo stress cronico compromette la regolarità e la profondità del sonno.
+- La privazione o la scarsa qualità del sonno alterano la regolazione emotiva e aumentano i sintomi ansiosi.
+
+In questo caso, la qualità del sonno è il mediatore che spiega come lo stress porti all'ansia. L'effetto causale dello stress sui sintomi d'ansia può essere scomposto in:
+- **effetto indiretto** (tramite il Sonno);
+- **effetto diretto** (se esiste una freccia residua Stress → Ansia);
+- **effetto totale** (somma di diretto e indiretto).
+
+### Variabili moderatrici: il "dipende da..."
+
+Una **variabile moderatrice** modifica la forza, la direzione o l'esistenza stessa della relazione causale tra due altre variabili. Risponde alla domanda: "Per chi o in quali condizioni l'effetto è più forte o più debole?"
+
+**Esempio:** supponiamo che lo stress accademico influenzi i sintomi d'ansia. Questa relazione potrebbe essere moderata dal supporto sociale percepito.
+
+Nel grafo, la variabile moderatrice si rappresenta con una freccia che punta alla relazione stessa:
+`Stress → Ansia` con una freccia da `Supporto Sociale` che punta alla freccia tra Stress e Ansia.
+
+Interpretazione:
+
+- per gli studenti con un **basso** supporto sociale, l'effetto dello Stress sull'Ansia è **forte**;
+- per gli studenti con un **alto** supporto sociale, l'effetto dello Stress sull'Ansia è **attenuato** o persino assente.
+
+### Una distinzione cruciale per la ricerca
+
+Comprendere se una variabile è un confonditore, un mediatore o un moderatore è essenziale per:
+
+1.  **progettare lo studio:** un confonditore va misurato e controllato per ottenere stime non distorte dal punto di vista causale. Un mediatore va misurato per testare il meccanismo. Un moderatore viene incluso per esplorare le differenze tra i sottogruppi.
+
+2.  **scegliere l'analisi statistica:** il controllo per un confonditore (per esempio, mediante la regressione multipla) è diverso dalla verifica di mediazione (per esempio, mediante un analisi di percorso) o moderazione (per esempio, mediante un'analisi di regressione che include termini di interazione).
+
+3.  **interpretare i risultati in modo corretto:** scambiare un confonditore per un mediatore porta a conclusioni completamente errate sulla direzione e sulla natura della causalità.
+
+**Sintesi visiva:**
+
+- **confonditore:** `Z → X` e `Z → Y` (crea un falso legame tra `X` e `Y`);
+- **mediatore:** `X → M → Y` (spiega il legame tra `X` e `Y`);
+- **moderatore:** `W` modifica la forza di `X → Y`.
+
+Questa chiarezza concettuale è fondamentale per costruire modelli causali realistici e testabili nelle scienze psicologiche.
 
 ### Le quattro configurazioni fondamentali nei DAG
 
@@ -184,15 +243,14 @@ Finora abbiamo visto che i grafi causali servono a rappresentare le nostre ipote
 
 ### Indipendenze e dipendenze
 
-Un'idea chiave è che un grafo causale non descrive solo "chi influenza chi", ma implica anche certe *relazioni di indipendenza* tra le variabili.  
-Queste relazioni sono importanti perché ci permettono di confrontare il grafo con i dati: se le indipendenze predette non si verificano, il grafo non può essere corretto.
+Un'idea chiave è che un grafo causale non descrive solo "chi influenza chi", ma implica anche certe *relazioni di indipendenza* tra le variabili. Queste relazioni sono importanti perché ci permettono di confrontare il grafo con i dati: se le indipendenze predette non si verificano, il grafo non può essere corretto.
 
 #### Esempio 1: Catena (mediazione)
 
 Supponiamo di ipotizzare la seguente relazione causale:  
 **Stress → Sonno → Ansia**.  
 
-In questa struttura, **Sonno** è un **mediatore**, poiché trasmette parzialmente o totalmente l'effetto dello Stress sull'Ansia. Se non osserviamo il livello di Sonno, Stress e Ansia appariranno associati a causa del percorso causale attivo. Tuttavia, una volta che **condizioniamo sul Sonno**, l’associazione tra Stress e Ansia si interrompe, poiché blocchiamo il meccanismo di trasmissione. Da un punto di vista inferenziale, conoscendo il livello di Sonno, lo Stress non fornisce ulteriori informazioni sull'Ansia.
+In questa struttura, **Sonno** è un **mediatore**, in quanto trasmette parzialmente o totalmente l'effetto dello Stress sull'Ansia. Se non misuriamo il livello di Sonno, Stress e Ansia appariranno associati a causa del percorso causale attivo. Tuttavia, una volta che **condizioniamo sul Sonno**, l’associazione tra Stress e Ansia si interrompe, poiché blocchiamo il meccanismo di trasmissione. Da un punto di vista inferenziale, conoscendo il livello di Sonno, lo Stress non fornisce ulteriori informazioni sull'Ansia.
 
 Questa relazione è espressa formalmente dalla condizione di **indipendenza condizionale**:
 
@@ -356,19 +414,19 @@ Dato un modello causale (DAG) e dati osservati, è possibile verificare empirica
 
 Il ponte tra **modelli teorici** e **verifica empirica** costituisce il nucleo dell'inferenza causale moderna:
 
-- I **DAG** formalizzano le nostre ipotesi causali a priori, derivanti dalla teoria e dalla conoscenza del dominio.
-- Le **indipendenze condizionali** osservate (o non osservate) nei dati forniscono un test per la validità di tali ipotesi.
+- i **DAG** formalizzano le nostre ipotesi causali a priori, derivanti dalla teoria e dalla conoscenza del dominio;
+- le **indipendenze condizionali** osservate (o non osservate) nei dati forniscono un test per la validità di tali ipotesi.
 
 Questo crea un ciclo virtuoso di affinamento della conoscenza: se i dati contraddicono l'indipendenza prevista dal grafo, il modello causale deve essere rivisto o integrato. In questo modo, l'analisi statistica diventa uno strumento non solo per una stima quantitativa, ma anche per **testare e perfezionare la teoria causale** sottostante.
 
 ### Punti chiave da ricordare
 
-Quando si afferma che l'inferenza causale richiede **metodi statistici appropriati**, ci si riferisce proprio a questo insieme di strumenti — correlazioni parziali, regressioni multiple, modelli strutturali — che permettono di verificare se i dati osservati sono coerenti con le previsioni di indipendenza condizionale derivanti da un DAG. In altre parole, questi metodi traducono in pratica il principio fondamentale secondo cui **ogni ipotesi causale implica specifiche restrizioni statistiche sui dati**.
+Quando si afferma che l'inferenza causale richiede **metodi statistici appropriati**, ci si riferisce proprio a questo insieme di strumenti, ovvero correlazioni parziali, regressioni multiple e modelli strutturali, che permettono di verificare se i dati osservati sono coerenti con le previsioni di indipendenza condizionale derivanti da un DAG. In altre parole, questi metodi traducono in pratica il principio fondamentale secondo cui **ogni ipotesi causale implica specifiche restrizioni statistiche sui dati**.
 
 Il linguaggio dei DAG, quindi, non è un esercizio puramente teorico, ma costituisce un **ponte operativo** tra la teoria psicologica e l'evidenza empirica. Per il ricercatore in psicologia, ciò significa integrare nella propria cassetta degli attrezzi metodologici tecniche quali:
 
 - la **regressione multipla** per il controllo dei confondenti e la verifica di mediazione;
-- le **correlazioni parziali e semiparziali** per testare indipendenze condizionate;
+- le **correlazioni parziali e semiparziali** per testare le indipendenze condizionate;
 - i **modelli di equazioni strutturali (SEM)** per rappresentare e stimare direttamente reti causali complesse.
 
 Tutti questi approcci condividono l'obiettivo di **mettere alla prova le implicazioni testabili dei nostri modelli causali**, trasformando le ipotesi teoriche in affermazioni empiricamente falsificabili. In questo modo, l'analisi statistica non è solo uno strumento descrittivo, ma diventa un mezzo attivo per costruire e validare la conoscenza causale in psicologia.
@@ -441,7 +499,7 @@ Queste condizioni costituiscono problemi di **specificazione del modello** la cu
 
 ### Matching
 
-Un'alternativa è la tecnica del **matching**, che mira a costruire un gruppo di controllo comparabile al gruppo di trattamento rendendoli simili per tutte le caratteristiche osservate. In pratica, per ogni individuo esposto alla condizione di interesse (per esempio, l'uso intensivo dei social media), se ne identifica uno o più non esposti con caratteristiche simili (per esempio, età, genere, rendimento scolastico, livello di solitudine). Confrontando gli esiti di questi gruppi appaiati, si riduce il bias da confondimento osservato, imitando la comparabilità garantita dalla randomizzazione.
+Un'alternativa è la tecnica del **matching**, che mira a costruire un gruppo di controllo comparabile al gruppo di trattamento rendendoli simili per tutte le caratteristiche osservate. In pratica, per ogni individuo esposto alla condizione di interesse (per esempio, l'uso intensivo dei social media), se ne identifica uno o più non esposti con caratteristiche simili (per esempio, età, genere, rendimento scolastico e livello di solitudine). Confrontando gli esiti di questi gruppi appaiati, si riduce il bias da confondimento osservato, imitando la comparabilità garantita dalla randomizzazione.
 
 ### Variabili strumentali
 
@@ -510,9 +568,9 @@ Lo studio della causalità non è un esercizio puramente teorico. Ogni volta che
 
 In questo capitolo è emerso che l’analisi causale in psicologia è intrinsecamente complessa, ma non irraggiungibile. Abbiamo chiarito la differenza tra correlazione e causalità, mostrato come i grafi causali consentano di esplicitare e comunicare le ipotesi teoriche e approfondito il ruolo di concetti chiave quali confondimento, mediazione e moderazione nel determinare il significato delle relazioni empiriche osservate.
 
-Sono stati inoltre discussi i principali approcci empirici per valutare le ipotesi causali, evidenziando che gli esperimenti controllati rappresentano lo standard di riferimento, che i quasi-esperimenti offrono soluzioni pragmatiche quando la randomizzazione non è possibile e che gli studi osservativi richiedono un uso particolarmente attento di modelli e tecniche statistiche per evitare interpretazioni fuorvianti.
+Sono stati inoltre discussi i principali approcci empirici per valutare le ipotesi causali, evidenziando che gli esperimenti controllati rappresentano lo standard di riferimento, che i quasi-esperimenti offrono soluzioni pragmatiche quando la randomizzazione non è possibile e che gli studi osservazionali richiedono un uso particolarmente attento di modelli e tecniche statistiche per evitare interpretazioni fuorvianti.
 
-Il messaggio conclusivo è che i dati, da soli, non "parlano". Essi acquistano significato solo all’interno di un modello teorico esplicito che guidi l’analisi e l’interpretazione. Anche le procedure statistiche più sofisticate non possono produrre inferenze causali valide se non sono guidate da ipotesi chiare sui meccanismi sottostanti che si intendono studiare.
+Il messaggio conclusivo è che i dati, da soli, non "parlano". Essi acquistano significato solo all'interno di un modello teorico esplicito che guidi l'analisi e l'interpretazione. Anche le procedure statistiche più sofisticate non possono produrre inferenze causali valide se non sono guidate da ipotesi chiare sui meccanismi sottostanti che si intendono studiare.
 
 ::: {.callout-note}
 ## Il messaggio per chi usa la regressione
