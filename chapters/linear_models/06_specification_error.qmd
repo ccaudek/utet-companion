@@ -2,13 +2,13 @@
 
 ::: {.callout-note appearance="minimal"}
 
-Finora abbiamo presentato la regressione lineare come uno strumento potente e flessibile per descrivere relazioni tra variabili. Abbiamo visto come stimarne i parametri, come interpretarli e come implementarli sia in R che in Stan. Ma in tutte queste applicazioni abbiamo dato per scontato un punto cruciale: che il modello fosse *specificato correttamente*.
+Finora abbiamo presentato la regressione lineare come uno strumento per descrivere le relazioni tra le variabili. Abbiamo visto come stimare i suoi parametri, come interpretarli e come implementarli sia in R che in Stan. In tutte queste applicazioni, però, abbiamo dato per scontato un punto cruciale: che il modello fosse *specificato correttamente*.
 
-Nella pratica, questa condizione è raramente soddisfatta. Può accadere che una variabile rilevante non sia stata inclusa nel modello, oppure che la forma funzionale ipotizzata non descriva adeguatamente la relazione reale. In questi casi parliamo di *errore di specificazione del modello*.
+Nella pratica, però, questa condizione è raramente soddisfatta. Può accadere che una variabile rilevante non sia stata inclusa nel modello o che la forma funzionale ipotizzata non descriva adeguatamente la relazione reale. In questi casi parliamo di **errore di specificazione** del modello.
 
-Una delle conseguenze più importanti è il cosiddetto *bias da variabile omessa*: quando trascuriamo un predittore correlato sia con la variabile dipendente sia con altri predittori inclusi, le stime dei coefficienti risultano distorte. Questo non è un dettaglio tecnico, ma un problema sostanziale: potremmo attribuire a un predittore un effetto che in realtà appartiene a un altro, fraintendendo così i meccanismi che hanno generato i dati.
+Una delle conseguenze più importanti è il cosiddetto **bias da variabile omessa**: *quando si omette un predittore correlato sia con la variabile dipendente sia con altri predittori inclusi nel modello, le stime dei coefficienti risultano distorte*. Questo non è un semplice problema tecnico, ma una questione sostanziale: in tali condizioni, infatti, si finisce per attribuire a un predittore un effetto che in realtà appartiene a un altro, producendo un'interpretazione errata dei meccanismi che hanno generato i dati.
 
-In questo capitolo analizzeremo cosa significa errore di specificazione, mostreremo matematicamente come nasce il bias da variabile omessa e discuteremo le sue implicazioni nella ricerca psicologica. Comprendere questi limiti è fondamentale non solo per interpretare in modo corretto i risultati della regressione, ma anche per formulare modelli più adeguati e consapevoli.
+In questo capitolo analizzeremo il significato dell'errore di specificazione, mostreremo matematicamente come nasce il bias da variabile omessa e discuteremo le sue implicazioni nella ricerca psicologica. Comprendere questi limiti è fondamentale non solo per interpretare correttamente i risultati della regressione, ma anche per formulare modelli più adeguati e consapevoli.
 :::
 
 ## Panoramica del capitolo {.unnumbered .unlisted}
@@ -41,6 +41,8 @@ pacman::p_load(brms, posterior, cmdstanr, tidybayes, loo, patchwork)
 
 ## Errore di specificazione e bias da variabile omessa {#sec-ovb}
 
+Esaminiamo nel dettaglio quali sono le condizioni per l'errore di specificazione e quali sono le conseguenze del bias da variabile omessa.
+
 ### Idea chiave
 
 Se il *vero* modello è
@@ -58,12 +60,15 @@ allora il coefficiente su $X_1$ risulta distorto quando:
 1. $X_2$ ha *effetto diretto* su $Y$ ($\beta_2\neq 0$);
 2. $X_2$ è *correlata* con $X_1$ ($\mathrm{Corr}(X_1,X_2)\neq 0$).
 
+L'errore di specificazione emerge, in altre parole, solo quando si verificano congiuntamente due condizioni: deve essere omessa dal modello una variabile che influenza direttamente la variabile dipendente *e* questa stessa variabile deve essere correlata con almeno uno dei predittori inclusi. Ne consegue che non si commette tale errore né quando si omette una variabile irrilevante per $Y$, né quando si omette una variabile che, pur influenzando $Y$, risulta incorrelata con tutti i predittori presenti nel modello.
 
-### Dimostrazione (via standardizzazione)
+### Dimostrazione 
 
-#### Passo 1 — Standardizza le variabili
+Per semplificare la trattazione, senza perdere in generalità, lavoriamo con variabili standardizzate.
 
-Definiamo medie $\mu_1,\mu_2,\mu_Y$ e deviazioni standard $\sigma_1,\sigma_2,\sigma_Y$. Poniamo
+#### Passo 1 — Standardizzazione delle variabili
+
+Siano $\mu_1,\mu_2,\mu_Y$ le medie e $\sigma_1,\sigma_2,\sigma_Y$ le deviazioni standard delle variabili originali. Definiamo le variabili standardizzate:
 
 $$
 Z_1=\frac{X_1-\mu_1}{\sigma_1},\qquad 
@@ -71,7 +76,7 @@ Z_2=\frac{X_2-\mu_2}{\sigma_2},\qquad
 Z_Y=\frac{Y-\mu_Y}{\sigma_Y}.
 $$
 
-Per costruzione: 
+Per costruzione, si ha:
 
 - $\mathrm{Var}(Z_1)=\mathrm{Var}(Z_2)=1$, 
 - $\mathrm{Cov}(Z_1,Z_2)=\rho_{12}=\mathrm{Corr}(X_1,X_2)$.
@@ -81,29 +86,28 @@ Il *modello vero standardizzato* è
 $$
 Z_Y=\gamma_1 Z_1+\gamma_2 Z_2+\varepsilon_z,\qquad \mathbb{E}[\varepsilon_z\mid Z_1,Z_2]=0,
 $$
-con *beta standardizzati*
+dove i coefficienti standardizzati sono:
 
 $$
 \gamma_1=\beta_1\,\frac{\sigma_1}{\sigma_Y},\qquad
 \gamma_2=\beta_2\,\frac{\sigma_2}{\sigma_Y}.
 $$
 
-#### Passo 2 — Stima (erronea) che omette $Z_2$
+#### Passo 2 — Stima con variabile omessa
 
-Stimiamo la regressione univariata
+Stimiamo ora la regressione erronea che omette $Z_2$:
 
 $$
 Z_Y=\delta_1 Z_1 + \text{errore}.
 $$
-
-Per OLS,
+dove $u$ è il termine d'errore del modello incompleto. Lo stimatore OLS di $\delta_1$ è:
 
 $$
 \hat\delta_1=\frac{\mathrm{Cov}(Z_1,Z_Y)}{\mathrm{Var}(Z_1)}=\mathrm{Cov}(Z_1,Z_Y),
 $$
-dato che $\mathrm{Var}(Z_1)=1$.
+poiché $\mathrm{Var}(Z_1)=1$.
 
-Usiamo il modello vero standardizzato:
+Sostituiamo $Z_Y$ con l'espressione del modello vero:
 
 $$
 \begin{align}
@@ -115,18 +119,18 @@ $$
 \end{align} 
 $$
 
-Quindi
+Dunque:
 
 $$
 \boxed{\;\hat\delta_1=\gamma_1+\gamma_2\,\rho_{12}\;}.
 $$
 
-**Lettura immediata:** il coefficiente stimato univariato mescola l’effetto diretto standardizzato di $X_1$ ($\gamma_1$) con un termine spurio $\gamma_2\rho_{12}$ dovuto all’omissione di $X_2$.
+**Interpretazione:** lo stimatore univariato $\hat\delta_1$ non cattura solo l'effetto diretto standardizzato di $Z_1$ ($\gamma_1$), ma somma ad esso un termine spurio $\gamma_2\rho_{12}$, che riflette l'influenza della variabile omessa $Z_2$ attraverso la sua correlazione con $Z_1$.
 
 
-### Ritraduzione ai coefficienti non standardizzati
+### Passo 3 — Ritorno ai coefficienti originali
 
-Tra i coefficienti vale
+Per collegare il risultato ai coefficienti non standardizzati, ricordiamo le relazioni:
 
 $$
 \hat\delta_1=\frac{\sigma_1}{\sigma_Y}\,\hat\alpha_1,\qquad
@@ -134,61 +138,83 @@ $$
 \gamma_2=\beta_2\,\frac{\sigma_2}{\sigma_Y}.
 $$
 
-Dalla formula standardizzata
-
-$$
-\hat\delta_1=\gamma_1+\gamma_2\rho_{12}
-$$
-segue
+Sostituendo nella formula standardizzata $\hat\delta_1=\gamma_1+\gamma_2\rho_{12}$ otteniamo:
 
 $$
 \frac{\sigma_1}{\sigma_Y}\,\hat\alpha_1
 =\beta_1\frac{\sigma_1}{\sigma_Y}
 +\beta_2\frac{\sigma_2}{\sigma_Y}\rho_{12}.
 $$
-
-Moltiplicando per $\sigma_Y/\sigma_1$ e ricordando che
-$\rho_{12}=\dfrac{\mathrm{Cov}(X_1,X_2)}{\sigma_1\sigma_2}$,
-ottieniamo la forma non standardizzata:
+Moltiplicando entrambi i membri per $\sigma_Y/\sigma_1$ e ricordando che $\rho_{12}= \mathrm{Cov}(X_1,X_2)/(\sigma_1\sigma_2)$, si arriva alla forma non standardizzata:
 
 $$
 \boxed{\;\hat\alpha_1=\beta_1+\beta_2\,\frac{\mathrm{Cov}(X_1,X_2)}{\mathrm{Var}(X_1)}\;}.
 $$
 
-**Bias (in media):**
+**Espressione del bias:** in media, lo stimatore $\hat\alpha_1$ differisce dal parametro vero $\beta_1$ per una quantità pari a:
 
 $$
 \boxed{\;\mathbb{E}[\hat\alpha_1]-\beta_1
 =\beta_2\,\frac{\mathrm{Cov}(X_1,X_2)}{\mathrm{Var}(X_1)}\;}
-\quad\Longleftrightarrow\quad
+$$
+
+equivalente, nella versione standardizzata, a:
+
+$$
 \boxed{\;\mathbb{E}[\hat\delta_1]-\gamma_1=\gamma_2\rho_{12}\;}.
 $$
 
-
+Questa è l'espressione analitica del **bias da variabile omessa**.
 
 ### Interpretazione didattica
 
-* **Condizioni per il bias:** serve *sia* $\beta_2\neq 0$ (l’omessa $X_2$ conta davvero su $Y$) *sia* $\rho_{12}\neq 0$ (l’omessa $X_2$ è correlata con $X_1$). Se una condizione manca, il bias svanisce.
-* **Segno del bias (scala standardizzata):** $\mathrm{Bias}(\hat\delta_1)=\gamma_2\rho_{12}$.
-  - $\gamma_2>0$ e $\rho_{12}>0$ ⇒ *sovrastima*; 
-  - $\gamma_2>0$ e $\rho_{12}<0$ ⇒ *sottostima*.
+Il bias da variabile omessa si verifica solo quando sono presenti entrambe le seguenti condizioni:
 
+1. $\beta_2 \neq 0$ – la variabile omessa $X_2$ influisce realmente su $Y$,
+2. $\rho_{12} \neq 0$ – la variabile omessa $X_2$ è correlata con $X_1$.
 
-### Perché conta in psicologia
+Se una delle due condizioni non sussiste, il bias si annulla.
 
-La regressione multipla è un modello *fenomenologico*: fotografa *associazioni* tra variabili, non i *meccanismi* che le generano. In contesti psicologici, l’*omissione di variabili rilevanti* è spesso inevitabile: non conosciamo o non misuriamo tutti i determinanti di $Y$. Ne segue che i coefficienti parziali possono essere *sistematicamente distorti* e, dunque, fuorvianti.
+**Direzione del bias (scala standardizzata):**
+Poiché $\mathrm{Bias}(\hat\delta_1)=\gamma_2\rho_{12}$, la distorsione può essere positiva o negativa:
 
+- $\gamma_2>0$ e $\rho_{12}>0$ ⇒ **sovrastima** dell'effetto di $X_1$;
+- $\gamma_2>0$ e $\rho_{12}<0$ ⇒ **sottostima** dell'effetto di $X_1$.
 
-### Oltre la regressione: modelli formali dei processi
+### La rilevanza per la psicologia
 
-Per queste ragioni, i modelli di regressione multipla dovrebbero avere un ruolo limitato in psicologia. Molto più promettente è l’uso di *modelli formali* che cercano di rappresentare i meccanismi psicologici sottostanti. Esempi discussi in questa dispensa sono:
+La regressione multipla è un modello essenzialmente *descrittivo* o *fenomenologico*: fotografa le associazioni tra le variabili senza necessariamente catturare i meccanismi causali che le producono. Nella ricerca psicologica, l'omissione di variabili rilevanti è spesso inevitabile, dato che è impossibile conoscere o misurare tutti i fattori che determinano il comportamento. Di conseguenza, i coefficienti stimati possono risultare **sistematicamente distorti**, offrendo un'interpretazione fuorviante delle relazioni sottostanti [@wilms2021omitted].
 
-- il *modello di apprendimento di Rescorla–Wagner*, che spiega come gli individui aggiornano le loro aspettative sulla base del feedback;  
-- il *Drift Diffusion Model (DDM)*, che descrive i processi decisionali come un accumulo di evidenza nel tempo;  
-- i *modelli dinamici per dati EMA*, che mostrano come l’umore e altre variabili psicologiche cambiano nel tempo.  
+Come evidenziato da @wilms2021omitted, il bias da variabile omessa non è un semplice dettaglio tecnico, ma una minaccia sostanziale alla validità della ricerca. Le simulazioni presentate nell'articolo, coerentemente con quelle discusse in precedenza, mostrano chiaramente che, quando omettiamo una variabile che influenza sia il predittore che l'esito, le nostre stime possono **sovrastimare** l'effetto reale (falsi positivi), **sottostimare** l'effetto reale (falsi negativi) o addirittura **invertirne il segno**, suggerendo un effetto positivo dove è negativo, o viceversa.
 
-Questi modelli non si limitano a descrivere correlazioni, ma cercano di catturare i *processi causali* che generano i dati osservati.
+In altre parole, i risultati di una regressione su dati osservazionali possono catturare associazioni spurie anziché effetti genuini. Questa difficoltà è particolarmente rilevante in psicologia, in quanto, nella pratica, non abbiamo mai accesso al "modello vero", ovvero alla reale struttura causale che genera i dati, e non possiamo quindi escludere con certezza che le nostre stime non siano distorte da variabili omesse.
 
+La lezione fondamentale è chiara: **la regressione standard non è adatta per trarre inferenze causali a partire da dati osservazionali**. Affermare che "$X$ causa $Y$" sulla base di un coefficiente di regressione è metodologicamente insostenibile se non possiamo escludere l'esistenza di una terza variabile, non misurata, che influenzi sia $X$ che $Y$.
+
+### Oltre i modelli associativi: strategie per l'inferenza causale
+
+L'articolo di @wilms2021omitted non si limita a illustrare il problema, ma esplora anche strategie metodologiche per affrontare la sfida dell'inferenza causale. Tali approcci rappresentano un vero e proprio cambio di paradigma rispetto all’uso ingenuo della regressione descrittiva.
+
+**1. Disegni sperimentali e quasi-sperimentali.**
+Il modo più diretto per garantire l'esogeneità di un predittore è la *randomizzazione sperimentale*. Tuttavia, quando gli esperimenti non sono praticabili, è possibile ricorrere a disegni *quasi-sperimentali*. @wilms2021omitted citano in particolare:
+
+- **variabili strumentali (IV)**: un approccio che sfrutta una variabile esogena (lo *strumento*) che influenza l'esito esclusivamente attraverso il predittore di interesse, consentendo di isolare la componente di variazione esogena del predittore stesso;
+- **regressione della discontinuità (RDD)**: un disegno che sfrutta soglie amministrative o criteri di assegnazione arbitrari per allocare i partecipanti a condizioni differenti, trattando gli individui prossimi alla soglia come se fossero assegnati in modo casuale.
+
+Questi metodi mirano esplicitamente a risolvere il problema dell'**endogeneità**, ossia la correlazione tra i predittori e il termine d'errore del modello, da cui deriva il bias da variabile omessa.
+
+**2. Modelli formali dei processi psicologici.**
+Un approccio complementare e, per molti versi, più ambizioso, consiste nell'abbandonare i modelli puramente associativi a favore di modelli formali. Questi modelli non si limitano a descrivere le correlazioni tra le variabili osservate, ma cercano di specificare in modo esplicito i meccanismi causali ipotizzati che generano i dati.
+
+Alcuni esempi discussi in questo manuale includono:
+
+- il **modello di apprendimento di Rescorla–Wagner**, che formalizza l’aggiornamento delle aspettative in funzione della discrepanza tra esiti attesi ed esiti osservati;
+- il **Drift Diffusion Model (DDM)**, che rappresenta il processo decisionale come un accumulo sequenziale di evidenza fino al raggiungimento di una soglia di risposta;
+- i **modelli dinamici per dati EMA (Ecological Momentary Assessment)**, progettati per catturare l’evoluzione temporale degli stati psicologici (ad esempio l’umore) e le loro interdipendenze nel tempo.
+
+A differenza di una regressione che cerca semplicemente di "predire" $Y$ da $X$, questi modelli forniscono una *rappresentazione esplicita del processo generativo sottostante*. Il loro obiettivo non è solo la descrizione statistica, ma anche la comprensione meccanicistica: il modello produce delle previsioni su *come* i dati dovrebbero apparire se il meccanismo ipotizzato fosse vero. La valutazione del modello consiste quindi nel verificare quanto tali previsioni siano coerenti con i dati osservati.
+
+In conclusione, la consapevolezza dei limiti della regressione multipla non costituisce un vicolo cieco, ma bensì un punto di partenza. Essa stimola l’adozione di una metodologia più rigorosa e articolata, che integri *strategie di disegno robuste per l'inferenza causale* con lo sviluppo di *teorie formalizzate dei processi psicologici*. È proprio questa combinazione che può favorire una scienza psicologica più cumulativa, esplicativa e teoricamente solida.
 
 ::: {.callout-tip collapse=true title="1) Mappa del bias: variazione di $\rho_{12}$ e $\beta_2$"}
 Esaminiamo come **segno** e **magnitudo** del bias cambino al variare della correlazione tra regressori ($\rho_{12}$) e dell’effetto dell’omessa ($\beta_2$). La heatmap visualizza $\hat\alpha_1-\beta_1$.
@@ -234,24 +260,22 @@ L’asse orizzontale riporta la correlazione tra i regressori $\rho_{12}=\mathrm
 * **Simmetria e teoria.** La mappa è sostanzialmente simmetrica perché il bias teorico è $\beta_2\rho_{12}$. Le piccole irregolarità dipendono dal rumore Monte Carlo della simulazione (con $n$ finito). 
 
 * **Lettura pratica.** Se *anche solo una* tra correlazione tra regressori ($\rho_{12}$) o effetto dell’omessa ($\beta_2$) è prossima a zero, il bias è trascurabile (aree chiare lungo gli assi). Quando *entrambi* sono lontani da zero, l’OLS nel modello omesso è *fuorviante*.
-
 :::
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-In questo capitolo abbiamo visto come la validità delle stime di regressione dipenda in modo cruciale dalla corretta specificazione del modello. Abbiamo discusso in particolare il *bias da variabile omessa*, mostrando che trascurare un predittore rilevante può distorcere i coefficienti degli altri, inducendo interpretazioni fuorvianti.
+In questo capitolo abbiamo visto che la validità delle stime di regressione dipende in modo cruciale dalla corretta specificazione del modello. In particolare, abbiamo discusso il *bias da variabile omessa*, mostrando come l'esclusione di un predittore rilevante possa alterare i coefficienti stimati per le altre variabili, portando a interpretazioni potenzialmente fuorvianti.
 
-Questo non è un problema marginale: nella ricerca psicologica capita spesso di lavorare con costrutti complessi, difficili da misurare, e di non poter includere tutte le variabili rilevanti. In queste condizioni, le stime di regressione rischiano di riflettere relazioni spurie piuttosto che effetti reali. Essere consapevoli di questi limiti è quindi essenziale per interpretare i risultati con cautela e per progettare studi che riducano al minimo il rischio di specificare modelli inadeguati.
+Il problema non è affatto marginale. Nella ricerca psicologica, infatti, i costrutti di interesse sono spesso complessi e difficili da misurare, e non è possibile includere tutti i fattori rilevanti. In queste condizioni, le stime di regressione rischiano di catturare associazioni spurie anziché effetti genuini. Essere consapevoli di questi limiti è quindi essenziale per interpretare i risultati con la dovuta cautela.
 
-La lezione più importante è che la regressione, come ogni modello fenomenologico, non deve essere scambiata per una spiegazione causale: è un modo per descrivere associazioni nei dati, che può però facilmente indurre in errore se non viene accompagnato da una riflessione critica sulla struttura del modello.
+La lezione fondamentale è che la regressione, in quanto modello essenzialmente descrittivo, non deve essere confusa con una spiegazione causale. La regressione fornisce un metodo per sintetizzare le associazioni osservate nei dati, ma può indurre in errore se non è accompagnata da una riflessione critica sulle variabili omesse e sulla struttura del fenomeno in esame.
 
-Nel prossimi capitolo vedremo come l’ANOVA a una via possa essere interpretata come un caso particolare del modello lineare. Sarà l’occasione per consolidare ulteriormente la visione unificata che guida questa sezione: regressione e confronto tra gruppi non sono strumenti separati, ma facce diverse dello stesso impianto metodologico.
+Nei prossimi due capitoli affronteremo direttamente il problema dell'inferenza causale: se il bias da variabile omessa è un rischio onnipresente nelle analisi osservative, dato che non è possibile conoscere *tutte* le variabili che influenzano un fenomeno psicologico, come è possibile ottenere conclusioni causali affidabili?  Vedremo che esistono strategie per affrontare questa sfida, ma che esse richiedono un cambiamento di prospettiva rispetto all’approccio puramente descrittivo della regressione tradizionale.
 
 ::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
 ```{r}
 sessionInfo()
 ```
 :::
-
 
 ## Bibliografia {.unnumbered .unlisted}
