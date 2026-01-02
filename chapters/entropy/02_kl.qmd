@@ -1,16 +1,15 @@
 # La divergenza di Kullback-Leibler {#sec-kullback-leibler-divergence}
 
 ::: {.callout-note appearance="minimal"}
+Nel capitolo precedente abbiamo visto come l’**entropia** consenta di quantificare l’incertezza intrinseca associata a una singola distribuzione di probabilità. In molti contesti applicativi, tuttavia, non è sufficiente descrivere l’incertezza di una distribuzione isolata: ciò che conta è valutare **quanto una distribuzione differisca da un’altra**.
 
-Nel capitolo precedente abbiamo visto come l’entropia quantifichi l’incertezza intrinseca di una variabile aleatoria. Ora, però, vogliamo allargare lo sguardo: invece di descrivere l’incertezza *di una singola distribuzione*, vogliamo misurare *quanto una distribuzione differisca da un’altra*.
+Questo passaggio dalla descrizione all’**approssimazione** è cruciale nella modellizzazione statistica. Ogni volta che costruiamo un modello, sostituiamo implicitamente la distribuzione reale che genera i dati, che indicheremo con $P$, con una distribuzione approssimante, indicata con $Q$. Il problema centrale dell’analisi statistica diventa allora una domanda tanto semplice quanto profonda: **qual è il costo informazionale di questa sostituzione?**
 
-Questo passaggio è essenziale per la modellizzazione statistica. Ogni volta che costruiamo un modello sostituiamo la distribuzione reale dei dati, indicata con $P$, con una distribuzione approssimante, indicata con $Q$. Il cuore dell’analisi statistica diventa dunque una domanda semplice e profonda: **quanto è costosa, in termini informazionali, questa approssimazione?**
+La *divergenza di Kullback–Leibler* [@kullback1951information], denotata $D_{\text{KL}}$, fornisce una risposta formale a questa domanda. Essa misura lo scarto informativo tra $P$ e $Q$, quantificando l’inefficienza che si introduce quando eventi generati dalla distribuzione reale $P$ vengono descritti utilizzando il modello $Q$. In termini informazionali, la divergenza di Kullback–Leibler risponde alla seguente domanda operativa:
 
-La *divergenza di Kullback–Leibler* [@kullback1951information], denotata $D_{\text{KL}}$, fornisce una risposta precisa. Essa misura lo scarto informativo tra $P$ e $Q$, quantificando l’inefficienza che si genera ogni volta che si usa il modello $Q$ per rappresentare la realtà $P$. In altre parole, $D_{\text{KL}}$ ci dice:
+> **Quanti bit di informazione vengono sprecati, in media, se codifichiamo eventi generati da $P$ come se provenissero da $Q$?**
 
-> **Quanti bit di informazione sprechiamo, in media, se codifichiamo eventi generati da $P$ come se provenissero da $Q$?**
-
-Questa idea trasforma la valutazione dei modelli in un problema di costo informazionale: un modello “buono” non è quello che si adatta semplicemente ai dati, ma quello che fa perdere *meno informazione possibile* rispetto alla distribuzione reale.
+Questa interpretazione trasforma la valutazione dei modelli in un problema di **costo informazionale**. Un modello non è “buono” perché si adatta bene ai dati osservati, ma perché introduce la minima perdita di informazione possibile rispetto al vero processo generatore dei dati. In questo senso, la divergenza di Kullback–Leibler rappresenta il ponte concettuale tra la teoria dell’informazione e la valutazione quantitativa dei modelli statistici, preparando il terreno per criteri predittivi come l’*Expected Log Predictive Density*.
 :::
 
 ### Panoramica del capitolo {.unnumbered .unlisted}
@@ -63,72 +62,77 @@ cross_entropy <- function(p, q) {
 
 ## Il problema della generalizzabilità
 
-Prima di introdurre formalmente la divergenza di Kullback–Leibler, è utile chiarire la motivazione epistemologica che ne giustifica l’uso. Uno dei compiti centrali della scienza è la *generalizzabilità*: un modello non è valido solo perché descrive bene i dati già raccolti, ma perché riesce anche a prevedere ciò che non abbiamo ancora osservato.
+Prima di introdurre formalmente la divergenza di Kullback–Leibler, è utile chiarire la motivazione epistemologica che ne giustifica l’uso. Uno degli obiettivi centrali della scienza non è soltanto descrivere i dati già osservati, ma formulare modelli che siano **generalizzabili**, cioè capaci di produrre previsioni affidabili su fenomeni non ancora osservati.
 
-Questa esigenza genera una tensione inevitabile:
+Questa esigenza introduce una tensione strutturale nella modellizzazione statistica:
 
-* se un modello è **troppo semplice**, *sottostima* la struttura del fenomeno (*underfitting*); ignora le relazioni sistematiche e i pattern importanti presenti nei dati e fallisce sia nell’interpretare sia nel prevedere.
-* Se un modello è **troppo complesso**, *sovrastima* ciò che ha osservato (*overfitting*) aderendo così perfettamente ai dati osservati da incorporare non solo le regolarità autentiche, ma anche il rumore statistico e le idiosincrasie del campione, compromettendo del tutto la sua capacità di generalizzare.
+* se un modello è **troppo semplice**, *sottostima* la struttura del fenomeno (*underfitting*): ignora relazioni sistematiche e pattern rilevanti presenti nei dati, fallendo sia nella spiegazione sia nella previsione;
+* se un modello è **troppo complesso**, *sovrastima* ciò che ha osservato (*overfitting*): aderisce così strettamente ai dati disponibili da incorporare non solo le regolarità autentiche, ma anche il rumore statistico e le idiosincrasie del campione, compromettendo la capacità di generalizzare a nuovi dati.
 
-La questione decisiva diventa quindi: **come valutare se un modello cattura la struttura genuina dei dati senza confonderla con il rumore campionario?**
+La questione decisiva diventa quindi: **come stabilire se un modello stia catturando la struttura genuina del fenomeno, piuttosto che adattarsi alle fluttuazioni accidentali del campione osservato?**
 
-Una possibile risposta è spostare l’attenzione dal “quanto bene spiega i dati osservati” al “quanto si avvicina alla distribuzione che li ha generati”. In altre parole, il problema della generalizzabilità può essere formulato come una misura di *distanza informativa* tra il modello e la realtà.
+Una risposta naturale consiste nello spostare l’attenzione dal criterio “quanto bene il modello descrive i dati osservati” a un criterio più fondamentale: “quanto il modello si avvicina alla distribuzione che ha generato quei dati”. In questo senso, il problema della generalizzabilità può essere riformulato come un problema di **distanza informativa** tra il modello e la realtà.
 
-È precisamente questa distanza che la **divergenza di Kullback–Leibler** rende quantificabile. Essa permette di valutare se il modello rappresenta le regolarità autentiche del fenomeno o se, al contrario, sta codificando informazioni spurie che non troveremo nei dati futuri.
+È precisamente questa distanza che la **divergenza di Kullback–Leibler** consente di quantificare. Essa fornisce uno strumento per valutare se un modello stia rappresentando le regolarità informative del processo generatore dei dati oppure se stia codificando informazione spurie, destinate a non ripresentarsi nei dati futuri.
 
 ## Dall’entropia all’entropia incrociata
 
-Per arrivare alla divergenza di Kullback–Leibler è necessario introdurre un passaggio intermedio: l’*entropia incrociata* (*cross-entropy*).
+Per arrivare alla divergenza di Kullback–Leibler è utile introdurre un passaggio intermedio fondamentale: l’**entropia incrociata** (*cross-entropy*).
 
 ### Ripasso: entropia come limite di codifica
 
-Abbiamo visto che l’entropia $H(P)$ di una distribuzione $P$ indica la lunghezza media minima, espressa in *bit*, richiesta per codificare in modo efficiente messaggi generati da $P$. In altre parole, se conosciamo la distribuzione vera, possiamo progettare un codice ottimale (ad esempio, mediante la codifica di Huffman) che si avvicina asintoticamente a questo limite teorico.
+Abbiamo visto che l’entropia $H(P)$ di una distribuzione $P$ rappresenta la lunghezza media minima, espressa in *bit*, necessaria per codificare in modo efficiente messaggi generati da $P$. In altre parole, se la distribuzione vera è nota, è possibile costruire un codice ottimale (ad esempio tramite la codifica di Huffman) che si avvicina asintoticamente a questo limite teorico.
 
-Formalmente:
+Formalmente, per una variabile discreta:
 
 $$
 H(P) = -\sum_x p(x),\log_2 p(x).
 $$
+Questa quantità stabilisce un limite inferiore: nessun codice privo di perdite può ottenere, in media, una lunghezza inferiore a $H(P)$ bit per simbolo.
 
 ### Quando il modello è sbagliato
 
-Nella pratica scientifica, però, la distribuzione vera $P$ che genera i dati è sconosciuta. Possediamo soltanto un modello approssimato $Q$ che riteniamo essere una sua ragionevole rappresentazione. Se progettiamo un codice ottimale *per $Q$* e lo usiamo per codificare dati che in realtà provengono da $P$, la codifica non sarà più ottimale: spenderemo più *bit* del necessario.
+Nella pratica scientifica, tuttavia, la distribuzione vera $P$ che genera i dati è sconosciuta. Disponiamo soltanto di un modello approssimato $Q$, che riteniamo una rappresentazione plausibile del processo sottostante. Se costruiamo un codice ottimale **per $Q$** e lo utilizziamo per codificare dati che in realtà provengono da $P$, la codifica non sarà più ottimale: spenderemo più *bit* del necessario.
 
-Un esempio concreto chiarisce l’idea. Immaginiamo che la distribuzione vera $P$ sia:
+Un esempio chiarisce l’idea. Supponiamo che la distribuzione vera $P$ assegni probabilità:
 
-* evento A con probabilità 0.9 (molto frequente);
-* evento B con probabilità 0.1 (rara).
+* evento A: $p(A)=0.9$ (molto frequente);
+* evento B: $p(B)=0.1$ (raro).
 
-Un codice ottimale assegnerebbe a A un codice brevissimo, perché appare quasi sempre. Tuttavia, se credessimo erroneamente che A e B siano equiprobabili ($Q$: 0.5–0.5), assegneremmo codici simili a entrambi. Il risultato è uno spreco di *bit*: assegniamo un codice eccessivamente lungo all'evento A, che invece si presenta molto frequentemente.
+Un codice ottimale per $P$ assegnerebbe a A un codice molto breve, dato che compare quasi sempre. Se invece credessimo erroneamente che A e B siano equiprobabili ($Q$: $0.5$–$0.5$), assegneremmo codici di lunghezza simile a entrambi. Il risultato è uno spreco sistematico di *bit*, poiché l’evento più frequente viene codificato in modo inefficiente.
 
 ### Definizione dell’entropia incrociata
 
-L’*entropia incrociata* quantifica esattamente questa inefficienza: è la lunghezza media del codice quando i dati seguono $P$ ma il codice è ottimizzato per la distribuzione (potenzialmente errata) $Q$:
+L’**entropia incrociata** quantifica esattamente questa inefficienza. Essa è definita come la lunghezza media del codice quando i dati seguono la distribuzione $P$, ma il codice è costruito assumendo che la distribuzione sia $Q$:
 
 $$
 H(P,Q) = -\sum_x p(x), \log_2 q(x).
 $$
 
-Si osservi la struttura della formula: le probabilità sono pesate secondo $P$ (poiché i messaggi seguono effettivamente quella distribuzione), ma i logaritmi sono calcolati su $Q$ (poiché il codice è costruito in base a questa distribuzione).
+La struttura della formula rende esplicito il meccanismo sottostante: le probabilità $p(x)$ pesano gli eventi secondo la loro frequenza reale, mentre i logaritmi di $q(x)$ riflettono le lunghezze dei codici progettati sulla base del modello $Q$.
 
 ### Proprietà essenziale
 
-L’entropia incrociata è sempre maggiore o uguale all’entropia vera:
+L’entropia incrociata soddisfa sempre la disuguaglianza
 
 $$
 H(P,Q) \ge H(P),
 $$
-dove l'uguaglianza vale se e solo se $P = Q$.
+dove l’uguaglianza vale se e solo se $P = Q$.
 
 **Interpretazione operativa:**
 
-* quando $Q = P$, utilizziamo il codice ottimale e e non stiamo sprecando alcun bit: $H(P, P) = H(P)$;
-* quando $Q \neq P$, stiamo utilizzando un codice subottimale che assegna lunghezze non ideali agli eventi: $H(P, Q) > H(P)$; 
-* la differenza $H(P, Q) - H(P)$ quantifica quindi lo *spreco informativo* imputabile all'uso di un modello imperfetto.
+* quando $Q = P$, utilizziamo il codice ottimale e non sprechiamo alcun *bit*:
+  $H(P, P) = H(P)$;
+* quando $Q \neq P$, utilizziamo un codice subottimale che assegna lunghezze non ideali agli eventi:
+  $H(P, Q) > H(P)$;
+* la differenza $H(P, Q) - H(P)$ quantifica quindi lo **spreco informativo medio** dovuto all’uso di un modello imperfetto.
 
 ### Significato concettuale
 
-Questa proprietà fissa un limite inferiore prestazionale: nessuna strategia di codifica può superare l'efficienza del codice ottimale basato sulla piena conoscenza di $P$. In definitiva, l'entropia incrociata misura il *costo della nostra ignoranza*, ovvero il prezzo in bit aggiuntivi che paghiamo a causa di una comprensione imperfetta del processo sottostante.
+Questa proprietà stabilisce un limite prestazionale fondamentale: nessuna strategia di codifica basata su un modello approssimato può essere più efficiente di quella costruita conoscendo esattamente la distribuzione vera. In questo senso, l’entropia incrociata misura il **costo della nostra ignoranza**: il prezzo, in *bit* aggiuntivi, che paghiamo quando utilizziamo un modello $Q$ al posto della distribuzione reale $P$.
+
+Nel prossimo passo vedremo che questo costo può essere isolato in modo preciso, portando alla definizione della **divergenza di Kullback–Leibler** come differenza tra entropia incrociata ed entropia vera.
 
 ::: {#example-cross-entropy .callout .exercise collapse="true" collapsed="true"}
 
@@ -177,71 +181,78 @@ cat("Spreco informativo:", round(cross_entropy(P, Q) - entropy(P), 3), "bit\n")
 
 ### Definizione formale
 
-La *divergenza di Kullback-Leibler* ($D_{\text{KL}}$) quantifica lo **spreco informativo** introdotto quando utilizziamo un modello approssimato $Q$ al posto della distribuzione vera $P$. Formalmente, si definisce come la differenza tra l'entropia incrociata e l'entropia vera:
+La *divergenza di Kullback–Leibler* ($D_{\text{KL}}$) quantifica lo **spreco informativo** introdotto quando utilizziamo un modello approssimato $Q$ al posto della distribuzione vera $P$. Come anticipato nella sezione precedente, essa emerge naturalmente come la **differenza tra l’entropia incrociata e l’entropia vera**:
 
 $$
 D_{\text{KL}}(P \parallel Q) = H(P, Q) - H(P).
 $$ {#eq-kl-as-difference}
 
-Sviluppando le definizioni, otteniamo:
+Sostituendo le definizioni di entropia incrociata ed entropia, otteniamo:
 
 $$
-D_{\text{KL}}(P \parallel Q) = -\sum_x p(x) \log_2 q(x) + \sum_x p(x) \log_2 p(x),
+D_{\text{KL}}(P \parallel Q) = -\sum_x p(x)\,\log_2 q(x) + \sum_x p(x)\,\log_2 p(x),
 $$
-che si semplifica nella forma canonica:
+che può essere riscritta nella forma canonica:
 
 $$
-D_{\text{KL}}(P \parallel Q) = \sum_x p(x) \log_2 \frac{p(x)}{q(x)}.
+D_{\text{KL}}(P \parallel Q) = \sum_x p(x)\,\log_2 \frac{p(x)}{q(x)}.
 $$ {#eq-kl-div-def}
 
-Questa formula mette in evidenza il confronto puntuale tra le probabilità assegnate da $P$ e $Q$ a ciascun evento.
+Questa espressione rende esplicito il confronto *punto per punto* tra la distribuzione reale $P$ e il modello $Q$: per ciascun evento $x$, si valuta quanto la probabilità assegnata da $Q$ si discosti da quella assegnata da $P$, pesando tale scarto in base alla frequenza reale dell’evento.
 
 ### Tre prospettive interpretative
 
-La divergenza KL può essere interpretata in tre modi complementari.
+La divergenza di Kullback–Leibler può essere interpretata in tre modi complementari, che ne chiariscono il significato operativo.
 
 **1. Inefficienza di codifica.**
-Indica il numero medio di bit *aggiuntivi* necessari per codificare messaggi generati da $P$ usando un codice ottimizzato per $Q$. Questa interpretazione operativa collega direttamente la teoria dell'informazione alla pratica della compressione dati.
+La $D_{\text{KL}}(P \parallel Q)$ rappresenta il numero medio di *bit aggiuntivi* necessari per codificare messaggi generati da $P$ utilizzando un codice ottimizzato per $Q$ invece che per $P$. Essa misura quindi l’inefficienza introdotta da un modello di codifica non ottimale.
 
 **2. Eccesso di sorpresa.**
-Misura quanto le osservazioni reali risultano più o meno sorprendenti rispetto alle aspettative del modello $Q$. Se $Q$ è impreciso, rimaniamo sistematicamente più sorpresi (o meno sorpresi) di quanto sarebbe necessario in base a $P$. La $D_{\text{KL}}$ quantifica proprio il valore atteso di questo "eccesso di sorpresa".
+La $D_{\text{KL}}$ può essere vista come il valore atteso della differenza tra la sorpresa effettiva degli eventi (secondo $P$) e la sorpresa prevista dal modello $Q$. Quando $Q$ è impreciso, gli eventi osservati risultano sistematicamente più (o meno) sorprendenti di quanto previsto; la divergenza quantifica precisamente questo *eccesso medio di sorpresa*.
 
 **3. Perdita informativa.**
-La $D_{\text{KL}}$ quantifica l'informazione che viene persa quando tentiamo di descrivere la realtà $P$ attraverso l'approssimazione $Q$. Questa prospettiva è particolarmente rilevante nella modellizzazione statistica, poiché misura direttamente l'inadeguatezza di un modello nel rappresentare la struttura del fenomeno studiato.
+Dal punto di vista statistico, la $D_{\text{KL}}$ misura quanta informazione viene persa quando la realtà descritta da $P$ viene approssimata mediante il modello $Q$. In questo senso, essa fornisce una misura diretta dell’inadeguatezza informazionale di un modello rispetto al processo generatore dei dati.
 
 ### Proprietà fondamentali
 
-La $D_{\text{KL}}$ possiede un insieme di proprietà matematiche che ne definiscono il comportamento.
+La divergenza di Kullback–Leibler possiede alcune proprietà matematiche essenziali che ne definiscono il comportamento.
 
 **Non-negatività.**
-Per ogni coppia di distribuzioni $P$ e $Q$, vale $D_{\text{KL}}(P \parallel Q) \geq 0$. L'uguaglianza $D_{\text{KL}}(P \parallel Q) = 0$ si verifica se e solo se $P = Q$. Questa proprietà indica che non esiste un "modello sbagliato" che sia più efficiente del "modello vero". Qualsiasi approssimazione della distribuzione reale introduce inevitabilmente un costo informativo.
+Per ogni coppia di distribuzioni $P$ e $Q$ vale
+
+$$
+D_{\text{KL}}(P \parallel Q) \ge 0,
+$$
+
+con uguaglianza se e solo se $P = Q$. Questa proprietà implica che nessun modello approssimato può essere, in media, più efficiente del modello vero: qualsiasi deviazione da $P$ introduce inevitabilmente un costo informativo.
 
 ### Asimmetria
 
 $$
-D_{\text{KL}}(P \parallel Q) \neq D_{\text{KL}}(Q \parallel P)
+D_{\text{KL}}(P \parallel Q) \neq D_{\text{KL}}(Q \parallel P).
 $$
 
-Questa proprietà di asimmetria non è un semplice dettaglio matematico, ma riflette una differenza concettuale fondamentale nei due modi di misurare la divergenza:
+Questa asimmetria non è un dettaglio tecnico, ma riflette una distinzione concettuale cruciale nel confronto tra modelli:
 
-- **divergenza "in avanti" $D_{\text{KL}}(P \parallel Q)$**: penalizza fortemente il fatto che la distribuzione approssimante $Q$ assegni una probabilità molto bassa (o nulla) a eventi che, secondo la distribuzione vera $P$, hanno invece probabilità rilevante. In altre parole, è intollerante verso la **sottostima** di eventi probabili.
-  
-- **divergenza "inversa" $D_{\text{KL}}(Q \parallel P)$**: penalizza il fatto che $Q$ assegni probabilità positiva a eventi che secondo $P$ sono impossibili (probabilità zero). In questo caso, la misura è intollerante verso la **soprastima** di eventi che in realtà non accadono mai.
+* la **divergenza “in avanti”** $D_{\text{KL}}(P \parallel Q)$ penalizza fortemente i casi in cui il modello $Q$ assegna probabilità molto basse (o nulle) a eventi che, secondo $P$, sono invece probabili. È quindi particolarmente sensibile alla **sottostima** di eventi rilevanti;
+* la **divergenza “inversa”** $D_{\text{KL}}(Q \parallel P)$ penalizza invece il fatto che $Q$ assegni probabilità positiva a eventi che, secondo $P$, non dovrebbero verificarsi. In questo caso, la misura è più sensibile alla **sovrastima** di eventi impossibili o estremamente improbabili.
+
+Questa differenza rende la direzione della divergenza una scelta concettuale, non puramente formale, e riflette il ruolo asimmetrico tra realtà ($P$) e modello ($Q$).
 
 **Invarianza rispetto a trasformazioni invertibili.**
-La $D_{\text{KL}}$ rimane invariata quando applichiamo trasformazioni reversibili ai dati. Per esempio, se trasformiamo i dati da centimetri a pollici (una conversione reversibile), il valore della $D_{\text{KL}}$ non cambia. Questa proprietà garantisce che la misura sia intrinseca alla relazione tra le distribuzioni e non dipenda dalla rappresentazione specifica dei dati.
+La $D_{\text{KL}}$ rimane invariata sotto trasformazioni reversibili dei dati. Ad esempio, una conversione di unità di misura (da centimetri a pollici) non altera il valore della divergenza. Ciò garantisce che la misura catturi una differenza intrinseca tra le distribuzioni, indipendente dalla loro rappresentazione.
 
 **Dipendenza dalla base logaritmica.**
-Il valore numerico della $D_{\text{KL}}$ dipende dalla base del logaritmo utilizzato nella sua definizione. L'uso del logaritmo in base 2 restituisce un valore in *bit*, interpretabile come un costo di codifica. L'uso del logaritmo naturale, invece, fornisce un risultato in *nat*. Sebbene il valore assoluto cambi, la scelta della base è inessenziale per le comparazioni qualitative, poiché le due misure differiscono solo per un fattore di scala costante.
+Il valore numerico della $D_{\text{KL}}$ dipende dalla base del logaritmo utilizzato. Con il logaritmo in base 2 la divergenza è misurata in *bit*; con il logaritmo naturale è misurata in *nat*. Questa scelta influisce solo su una costante di scala e non altera i confronti qualitativi tra modelli.
 
 **Non è una metrica.**
-Nonostante il nome "divergenza" possa suggerire il contrario, la $D_{\text{KL}}$ non è una distanza matematica (una metrica). Essa infatti viola due proprietà fondamentali: non è simmetrica e non soddisfa la disuguaglianza triangolare (secondo cui la distanza diretta tra due punti non può essere maggiore della somma delle distanze attraverso un punto intermedio). Per questo motivo, va interpretata non come una "distanza" tra $P$ e $Q$, ma piuttosto come una misura *direzionale* di disaccordo, che quantifica il costo di usare $Q$ per approssimare $P$.
+Nonostante il nome, la $D_{\text{KL}}$ non è una distanza matematica. Essa non è simmetrica e non soddisfa la disuguaglianza triangolare. Va quindi interpretata non come una distanza geometrica, ma come una misura **direzionale di disaccordo informazionale**, che quantifica il costo di utilizzare $Q$ come approssimazione di $P$.
 
-## Perché la KL non è simmetrica
+::: {.callout-note collapse=true title="Perché la KL non è simmetrica"}
 
 L’asimmetria della $D_{\text{KL}}$ è una delle sue caratteristiche più profonde e, inizialmente, può risultare sorprendente. Tuttavia, non si tratta di una stranezza matematica, ma di un principio fondamentale della modellazione statistica.  Confrontare un modello con la realtà non è come misurare la distanza tra due punti su una mappa; è un’operazione intrinsecamente direzionale, poiché il **costo degli errori dipende dalla direzione in cui li commettiamo**.
 
-### Due domande fondamentali, due risposte diverse
+**Due domande fondamentali, due risposte diverse.**
 
 La scelta dell’ordine degli argomenti in $D_{\text{KL}}(P \parallel Q)$ corrisponde a porre due domande concettualmente diverse:
 
@@ -250,9 +261,9 @@ La scelta dell’ordine degli argomenti in $D_{\text{KL}}(P \parallel Q)$ corris
 
 Nella ricerca scientifica, solo la prima domanda è rilevante: il nostro universo è regolato dalla distribuzione vera $P$ (anche se ignota), e disponiamo solo di un modello approssimato $Q$. L’obiettivo è quantificare il prezzo della nostra conoscenza imperfetta.
 
-### Esempio pratico: modello troppo semplice
+**Esempio pratico: modello troppo semplice.**
 
-Consideriamo un caso emblematico:
+Consideriamo un esempio discreto e binario per semplicità:
 
 * **$P = [0.9, 0.1]$** — La realtà: un evento comune e uno raro.
 * **$Q = [0.5, 0.5]$** — Il nostro modello: un’approssimazione ingenua di equiprobabilità.
@@ -274,9 +285,10 @@ cat("D_KL(Q || P) =", round(kl_QP, 3), "bit\n")
 
 * **$D_{\text{KL}}(Q \parallel P) \approx 0.368$ bit**: descrive uno scenario controfattuale. Se la realtà fosse $Q$ ma noi usassimo $P$, l’inefficienza sarebbe minore. Questo è il costo della *sovrastima*, inferiore perché il modello non penalizza così severamente la previsione di eventi frequenti.
 
-### La regola generale: sottostimare è più costoso che sovrastimare
+**La regola generale: sottostimare è più costoso che sovrastimare.**
 
-La discrepanza numerica evidenzia un principio generale della modellazione probabilistica: **sottostimare la probabilità di un evento frequente ha conseguenze più gravi che sovrastimarla**. Questo perché l’errore viene “pagato” ogni volta che l’evento si verifica, amplificando l’impatto dello sbaglio.
+La discrepanza numerica evidenzia un principio generale della modellazione probabilistica: **sottostimare la probabilità di un evento frequente ha conseguenze più gravi che sovrastimarla**. Questo perché l’errore viene “pagato” ogni volta che l’evento si verifica, amplificando l’impatto dello sbaglio. Questo principio spiega perché, nella valutazione dei modelli, penalizziamo severamente quelli che non assegnano sufficiente probabilità agli eventi che accadono spesso.
+:::
 
 ## Calcolo dettagliato della divergenza KL
 
@@ -384,55 +396,59 @@ L’uguaglianza conferma che la $D_{\text{KL}}$ può essere interpretata sia com
 
 ### Principio fondamentale: scegliere l'approssimazione più fedele
 
-In statistica, un principio cardinale per la selezione dei modelli afferma che:
+In statistica, un principio fondamentale per la selezione dei modelli afferma che, **in linea di principio**, tra tutti i modelli candidati è preferibile quello che **minimizza la divergenza di Kullback–Leibler** rispetto alla distribuzione vera dei dati.
 
-> **tra tutti i modelli candidati, il migliore è quello che minimizza la divergenza di Kullback-Leibler rispetto alla distribuzione vera dei dati.**
-
-Formalmente, se $P$ rappresenta la distribuzione vera dei dati e $Q$ una distribuzione approssimante (il modello), il modello ottimale è dato da:
+Formalmente, se $P$ rappresenta il processo generatore reale dei dati e $Q$ una distribuzione approssimante (il modello), il modello ottimale è definito come:
 
 $$
 Q_{\text{ottimale}} = \arg\min_{Q} D_{\text{KL}}(P \parallel Q).
 $$
 
-Questo criterio ha un'interpretazione profonda: il modello ottimale è quello che, in media, **spreca meno informazione** (misurata in bit) quando si usa $Q$ al posto di $P$, **genera meno sorpresa inattesa** negli osservatori che conoscono $P$, e quindi **cattura più fedelmente la struttura reale** dei dati. Minimizzare la $D_{\text{KL}}$ equivale dunque a scegliere la rappresentazione più verosimile e informativamente più economica della realtà sottostante.
+Questo criterio ha un’interpretazione profonda: il modello ottimale è quello che, **in media**, introduce la minore perdita informativa quando viene utilizzato al posto di $P$. Equivalente­mente, è il modello che spreca meno *bit* nella codifica degli eventi reali, genera meno sorpresa inattesa rispetto alle aspettative corrette e cattura più fedelmente la struttura informazionale del fenomeno osservato. Minimizzare la $D_{\text{KL}}$ equivale quindi a scegliere la rappresentazione informativamente più economica della realtà sottostante.
 
 ### Il paradosso: minimizzare l’ignoto
 
-Emerge immediatamente un problema fondamentale: **come possiamo minimizzare la divergenza da $P$ se $P$ è ignota?** La distribuzione vera che ha generato i dati è proprio l'oggetto incognito dell'inferenza. Sembra un circolo vizioso: per trovare il miglior modello dovremmo già conoscere la realtà, ma per conoscere la realtà abbiamo bisogno di un buon modello.
+Sorge però immediatamente una difficoltà concettuale: **come possiamo minimizzare la divergenza rispetto a $P$ se $P$ è ignota?**
+La distribuzione vera che ha generato i dati è proprio l’oggetto dell’inferenza statistica. A prima vista, il criterio sembra circolare: per scegliere il miglior modello dovremmo conoscere la realtà, ma per conoscere la realtà abbiamo bisogno di un modello.
 
 ### La soluzione: confrontare i modelli senza conoscere $P$
 
-La soluzione è fornita da una semplice scomposizione algebrica della divergenza KL:
+La soluzione a questo apparente paradosso emerge da una semplice ma cruciale scomposizione della divergenza di Kullback–Leibler:
 
 $$
 D_{\text{KL}}(P \parallel Q) = H(P, Q) - H(P),
 $$
-dove $H(P, Q)$ è l'entropia incrociata e $H(P)$ è l'entropia della distribuzione vera $P$.
 
-Il termine $H(P)$ è costante rispetto alla scelta del modello $Q$: rappresenta l'incertezza intrinseca e irriducibile dei dati, e non dipende da come li modelliamo. Pertanto, quando confrontiamo due modelli candidati $Q_1$ e $Q_2$, abbiamo:
+dove $H(P, Q)$ è l’entropia incrociata e $H(P)$ è l’entropia della distribuzione vera.
+
+Il termine $H(P)$ rappresenta l’incertezza intrinseca e irriducibile del processo generatore dei dati ed è **indipendente dalla scelta del modello**. Di conseguenza, quando confrontiamo due modelli candidati $Q_1$ e $Q_2$, otteniamo:
 
 $$
 D_{\text{KL}}(P \parallel Q_1) - D_{\text{KL}}(P \parallel Q_2) = \big[H(P, Q_1) - H(P)\big] - \big[H(P, Q_2) - H(P)\big] = H(P, Q_1) - H(P, Q_2).
 $$
 
-**L'entropia $H(P)$ si elide completamente.** Questo risultato cruciale significa che, per **confrontare** due modelli in termini di aderenza a $P$, non abbiamo bisogno di conoscere $P$ stessa. È sufficiente valutare e confrontare le rispettive entropie incrociate $H(P, Q_1)$ e $H(P, Q_2)$ — quantità che, a differenza della KL, possono essere stimate empiricamente dai dati osservati.
+Il termine $H(P)$ **si elide completamente**. Questo risultato è fondamentale: per confrontare due modelli in termini di aderenza informazionale alla realtà, **non è necessario conoscere $P$**. È sufficiente confrontare le rispettive entropie incrociate, quantità che possono essere stimate empiricamente dai dati osservati, sebbene con un’incertezza dovuta al campionamento finito.
 
 ### Stima empirica della divergenza KL
 
-L’entropia incrociata $H(P, Q)$ può essere stimata in modo empirico a partire dai dati osservati, utilizzando la media del logaritmo della verosimiglianza del modello $Q$ sui dati:
+L’entropia incrociata $H(P, Q)$ può essere stimata a partire dai dati osservati come la media del logaritmo della verosimiglianza del modello $Q$ sui dati:
 
 $$
 H(P, Q) \approx -\frac{1}{n} \sum_{i=1}^n \log_2 q(x_i),
 $$
-dove $x_1, \dots, x_n$ costituiscono il campione osservato e $q(x_i)$ è la densità (o massa) di probabilità assegnata dal modello $Q$ all’osservazione $x_i$.
+dove $x_1, \dots, x_n$ rappresentano il campione osservato e $q(x_i)$ è la densità (o massa) di probabilità assegnata dal modello $Q$ all’osservazione $x_i$.
 
-Questa stima empirica fornisce la base per numerosi criteri pratici di selezione e validazione dei modelli:
+Questa quantità è, a segno cambiato, **la log-verosimiglianza media del modello**. Essa costituisce il fondamento di numerosi criteri pratici per la selezione e la validazione dei modelli:
 
-*   **Log-score (log-verosimiglianza campionaria)**: corrisponde direttamente alla stima empirica dell’entropia incrociata cambiata di segno. Un log-score più alto (meno negativo) indica che il modello assegna, in media, maggiore probabilità ai dati osservati, suggerendo una migliore capacità predittiva.
-*   **ELPD (*Expected Log Predictive Density*)** rappresenta il valore atteso del log-score su nuovi dati provenienti dalla stessa distribuzione $P$. È una misura della performance predittiva generalizzabile fuori dal campione.
-*   **LOO-CV (*Leave-One-Out Cross-Validation*)** è un metodo efficiente e robusto per stimare l’ELPD utilizzando soltanto il dataset a disposizione, senza dover raccogliere dati esterni. La procedura valuta iterativamente quanto bene il modello, addestrato su $n-1$ osservazioni, predice il dato tenuto fuori, fornendo così una stima affidabile della sua capacità predittiva su nuovi dati.
+* il **log-score** (o log-verosimiglianza campionaria), che misura quanto bene il modello descrive i dati osservati;
+* l’**Expected Log Predictive Density (ELPD)**, che estende questo concetto alla previsione *out-of-sample*;
+* la **Leave-One-Out Cross-Validation (LOO-CV)**, che fornisce una stima robusta dell’ELPD utilizzando esclusivamente i dati disponibili.
+
+In questo modo, il criterio teorico di minimizzazione della divergenza di Kullback–Leibler si traduce in strumenti operativi che permettono di confrontare modelli senza accesso diretto alla distribuzione vera, mantenendo come obiettivo ultimo la massima capacità di generalizzazione.
 
 ### Visualizzazione: confronto tra modelli candidati
+
+*(Nel grafico seguente la distribuzione $P$ è nota solo a scopo illustrativo.)*
 
 ```{r}
 # Distribuzione vera (nota solo a scopo illustrativo)
@@ -469,32 +485,37 @@ ggplot(df, aes(x = esito, y = probabilità, fill = distribuzione)) +
   theme_minimal() 
 ```
 
-**Interpretazione:** il modello $Q_1$, con divergenza KL minore, cattura le principali regolarità di $P$, mentre $Q_2$ non riconosce le asimmetrie della distribuzione reale e paga un prezzo informativo più alto.
+**Interpretazione.** Il modello $Q_1$, con divergenza KL minore, cattura le principali regolarità di $P$, mentre $Q_2$ non riconosce le asimmetrie della distribuzione reale e paga un costo informativo maggiore. Questo esempio rende visibile il principio secondo cui la selezione del modello è, in ultima analisi, una questione di **perdita informativa**.
 
-## Esempio psicologico: modelli per l'ansia
-
+::: {.callout-note collapse=true title="Esempio psicologico: modelli per l'ansia"}
 Per ancorare i concetti astratti della teoria dell’informazione alla pratica della ricerca psicologica, consideriamo uno scenario tipico di modellazione in psicologia clinica.
 
-### Il contesto di ricerca
+**Il contesto di ricerca.**
 
-Immaginiamo che uno psicologo clinico voglia sviluppare un modello per prevedere la distribuzione dei livelli di ansia (categorizzata in bassa, media e alta) tra gli studenti universitari durante il periodo degli esami. Sulla base di dati osservativi, intende confrontare due modelli concorrenti. Il primo, denominato **Modello A**, è di tipo parsimonioso e utilizza come unico predittore il punteggio delle *strategie di coping* individuali. Il secondo, **Modello B**, è più complesso e integra, oltre al coping, anche la misura del *supporto sociale percepito*.
+Immaginiamo che uno psicologo clinico voglia sviluppare un modello per descrivere e prevedere la distribuzione dei livelli di ansia — categorizzati in *bassa*, *media* e *alta* — tra studenti universitari durante il periodo degli esami. Sulla base di dati osservativi, intende confrontare due modelli concorrenti.
 
-### Simulazione dei risultati
+Il **Modello A** è parsimonioso e utilizza come unico predittore il punteggio individuale nelle *strategie di coping*.
+Il **Modello B** è più complesso e integra, oltre al coping, una misura del *supporto sociale percepito*.
 
-Supponiamo che la distribuzione vera dei livelli di ansia nella popolazione di riferimento sia:
+**Distribuzioni predittive (scenario illustrativo).**
+
+A scopo puramente illustrativo, supponiamo che la distribuzione vera dei livelli di ansia nella popolazione sia:
+
 $$
 P = [0.30, 0.45, 0.25].
 $$
 
-Il Modello A, basato esclusivamente sul coping, produce la seguente distribuzione predittiva:
+Il Modello A produce la distribuzione predittiva:
+
 $$
 Q_A = [0.35, 0.40, 0.25].
 $$
 
-Il Modello B, che incorpora anche il supporto sociale, genera invece:
+mentre il Modello B genera:
 $$
 Q_B = [0.32, 0.43, 0.25].
 $$
+*(In una situazione reale, la distribuzione $P$ non sarebbe osservabile; qui è nota solo per chiarire il significato della divergenza KL.)*
 
 ```{r}
 P  <- c(0.30, 0.45, 0.25)
@@ -514,15 +535,16 @@ cat("\nDifferenza:", round(kl_A - kl_B, 4), "bit a favore del Modello B\n")
 
 ### Interpretazione dei risultati
 
-Il Modello B presenta una divergenza KL leggermente inferiore (circa 0.0033 bit), il che indica che le sue previsioni sono, in media, più vicine alla distribuzione effettivamente osservata. Tuttavia, il guadagno predittivo ottenuto è modesto.
+**Confronto informazionale.**
 
-Questo risultato evidenzia il classico dilemma metodologico della modellazione: **un miglioramento predittivo così marginale giustifica l'aggiunta di un predittore e l'aumento della complessità del modello?**
+Il calcolo della divergenza di Kullback–Leibler mostra che:
 
-Da un lato, il Modello B può essere difeso per la sua maggiore accuratezza, che è in linea con una teoria psicosociale più ricca e articolata. Inoltre, potrebbe cogliere interazioni specifiche o effetti differenziali in sottogruppi che il modello più semplice non sarebbe in grado di rilevare, offrendo una base teorica più solida per approfondimenti futuri.
+* il **Modello B** presenta una $D_{\text{KL}}$ leggermente inferiore;
+* il vantaggio informazionale è **reale ma modesto** (circa 0.003 bit).
 
-Dall'altro lato, il Modello A vanta una maggiore parsimonia e trasparenza interpretativa. Presenta un rischio inferiore di sovradattamento (*overfitting*), un vantaggio cruciale, soprattutto quando si lavora con campioni di piccole dimensioni. La sua semplicità lo rende anche più facile da implementare in contesti applicativi in cui le risorse sono limitate.
+Dal punto di vista teorico, ciò indica che il Modello B approssima meglio la distribuzione generatrice dei dati. Tuttavia, l’entità del miglioramento è minima.
 
-### Visualizzazione del confronto
+**Visualizzazione del confronto.**
 
 ```{r}
 #| fig-cap: "Confronto tra i due modelli predittivi dell'ansia. Entrambi i modelli approssimano ragionevolmente la distribuzione vera, con il Modello B che mostra un vantaggio marginale."
@@ -548,30 +570,44 @@ ggplot(df, aes(x = livello_ansia, y = probabilita, fill = modello)) +
   theme_minimal() +
   theme(legend.position = "bottom")
 ```
-### Il dilemma fondamentale: complessità versus parsimonia
 
-L'esempio proposto illustra concretamente il *trade-off* che ogni ricercatore si trova ad affrontare: il principio di parsimonia, noto anche come "rasoio di Occam", raccomanda di privilegiare il modello più semplice quando le prestazioni predittive sono comparabili. Determinare quando un incremento, seppur minimo, nell'accuratezza predittiva sia sufficientemente significativo da giustificare un aumento della complessità del modello rappresenta una delle decisioni metodologiche più sottili e importanti nella scienza dei dati.
+**Interpretazione metodologica.**
 
-Nel prossimo capitolo esploreremo come gli strumenti statistici avanzati, quali la validazione incrociata *leave-one-out* (LOO-CV) e la densità predittiva attesa (*Expected Log Predictive Density*, ELPD), forniscano un quadro formale per quantificare sistematicamente questo compromesso. Questi metodi permettono di valutare non solo la performance media di un modello, ma anche l'incertezza associata alla stima della sua capacità predittiva, considerando esplicitamente il rischio di sovradattamento. Questo approccio fornisce le basi per compiere scelte di selezione e valutazione dei modelli che siano metodologicamente rigorose e informate dall'evidenza empirica.
+Questo risultato mette in luce un dilemma centrale della modellazione statistica:
+
+> **un guadagno predittivo marginale giustifica un aumento della complessità del modello?**
+
+Il Modello B può essere preferito per la sua maggiore aderenza informazionale e per il suo allineamento con una teoria psicosociale più ricca. Potrebbe inoltre catturare effetti specifici in sottogruppi o interazioni che il modello più semplice non rileva.
+
+D’altro canto, il Modello A offre maggiore parsimonia, interpretabilità e robustezza, soprattutto in contesti con campioni ridotti, dove il rischio di *overfitting* diventa rilevante. La sua semplicità lo rende anche più facilmente applicabile in contesti clinici e operativi.
+
+**Il ponte verso la valutazione predittiva.** 
+
+Questo esempio mostra perché la sola differenza di divergenza KL, pur concettualmente fondamentale, **non è sufficiente** per guidare la selezione dei modelli nella pratica. È necessario valutare anche:
+
+* l’incertezza associata alla stima della performance;
+* la stabilità predittiva *out-of-sample*;
+* il rischio di sovradattamento.
+
+Nel capitolo successivo vedremo come strumenti come la *Leave-One-Out Cross-Validation* (LOO-CV) e l’*Expected Log Predictive Density* (ELPD) forniscano un quadro formale per quantificare sistematicamente questo compromesso, consentendo decisioni di selezione dei modelli che siano al tempo stesso predittive, parsimoniose e metodologicamente rigorose.
+:::
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-In questo capitolo abbiamo sviluppato la *divergenza di Kullback-Leibler* come strumento fondamentale per misurare la distanza tra una rappresentazione teorica e la realtà empirica nella modellazione statistica.
+In questo capitolo abbiamo sviluppato la **divergenza di Kullback–Leibler** come strumento fondamentale per misurare la distanza informazionale tra una rappresentazione teorica e la realtà empirica nella modellazione statistica.
 
-L'**entropia incrociata** $H(P,Q)$ quantifica la lunghezza media del codice richiesta quando si utilizza un modello $Q$ per rappresentare dati provenienti dalla distribuzione vera $P$. Il fatto che essa sia sempre maggiore o uguale all'entropia $H(P)$ stabilisce un limite fondamentale: nessuna strategia di codifica basata su $Q$ può superare l'efficienza del codice ottimale costruito sulla conoscenza perfetta di $P$.
+Abbiamo visto che l’**entropia incrociata** $H(P,Q)$ quantifica la lunghezza media del codice richiesta quando si utilizza un modello $Q$ per rappresentare dati generati dalla distribuzione vera $P$. Il fatto che $H(P,Q)$ sia sempre maggiore o uguale all’entropia $H(P)$ stabilisce un limite fondamentale: nessuna strategia di codifica basata su un modello approssimato può superare l’efficienza del codice ottimale costruito sulla piena conoscenza di $P$.
 
-La **divergenza KL** misura precisamente la differenza $H(P,Q) - H(P)$, rappresentando lo spreco informativo dovuto all'adozione di una rappresentazione imperfetta. Le sue tre interpretazioni — come inefficienza di codifica, eccesso di sorpresa e perdita informativa — convergono verso lo stesso principio fondamentale: ogni approssimazione della realtà comporta un costo, e la $D_{\text{KL}}$ fornisce la metrica per quantificarlo.
+La **divergenza di Kullback–Leibler** isola precisamente la differenza $H(P,Q) - H(P)$, fornendo una misura dello *spreco informativo* introdotto dall’adozione di una rappresentazione imperfetta. Le sue diverse interpretazioni, come inefficienza di codifica, eccesso di sorpresa e perdita informativa, convergono verso un principio comune: **ogni approssimazione della realtà comporta un costo**, e la $D_{\text{KL}}$ fornisce la metrica per quantificarlo.
 
-L'**asimmetria** della $D_{\text{KL}}$ non è un difetto matematico, ma riflette la natura intrinsecamente direzionale del processo di modellazione scientifica: siamo interessati a misurare quanto il nostro modello $Q$ si avvicini alla realtà $P$, non il contrario. 
+L’**asimmetria** della $D_{\text{KL}}$ non è un difetto matematico, ma riflette la natura intrinsecamente direzionale del processo di modellazione scientifica. Il nostro interesse non è misurare una distanza simmetrica tra due oggetti astratti, ma valutare quanto un modello $Q$ riesca ad approssimare il processo generatore reale $P$, e quale sia il prezzo informazionale della discrepanza residua.
 
-Nel **confronto tra modelli alternativi** emerge un risultato cruciale: non è necessario conoscere la distribuzione vera $P$, poiché il termine $H(P)$, che rappresenta l'incertezza intrinseca e irriducibile del fenomeno, si annulla quando si confrontano le entropie incrociate dei diversi modelli.
+Nel **confronto tra modelli alternativi** emerge un risultato cruciale: non è necessario conoscere esplicitamente la distribuzione vera $P$. Il termine $H(P)$, che rappresenta l’incertezza intrinseca e irriducibile del fenomeno, si annulla nei confronti tra modelli, rendendo possibile una valutazione relativa basata esclusivamente sulle entropie incrociate $H(P,Q)$. In questo modo, la selezione dei modelli può essere formulata come un problema di confronto informazionale, anche in assenza di accesso diretto alla verità sottostante.
 
-La $D_{\text{KL}}$ fornisce così un criterio teorico elegante e solido per la selezione dei modelli: il modello migliore è quello che minimizza $D_{\text{KL}}(P \parallel Q)$. Come abbiamo visto, confrontare modelli tra loro è possibile senza conoscere $P$, limitandosi a confrontare le loro entropie incrociate. Tuttavia, l'applicazione pratica di questo principio incontra tre sfide fondamentali che devono essere affrontate.
+La $D_{\text{KL}}$ fornisce quindi un criterio teorico elegante e solido: **il modello migliore è quello che minimizza $D_{\text{KL}}(P \parallel Q)$**. Tuttavia, l’applicazione pratica di questo principio solleva tre sfide fondamentali.
+In primo luogo, l’entropia incrociata $H(P,Q)$ deve essere stimata a partire da campioni finiti e potenzialmente rumorosi. In secondo luogo, la valutazione basata sugli stessi dati utilizzati per adattare il modello tende a essere ottimistica, favorendo modelli più complessi. Infine, è necessario quantificare l’incertezza associata alle stime per distinguere miglioramenti predittivi sostanziali da semplici fluttuazioni campionarie.
 
-In primo luogo, sebbene il termine $H(P)$ si annulli nei confronti, dobbiamo comunque stimare in modo affidabile l'entropia incrociata $H(P,Q)$ a partire da un campione finito e potenzialmente rumoroso.
-In secondo luogo, la stima basata sullo stesso campione utilizzato per adattare il modello tende a essere ottimistica: un modello più complesso apparirà sempre migliore se valutato sui dati che ha già "visto". Infine, dobbiamo quantificare l'incertezza delle nostre stime per distinguere i miglioramenti predittivi sostanziali dalle fluttuazioni campionarie.
-
-Nel prossimo capitolo esploreremo come la *Leave-One-Out Cross-Validation* (**LOO-CV**) e la *Expected Log Predictive Density* (**ELPD**) affrontino sistematicamente queste sfide, trasformando il principio astratto della minimizzazione della $D_{\text{KL}}$ in uno strumento operativo e robusto per la selezione e la valutazione dei modelli nella ricerca psicologica.
+Nel prossimo capitolo mostreremo come la **Leave-One-Out Cross-Validation** (LOO-CV) e la **Expected Log Predictive Density** (ELPD) affrontino sistematicamente queste difficoltà, trasformando il principio astratto della minimizzazione della divergenza di Kullback–Leibler in uno strumento operativo, robusto e direttamente applicabile alla selezione e alla valutazione dei modelli nella ricerca psicologica.
 
 ::: {.callout-important title="Esercizi" collapse="true"}
 1. Consideriamo due distribuzioni discrete:
