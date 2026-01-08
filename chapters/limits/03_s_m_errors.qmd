@@ -200,23 +200,61 @@ La prima figura include soltanto gli studi che superano la soglia di significati
 #| fig-cap: "Distribuzione delle stime del d di Cohen nei risultati 'statisticamente significativi'. La linea rossa indica l'effetto vero (d = 0.2). Il filtro della significatività seleziona sistematicamente stime gonfiate."
 #| fig-height: 5
 
+col_hist   <- palette_qualitative[5]  # Blu
+col_true   <- palette_qualitative[1]  # Arancione
+col_zero   <- palette_qualitative[8]  # Grigio
+col_emph   <- palette_qualitative[5]  # Blu (annotazione)
+
 ggplot(significant_results, aes(x = d_observed)) +
-  geom_histogram(bins = 30, fill = "steelblue", color = "white", alpha = 0.8) +
-  geom_vline(xintercept = true_d, color = "red", linetype = "dashed", linewidth = 1.2) +
-  geom_vline(xintercept = 0, color = "gray50", linetype = "dotted") +
-  annotate("text", x = true_d + 0.05, y = Inf, vjust = 2, hjust = 0,
-           label = sprintf("Effetto vero\nd = %.2f", true_d), color = "red") +
-  annotate("text", x = mean(abs(significant_results$d_observed)), y = Inf, vjust = 4, hjust = 0.5,
-           label = sprintf("Media |d| significativi\n= %.2f (%.1fx il vero)", 
-                          mean(abs(significant_results$d_observed)), type_m_ratio),
-           color = "darkblue") +
+  geom_histogram(
+    bins = 30,
+    fill = col_hist,
+    color = "white",
+    alpha = 0.8
+  ) +
+  geom_vline(
+    xintercept = true_d,
+    color = col_true,
+    linetype = "dashed",
+    linewidth = 1.2
+  ) +
+  geom_vline(
+    xintercept = 0,
+    color = col_zero,
+    linetype = "dotted"
+  ) +
+  annotate(
+    "text",
+    x = true_d + 0.05,
+    y = Inf,
+    vjust = 2,
+    hjust = 0,
+    label = sprintf("Effetto vero\nd = %.2f", true_d),
+    color = col_true
+  ) +
+  annotate(
+    "text",
+    x = mean(abs(significant_results$d_observed)),
+    y = Inf,
+    vjust = 4,
+    hjust = 0.5,
+    label = sprintf(
+      "Media |d| significativi\n= %.2f (%.1fx il vero)",
+      mean(abs(significant_results$d_observed)),
+      type_m_ratio
+    ),
+    color = col_emph
+  ) +
   labs(
     x = "Stima d di Cohen",
     y = "Frequenza",
-    title = "Errore di Tipo M: sovrastima sistematica degli effetti 'significativi'",
-    subtitle = sprintf("Solo %d/%d studi (%.1f%%) raggiungono p < 0.05", 
-                      nrow(significant_results), n_simulations,
-                      100 * nrow(significant_results) / n_simulations)
+    title = "Errore di Tipo M:\nsovrastima sistematica degli effetti 'significativi'",
+    subtitle = sprintf(
+      "Solo %d/%d studi (%.1f%%) raggiungono p < 0.05",
+      nrow(significant_results),
+      n_simulations,
+      100 * nrow(significant_results) / n_simulations
+    )
   )
 ```
 
@@ -228,24 +266,46 @@ La seconda figura approfondisce un aspetto diverso: tra gli studi che superano l
 #| label: fig-type-s-error
 #| fig-cap: "Errore di Tipo S: una quota non trascurabile di risultati significativi ha il segno sbagliato (d < 0 quando il vero effetto è positivo)."
 
+palette_sign_error <- setNames(
+  palette_qualitative[c(5, 1)],  # blu + arancione
+  c("FALSE", "TRUE")
+)
+
+col_zero <- palette_qualitative[8]  # grigio
+col_true <- palette_qualitative[1]  # arancione
+
 significant_results |>
-  mutate(sign_error = d_observed < 0) |>
+  mutate(sign_error = factor(d_observed < 0, levels = c(FALSE, TRUE))) |>
   ggplot(aes(x = d_observed, fill = sign_error)) +
   geom_histogram(bins = 30, color = "white", alpha = 0.8) +
-  geom_vline(xintercept = 0, color = "black", linewidth = 1) +
-  geom_vline(xintercept = true_d, color = "red", linetype = "dashed", linewidth = 1) +
+  geom_vline(
+    xintercept = 0,
+    color = col_zero,
+    linewidth = 1
+  ) +
+  geom_vline(
+    xintercept = true_d,
+    color = col_true,
+    linetype = "dashed",
+    linewidth = 1
+  ) +
   scale_fill_manual(
-    values = c("FALSE" = "steelblue", "TRUE" = "coral"),
-    labels = c("FALSE" = "Segno corretto", "TRUE" = "Segno sbagliato")
+    values = palette_sign_error,
+    labels = c(
+      "FALSE" = "Segno corretto",
+      "TRUE"  = "Segno sbagliato"
+    )
   ) +
   labs(
     x = "Stima d di Cohen",
     y = "Frequenza",
     fill = "",
     title = "Errore di Tipo S:\nrisultati significativi con direzione errata",
-    subtitle = sprintf("%.1f%% dei risultati 'significativi' ha il segno sbagliato", 
-                      type_s_rate * 100)
-  ) 
+    subtitle = sprintf(
+      "%.1f%% dei risultati 'significativi' ha il segno sbagliato",
+      type_s_rate * 100
+    )
+  )
 ```
 
 Questo fenomeno si verifica in condizioni di **bassa potenza statistica**. In tali contesti, non solo è improbabile rilevare un piccolo effetto, ma aumenta anche il rischio che il rumore campionario generi una stima significativa nella direzione opposta. L'inclusione di questi risultati nella letteratura scientifica contribuisce a creare incoerenze empiriche, a ridurre la replicabilità degli studi e a generare dispute teoriche basate su dati non attendibili.
@@ -257,16 +317,38 @@ La terza figura permette di confrontare questo scenario con la distribuzione del
 #| fig-cap: "Distribuzione delle stime del d di Cohen in tutti gli studi simulati. Senza filtro di selezione, le fluttuazioni casuali si compensano e la media coincide con l'effetto reale."
 #| fig-height: 5
 
+col_hist <- palette_qualitative[8]  # Grigio
+col_true <- palette_qualitative[1]  # Arancione
+col_mean <- palette_qualitative[5]  # Blu
+
 p3 <- ggplot(results, aes(x = d_observed)) +
-  geom_histogram(bins = 50, fill = "gray70", color = "white", alpha = 0.8) +
-  geom_vline(xintercept = true_d, color = "red", linetype = "dashed", linewidth = 1) +
-  geom_vline(xintercept = mean(results$d_observed), color = "blue", linewidth = 1) +
+  geom_histogram(
+    bins = 50,
+    fill = col_hist,
+    color = "white",
+    alpha = 0.8
+  ) +
+  geom_vline(
+    xintercept = true_d,
+    color = col_true,
+    linetype = "dashed",
+    linewidth = 1
+  ) +
+  geom_vline(
+    xintercept = mean(results$d_observed),
+    color = col_mean,
+    linewidth = 1
+  ) +
   labs(
-    title = "Tutti gli studi (N = 50,000)",
-    subtitle = sprintf("Media = %.3f (≈ effetto vero)", mean(results$d_observed)),
+    title = "Tutti gli studi (N = 50.000)",
+    subtitle = sprintf(
+      "Media = %.3f (≈ effetto vero)",
+      mean(results$d_observed)
+    ),
     x = "Stima d di Cohen",
     y = "Frequenza"
   )
+
 p3
 ```
 
@@ -330,17 +412,34 @@ comparison <- bayesian_results |>
   pivot_longer(everything(), names_to = "method", values_to = "estimate") |>
   mutate(method = ifelse(method == "d_observed", "Frequentista", "Bayesiano"))
 
+palette_methods <- setNames(
+  palette_qualitative[c(1, 5)],  # arancione + blu
+  c("Frequentista", "Bayesiano")
+)
+
+col_true <- palette_qualitative[8]  # grigio
+
 ggplot(comparison, aes(x = estimate, fill = method)) +
-  geom_histogram(bins = 30, alpha = 0.6, position = "identity", color = "white") +
-  geom_vline(xintercept = true_d, color = "red", linetype = "dashed", linewidth = 1.2) +
-  scale_fill_manual(values = c("Frequentista" = "coral", "Bayesiano" = "steelblue")) +
+  geom_histogram(
+    bins = 30,
+    alpha = 0.6,
+    position = "identity",
+    color = "white"
+  ) +
+  geom_vline(
+    xintercept = true_d,
+    color = col_true,
+    linetype = "dashed",
+    linewidth = 1.2
+  ) +
+  scale_fill_manual(values = palette_methods) +
   labs(
     x = "Stima d di Cohen",
     y = "Frequenza",
     fill = "Metodo",
     title = "Stime frequentiste vs bayesiane\nper i risultati 'significativi'",
     subtitle = "Le stime bayesiane sono meno estreme grazie allo shrinkage verso la prior"
-  ) 
+  )
 ```
 
 ```{r}
@@ -395,25 +494,50 @@ sample_size_analysis <- map_dfr(sample_sizes, function(n) {
   )
 })
 
+col_power <- palette_qualitative[5]  # Blu
+col_m     <- palette_qualitative[1]  # Arancione
+col_s     <- palette_qualitative[7]  # Rosa
+col_ref   <- palette_qualitative[8]  # Grigio
+
 # Visualizzazione
 p_power <- ggplot(sample_size_analysis, aes(x = n_per_group, y = power)) +
-  geom_line(color = "steelblue", linewidth = 1.2) +
-  geom_point(color = "steelblue", size = 3) +
-  geom_hline(yintercept = 0.80, linetype = "dashed", color = "red") +
+  geom_line(color = col_power, linewidth = 1.2) +
+  geom_point(color = col_power, size = 3) +
+  geom_hline(
+    yintercept = 0.80,
+    linetype = "dashed",
+    color = col_ref
+  ) +
   scale_y_continuous(labels = scales::percent, limits = c(0, 1)) +
-  labs(title = "Potenza statistica", x = "n per gruppo", y = "Potenza")
+  labs(
+    title = "Potenza statistica",
+    x = "n per gruppo",
+    y = "Potenza"
+  )
 
 p_type_m <- ggplot(sample_size_analysis, aes(x = n_per_group, y = type_m)) +
-  geom_line(color = "coral", linewidth = 1.2) +
-  geom_point(color = "coral", size = 3) +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "gray50") +
-  labs(title = "Errore Tipo M (exaggeration)", x = "n per gruppo", y = "Fattore di esagerazione")
+  geom_line(color = col_m, linewidth = 1.2) +
+  geom_point(color = col_m, size = 3) +
+  geom_hline(
+    yintercept = 1,
+    linetype = "dashed",
+    color = col_ref
+  ) +
+  labs(
+    title = "Errore Tipo M (exaggeration)",
+    x = "n per gruppo",
+    y = "Fattore di esagerazione"
+  )
 
 p_type_s <- ggplot(sample_size_analysis, aes(x = n_per_group, y = type_s)) +
-  geom_line(color = "purple", linewidth = 1.2) +
-  geom_point(color = "purple", size = 3) +
+  geom_line(color = col_s, linewidth = 1.2) +
+  geom_point(color = col_s, size = 3) +
   scale_y_continuous(labels = scales::percent) +
-  labs(title = "Errore Tipo S (wrong sign)", x = "n per gruppo", y = "Tasso errore di segno")
+  labs(
+    title = "Errore Tipo S (wrong sign)",
+    x = "n per gruppo",
+    y = "Tasso errore di segno"
+  )
 ```
 
 ```{r}

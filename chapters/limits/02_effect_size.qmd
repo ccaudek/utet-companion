@@ -59,31 +59,54 @@ La seguente simulazione mostra come appaiono distribuzioni con diversi valori di
 #| label: fig-cohen-d-visual
 #| fig-cap: "Visualizzazione di diversi valori del d di Cohen. Con d = 0.2 le distribuzioni si sovrappongono quasi completamente; con d = 0.8 la separazione è evidente."
 
+palette_groups <- setNames(
+  palette_qualitative[c(5, 1)],
+  c("Controllo", "Trattamento")
+)
+
 # Funzione per generare dati con un dato Cohen's d
 generate_groups <- function(d, n = 1000) {
   tibble(
-    value = c(rnorm(n, mean = 0, sd = 1), 
-              rnorm(n, mean = d, sd = 1)),
-    group = rep(c("Controllo", "Trattamento"), each = n)
+    value = c(
+      rnorm(n, mean = 0, sd = 1),
+      rnorm(n, mean = d, sd = 1)
+    ),
+    group = factor(
+      rep(c("Controllo", "Trattamento"), each = n),
+      levels = c("Controllo", "Trattamento")
+    )
   )
 }
 
-# Creiamo grafici per diversi valori di d
+# Valori di d e label
 d_values <- c(0.2, 0.5, 0.8, 1.2)
-labels <- c("Piccolo (d = 0.2)", "Medio (d = 0.5)", 
-            "Grande (d = 0.8)", "Molto grande (d = 1.2)")
+labels <- c(
+  "Piccolo (d = 0.2)",
+  "Medio (d = 0.5)",
+  "Grande (d = 0.8)",
+  "Molto grande (d = 1.2)"
+)
 
 plots <- map2(d_values, labels, function(d, label) {
   data <- generate_groups(d)
   
-  # Calcola la percentuale di sovrapposizione (approssimata)
   overlap <- 2 * pnorm(-abs(d) / 2) * 100
   
   ggplot(data, aes(x = value, fill = group)) +
     geom_density(alpha = 0.5, color = "white") +
-    geom_vline(xintercept = 0, linetype = "dashed", color = "blue", alpha = 0.5) +
-    geom_vline(xintercept = d, linetype = "dashed", color = "red", alpha = 0.5) +
-    scale_fill_manual(values = c("Controllo" = "steelblue", "Trattamento" = "coral")) +
+    geom_vline(
+      xintercept = 0,
+      linetype = "dashed",
+      color = palette_groups["Controllo"],
+      alpha = 0.7
+    ) +
+    geom_vline(
+      xintercept = d,
+      linetype = "dashed",
+      color = palette_groups["Trattamento"],
+      alpha = 0.7
+    ) +
+    scale_fill_manual(values = palette_groups) +
     labs(
       title = label,
       subtitle = sprintf("Sovrapposizione: %.0f%%", overlap),
@@ -175,11 +198,16 @@ Questa relazione permette di tradurre effetti espressi in una metrica nell'altra
 ### Visualizzazione di correlazioni di diversa intensità
 
 ```{r fig.asp=1}
+#| echo: false
 #| out.width: "100%"
 #| fig-width: 8
 #| fig-height: 8
 #| label: fig-correlations-visual
 #| fig-cap: "Visualizzazione di correlazioni progressivamente più forti. Con $r$ = 0.1 la relazione è quasi impercettibile; con $r$ = 0.7 emerge un chiaro pattern lineare."
+
+col_points <- palette_qualitative[5]  # Blu
+col_line   <- palette_qualitative[1]  # Arancione
+col_subtle <- palette_qualitative[8]  # Grigio
 
 # Funzione per generare dati con una correlazione specifica
 generate_correlated_data <- function(r, n = 200) {
@@ -188,38 +216,48 @@ generate_correlated_data <- function(r, n = 200) {
   tibble(x = x, y = y, correlation = r)
 }
 
-# Valori di correlazione da visualizzare
+# Valori di correlazione
 r_values <- c(0.1, 0.3, 0.5, 0.7)
 
-# Generazione di tutti i plot
 correlation_plots <- map(r_values, function(r_val) {
   data <- generate_correlated_data(r_val)
   
   ggplot(data, aes(x = x, y = y)) +
-    geom_point(alpha = 0.6, color = "steelblue", size = 1.5) +
-    geom_smooth(method = "lm", se = FALSE, color = "#E64A19", linewidth = 1.2) +
+    geom_point(
+      alpha = 0.6,
+      color = col_points,
+      size = 1.5
+    ) +
+    geom_smooth(
+      method = "lm",
+      se = FALSE,
+      color = col_line,
+      linewidth = 1.2
+    ) +
     labs(
       title = sprintf("r = %.1f", r_val),
       subtitle = sprintf("r² = %.2f", r_val^2),
       x = "Variabile X",
       y = "Variabile Y"
     ) +
-    theme_minimal() +
     theme(
       aspect.ratio = 1,
       plot.title = element_text(face = "bold", hjust = 0.5),
-      plot.subtitle = element_text(hjust = 0.5, color = "#666666")
+      plot.subtitle = element_text(
+        hjust = 0.5,
+        color = col_subtle
+      )
     ) +
     coord_cartesian(xlim = c(-3, 3), ylim = c(-3, 3))
 })
 
-# Layout a griglia 2x2
-(correlation_plots[[1]] + correlation_plots[[2]]) / 
+# Layout 2x2
+(correlation_plots[[1]] + correlation_plots[[2]]) /
 (correlation_plots[[3]] + correlation_plots[[4]]) +
   plot_annotation(
     title = "Intensità Progressiva della Correlazione Lineare",
-    subtitle = "La linea rossa rappresenta la retta di regressione che meglio approssima\nla relazione",
-    caption = "Nota: r2 rappresenta la proporzione di varianza in Y spiegata da X."
+    subtitle = "La linea arancione rappresenta la retta di regressione che meglio approssima\nla relazione",
+    caption = "Nota: r² rappresenta la proporzione di varianza in Y spiegata da X."
   ) &
   theme(plot.title = element_text(face = "bold", size = 14))
 ```
@@ -314,8 +352,14 @@ quando eleviamo al quadrato per ottenere $r^2$, la relazione raddoppiata (×2) d
 ### Visualizzazione della relazione non lineare tra $r$ e $r^2$
 
 ```{r}
+#| echo: false
 #| label: fig-r-vs-r2
 #| fig-cap: "La trasformazione quadratica da r a r² comprime i valori piccoli e amplifica le differenze relative tra valori maggiori."
+
+col_curve    <- palette_qualitative[5]  # Blu
+col_reference<- palette_qualitative[8]  # Grigio
+col_highlight<- palette_qualitative[1]  # Arancione
+col_text     <- palette_qualitative[8]  # Grigio
 
 # Creazione dei dati per il grafico
 transformation_data <- tibble(
@@ -323,30 +367,58 @@ transformation_data <- tibble(
   r_squared = r^2
 )
 
-# Punti di riferimento specifici
+# Punti di riferimento
 reference_points <- tibble(
   r = c(0.1, 0.3, 0.5, 0.7),
-  label = c("r = 0.1\n(r² = 0.01)", 
-            "r = 0.3\n(r² = 0.09)", 
-            "r = 0.5\n(r² = 0.25)", 
-            "r = 0.7\n(r² = 0.49)")
+  label = c(
+    "r = 0.1\n(r² = 0.01)", 
+    "r = 0.3\n(r² = 0.09)", 
+    "r = 0.5\n(r² = 0.25)", 
+    "r = 0.7\n(r² = 0.49)"
+  )
 )
 
 ggplot(transformation_data, aes(x = r, y = r_squared)) +
-  geom_line(color = "#1976D2", linewidth = 1.5, alpha = 0.8) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", 
-              color = "#757575", linewidth = 0.8, alpha = 0.5) +
-  geom_point(data = reference_points, aes(x = r, y = r^2), 
-             color = "#E64A19", size = 4) +
-  geom_segment(data = reference_points, 
-               aes(x = r, xend = r, y = 0, yend = r^2),
-               color = "#E64A19", linetype = "dotted", alpha = 0.6) +
-  geom_segment(data = reference_points,
-               aes(x = 0, xend = r, y = r^2, yend = r^2),
-               color = "#E64A19", linetype = "dotted", alpha = 0.6) +
-  geom_text(data = reference_points,
-            aes(x = r, y = r^2, label = label),
-            vjust = -0.5, hjust = 0.5, size = 3.5, color = "#E64A19") +
+  geom_line(
+    color = col_curve,
+    linewidth = 1.5,
+    alpha = 0.8
+  ) +
+  geom_abline(
+    slope = 1, intercept = 0,
+    linetype = "dashed",
+    color = col_reference,
+    linewidth = 0.8,
+    alpha = 0.5
+  ) +
+  geom_point(
+    data = reference_points,
+    aes(x = r, y = r^2),
+    color = col_highlight,
+    size = 4
+  ) +
+  geom_segment(
+    data = reference_points,
+    aes(x = r, xend = r, y = 0, yend = r^2),
+    color = col_highlight,
+    linetype = "dotted",
+    alpha = 0.6
+  ) +
+  geom_segment(
+    data = reference_points,
+    aes(x = 0, xend = r, y = r^2, yend = r^2),
+    color = col_highlight,
+    linetype = "dotted",
+    alpha = 0.6
+  ) +
+  geom_text(
+    data = reference_points,
+    aes(x = r, y = r^2, label = label),
+    vjust = -0.5,
+    hjust = 0.5,
+    size = 3.5,
+    color = col_highlight
+  ) +
   labs(
     x = "Coefficiente di correlazione (r)",
     y = "Coefficiente di determinazione (r²)",
@@ -361,15 +433,20 @@ ggplot(transformation_data, aes(x = r, y = r_squared)) +
     breaks = seq(0, 1, 0.1),
     limits = c(0, 1)
   ) +
-  theme_minimal(base_size = 12) +
   theme(
     panel.grid.minor = element_blank(),
     plot.title = element_text(face = "bold"),
-    axis.text = element_text(color = "#333333")
+    axis.text = element_text(color = col_text)
   ) +
-  annotate("text", x = 0.82, y = 0.7, 
-           label = "Effetto di compressione:\nvalori piccoli di r diventano\nancora più piccoli in r²",
-           hjust = 1, size = 3.5, color = "#666666", lineheight = 0.9)
+  annotate(
+    "text",
+    x = 0.82, y = 0.7,
+    label = "Effetto di compressione:\nvalori piccoli di r diventano\nancora più piccoli in r²",
+    hjust = 1,
+    size = 3.5,
+    color = col_text,
+    lineheight = 0.9
+  )
 ```
 
 ### Implicazioni per la ricerca applicata
@@ -479,12 +556,23 @@ benchmarks <- tibble(
   ) |>
   arrange(r)
 
-ggplot(benchmarks, aes(x = r, y = reorder(Effetto, r), fill = Cohen_label)) +
+palette_cohen <- setNames(
+  palette_qualitative[c(8, 2, 5, 1)],
+  c("< Piccolo", "Piccolo", "Medio", "Grande")
+)
+
+ggplot(
+  benchmarks,
+  aes(x = r, y = reorder(Effetto, r), fill = Cohen_label)
+) +
   geom_col(alpha = 0.8) +
-  geom_vline(xintercept = c(0.1, 0.3, 0.5), linetype = "dashed", 
-             color = "gray50", alpha = 0.5) +
-  scale_fill_manual(values = c("< Piccolo" = "gray70", "Piccolo" = "lightblue",
-                               "Medio" = "steelblue", "Grande" = "darkblue")) +
+  geom_vline(
+    xintercept = c(0.1, 0.3, 0.5),
+    linetype = "dashed",
+    color = palette_qualitative[8],  # grigio
+    alpha = 0.5
+  ) +
+  scale_fill_manual(values = palette_cohen) +
   labs(
     x = "Correlazione (r)",
     y = "",
@@ -560,21 +648,45 @@ r_each <- 0.30
 # (semplificazione per illustrare il concetto)
 cumulative_r2 <- n_predictors * r_each^2
 
+col_main   <- palette_qualitative[5]  # Blu
+col_limit  <- palette_qualitative[8]  # Grigio
+col_marker <- palette_qualitative[1]  # Arancione
+
 tibble(
   `Numero di predittori` = n_predictors,
   `R² cumulativa (se indipendenti)` = cumulative_r2
 ) |>
   ggplot(aes(x = `Numero di predittori`, y = `R² cumulativa (se indipendenti)`)) +
-  geom_line(color = "steelblue", linewidth = 1.2) +
-  geom_point(color = "steelblue", size = 2) +
-  geom_hline(yintercept = 1, color = "red", linetype = "dashed", linewidth = 1) +
-  annotate("text", x = 15, y = 1.1, label = "R² = 1 (limite massimo)", 
-           color = "red", hjust = 0) +
-  geom_vline(xintercept = 1 / r_each^2, color = "coral", linetype = "dotted") +
-  annotate("text", x = 12, y = 0.5, 
-           label = sprintf("Con r = %.2f per predittore,\nbastano %.0f predittori\nper 'esaurire' la varianza", 
-                          r_each, 1 / r_each^2),
-           color = "coral", hjust = 0) +
+  geom_line(color = col_main, linewidth = 1.2) +
+  geom_point(color = col_main, size = 2) +
+  geom_hline(
+    yintercept = 1,
+    color = col_limit,
+    linetype = "dashed",
+    linewidth = 1
+  ) +
+  annotate(
+    "text",
+    x = 15, y = 1.1,
+    label = "R² = 1 (limite massimo)",
+    color = col_limit,
+    hjust = 0
+  ) +
+  geom_vline(
+    xintercept = 1 / r_each^2,
+    color = col_marker,
+    linetype = "dotted"
+  ) +
+  annotate(
+    "text",
+    x = 12, y = 0.5,
+    label = sprintf(
+      "Con r = %.2f per predittore,\nbastano %.0f predittori\nper 'esaurire' la varianza",
+      r_each, 1 / r_each^2
+    ),
+    color = col_marker,
+    hjust = 0
+  ) +
   scale_y_continuous(limits = c(0, 2), breaks = seq(0, 2, 0.25)) +
   labs(
     title = "Il 'Piranha Problem'",

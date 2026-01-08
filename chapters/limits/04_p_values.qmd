@@ -35,7 +35,6 @@ In questo capitolo, esploreremo l'instabilità del valore-$p$ attraverso delle s
 
 here::here("code", "_common.R") |> 
   source()
-library(tidyverse)
 library(patchwork)
 ```
 :::
@@ -95,25 +94,43 @@ simulation_ordered <- simulation |>
   arrange(p_value) |>
   mutate(rank = row_number())
 
-ggplot(simulation_ordered, aes(x = rank, y = p_value, color = significant)) +
+col_sig   <- palette_qualitative[3]  # Verde
+col_nons  <- palette_qualitative[8]  # Grigio
+col_thr   <- palette_qualitative[8]  # Grigio (soglia neutra)
+
+simulation_ordered |>
+  mutate(significant = factor(significant, levels = c(TRUE, FALSE))) |>
+  ggplot(aes(x = rank, y = p_value, color = significant)) +
   geom_point(size = 2, alpha = 0.8) +
-  geom_hline(yintercept = 0.05, linetype = "dashed", color = "red", linewidth = 1) +
-  scale_color_manual(
-    values = c("TRUE" = "forestgreen", "FALSE" = "gray60"),
-    labels = c("TRUE" = "Significativo (p < 0.05)", "FALSE" = "Non significativo")
+  geom_hline(
+    yintercept = 0.05,
+    linetype = "dashed",
+    color = col_thr,
+    linewidth = 1
   ) +
-  scale_y_continuous(trans = "log10", 
-                     breaks = c(0.001, 0.01, 0.05, 0.1, 0.5, 1),
-                     labels = c("0.001", "0.01", "0.05", "0.1", "0.5", "1")) +
+  scale_color_manual(
+    values = setNames(c(col_sig, col_nons), c("TRUE", "FALSE")),
+    labels = c(
+      "TRUE"  = "Significativo (p < 0.05)",
+      "FALSE" = "Non significativo"
+    )
+  ) +
+  scale_y_continuous(
+    trans = "log10",
+    breaks = c(0.001, 0.01, 0.05, 0.1, 0.5, 1),
+    labels = c("0.001", "0.01", "0.05", "0.1", "0.5", "1")
+  ) +
   labs(
     x = "Campioni (ordinati per valore-p)",
     y = "Valore-p (scala logaritmica)",
     color = "",
     title = "100 studi identici, conclusioni diverse",
-    subtitle = sprintf("Stesso effetto (d = %.1f), stesso n = %d, ma valori-p da %.4f a %.2f",
-                      true_mean/true_sd, n_obs, 
-                      min(simulation$p_value), max(simulation$p_value))
-  ) 
+    subtitle = sprintf(
+      "Stesso effetto (d = %.1f), stesso n = %d, ma valori-p da %.4f a %.2f",
+      true_mean/true_sd, n_obs,
+      min(simulation$p_value), max(simulation$p_value)
+    )
+  )
 ```
 
 Il grafico mette in evidenza un risultato particolarmente incisivo: **lo stesso effetto reale**, valutato con **la medesima procedura statistica** (test $t$ di Student), può generare valori-$p$ che coprono pressoché l’intera gamma possibile, da valori prossimi a 0 fino a valori prossimi a 1. In pratica, estraendo campioni diversi dalla stessa popolazione, si giungerebbe a conclusioni diametralmente opposte: con alcuni si dichiarerebbe l'effetto "altamente significativo" ($p$ < 0.01), mentre con altri non si rileverebbe alcuna evidenza statistica ($p$ > 0.05). Tale variabilità non riflette differenze nel fenomeno sottostante, ma è esclusivamente un riflesso della fluttuazione casuale intrinseca al processo di campionamento.
@@ -130,27 +147,56 @@ Quando l'ipotesi nulla è vera, il valore-$p$ è progettato per comportarsi in u
 #| label: fig-pvalue-under-h0
 #| fig-cap: "Distribuzione uniforme dei valori-p quando H₀ è vera. La linea rossa tratteggiata a y=1 mostra l'andamento atteso di una distribuzione uniforme perfetta. Il 5% dei valori cade a sinistra della linea verticale scura (p < 0.05) per puro caso."
 
+# Colori (Okabe–Ito)
+col_hist <- palette_qualitative[5]  # Blu
+col_ref  <- palette_qualitative[8]  # Grigio
+col_thr  <- palette_qualitative[1]  # Arancione
+
 # Simulazione sotto H0 vera
 n_sims_h0 <- 10000
-p_values_h0 <- map_dbl(1:n_sims_h0, function(i) {
-  x <- rnorm(n_obs, mean = 0, sd = true_sd)  # H0 vera: mu = 0
-  t.test(x, mu = 0)$p.value
-})
+p_values_h0 <- numeric(n_sims_h0)
+
+for (i in seq_len(n_sims_h0)) {
+  x <- rnorm(n_obs, mean = 0, sd = true_sd)
+  p_values_h0[i] <- t.test(x, mu = 0)$p.value
+}
 
 tibble(p_value = p_values_h0) |>
   ggplot(aes(x = p_value)) +
-  geom_histogram(bins = 50, fill = "steelblue", color = "white", 
-                 aes(y = after_stat(density)), alpha = 0.8) +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "red", linewidth = 1) +
-  geom_vline(xintercept = 0.05, linetype = "dashed", color = "darkred", linewidth = 1) +
-  annotate("text", x = 0.10, y = 1.3, label = "5% falsi positivi", 
-           color = "darkred", hjust = 0) +
+  geom_histogram(
+    bins = 50,
+    fill = col_hist,
+    color = "white",
+    aes(y = after_stat(density)),
+    alpha = 0.8
+  ) +
+  geom_hline(
+    yintercept = 1,
+    linetype = "dashed",
+    color = col_ref,
+    linewidth = 1
+  ) +
+  geom_vline(
+    xintercept = 0.05,
+    linetype = "dashed",
+    color = col_thr,
+    linewidth = 1
+  ) +
+  annotate(
+    "text",
+    x = 0.10, y = 1.3,
+    label = "5% falsi positivi",
+    color = col_thr,
+    hjust = 0
+  ) +
   labs(
     x = "Valore-p",
     y = "Densità",
     title = "Distribuzione dei valori-p sotto H₀ vera",
-    subtitle = sprintf("Distribuzione uniforme attesa: %.1f%% dei valori-p < 0.05 (atteso: 5%%)", 
-                      100 * mean(p_values_h0 < 0.05))
+    subtitle = sprintf(
+      "Distribuzione uniforme attesa: %.1f%% dei valori-p < 0.05 (atteso: 5%%)",
+      100 * mean(p_values_h0 < 0.05)
+    )
   ) +
   coord_cartesian(ylim = c(0, 1.5))
 ```
@@ -163,32 +209,59 @@ La situazione cambia radicalmente quando esiste un effetto reale nella popolazio
 #| label: fig-pvalue-distributions
 #| fig-cap: "Come la dimensione dell'effetto modella la distribuzione del valore-p. Con H₀ vera (d=0.0), la distribuzione è uniforme. All'aumentare dell'effetto reale (d), la distribuzione si sposta verso valori più bassi, aumentando la potenza (percentuale di p<0.05)."
 
-# Simulazione sotto H0 falsa (effetto piccolo)
+col_hist <- palette_qualitative[5]  # Blu
+col_thr  <- palette_qualitative[1]  # Arancione
+
+# Simulazione sotto H0 falsa (effetti di diversa ampiezza)
 effect_sizes <- c(0, 0.2, 0.5, 0.8)
 n_sims <- 5000
 
-pvalue_distributions <- map_dfr(effect_sizes, function(d) {
-  p_vals <- map_dbl(1:n_sims, function(i) {
+pvalue_distributions <- tibble()
+
+for (d in effect_sizes) {
+
+  p_vals <- numeric(n_sims)
+
+  for (i in seq_len(n_sims)) {
     x <- rnorm(n_obs, mean = d * true_sd, sd = true_sd)
-    t.test(x, mu = 0)$p.value
-  })
-  
-  tibble(
-    effect_size = d,
-    p_value = p_vals,
-    label = sprintf("d = %.1f (potenza: %.0f%%)", d, 100 * mean(p_vals < 0.05))
+    p_vals[i] <- t.test(x, mu = 0)$p.value
+  }
+
+  pvalue_distributions <- bind_rows(
+    pvalue_distributions,
+    tibble(
+      effect_size = d,
+      p_value = p_vals,
+      label = sprintf(
+        "d = %.1f (potenza: %.0f%%)",
+        d, 100 * mean(p_vals < 0.05)
+      )
+    )
   )
-})
+}
 
 ggplot(pvalue_distributions, aes(x = p_value)) +
-  geom_histogram(bins = 50, fill = "steelblue", color = "white", alpha = 0.8) +
-  geom_vline(xintercept = 0.05, linetype = "dashed", color = "red") +
+  geom_histogram(
+    bins = 50,
+    fill = col_hist,
+    color = "white",
+    alpha = 0.8
+  ) +
+  geom_vline(
+    xintercept = 0.05,
+    linetype = "dashed",
+    color = col_thr,
+    linewidth = 1
+  ) +
   facet_wrap(~label, ncol = 2, scales = "free_y") +
   labs(
     x = "Valore-p",
     y = "Frequenza",
-    title = "Come la dimensione dell'effetto influenza\nla distribuzione dei valori-p",
-    subtitle = sprintf("n = %d per campione, %d simulazioni per condizione", n_obs, n_sims)
+    title = "Come la dimensione dell'effetto influenza la distribuzione dei valori-p",
+    subtitle = sprintf(
+      "n = %d per campione, %d simulazioni per condizione",
+      n_obs, n_sims
+    )
   )
 ```
 
@@ -218,53 +291,70 @@ Per capire quanto questo fenomeno sia frequente, possiamo simulare coppie di stu
 
 ```{r}
 #| label: fig-two-studies
-#| fig-cap: "Simulazione di 1000 coppie di studi che esaminano lo stesso effetto reale. Spesso uno studio risulta “significativo” e l’altro no."
+#| fig-cap: "Simulazione di 1000 coppie di studi che esaminano lo stesso effetto reale. Spesso uno studio risulta “significativo” e l'altro no."
 
 # Simula coppie di studi
 n_pairs <- 1000
+
+# Verifica che n_obs e true_mean siano definiti (se necessario, aggiungi:)
+# n_obs <- 50      # esempio
+# true_mean <- 0.2 # esempio
+# true_sd <- 1     # esempio
+
+p_a <- numeric(n_pairs)
+p_b <- numeric(n_pairs)
+
+for (i in seq_len(n_pairs)) {
+  x_a <- rnorm(n_obs, mean = true_mean, sd = true_sd)
+  x_b <- rnorm(n_obs, mean = true_mean, sd = true_sd)
+  p_a[i] <- t.test(x_a, mu = 0)$p.value
+  p_b[i] <- t.test(x_b, mu = 0)$p.value
+}
+
 study_pairs <- tibble(pair_id = 1:n_pairs) |>
-  rowwise() |>
   mutate(
-    # Studio A
-    data_a = list(rnorm(n_obs, mean = true_mean, sd = true_sd)),
-    p_a = t.test(data_a, mu = 0)$p.value,
+    p_a = p_a,
+    p_b = p_b,
     sig_a = p_a < 0.05,
-    # Studio B (stessa popolazione!)
-    data_b = list(rnorm(n_obs, mean = true_mean, sd = true_sd)),
-    p_b = t.test(data_b, mu = 0)$p.value,
     sig_b = p_b < 0.05,
-    # Concordanza
     concordance = case_when(
       sig_a & sig_b ~ "Entrambi significativi",
       !sig_a & !sig_b ~ "Entrambi non significativi",
       TRUE ~ "Risultati discordanti"
     )
-  ) |>
-  ungroup()
+  )
 
 # Statistiche
 concordance_stats <- study_pairs |>
   dplyr::count(concordance) |>
   mutate(pct = n / sum(n) * 100)
 
+# Colori
+col_ref  <- palette_qualitative[8]  # grigio
+col_line <- palette_qualitative[8]  # grigio
+palette_concordance <- setNames(
+  palette_qualitative[c(3, 8, 6)],  # verde, grigio, rosso-arancio (anziché 1)
+  c("Entrambi significativi", "Entrambi non significativi", "Risultati discordanti")
+)
+
 # Visualizzazione
 ggplot(study_pairs, aes(x = p_a, y = p_b, color = concordance)) +
   geom_point(alpha = 0.5, size = 2) +
-  geom_hline(yintercept = 0.05, linetype = "dashed", color = "gray50") +
-  geom_vline(xintercept = 0.05, linetype = "dashed", color = "gray50") +
-  geom_abline(slope = 1, intercept = 0, color = "gray30", linetype = "dotted") +
-  scale_color_manual(values = c(
-    "Entrambi significativi" = "forestgreen",
-    "Entrambi non significativi" = "steelblue",
-    "Risultati discordanti" = "coral"
-  )) +
+  geom_hline(yintercept = 0.05, linetype = "dashed", color = col_ref) +
+  geom_vline(xintercept = 0.05, linetype = "dashed", color = col_ref) +
+  geom_abline(slope = 1, intercept = 0, color = col_line, linetype = "dotted") +
+  scale_color_manual(values = palette_concordance) +
   labs(
     x = "P-value Studio A",
     y = "P-value Studio B",
     color = "",
     title = "Coppie di studi sullo stesso effetto",
-    subtitle = sprintf("Circa %.0f%% delle coppie produce risultati discordanti", 
-                      concordance_stats$pct[concordance_stats$concordance == "Risultati discordanti"])
+    subtitle = sprintf(
+      "Circa %.0f%% delle coppie produce risultati discordanti",
+      concordance_stats |> 
+        filter(concordance == "Risultati discordanti") |> 
+        pull(pct)
+    )
   ) +
   coord_fixed()
 ```
@@ -331,43 +421,55 @@ pct_post_above095 <- mean(comparison$prob_positive > 0.95) * 100
 Grafici comparativi:
 
 ```{r}
+col_pvalue <- palette_qualitative[6]     
+col_postprob <- palette_qualitative[5]  
+col_line <- palette_qualitative[8]   
+
 # (A) histogram p-value con rug e annotazioni
 pA <- ggplot(comparison, aes(x = p_value)) +
-  geom_histogram(bins = 30, fill = "#F39C79", color = "white", alpha = 0.9) +
-  geom_rug(sides = "b", alpha = 0.2) +
-  geom_vline(xintercept = 0.05, linetype = "dashed", color = "black") +
-  annotate("text", x = 0.65, y = Inf, label = sprintf("Range: [%.3f, %.3f]\nMean: %.3f\nCV: %.2f\n%% p<0.05: %.1f%%",
-                                                      pv_min, pv_max, pv_mean, pv_cv, pct_p_below05),
-           hjust = 1, vjust = 1.1, size = 3.5) +
+  geom_histogram(bins = 30, fill = col_pvalue, color = "white", alpha = 0.9) +
+  geom_rug(sides = "b", alpha = 0.3, color = col_pvalue) +
+  geom_vline(xintercept = 0.05, linetype = "dashed", color = col_line, linewidth = 0.8) +
+  annotate("text", 
+           x = 0.65, y = Inf, 
+           label = sprintf("Range: [%.3f, %.3f]\nMedia: %.3f\nCV: %.2f\n%% p<0.05: %.1f%%",
+                           pv_min, pv_max, pv_mean, pv_cv, pct_p_below05),
+           hjust = 1, vjust = 1.2, size = 3.5, lineheight = 0.9,
+           color = col_pvalue, fontface = "bold") +
   labs(title = "A) Distribuzione dei p-value",
-       x = "p-value", y = "Frequenza") +
-  theme_minimal()
+       x = "p-value", y = "Frequenza") 
 
 # (B) histogram posterior probabilities con rug e annotazioni
 pB <- ggplot(comparison, aes(x = prob_positive)) +
-  geom_histogram(bins = 30, fill = "#4C7BD9", color = "white", alpha = 0.9) +
-  geom_rug(sides = "b", alpha = 0.2) +
-  geom_vline(xintercept = 0.5, linetype = "dotted", color = "gray40") +
-  annotate("text", x = 0.98, y = Inf, label = sprintf("Range: [%.2f, %.2f]\nMean: %.2f\nCV: %.2f\n%%",
-                                                      post_min, post_max, post_mean, post_cv),
-           hjust = 1, vjust = 1.1, size = 3.5) +
+  geom_histogram(bins = 30, fill = col_postprob, color = "white", alpha = 0.9) +
+  geom_rug(sides = "b", alpha = 0.3, color = col_postprob) +
+  geom_vline(xintercept = 0.5, linetype = "dotted", color = col_line, linewidth = 0.8) +
+  annotate("text", 
+           x = 0.98, y = Inf, 
+           label = sprintf("Range: [%.2f, %.2f]\nMedia: %.2f\nCV: %.2f",
+                           post_min, post_max, post_mean, post_cv),
+           hjust = 1, vjust = 1.2, size = 3.5, lineheight = 0.9,
+           color = col_postprob, fontface = "bold") +
   labs(title = "B) Distribuzione P(μ > 0 | dati)",
-       x = "Probabilità a posteriori", y = "Frequenza") +
-  theme_minimal()
+       x = "Probabilità a posteriori", y = "Frequenza") 
 
 # (C) scatter p-value vs posterior probability + 2D density contours
-# color by 2D density (using stat_density_2d)
 pC <- ggplot(comparison, aes(x = p_value, y = prob_positive)) +
-  geom_point(alpha = 0.45, size = 1.8) +
-  stat_density_2d(aes(fill = ..level..), geom = "polygon", alpha = 0.25, color = NA) +
-  scale_fill_viridis_c(option = "A", direction = -1) +
-  geom_smooth(method = "loess", se = FALSE, color = "black", linetype = "dashed", size = 0.6) +
-  geom_vline(xintercept = 0.05, linetype = "dashed", color = "gray50") +
-  geom_hline(yintercept = 0.5, linetype = "dotted", color = "gray50") +
+  geom_point(alpha = 0.5, size = 1.8, color = palette_qualitative[8]) +  # Grigio per i punti
+  stat_density_2d(aes(fill = ..level..), geom = "polygon", 
+                  alpha = 0.25, color = NA) +
+  # Usa gradient con colori dalla tua palette
+  scale_fill_gradientn(colors = c(col_postprob, "#FFFFFF", col_pvalue)) +
+  geom_smooth(method = "loess", se = FALSE, 
+              color = palette_qualitative[1],  # Arancione
+              linetype = "dashed", linewidth = 0.8) +
+  geom_vline(xintercept = 0.05, linetype = "dashed", 
+             color = col_line, linewidth = 0.6) +
+  geom_hline(yintercept = 0.5, linetype = "dotted", 
+             color = col_line, linewidth = 0.6) +
   labs(title = "C) p-value vs P(μ>0 | dati)",
        x = "p-value", y = "Probabilità a posteriori") +
   coord_cartesian(xlim = c(0, 1), ylim = c(0, 1)) +
-  theme_minimal() +
   theme(legend.position = "none")
 ```
 
@@ -418,7 +520,6 @@ Anche l’inferenza bayesiana è soggetta alla variabilità campionaria. Introdu
 
 In sintesi, l’approccio bayesiano non elimina l’incertezza, ma la **quantifica** in modo esplicito, mentre la soglia frequentista tende a **mascherarla**, trasformando la naturale variabilità dei risultati in un conflitto artificiale tra studi apparentemente contraddittori.
 
-
 ## Simulazione 5: l'effetto della dimensione campionaria
 
 Un argomento spesso avanzato a sostegno dell'uso del valore-$p$ è che, aumentando la dimensione campionaria, le inferenze diventano più stabili. In parte questa affermazione è vera: campioni più ampi, infatti, offrono una maggiore potenza statistica, il che rende più frequenti i risultati "statisticamente significativi" quando esiste un effetto reale. Tuttavia, questa osservazione rischia di nascondere un fatto meno intuitivo, ma altrettanto importante: anche con campioni molto grandi, il valore-$p$ conserva una sostanziale variabilità e rimane strettamente dipendente dalle caratteristiche specifiche del singolo campione osservato.
@@ -436,29 +537,50 @@ true_sd <- 1
 sample_sizes <- c(10, 30, 100, 300)
 n_sims <- 1000
 
-sample_size_effect <- map_dfr(sample_sizes, function(n) {
-  p_vals <- map_dbl(1:n_sims, function(i) {
+sample_size_effect <- tibble()
+
+for (n in sample_sizes) {
+
+  p_vals <- numeric(n_sims)
+
+  for (i in seq_len(n_sims)) {
     x <- rnorm(n, mean = true_mean, sd = true_sd)
-    t.test(x, mu = 0)$p.value
-  })
-  
-  tibble(
-    n = n,
-    p_value = p_vals,
-    label = sprintf("n = %d", n)
+    p_vals[i] <- t.test(x, mu = 0)$p.value
+  }
+
+  sample_size_effect <- bind_rows(
+    sample_size_effect,
+    tibble(
+      n = n,
+      p_value = p_vals,
+      label = sprintf("n = %d", n)
+    )
   )
-})
+}
 
 ggplot(sample_size_effect, aes(x = p_value)) +
-  geom_histogram(bins = 40, fill = "steelblue", color = "white", alpha = 0.8) +
-  geom_vline(xintercept = 0.05, linetype = "dashed", color = "red") +
+  geom_histogram(
+    aes(fill = "Distribuzione P-value"),
+    bins = 40, 
+    color = "white", 
+    alpha = 0.8
+  ) +
+  geom_vline(
+    aes(xintercept = 0.05, color = "Soglia α = 0.05"),
+    linetype = "dashed", 
+    linewidth = 1
+  ) +
   facet_wrap(~label, ncol = 2) +
   labs(
     x = "Valore-p",
     y = "Frequenza",
     title = "Distribuzione dei valori-p\nper diverse dimensioni campionarie",
-    subtitle = sprintf("Effetto vero: d = %.1f", true_mean/true_sd)
-  )
+    subtitle = sprintf("Effetto vero: d = %.1f", true_mean/true_sd),
+    fill = "Elementi",
+    color = "Linee"
+  ) +
+  scale_fill_manual(values = c("Distribuzione P-value" = palette_qualitative[2])) + 
+  scale_color_manual(values = c("Soglia α = 0.05" = palette_qualitative[6]))   
 ```
 
 ```{r}
@@ -518,19 +640,26 @@ scenarios <- tibble(
 # Simula repliche
 n_reps <- 10000
 
-replication_probs <- map_dfr(1:nrow(scenarios), function(i) {
+replication_probs <- tibble()
+
+for (i in seq_len(nrow(scenarios))) {
+
   d <- scenarios$true_d[i]
-  
-  p_reps <- map_dbl(1:n_reps, function(j) {
+  p_reps <- numeric(n_reps)
+
+  for (j in seq_len(n_reps)) {
     x <- rnorm(n_original, mean = d, sd = 1)
-    t.test(x, mu = 0)$p.value
-  })
-  
-  tibble(
-    scenario = scenarios$scenario[i],
-    prob_replicate = mean(p_reps < 0.05)
+    p_reps[j] <- t.test(x, mu = 0)$p.value
+  }
+
+  replication_probs <- bind_rows(
+    replication_probs,
+    tibble(
+      scenario = scenarios$scenario[i],
+      prob_replicate = mean(p_reps < 0.05)
+    )
   )
-})
+}
 
 replication_probs |>
   mutate(`P(replica significativa)` = sprintf("%.0f%%", prob_replicate * 100)) |>
@@ -556,25 +685,30 @@ d <- 0.3
 n <- 50
 n_sims <- 10000
 
-future_studies <- map_dfr(1:n_sims, function(i) {
+future_studies <- tibble(
+  p_value = numeric(n_sims),
+  prob_positive = numeric(n_sims)
+)
+
+for (i in seq_len(n_sims)) {
+
   x <- rnorm(n, mean = d, sd = 1)
-  
+
   # P-value
-  p <- t.test(x, mu = 0)$p.value
-  
+  future_studies$p_value[i] <- t.test(x, mu = 0)$p.value
+
   # Bayesiano
   x_bar <- mean(x)
   se <- sd(x) / sqrt(n)
   prior_sd <- 0.5
-  
-  post_precision <- 1/prior_sd^2 + 1/se^2
-  post_mean <- (1/se^2 * x_bar) / post_precision
-  post_sd <- sqrt(1/post_precision)
-  
-  prob_pos <- pnorm(0, post_mean, post_sd, lower.tail = FALSE)
-  
-  tibble(p_value = p, prob_positive = prob_pos)
-})
+
+  post_precision <- 1 / prior_sd^2 + 1 / se^2
+  post_mean <- (1 / se^2 * x_bar) / post_precision
+  post_sd <- sqrt(1 / post_precision)
+
+  future_studies$prob_positive[i] <-
+    pnorm(0, post_mean, post_sd, lower.tail = FALSE)
+}
 
 # Intervalli al 95%
 cat("Intervallo al 95% per p-value:\n")
@@ -612,30 +746,45 @@ d <- 0.3
 n <- 50
 n_sims <- 10000
 
-threshold_analysis <- map_dfr(thresholds, function(alpha) {
-  # Sotto H0 (falsi positivi)
-  p_h0 <- map_dbl(1:n_sims, ~t.test(rnorm(n, 0, 1), mu = 0)$p.value)
+threshold_analysis <- tibble()
+
+for (alpha in thresholds) {
+
+  ## H0
+  p_h0 <- numeric(n_sims)
+  for (i in seq_len(n_sims)) {
+    p_h0[i] <- t.test(rnorm(n, 0, 1), mu = 0)$p.value
+  }
   fpr <- mean(p_h0 < alpha)
-  
-  # Sotto H1 (potenza)
-  p_h1 <- map_dbl(1:n_sims, ~t.test(rnorm(n, d, 1), mu = 0)$p.value)
+
+  ## H1
+  p_h1 <- numeric(n_sims)
+  for (i in seq_len(n_sims)) {
+    p_h1[i] <- t.test(rnorm(n, d, 1), mu = 0)$p.value
+  }
   power <- mean(p_h1 < alpha)
-  
-  # Concordanza tra coppie
-  p_pairs <- map_dfr(1:1000, function(i) {
-    p1 <- t.test(rnorm(n, d, 1), mu = 0)$p.value
-    p2 <- t.test(rnorm(n, d, 1), mu = 0)$p.value
-    tibble(sig1 = p1 < alpha, sig2 = p2 < alpha)
-  })
-  discord <- mean(p_pairs$sig1 != p_pairs$sig2)
-  
-  tibble(
-    alpha = alpha,
-    `Falsi positivi` = sprintf("%.2f%%", fpr * 100),
-    `Potenza` = sprintf("%.0f%%", power * 100),
-    `Discordanza` = sprintf("%.0f%%", discord * 100)
+
+  ## Coppie
+  sig1 <- logical(1000)
+  sig2 <- logical(1000)
+
+  for (i in seq_len(1000)) {
+    sig1[i] <- t.test(rnorm(n, d, 1), mu = 0)$p.value < alpha
+    sig2[i] <- t.test(rnorm(n, d, 1), mu = 0)$p.value < alpha
+  }
+
+  discord <- mean(sig1 != sig2)
+
+  threshold_analysis <- bind_rows(
+    threshold_analysis,
+    tibble(
+      alpha = alpha,
+      `Falsi positivi` = sprintf("%.2f%%", fpr * 100),
+      `Potenza` = sprintf("%.0f%%", power * 100),
+      `Discordanza` = sprintf("%.0f%%", discord * 100)
+    )
   )
-})
+}
 
 threshold_analysis |>
   mutate(Soglia = sprintf("p < %.3f", alpha)) |>

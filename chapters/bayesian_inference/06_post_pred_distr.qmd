@@ -317,15 +317,27 @@ Il vettore `proporzioni_future` riassume queste possibilità: non una singola pr
 Distribuzione iniziale (prima di osservare i dati):
 
 ```{r}
+# Definisci i colori tematici
+col_prior <- palette_qualitative[8]      # Grigio per prior
+col_posterior <- palette_qualitative[5]  # Blu per posterior
+col_pred_dist <- palette_qualitative[2]  # Azzurro per distribuzioni predittive
+col_line <- palette_qualitative[6]       # Rosso-arancio per linee verticali
+
 # Distribuzione iniziale (prima di osservare i dati) — PRIOR 
 ggplot(data.frame(x = c(0, 1)), aes(x = x)) +
   stat_function(
-    fun  = dbeta,
+    fun = dbeta,
     args = list(shape1 = alpha_prior, shape2 = beta_prior),
     linewidth = 1.1,
+    color = col_prior
   ) +
   scale_x_continuous(labels = scales::label_percent(accuracy = 1)) +
-  labs(x = "Probabilità di successo (p)", y = "Densità") 
+  labs(
+    x = "Probabilità di successo (p)", 
+    y = "Densità",
+    title = "Distribuzione a priori: Beta(2,2)",
+    subtitle = "Conoscenza iniziale prima di osservare i dati"
+  )
 ```
 
 Conoscenza aggiornata (dopo aver osservato i dati):
@@ -334,11 +346,18 @@ Conoscenza aggiornata (dopo aver osservato i dati):
 # Conoscenza aggiornata (dopo aver osservato i dati) — POSTERIOR 
 ggplot(data.frame(x = c(0, 1)), aes(x = x)) +
   stat_function(
-    fun  = dbeta,
+    fun = dbeta,
     args = list(shape1 = alpha_post, shape2 = beta_post),
-    linewidth = 1.1
+    linewidth = 1.1,
+    color = col_posterior
   ) +
-  labs(x = "Probabilità di successo (p)", y = "Densità")
+  scale_x_continuous(labels = scales::label_percent(accuracy = 1)) +
+  labs(
+    x = "Probabilità di successo (p)", 
+    y = "Densità",
+    title = "Distribuzione a posteriori: Beta(72,32)",
+    subtitle = "Conoscenza aggiornata dopo aver osservato 70 successi su 100 prove"
+  ) 
 ```
 
 Previsioni per i prossimi 10 lanci:
@@ -349,17 +368,32 @@ ggplot(data.frame(proporzioni = proporzioni_future), aes(x = proporzioni)) +
   geom_histogram(
     aes(y = after_stat(density)),
     bins = 20,
-    fill = modern_palette$grey5,
-    color = modern_palette$white,
+    fill = col_pred_dist,
+    color = "white",
     alpha = 0.85,
     linewidth = 0.2
   ) +
   geom_vline(
     aes(xintercept = successi_osservati / lanci_totali),
     linewidth = 0.9,
-    linetype = "dashed"
+    linetype = "dashed",
+    color = col_line
   ) +
-  labs(x = "Proporzione di successi attesi", y = "Densità")
+  annotate(
+    "text",
+    x = successi_osservati / lanci_totali + 0.02,
+    y = 3.5,
+    label = paste0("Proporzione osservata: ", 
+                   round(successi_osservati / lanci_totali, 2)),
+    color = col_line,
+    hjust = 0
+  ) +
+  labs(
+    x = "Proporzione di successi attesi", 
+    y = "Densità",
+    title = "Distribuzione predittiva a posteriori",
+    subtitle = "Previsioni per i prossimi 10 lanci (Beta-Binomiale)"
+  )
 ```
 
 #### Interpretazione dei risultati

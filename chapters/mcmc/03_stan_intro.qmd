@@ -479,10 +479,18 @@ n <- 30
 sigma <- 15
 y_cont <- rnorm(n, mean = 105, sd = sigma)
 
+# Definisci i colori tematici
+col_histogram <- palette_qualitative[5]     # Blu per istogrammi
+col_trace <- palette_qualitative[c(2, 3, 6, 7)] # 4 colori per le tracce MCMC
+col_density <- palette_qualitative[c(1, 2, 3, 6)] # 4 colori per densità sovrapposte
+col_ppc <- palette_qualitative[2]          # Azzurro per PPC overlay
+col_vline <- palette_qualitative[6]        # Rosso-arancio per linee verticali
+
 tibble(y = y_cont) |>
   ggplot(aes(x = y)) +
-  geom_histogram(bins = 15, fill = PRIMARY, color = "white") +
-  labs(x = "Punteggio", y = "Frequenza") 
+  geom_histogram(bins = 15, fill = col_histogram, color = "white", alpha = 0.8) +
+  labs(x = "Punteggio", y = "Frequenza", 
+       title = "Distribuzione dei punteggi QI simulati")
 ```
 
 ### Specificazione del modello bayesiano
@@ -651,7 +659,7 @@ Un punto di partenza fondamentale è l'analisi dell'istogramma dei campioni MCMC
 ```{r}
 bayesplot::mcmc_hist(fit2$draws("mu"), 
                      binwidth = 1,
-                     fill = "steelblue", 
+                     fill = col_histogram, 
                      alpha = 0.7) +
   labs(title = "Distribuzione a posteriori di μ",
        subtitle = "Stima della media della popolazione",
@@ -668,9 +676,10 @@ Per valutare la convergenza delle catene MCMC, è utile esaminare le traiettorie
 ```{r}
 bayesplot::mcmc_trace(fit2$draws("mu"), 
                       alpha = 0.7) +
+  scale_color_manual(values = col_trace) +
   labs(title = "Traiettorie delle catene MCMC per μ",
        x = "Iterazione", 
-       y = "Valore di μ") 
+       y = "Valore di μ")
 ```
 
 #### Densità delle catene
@@ -679,6 +688,8 @@ La sovrapposizione delle densità delle diverse catene fornisce un'ulteriore ver
 
 ```{r}
 bayesplot::mcmc_dens_overlay(fit2$draws("mu")) +
+  scale_color_manual(values = col_density) +
+  scale_fill_manual(values = col_density) +
   labs(title = "Densità a posteriori per μ",
        subtitle = "Confronto tra le quattro catene MCMC",
        x = "Valore di μ", 
@@ -717,6 +728,7 @@ La visualizzazione grafica facilita la comunicazione dei risultati e mostra chia
 
 ```{r}
 p <- bayesplot::mcmc_areas(fit2$draws("mu"), prob = 0.94, point_est = "mean") +
+  scale_fill_manual(values = col_histogram) +
   labs(x = expression(mu), y = "Densità",
        title = "Distribuzione a posteriori di μ",
        subtitle = "Area colorata: intervallo di credibilità al 94% (ETI)")
@@ -730,7 +742,7 @@ hdi_lower <- hdi_vals$CI_low
 hdi_upper <- hdi_vals$CI_high
 
 p + geom_vline(xintercept = c(hdi_lower, hdi_upper),
-               linetype = "dashed")
+               linetype = "dashed", color = col_vline, linewidth = 0.8)
 ```
 
 Nel caso di distribuzioni simmetriche, le linee tratteggiate dell’HDI coincidono con i bordi dell’area colorata dell’ETI. Con distribuzioni asimmetriche, come la Beta(6, 2), le differenze diventano evidenti:
@@ -743,11 +755,14 @@ eti_beta <- bayestestR::eti(theta_draws, ci = 0.94)
 hdi_beta <- bayestestR::hdi(theta_draws, ci = 0.94)
 
 ggplot(data.frame(theta = theta_draws), aes(x = theta)) +
-  geom_density() +
-  geom_vline(xintercept = c(eti_beta$CI_low, eti_beta$CI_high), linewidth = 0.7) +
+  geom_density(fill = col_histogram, alpha = 0.5) +
+  geom_vline(xintercept = c(eti_beta$CI_low, eti_beta$CI_high), 
+             linewidth = 0.7, color = palette_qualitative[1]) +  
   geom_vline(xintercept = c(hdi_beta$CI_low, hdi_beta$CI_high),
-             linewidth = 1.2, linetype = "dashed") +
-  labs(x = expression(theta), y = "Densità")
+             linewidth = 1.2, linetype = "dashed", color = col_vline) +  
+  labs(x = expression(theta), y = "Densità",
+       title = "Confronto ETI vs HDI per distribuzione Beta(6,2)",
+       subtitle = "Linea continua: ETI al 94%; Linea tratteggiata: HDI al 94%")
 ```
 
 In questo esempio, l’HDI risulta più concentrato nella regione ad alta densità, mentre l’ETI si estende verso la coda meno informativa.
@@ -933,7 +948,10 @@ idx <- sample(seq_len(nrow(yrep_mat_prior)), 100)
 bayesplot::ppc_dens_overlay(
   y = y_cont,
   yrep = yrep_mat_prior[idx, , drop = FALSE]
-) 
+) +
+  scale_color_manual(values = c("y" = col_vline, "yrep" = col_ppc)) +  
+  labs(title = "Prior Predictive Check",
+       subtitle = "Dati osservati (rosso) vs repliche simulate dal prior (azzurro)")
 ```
 
 Se le repliche simulate coprono la distribuzione empirica, il prior è coerente con la conoscenza di base. In caso contrario, occorre rivedere media e deviazione standard del prior.
@@ -972,7 +990,10 @@ Una volta estratte le repliche, possiamo confrontarle con i dati reali:
 
 ```{r}
 y_rep <- fit_post$draws("y_rep", format = "matrix")
-ppc_dens_overlay(y = stan_data_post$y, yrep = y_rep[1:100, ])
+ppc_dens_overlay(y = stan_data_post$y, yrep = y_rep[1:100, ]) +
+  scale_color_manual(values = c("y" = col_vline, "yrep" = col_ppc)) +  
+  labs(title = "Posterior Predictive Check",
+       subtitle = "Dati osservati (rosso) vs repliche simulate dalla posterior (azzurro)")
 ```
 
 Se le distribuzioni simulate coincidono con quella osservata, il modello descrive adeguatamente il fenomeno. Scostamenti sistematici — ad esempio repliche troppo concentrate o troppo disperse — indicano che la struttura del modello o i priors richiedono revisione.

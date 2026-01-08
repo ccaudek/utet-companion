@@ -87,18 +87,29 @@ Visualizzazione dei risultati:
 ```{r}
 tibble(p_value = best_p_values) |>
   ggplot(aes(x = p_value)) +
-  geom_histogram(bins = 50, fill = "steelblue", color = "white", alpha = 0.8) +
-  geom_vline(xintercept = 0.05, color = "red", linetype = "dashed", linewidth = 1) +
+  # 1. Istogramma: mappa il riempimento a una categoria
+  geom_histogram(aes(fill = "Distribuzione P-value"), 
+                 bins = 50, color = "white", alpha = 0.8) +
+  # 2. Linea di soglia: mappa il colore a una categoria
+  geom_vline(aes(xintercept = 0.05, color = "Soglia α = 0.05"), 
+             linetype = "dashed", linewidth = 1) +
+  # 3. Testo: puoi assegnare manualmente un colore dalla palette
   annotate("text", x = 0.15, y = Inf, vjust = 2, 
            label = sprintf("Tasso falsi positivi: %.1f%%", false_positive_rate * 100),
-           color = "red", fontface = "bold", size = 5) +
+           color = palette_qualitative[6],  # Usa il Rosso-arancio
+           fontface = "bold", size = 5) +
   labs(
     x = "Valore-p minimo tra 20 test",
     y = "Frequenza",
-    title = "P-Hacking: selezionare il p-value più basso tra molti test",
-    subtitle = "Effetto vero = 0, ma il ricercatore trova 'significatività' nel 64% dei casi"
+    title = "P-Hacking: selezionare il p-value più basso\ntra molti test",
+    subtitle = "Effetto vero = 0, ma il ricercatore trova 'significatività' nel 64% dei casi",
+    fill = "Elementi",  # Titolo legenda per il riempimento
+    color = "Linee"     # Titolo legenda per il colore
   ) +
-  scale_x_continuous(breaks = seq(0, 1, 0.1))
+  scale_x_continuous(breaks = seq(0, 1, 0.1)) +
+  # 4. Applica la tua palette manualmente
+  scale_fill_manual(values = c("Distribuzione P-value" = palette_qualitative[2])) +  # Azzurro
+  scale_color_manual(values = c("Soglia α = 0.05" = palette_qualitative[6]))         # Rosso-arancio
 ```
 
 **Interpretazione.**
@@ -187,33 +198,47 @@ phacked_pvalues <- replicate(n_studies, simulate_phacked_literature())
 Filtriamo solo i valori-$p$ "pubblicabili" (< 0.10) per ottenere una visualizzazione chiara intorno alla soglia critica:
 
 ```{r}
+# Grafico A: Letteratura senza distorsioni
 p1 <- tibble(p_value = honest_pvalues) |>
   filter(p_value < 0.10) |>
   ggplot(aes(x = p_value)) +
-  geom_histogram(bins = 40, fill = "forestgreen", color = "white", alpha = 0.8) +
-  geom_vline(xintercept = 0.05, color = "red", linetype = "dashed") +
+  geom_histogram(aes(fill = "Distribuzione P-value"), 
+                 bins = 40, color = "white", alpha = 0.8) +
+  geom_vline(aes(xintercept = 0.05, color = "Soglia α = 0.05"), 
+             linetype = "dashed", linewidth = 1) +
   labs(
     title = "A) Letteratura senza distorsioni",
     x = "Valore-p",
-    y = "Frequenza"
+    y = "Frequenza",
+    fill = "Elementi",
+    color = "Linee"
   ) +
   scale_x_continuous(breaks = seq(0, 0.10, 0.01)) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_manual(values = c("Distribuzione P-value" = palette_qualitative[2])) + 
+  scale_color_manual(values = c("Soglia α = 0.05" = palette_qualitative[6])) 
 ```
 
 ```{r}
+# Grafico B: Letteratura con p-hacking
 p2 <- tibble(p_value = phacked_pvalues) |>
   filter(p_value < 0.10) |>
   ggplot(aes(x = p_value)) +
-  geom_histogram(bins = 40, fill = "coral", color = "white", alpha = 0.8) +
-  geom_vline(xintercept = 0.05, color = "red", linetype = "dashed") +
+  geom_histogram(aes(fill = "Distribuzione P-value"), 
+                 bins = 40, color = "white", alpha = 0.8) +
+  geom_vline(aes(xintercept = 0.05, color = "Soglia α = 0.05"), 
+             linetype = "dashed", linewidth = 1) +
   labs(
     title = "B) Letteratura con p-hacking",
     x = "Valore-p",
-    y = "Frequenza"
+    y = "Frequenza",
+    fill = "Elementi",
+    color = "Linee"
   ) +
   scale_x_continuous(breaks = seq(0, 0.10, 0.01)) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_manual(values = c("Distribuzione P-value" = palette_qualitative[6])) + 
+  scale_color_manual(values = c("Soglia α = 0.05" = palette_qualitative[6])) 
 ```
 
 ```{r}
@@ -222,7 +247,12 @@ p2 <- tibble(p_value = phacked_pvalues) |>
 #| fig-width: 9
 #| fig-height: 5
 
-p1 + p2
+p1 + p2 +
+  plot_layout(guides = "collect") &
+  theme(
+    legend.position = "bottom",
+    legend.box = "horizontal"
+  )
 ```
 
 Calcoliamo il rapporto tra valore-$p$ appena sotto vs appena sopra lo 0.05:
@@ -384,17 +414,28 @@ results |>
   filter(p_value < 0.10) |>
   ggplot(aes(x = p_value, fill = has_true_effect)) +
   geom_histogram(bins = 50, position = "stack", alpha = 0.8) +
-  geom_vline(xintercept = 0.05, color = "black", linetype = "dashed", linewidth = 1) +
+  geom_vline(
+    xintercept = 0.05,
+    color = "black",
+    linetype = "dashed",
+    linewidth = 1
+  ) +
   scale_fill_manual(
-    values = c("TRUE" = "forestgreen", "FALSE" = "coral"),
-    labels = c("TRUE" = "Effetto vero", "FALSE" = "Nessun effetto (falso positivo)")
+    values = palette_qualitative[c(3, 6)],  # verde + rosso-arancio
+    labels = c(
+      "TRUE"  = "Effetto vero",
+      "FALSE" = "Nessun effetto (falso positivo)"
+    )
   ) +
   labs(
     x = "Valore-p",
     y = "Numero di studi",
     fill = "Tipo di risultato",
     title = "Composizione degli studi 'significativi'",
-    subtitle = sprintf("Prevalenza effetti reali = %d%%", prior_prob_effect * 100)
+    subtitle = sprintf(
+      "Prevalenza effetti reali = %d%%",
+      prior_prob_effect * 100
+    )
   )
 ```
 
@@ -518,25 +559,44 @@ median_p <- median(replications$p_value)
 #| fig-cap: "Lo stesso effetto vero produce p-value molto variabili in campioni diversi. La soglia 0.05 è un confine arbitrario che separa campioni essenzialmente indistinguibili."
 
 # Visualizzazione
+palette_signif <- setNames(
+  palette_qualitative[c(3, 8)],  # verde + grigio
+  c("TRUE", "FALSE")
+)
+
 replications |>
+  mutate(significant = factor(significant, levels = c(TRUE, FALSE))) |>
   ggplot(aes(x = p_value, fill = significant)) +
   geom_histogram(bins = 50, color = "white", alpha = 0.8) +
-  geom_vline(xintercept = 0.05, color = "black", linetype = "dashed", linewidth = 1.2) +
-  scale_fill_manual(
-    values = c("TRUE" = "forestgreen", "FALSE" = "coral"),
-    labels = c("TRUE" = "Significativo (p < 0.05)", "FALSE" = "Non significativo")
+  geom_vline(
+    xintercept = 0.05,
+    color = "black",
+    linetype = "dashed",
+    linewidth = 1.2
   ) +
-  annotate("text", x = 0.5, y = Inf, vjust = 2,
-           label = sprintf("Effetto vero: d = %.1f\nPotenza: %.0f%%\nMediana p-value: %.3f",
-                          true_effect, prop_significant * 100, median_p),
-           hjust = 0.5, size = 4) +
+  scale_fill_manual(
+    values = palette_signif,
+    labels = c(
+      "TRUE"  = "Significativo (p < 0.05)",
+      "FALSE" = "Non significativo"
+    )
+  ) +
+  annotate(
+    "text",
+    x = 0.5, y = Inf, vjust = 2,
+    label = sprintf(
+      "Effetto vero: d = %.1f\nPotenza: %.0f%%\nMediana p-value: %.3f",
+      true_effect, prop_significant * 100, median_p
+    ),
+    hjust = 0.5, size = 4
+  ) +
   labs(
     x = "Valore-p",
     y = "Numero di repliche",
     fill = "",
     title = "1000 repliche dello stesso studio\ncon lo stesso effetto vero",
-    subtitle = "Alcuni studi trovano 'significatività', altri no – ma l'effetto sottostante è identico"
-  ) 
+    subtitle = "Alcuni studi trovano 'significatività', altri no – ma l'effetto sottostante\nè identico"
+  )
 ```
 
 **Interpretazione.**
@@ -546,12 +606,21 @@ Il grafico mostra che, dato uno stesso effetto vero, i valori-$p$ ottenuti in di
 # Zoom sulla zona critica
 replications |>
   filter(p_value > 0.03 & p_value < 0.07) |>
+  mutate(significant = factor(significant, levels = c(TRUE, FALSE))) |>
   ggplot(aes(x = p_value, fill = significant)) +
   geom_histogram(bins = 20, color = "white", alpha = 0.8) +
-  geom_vline(xintercept = 0.05, color = "black", linetype = "dashed", linewidth = 1.2) +
+  geom_vline(
+    xintercept = 0.05,
+    color = "black",
+    linetype = "dashed",
+    linewidth = 1.2
+  ) +
   scale_fill_manual(
-    values = c("TRUE" = "forestgreen", "FALSE" = "coral"),
-    labels = c("TRUE" = "Pubblicabile", "FALSE" = "Nel cassetto")
+    values = palette_signif,
+    labels = c(
+      "TRUE"  = "Pubblicabile",
+      "FALSE" = "Nel cassetto"
+    )
   ) +
   labs(
     x = "Valore-p",
@@ -559,7 +628,7 @@ replications |>
     fill = "",
     title = "Zoom sulla 'zona grigia' (p tra 0.03 e 0.07)",
     subtitle = "Studi identici finiscono su lati opposti della soglia\nper pura variabilità campionaria"
-  ) 
+  )
 ```
 
 Lo zoom sulla "zona grigia" è particolarmente istruttivo: studi con un valore-$p$ = 0.049 e studi con un valore-$p$ = 0.051 sono scientificamente indistinguibili, ma il sistema editoriale li tratta come radicalmente diversi. Come hanno scritto @gelman2006difference

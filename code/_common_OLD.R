@@ -1,5 +1,5 @@
 # _common.R — caricato automaticamente da ogni .qmd
-# Versione ottimizzata con palette qualitativa e helper didattici
+# Versione con theme_minimal() e ottimizzazioni
 
 suppressPackageStartupMessages({
   library(here)
@@ -44,7 +44,7 @@ conflict_prefer("ess_bulk", "posterior")
 conflict_prefer("ess_tail", "posterior")
 conflict_prefer("theme_void", "ggplot2")
 conflict_prefer("extract", "tidyr")
-conflict_prefer("theme_default", "bayesplot")
+conflict_prefer("theme_default", "bayesplot") # <-- AGGIUNTO
 
 options(
   brms.backend = "cmdstanr",
@@ -87,7 +87,6 @@ modern_palette <- list(
   red = "#b25252"
 )
 
-# Palette discreta (scala di grigi)
 palette_discrete <- c(
   modern_palette$grey1,
   modern_palette$grey2,
@@ -95,29 +94,6 @@ palette_discrete <- c(
   modern_palette$grey4,
   modern_palette$grey5,
   modern_palette$grey6
-)
-
-# --------- NUOVO: Palette qualitativa colorblind-friendly ---------
-# Basata su Paul Tol's vibrant scheme
-palette_qualitative <- c(
-  "#E69F00", # Arancione
-  "#56B4E9", # Azzurro
-  "#009E73", # Verde
-  "#F0E442", # Giallo
-  "#0072B2", # Blu
-  "#D55E00", # Rosso-arancio
-  "#CC79A7", # Rosa
-  "#999999" # Grigio
-)
-
-# Palette per confronti binari (es. controllo vs trattamento)
-palette_binary <- c(
-  control = modern_palette$grey3,
-  treatment = PRIMARY,
-  before = modern_palette$grey4,
-  after = PRIMARY,
-  pre = modern_palette$grey4,
-  post = PRIMARY
 )
 
 # -------- Font di sistema --------
@@ -223,9 +199,7 @@ update_geom_defaults("label", list(family = modern_sans))
 update_geom_defaults("bar", list(linewidth = 0.2, colour = NA))
 update_geom_defaults("area", list(fill = modern_palette$grey6, alpha = 0.6))
 
-# -------- Scale helpers --------
-
-# Scala di grigi (originale)
+# -------- Scale helper --------
 scale_color_modern <- function(..., na.value = "#CCCCCC", drop = FALSE)
   scale_color_manual(
     values = palette_discrete,
@@ -242,39 +216,6 @@ scale_fill_modern <- function(..., na.value = "#CCCCCC", drop = FALSE)
     drop = drop
   )
 
-# NUOVO: Palette qualitativa per categorie multiple
-scale_color_qualitative <- function(..., na.value = "#CCCCCC", drop = FALSE)
-  scale_color_manual(
-    values = palette_qualitative,
-    ...,
-    na.value = na.value,
-    drop = drop
-  )
-
-scale_fill_qualitative <- function(..., na.value = "#CCCCCC", drop = FALSE)
-  scale_fill_manual(
-    values = palette_qualitative,
-    ...,
-    na.value = na.value,
-    drop = drop
-  )
-
-# NUOVO: Palette binaria per confronti (es. controllo vs trattamento)
-scale_color_binary <- function(..., na.value = "#CCCCCC")
-  scale_color_manual(
-    values = palette_binary,
-    ...,
-    na.value = na.value
-  )
-
-scale_fill_binary <- function(..., na.value = "#CCCCCC")
-  scale_fill_manual(
-    values = palette_binary,
-    ...,
-    na.value = na.value
-  )
-
-# Viridis e divergenti (originali)
 scale_color_viridis_modern <- function(...)
   scale_color_viridis_c(option = "plasma", ...)
 
@@ -299,7 +240,6 @@ scale_fill_divergent <- function(...)
     ...
   )
 
-# Accent (primario)
 scale_color_accent <- function(...)
   scale_color_manual(values = c(modern_palette$accent), ...)
 
@@ -311,26 +251,16 @@ scale_color_primary_then_grey <- function(n_primary = 1, ...) {
   scale_color_manual(values = vals, ...)
 }
 
-# -------- Chunk defaults con knitr --------
+# -------- Device PNG con ragg --------
 knitr::opts_chunk$set(
-  # Device
   dev = "ragg_png",
   fig.ext = "png",
-  dev.args = list(background = "transparent"),
-
-  # Risoluzione (OTTIMIZZATO per web)
-  dpi = 150, # Sufficiente per web
-  fig.retina = 2, # Effettivo 300 DPI su display retina
-
-  # Dimensioni
-  fig.width = 7,
-  fig.asp = 0.618, # Golden ratio
-  fig.height = 4.33, # 7 * 0.618
+  dpi = 300,
   out.width = "85%",
   fig.align = "center",
-  fig.show = "hold",
-
-  # Comportamento
+  fig.asp = 0.618,
+  fig.width = 7,
+  fig.height = 4.33,
   comment = "#>",
   collapse = TRUE,
   message = FALSE,
@@ -338,10 +268,7 @@ knitr::opts_chunk$set(
   echo = TRUE,
   eval = TRUE,
   error = FALSE,
-
-  # Cache (default off, attivare nei chunk pesanti)
-  cache = FALSE,
-  cache.lazy = FALSE
+  dev.args = list(background = "transparent")
 )
 
 # -------- tinytable --------
@@ -374,7 +301,6 @@ griglia_sottile_x <- theme(panel.grid.major.y = element_blank())
 griglia_sottile_y <- theme(panel.grid.major.x = element_blank())
 legenda_in_alto <- theme(legend.position = "top")
 legenda_destra <- theme(legend.position = "right")
-legenda_nascosta <- theme(legend.position = "none")
 
 formato_italiano <- function(accuracy = 0.01, scale = 1)
   scales::label_number(
@@ -410,153 +336,4 @@ geom_vline_primary <- function(xintercept, ...) {
 
 annotate_primary <- function(...) {
   annotate(..., colour = PRIMARY)
-}
-
-# -------- NUOVO: Helper per grafici didattici comuni --------
-
-# Istogramma con densità sovrapposta
-geom_hist_density <- function(binwidth = NULL, bins = 30, ...) {
-  list(
-    geom_histogram(
-      aes(y = after_stat(density)),
-      binwidth = binwidth,
-      bins = bins,
-      fill = modern_palette$grey5,
-      color = modern_palette$grey3,
-      alpha = 0.7,
-      ...
-    ),
-    geom_density(
-      linewidth = 1,
-      color = PRIMARY,
-      ...
-    )
-  )
-}
-
-# QQ plot per normalità
-plot_qq_normal <- function(data, var, title = "QQ Plot") {
-  ggplot(data, aes(sample = {{ var }})) +
-    stat_qq(color = modern_palette$grey3, size = 2, alpha = 0.7) +
-    stat_qq_line(color = PRIMARY, linewidth = 1.2) +
-    labs(
-      title = title,
-      x = "Quantili teorici (Normale)",
-      y = "Quantili osservati"
-    )
-}
-
-# Prior vs Posterior (pattern comune in bayesiano)
-plot_prior_posterior <- function(
-  prior_samples,
-  posterior_samples,
-  parameter_name = "θ",
-  title = "Aggiornamento Bayesiano"
-) {
-  df <- bind_rows(
-    tibble(value = prior_samples, type = "Prior"),
-    tibble(value = posterior_samples, type = "Posterior")
-  )
-
-  ggplot(df, aes(x = value, fill = type, color = type)) +
-    geom_density(alpha = 0.4, linewidth = 1) +
-    scale_fill_manual(
-      values = c(
-        Prior = modern_palette$grey4,
-        Posterior = PRIMARY
-      )
-    ) +
-    scale_color_manual(
-      values = c(
-        Prior = modern_palette$grey3,
-        Posterior = PRIMARY
-      )
-    ) +
-    labs(
-      title = title,
-      x = parameter_name,
-      y = "Densità",
-      fill = NULL,
-      color = NULL
-    ) +
-    legenda_in_alto
-}
-
-# Intervallo di credibilità con distribuzione
-plot_credible_interval <- function(
-  samples,
-  prob = 0.95,
-  parameter_name = "θ",
-  title = "Distribuzione Posteriori"
-) {
-  alpha <- 1 - prob
-  lower <- quantile(samples, alpha / 2)
-  upper <- quantile(samples, 1 - alpha / 2)
-  median_val <- median(samples)
-
-  df <- tibble(value = samples)
-
-  ggplot(df, aes(x = value)) +
-    geom_density(fill = modern_palette$grey5, alpha = 0.5, linewidth = 0) +
-    geom_vline(
-      xintercept = median_val,
-      color = PRIMARY,
-      linewidth = 1.2,
-      linetype = "dashed"
-    ) +
-    geom_vline(
-      xintercept = c(lower, upper),
-      color = PRIMARY,
-      linewidth = 0.8
-    ) +
-    annotate(
-      "rect",
-      xmin = lower,
-      xmax = upper,
-      ymin = -Inf,
-      ymax = Inf,
-      fill = PRIMARY,
-      alpha = 0.15
-    ) +
-    labs(
-      title = title,
-      x = parameter_name,
-      y = "Densità",
-      caption = sprintf(
-        "Intervallo di Credibilità %.0f%%: [%.3f, %.3f] | Mediana: %.3f",
-        prob * 100,
-        lower,
-        upper,
-        median_val
-      )
-    )
-}
-
-# Confronto distribuzioni (es. normale vs t)
-plot_distribution_comparison <- function(
-  x_range,
-  distributions_list,
-  title = "Confronto Distribuzioni"
-) {
-  # distributions_list è una lista nominata con funzioni densità
-  # Esempio: list("Normale" = dnorm, "t(3)" = function(x) dt(x, df=3))
-
-  df <- map_dfr(names(distributions_list), function(name) {
-    tibble(
-      x = x_range,
-      density = distributions_list[[name]](x_range),
-      distribution = name
-    )
-  })
-
-  ggplot(df, aes(x = x, y = density, color = distribution)) +
-    geom_line(linewidth = 1.2) +
-    scale_color_qualitative() +
-    labs(
-      title = title,
-      x = "x",
-      y = "Densità",
-      color = "Distribuzione"
-    ) +
-    legenda_in_alto
 }
