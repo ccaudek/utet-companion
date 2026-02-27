@@ -25,6 +25,26 @@ if (!requireNamespace("pacman")) install.packages("pacman")
 pacman::p_load(cmdstanr, posterior, bayesplot, ggplot2, dplyr, tibble, stringr)
 conflicts_prefer(posterior::ess_bulk)
 conflicts_prefer(posterior::ess_tail)
+
+# Definisci i colori tematici
+col_prior <- palette_qualitative[2]        # Azzurro per distribuzioni a priori
+col_data <- palette_qualitative[6]         # Rosso-arancio per dati empirici
+col_posterior <- palette_qualitative[5]    # Blu per stime a posteriori
+col_mean <- palette_qualitative[3]         # Verde per medie di popolazione
+col_interval <- palette_qualitative[7]     # Rosa per intervalli di credibilità
+col_shrinkage <- palette_qualitative[8]    # Grigio per segmenti di shrinkage
+col_highlight <- palette_qualitative[1]    # Arancione per elementi evidenziati
+
+color_names <- c(
+  "#E69F00" = "Arancione",
+  "#56B4E9" = "Azzurro", 
+  "#009E73" = "Verde",
+  "#F0E442" = "Giallo",
+  "#0072B2" = "Blu",
+  "#D55E00" = "Rosso-arancio",
+  "#CC79A7" = "Rosa",
+  "#999999" = "Grigio"
+)
 ```
 :::
 
@@ -183,12 +203,13 @@ b_draw <- rgamma(2000, shape = 2, rate = 2)
 mu_draw <- a_draw / (a_draw + b_draw)
 kappa_draw <- a_draw + b_draw
 
-tibble(mu = mu_draw, kappa = kappa_draw) |> 
+tibble(mu = mu_draw) |> 
   ggplot(aes(x = mu)) +
-  geom_density(linewidth = 0.6) +
+  geom_density(linewidth = 0.6, fill = col_prior, alpha = 0.5) +
   labs(x = "Media della popolazione (μ)", 
        y = "Densità", 
-       subtitle = "Distribuzione predittiva a priori per la media della popolazione")
+       title = "Distribuzione predittiva a priori\nper la media della popolazione",
+       subtitle = "Prior Gamma(2,2) su α e β")
 ```
 
 Come possiamo osservare, la distribuzione a priori per la media della popolazione $\mu$ si distribuisce su un ampio intervallo di valori, senza concentrarsi in modo inappropriato su alcuna regione particolare. Questo comportamento riflette un atteggiamento epistemico prudente: prima di osservare i dati, non imponiamo forti vincoli sulla performance media degli operatori.
@@ -328,38 +349,45 @@ Creiamo ora una visualizzazione che mostra simultaneamente le proporzioni empiri
 ```{r}
 #| label: tt-shrinkage-plot
 ggplot(df_shrink, aes(x = s_ord)) +
-  # Segmenti più visibili per lo shrinkage
+  # Segmenti per lo shrinkage
   geom_segment(aes(xend = s_ord, y = prop_emp, yend = post_mean), 
-               linewidth = 0.8, alpha = 0.9, color = "darkgray",
+               linewidth = 0.8, alpha = 0.7, color = col_shrinkage,
                arrow = arrow(length = unit(0.1, "cm"), ends = "both", type = "closed")) +
   # Punti per le stime empiriche
-  geom_point(aes(y = prop_emp), size = 3, alpha = 0.9, color = "darkred", 
+  geom_point(aes(y = prop_emp), size = 3, alpha = 0.9, color = col_data, 
              shape = 16) +
   # Punti per le stime a posteriori
-  geom_point(aes(y = post_mean), size = 3, color = "darkblue", shape = 17) +
+  geom_point(aes(y = post_mean), size = 3, color = col_posterior, shape = 17) +
   # Intervalli di credibilità
   geom_errorbar(aes(ymin = post_q05, ymax = post_q95), 
-                width = 0.2, alpha = 0.8, linewidth = 0.6) +
+                width = 0.2, alpha = 0.8, linewidth = 0.6, color = col_interval) +
   # Media di popolazione
   geom_hline(yintercept = mu_hat, linetype = "dashed", alpha = 0.8,
-             color = "darkgreen", linewidth = 0.7) +
+             color = col_mean, linewidth = 0.7) +
   labs(x = "Operatore", 
        y = "Probabilità di successo",
+       title = "Effetto di shrinkage\nnel modello gerarchico beta-binomiale",
        subtitle = sprintf("Shrinkage verso la media di popolazione: %.3f", mu_hat),
-       caption = "Punti rossi: proporzioni empiriche | Punti blu: stime a posteriori | Segmenti: entità dello shrinkage.") +
-  theme(panel.grid.minor = element_blank(),
-        panel.grid.major.x = element_blank(),
-        axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 9),
-        axis.text.y = element_text(size = 9),
-        plot.caption = element_text(size = 8, color = "gray40", hjust = 0),
-        plot.subtitle = element_text(face = "bold", color = "darkgreen")) +
+       caption = paste0(
+         "Punti ", color_names[col_data], ": proporzioni empiriche | ",
+         "Punti ", color_names[col_posterior], ": stime a posteriori | ",
+         "Segmenti ", color_names[col_shrinkage], ": entità dello shrinkage"
+       )) +
+  theme(
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 9),
+    axis.text.y = element_text(size = 9),
+    plot.caption = element_text(size = 8, color = "gray40", hjust = 0),
+    plot.subtitle = element_text(face = "bold", color = col_mean)
+  ) +
   scale_x_discrete(labels = function(x) gsub("s", "Op. ", x)) +
   # Evidenzia i segmenti di shrinkage più ampi
   geom_segment(data = df_shrink %>% 
                  mutate(shrinkage_magnitude = abs(prop_emp - post_mean)) %>%
                  filter(shrinkage_magnitude > quantile(abs(prop_emp - post_mean), 0.7)),
                aes(xend = s_ord, y = prop_emp, yend = post_mean),
-               linewidth = 1.2, alpha = 1, color = "red")
+               linewidth = 1.2, alpha = 1, color = col_highlight)
 ```
 
 In questa visualizzazione, i punti rossi rappresentano le proporzioni empiriche (i dati grezzi), mentre i triangoli blu mostrano le stime a posteriori prodotte dal modello gerarchico. I segmenti verticali collegano ciascuna coppia di stime, rendendo visibile l'entità dello shrinkage. Gli intervalli di credibilità al 90% (barre verticali) quantificano l'incertezza associata a ciascuna stima a posteriori.
@@ -403,11 +431,16 @@ for (s in seq_len(S)) {
 # Visualizzazione
 tibble(yrep_mean = yrep_mean) %>%
   ggplot(aes(x = yrep_mean)) +
-  geom_density(linewidth = 0.6, fill = "lightblue", alpha = 0.5) +
-  geom_vline(xintercept = yobs_mean, linetype = "dashed", color = "darkred") +
+  geom_density(linewidth = 0.6, fill = col_prior, alpha = 0.5) +
+  geom_vline(xintercept = yobs_mean, linetype = "dashed", 
+             color = col_data, linewidth = 1) +
+  annotate("text", x = yobs_mean + 0.02, y = 10, 
+           label = sprintf("Media osservata = %.3f", yobs_mean),
+           color = col_data, hjust = 0) +
   labs(x = "Media delle proporzioni (dati replicati)", 
        y = "Densità",
-       subtitle = sprintf("Linea tratteggiata: media osservata ≈ %.3f", yobs_mean))
+       title = "Verifica predittiva a posteriori",
+       subtitle = "Distribuzione delle medie replicate vs. valore osservato")
 ```
 
 La distribuzione delle medie replicate (in blu) rappresenta la variabilità che ci aspetteremmo di osservare in campioni futuri generati dallo stesso processo, secondo quanto stimato dal modello. La linea tratteggiata rossa indica il valore effettivamente osservato nei dati reali.
