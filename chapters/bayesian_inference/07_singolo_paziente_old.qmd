@@ -1,0 +1,552 @@
+# La decisione sul singolo paziente: dal punteggio osservato alla probabilità clinica {#sec-bayesian-inference-single-patient-cutoff}
+
+::: {.callout-caution collapse=true title="Preparazione del Notebook"}
+
+```{r}
+here::here("code", "_common.R") |> 
+  source()
+```
+:::
+
+## Il problema più delicato della psicometria clinica {#sec-problema}
+
+Consideriamo una situazione ricorrente nella pratica psicologica clinica. Uno psicologo somministra un test standardizzato per la depressione a un paziente, ottenendo un punteggio di **72**. Il manuale del test indica un *cut-off* clinico di **70**. A prima vista, la conclusione potrebbe apparire ovvia: poiché $72 > 70$, il paziente si colloca al di sopra della soglia e meriterebbe pertanto attenzione clinica.
+
+Questa conclusione, per quanto immediata, cela in realtà una questione concettuale tra le più delicate della psicometria. Ogni punteggio osservato in un test psicologico non costituisce una misurazione perfetta e incontrovertibile, ma piuttosto una stima influenzata da fattori casuali. Formalmente, nella teoria classica dei test, il punteggio osservato ($X$) è scomponibile in due elementi:
+
+$$
+X = \theta + \varepsilon,
+$$
+dove:
+
+- **$\theta$ (theta)** rappresenta il **punteggio vero**, ossia il livello effettivo del paziente nel costrutto di interesse (nel nostro esempio, la depressione "reale");
+- **$\varepsilon$ (epsilon)** è l'**errore di misura**, una componente accidentale che si distribuisce normalmente con media zero e varianza $\sigma^2_e$ ($\varepsilon \sim \mathcal{N}(0, \sigma^2_e)$).
+
+### Il significato psicologico dell'errore di misura
+
+Sarebbe riduttivo interpretare l'errore di misura come un mero artefatto statistico. Esso riflette invece una realtà psicologica concreta: il punteggio di un individuo può variare da una somministrazione all'altra per ragioni che non hanno alcuna relazione con il costrutto misurato. Fattori come la stanchezza, lo stato d'ansia transitorio, la motivazione del momento, l'effetto della desiderabilità sociale o persino l'ora del giorno in cui il test viene somministrato possono influenzare la prestazione.
+
+La qualità di uno strumento psicometrico è espressa dal suo coefficiente di **attendibilità** ($\rho$). Questo coefficiente, compreso tra 0 e 1, indica la proporzione di varianza del punteggio osservato attribuibile effettivamente al costrutto di interesse. Un test con attendibilità $\rho = 0.85$, come quello del nostro esempio, implica che il 15% della varianza osservata sia dovuta a fluttuazioni casuali, non al tratto psicologico che intendiamo misurare.
+
+::: {.callout-note title="La domanda clinica corretta" icon=false}
+Alla luce di queste considerazioni, il quesito clinico assume una formulazione più articolata e metodologicamente fondata:
+
+> dato il punteggio osservato $X = 72$, qual è la probabilità che il **punteggio vero** $\theta$ del paziente superi effettivamente la soglia clinica di 70?
+
+Questa domanda, a differenza della precedente, incorpora esplicitamente l'incertezza connaturata a ogni processo di misurazione psicologica.
+:::
+
+La risposta a tale interrogativo può essere affrontata seguendo due approcci distinti: quello frequentista, che si avvale della formula di @Kelley1923, e quello bayesiano, che si basa sulla distribuzione a posteriori del punteggio vero. Prima di esaminarli, è opportuno definire un contesto numerico di riferimento che ci accompagnerà nell'intero capitolo.
+
+## Definizione del contesto numerico {#sec-numeri}
+
+Fissiamo un esempio concreto che utilizzeremo in modo sistematico per illustrare i diversi metodi.
+
+- **Test standardizzato** con:
+  - media normativa della popolazione: $\mu_{\text{pop}} = 70$;
+  - deviazione standard normativa: $\sigma_{\text{pop}} = 15$;
+  - attendibilità: $\rho = 0.85$.
+- **Punteggio osservato dal paziente:** $X = 72$.
+- **Cut-off clinico:** $c = 70$.
+
+Da questi parametri è possibile ricavare l'**errore standard della misura** (SEM), che quantifica la dispersione media dei punteggi osservati attorno al punteggio vero dovuta all'errore casuale:
+
+$$
+\sigma_e = \sigma_{\text{pop}} \sqrt{1 - \rho} = 15 \times \sqrt{1 - 0.85} = 15 \times \sqrt{0.15} \approx 5.81.
+$$
+
+```{r}
+# Parametri del test
+mu_pop   <- 70      # media normativa
+sigma_pop <- 15     # DS normativa
+rho      <- 0.85    # attendibilità
+sigma_e  <- sigma_pop * sqrt(1 - rho)   # SEM = errore standard della misura
+
+# Osservazione
+X_obs <- 72
+cut_off <- 70
+
+cat("Errore standard della misura (SEM):", round(sigma_e, 2), "\n")
+```
+
+Il valore ottenuto ($\sigma_e \approx 5.81$) riveste un'importanza fondamentale: esso indica che, nonostante il test possegga una buona attendibilità ($\rho = 0.85$), esiste una variabilità casuale di circa 6 punti attorno a ogni misurazione. Il paziente ha ottenuto un punteggio di 72, ma il suo punteggio vero potrebbe, con probabilità non trascurabile, collocarsi anche diversi punti al di sopra o al di sotto di tale valore. È precisamente questa incertezza che occorre considerare nel processo decisionale clinico.
+
+## La risposta frequentista: la formula di Kelley (1923) {#sec-kelley}
+
+La teoria classica dei test (CTT) offre una prima risposta al problema della stima del punteggio vero attraverso la formula proposta da @Kelley1923. Questa formula rappresenta uno dei risultati fondamentali della psicometria e merita un'analisi attenta.
+
+### La formula di Kelley
+
+La stima del punteggio vero secondo @Kelley1923 è data da:
+
+$$
+\hat{\theta}_{\text{Kelley}} = \rho \, X + (1 - \rho) \, \mu_{\text{pop}},
+$$
+dove:
+
+- $\rho$ è il coefficiente di attendibilità del test;
+- $X$ è il punteggio osservato dal paziente;
+- $\mu_{\text{pop}}$ è la media della popolazione di riferimento.
+
+### Il significato della formula: una media ponderata
+
+La formula di @Kelley1923 produce una **media ponderata** tra due informazioni:
+
+- il punteggio osservato $X$, che riguarda specificamente il paziente;
+- la media della popolazione $\mu_{\text{pop}}$, che rappresenta la conoscenza generale sul gruppo di riferimento.
+
+Il peso assegnato a ciascuna componente è determinato proprio dall'attendibilità $\rho$:
+
+- quanto più il test è attendibile ($\rho$ vicino a 1), tanto maggiore sarà il peso attribuito al punteggio osservato;
+- quanto meno il test è attendibile ($\rho$ vicino a 0), tanto più la stima si sposterà verso la media della popolazione.
+
+### Il fenomeno della regressione verso la media
+
+Questa formula incorpora un fenomeno statistico noto come **regressione verso la media**: il punteggio stimato $\hat{\theta}_{\text{Kelley}}$ è sempre più vicino alla media normativa rispetto al punteggio osservato $X$.
+
+L'intuizione alla base è la seguente: se un paziente ottiene un punteggio estremamente elevato (o estremamente basso), è probabile che tale risultato sia in parte dovuto a una componente accidentale favorevole (o sfavorevole). La miglior stima del punteggio vero non coincide quindi con il punteggio osservato, ma si colloca in una posizione intermedia tra quest'ultimo e la media della popolazione.
+
+### La misura dell'incertezza: l'errore standard dell'errore di stima
+
+Ogni stima è accompagnata da un margine di incertezza. Nel caso della formula di @Kelley1923, tale incertezza è quantificata dall'**errore standard dell'errore di stima** (*Standard Error of Estimate*, SEE):
+
+$$
+\text{SEE} = \sigma_{\text{pop}} \sqrt{\rho(1 - \rho)}.
+$$
+
+Questo indice esprime la dispersione della distribuzione dei punteggi veri attorno alla stima puntuale $\hat{\theta}_{\text{Kelley}}$. A differenza dell'errore standard della misura (SEM), che quantifica la variabilità dei punteggi osservati attorno a un dato punteggio vero, il SEE quantifica l'incertezza residua che permane nella nostra stima dopo aver applicato la correzione di @Kelley1923.
+
+### Intervallo di confidenza per il punteggio vero
+
+Assumendo la normalità della distribuzione dell'errore, è possibile costruire un intervallo di confidenza al 95% per il punteggio vero:
+
+$$
+\hat{\theta}_{\text{Kelley}} \pm 1.96 \times \text{SEE}.
+$$
+
+Questo intervallo ha il seguente significato: se potessimo ripetere infinite volte il processo di somministrazione del test a pazienti con lo stesso punteggio osservato, il 95% degli intervalli così costruiti conterrebbe il vero punteggio $\theta$.
+
+### Applicazione al nostro esempio numerico
+
+Applichiamo ora la formula di @Kelley1923 ai dati del nostro esempio:
+
+```{r}
+# Stima di Kelley
+theta_kelley <- rho * X_obs + (1 - rho) * mu_pop
+
+# Errore standard dell'errore di stima
+SEE <- sigma_pop * sqrt(rho * (1 - rho))
+
+# Intervallo di confidenza al 95%
+IC_lower <- theta_kelley - 1.96 * SEE
+IC_upper <- theta_kelley + 1.96 * SEE
+
+cat("Stima di Kelley del punteggio vero:", round(theta_kelley, 2), "\n")
+cat("SEE:", round(SEE, 2), "\n")
+cat("IC 95%: [", round(IC_lower, 1), ",", round(IC_upper, 1), "]\n")
+```
+
+La stima puntuale del punteggio vero ($\hat{\theta}_{\text{Kelley}} \approx 71.7$) risulta inferiore al punteggio osservato (72), coerentemente con il principio di regressione verso la media. L'intervallo di confidenza, compreso tra circa 68.7 e 74.7, include sia valori inferiori sia valori superiori alla soglia clinica di 70.
+
+```{r}
+#| echo: false
+#| fig.cap: "Distribuzione campionaria della stima di Kelley del punteggio vero. L'area in azzurro rappresenta i valori superiori al cut-off di 70."
+
+x_seq <- seq(40, 110, length.out = 500)
+df_freq <- data.frame(
+  theta = x_seq,
+  densita = dnorm(x_seq, theta_kelley, SEE)
+)
+
+ggplot(df_freq, aes(x = theta, y = densita)) +
+  geom_line(linewidth = 1.2, color = "steelblue") +
+  geom_vline(xintercept = cut_off, linetype = "dashed", color = "firebrick", linewidth = 0.9) +
+  geom_vline(xintercept = X_obs, linetype = "dotted", color = "gray40", linewidth = 0.9) +
+  geom_area(data = subset(df_freq, theta > cut_off),
+            aes(y = densita), fill = "steelblue", alpha = 0.3) +
+  annotate("text", x = cut_off - 1, y = max(df_freq$densita) * 0.85,
+           label = "cut-off = 70", hjust = 1, color = "firebrick", size = 3.5) +
+  annotate("text", x = X_obs + 1, y = max(df_freq$densita) * 0.85,
+           label = "X osservato = 72", hjust = 0, color = "gray40", size = 3.5) +
+  labs(title = "Approccio di Kelley",
+       subtitle = paste0("Stima del punteggio vero: ", round(theta_kelley, 1),
+                         "   IC 95%: [", round(IC_lower, 1), ", ", round(IC_upper, 1), "]"),
+       x = "Punteggio vero θ", y = "Densità") +
+  theme_minimal(base_size = 13)
+```
+
+### Interpretazione frequentista e i suoi limiti per la pratica clinica
+
+È essenziale comprendere cosa l'approccio frequentista consenta di affermare e cosa invece non consenta.
+
+Nella prospettiva frequentista, il punteggio vero $\theta$ è considerato un **valore fisso ma sconosciuto**, non una variabile casuale. Di conseguenza, non è legittimo attribuire una probabilità all'evento "$\theta$ supera la soglia di 70". Il clinico potrebbe essere tentato di interpretare l'intervallo di confidenza come se contenesse il 95% della probabilità, ma tale interpretazione, pur intuitivamente attraente, è tecnicamente scorretta nell'ambito della statistica frequentista.
+
+L'unica affermazione statisticamente corretta è la seguente: "se il paziente avesse un punteggio vero esattamente pari a 70, e se ripetessimo infinite volte la procedura di somministrazione del test e di costruzione dell'intervallo di confidenza, nel 95% dei casi l'intervallo così ottenuto *non* includerebbe il valore 70".
+
+Si tratta di un'affermazione logicamente complessa e, come è facile intuire, di scarsa utilità pratica per il clinico che deve decidere se il proprio paziente necessiti o meno di un intervento. Questo limite dell'approccio frequentista costituisce la principale motivazione per considerare un approccio alternativo: la statistica bayesiana.
+
+### Nota tecnica: la relazione tra SEE e SEM
+
+È utile distinguere chiaramente l'errore standard della misura (SEM) dall'errore standard dell'errore di stima (SEE):
+
+- Il **SEM** ($\sigma_e = \sigma_{\text{pop}} \sqrt{1-\rho}$) quantifica la variabilità attesa dei punteggi osservati attorno a un dato punteggio vero. È utilizzato per costruire intervalli di confidenza attorno al punteggio osservato.
+- Il **SEE** ($\sigma_{\text{pop}} \sqrt{\rho(1-\rho)}$) quantifica la variabilità dei punteggi veri attorno alla stima di @Kelley1923. È utilizzato per costruire intervalli di confidenza attorno al punteggio vero stimato.
+
+Si noti che il SEE è sempre minore del SEM (poiché $\rho < 1$ implica $\sqrt{\rho(1-\rho)} < \sqrt{1-\rho}$), riflettendo il fatto che la stima di @Kelley1923 riduce l'incertezza grazie all'incorporazione dell'informazione sulla media della popolazione.
+
+## La risposta bayesiana: il modello Normale-Normale {#sec-bayesiano}
+
+L'approccio frequentista, pur fornendo una stima del punteggio vero attraverso la formula di @Kelley1923, incontra un limite fondamentale quando si tratta di rispondere alla domanda clinicamente rilevante: qual è la probabilità che il punteggio vero del paziente superi la soglia? La statistica bayesiana affronta questo problema in modo radicalmente diverso, trattando il punteggio vero $\theta$ come una **variabile casuale** anziché come un parametro fisso e sconosciuto.
+
+Questa prospettiva consente di incorporare nella stima due fonti di informazione:
+
+- la conoscenza sulla distribuzione del tratto nella popolazione di riferimento (distribuzione a priori);
+- il dato osservato relativo al singolo paziente (verosimiglianza).
+
+Il risultato è una **distribuzione a posteriori** che esprime, in termini probabilistici, tutto ciò che possiamo affermare sul punteggio vero del paziente dopo aver osservato la sua prestazione al test.
+
+### Il modello statistico
+
+Il modello generativo dei dati si articola in due livelli:
+
+$$
+\begin{aligned}
+X \mid \theta &\sim \mathcal{N}(\theta, \sigma^2_e) \quad \text{(verosimiglianza)}, \\
+\theta &\sim \mathcal{N}(\mu_{\text{pop}}, \sigma^2_{\text{pop}}) \quad \text{(distribuzione a priori)}.
+\end{aligned}
+$$
+
+Questo è il modello **Normale-Normale coniugato**, già incontrato nella Lezione 19, e qui applicato al contesto della misurazione psicometrica [@levy2017bayesian].
+
+- La **verosimiglianza** descrive il processo di misurazione: dato un particolare punteggio vero $\theta$, i punteggi osservati $X$ si distribuiscono normalmente attorno a $\theta$ con una varianza pari a $\sigma^2_e$, che è proprio la varianza dell'errore di misura del test.
+- La **distribuzione a priori** descrive la variabilità del tratto nella popolazione: prima ancora di osservare il paziente, sappiamo che i punteggi veri nella popolazione si distribuiscono normalmente con media $\mu_{\text{pop}}$ e varianza $\sigma^2_{\text{pop}}$.
+
+L'aggettivo "coniugato" indica che, per questa specifica coppia di distribuzioni (normale per la verosimiglianza e normale per la prior), anche la distribuzione a posteriori sarà normale. Questa proprietà facilita notevolmente i calcoli.
+
+### La distribuzione a posteriori del punteggio vero
+
+Applicando il teorema di Bayes al modello Normale-Normale, si ottiene che la distribuzione a posteriori di $\theta$ dato il punteggio osservato $X$ è ancora una distribuzione normale:
+
+$$
+\theta \mid X \sim \mathcal{N}(\mu_{\text{post}}, \sigma^2_{\text{post}}).
+$$
+
+I parametri della distribuzione a posteriori sono dati da:
+
+$$
+\sigma^2_{\text{post}} = \left( \frac{1}{\sigma^2_{\text{pop}}} + \frac{1}{\sigma^2_e} \right)^{-1},
+\qquad
+\mu_{\text{post}} = \sigma^2_{\text{post}} \left( \frac{\mu_{\text{pop}}}{\sigma^2_{\text{pop}}} + \frac{X}{\sigma^2_e} \right).
+$$
+
+Queste formule hanno un'interpretazione intuitiva:
+
+- la **varianza a posteriori** $\sigma^2_{\text{post}}$ è la media armonica ponderata delle varianze della prior ($\sigma^2_{\text{pop}}$) e della verosimiglianza ($\sigma^2_e$); essa è sempre minore di entrambe, riflettendo il fatto che la combinazione delle due fonti di informazione riduce l'incertezza;
+- la **media a posteriori** $\mu_{\text{post}}$ è una media ponderata tra la media della popolazione $\mu_{\text{pop}}$ e il punteggio osservato $X$, con pesi inversamente proporzionali alle rispettive varianze; maggiore è la precisione di una fonte informativa (minore è la sua varianza), maggiore sarà il suo peso.
+
+```{r}
+# Calcolo dei parametri a posteriori per il nostro esempio
+sigma_pop2 <- sigma_pop^2
+sigma_e2   <- sigma_e^2
+
+# Varianza a posteriori
+sigma_post2 <- 1 / (1/sigma_pop2 + 1/sigma_e2)
+sigma_post  <- sqrt(sigma_post2)
+
+# Media a posteriori
+mu_post <- sigma_post2 * (mu_pop / sigma_pop2 + X_obs / sigma_e2)
+
+cat("Media a posteriori:", round(mu_post, 2), "\n")
+cat("Deviazione standard a posteriori:", round(sigma_post, 2), "\n")
+```
+
+::: {.callout-tip title="Il collegamento con Kelley (1923)" icon=false}
+È importante notare che la **media a posteriori bayesiana** coincide esattamente con la **stima di Kelley**:
+
+$$
+\mu_{\text{post}} = \rho X + (1-\rho) \mu_{\text{pop}} = \hat{\theta}_{\text{Kelley}}.
+$$
+
+Questa equivalenza non è casuale. @Kelley1923 derivò la sua formula negli anni '20 da considerazioni psicometriche, ma essa corrisponde formalmente alla stima di massima verosimiglianza a posteriori (MAP) del modello bayesiano Normale-Normale. La differenza sostanziale tra i due approcci non risiede quindi nel valore puntuale della stima, ma in ciò che è possibile affermare a partire da essa.
+:::
+
+```{r}
+# Verifica dell'equivalenza
+cat("Stima di Kelley:", round(theta_kelley, 2), "\n")
+cat("Media a posteriori bayesiana:", round(mu_post, 2), "\n")
+```
+
+### Rispondere alla domanda clinica in modo diretto
+
+Il vantaggio cruciale dell'approccio bayesiano è che, disponendo dell'intera distribuzione a posteriori, possiamo rispondere direttamente alla domanda clinica che ci siamo posti all'inizio:
+
+$$
+P(\theta > 70 \mid X = 72) = 1 - \Phi\!\left(\frac{70 - \mu_{\text{post}}}{\sigma_{\text{post}}}\right),
+$$
+dove $\Phi$ indica la funzione di ripartizione della distribuzione normale standard.
+
+```{r}
+# Probabilità che il punteggio vero superi il cut-off
+prob_sopra_cutoff <- 1 - pnorm(cut_off, mean = mu_post, sd = sigma_post)
+
+cat("P(θ > 70 | X = 72) =", round(prob_sopra_cutoff * 100, 1), "%\n")
+```
+
+Nel nostro esempio, la probabilità che il punteggio vero del paziente superi la soglia clinica di 70 è circa il **62%**. Questo valore quantifica esplicitamente l'incertezza diagnostica: non possiamo affermare con certezza che il paziente sia sopra soglia, ma possiamo dire che è più probabile che lo sia piuttosto che non lo sia. Il clinico può comunicare questa informazione in modo trasparente e utilizzarla per decisioni condivise con il paziente.
+
+```{r}
+#| echo: false
+#| fig-cap: "Distribuzione a priori (linea tratteggiata) e a posteriori (linea continua) del punteggio vero. L'area colorata rappresenta la probabilità che il punteggio vero superi il cut-off di 70."
+
+x_seq <- seq(40, 110, length.out = 500)
+df_post <- data.frame(
+  theta = x_seq,
+  prior = dnorm(x_seq, mu_pop, sigma_pop),
+  posterior = dnorm(x_seq, mu_post, sigma_post)
+)
+
+ggplot(df_post, aes(x = theta)) +
+  geom_line(aes(y = prior), color = "steelblue", linewidth = 1, linetype = "dashed") +
+  geom_line(aes(y = posterior), color = "coral", linewidth = 1.2) +
+  geom_area(data = subset(df_post, theta > cut_off),
+            aes(y = posterior), fill = "coral", alpha = 0.35) +
+  geom_vline(xintercept = cut_off, linetype = "dashed", color = "firebrick", linewidth = 0.9) +
+  geom_vline(xintercept = X_obs, linetype = "dotted", color = "gray40", linewidth = 0.9) +
+  annotate("text", x = cut_off - 1, y = 0.065,
+           label = "cut-off = 70", hjust = 1, color = "firebrick", size = 3.5) +
+  annotate("text", x = X_obs + 1, y = 0.065,
+           label = "X = 72", hjust = 0, color = "gray40", size = 3.5) +
+  annotate("text", x = 90, y = 0.04,
+           label = paste0("P(θ > 70 | X = 72)\n= ",
+                          round(prob_sopra_cutoff * 100, 1), "%"),
+           color = "coral", size = 3.5) +
+  annotate("text", x = 52, y = 0.01,
+           label = "prior", color = "steelblue", size = 3.5) +
+  annotate("text", x = 78, y = 0.06,
+           label = "posterior", color = "coral", size = 3.5) +
+  labs(title = "Approccio bayesiano",
+       subtitle = "Distribuzione a posteriori del punteggio vero θ",
+       x = "Punteggio vero θ", y = "Densità") +
+  theme_minimal(base_size = 13)
+```
+
+### L'intervallo di credibilità
+
+Un'altra utile sintesi della distribuzione a posteriori è l'**intervallo di credibilità** (o intervallo bayesiano), che ha un'interpretazione molto più intuitiva rispetto all'intervallo di confidenza frequentista:
+
+```{r}
+IC95_lower <- qnorm(0.025, mu_post, sigma_post)
+IC95_upper <- qnorm(0.975, mu_post, sigma_post)
+
+cat("IC bayesiano 95%: [", round(IC95_lower, 1), ",", round(IC95_upper, 1), "]\n")
+```
+
+Possiamo affermare che: **"c'è una probabilità del 95% che il punteggio vero di questo paziente sia compreso tra 68.7 e 74.7."** Questa affermazione, scorretta nel paradigma frequentista, è perfettamente legittima in quello bayesiano, perché qui $\theta$ è trattato come una variabile casuale e la probabilità esprime un grado di credenza soggettiva aggiornato alla luce dei dati.
+
+## La distribuzione predittiva a posteriori per una nuova somministrazione {#sec-predittiva}
+
+Finora ci siamo concentrati sulla stima del punteggio vero $\theta$. Esiste tuttavia un'altra domanda clinicamente rilevante:
+
+> se somministrassimo lo **stesso test** allo stesso paziente in un'occasione successiva, quale punteggio ci aspetteremmo di osservare?
+
+A questa domanda risponde la **distribuzione predittiva a posteriori**. Essa descrive la distribuzione di un nuovo punteggio $\tilde{X}$ (non ancora osservato) dello stesso paziente, condizionatamente al punteggio già osservato $X$.
+
+Per il modello Normale-Normale, la distribuzione predittiva è anch'essa normale:
+
+$$
+\tilde{X} \mid X \sim \mathcal{N}\!\left(\mu_{\text{post}},\; \sigma^2_{\text{post}} + \sigma^2_e\right)
+$$
+
+La media della distribuzione predittiva coincide con la media a posteriori $\mu_{\text{post}}$, mentre la varianza è la somma di due componenti:
+
+- $\sigma^2_{\text{post}}$: l'incertezza residua sul punteggio vero;
+- $\sigma^2_e$: la variabilità dovuta all'errore di misura in una nuova somministrazione.
+
+```{r}
+# Calcolo dei parametri predittivi
+sigma_pred2 <- sigma_post2 + sigma_e2
+sigma_pred  <- sqrt(sigma_pred2)
+mu_pred     <- mu_post  # la media è la stessa della posterior
+
+cat("Media predittiva:", round(mu_pred, 2), "\n")
+cat("Deviazione standard predittiva:", round(sigma_pred, 2), "\n\n")
+
+# Intervallo predittivo al 95%
+IC_pred_lower <- qnorm(0.025, mu_pred, sigma_pred)
+IC_pred_upper <- qnorm(0.975, mu_pred, sigma_pred)
+cat("IC predittivo 95%: [", round(IC_pred_lower, 1), ",", round(IC_pred_upper, 1), "]\n")
+
+# Probabilità che una nuova misurazione superi il cut-off
+prob_pred_sopra <- 1 - pnorm(cut_off, mu_pred, sigma_pred)
+cat("P(X_nuovo > 70 | X = 72) =", round(prob_pred_sopra * 100, 1), "%\n")
+```
+
+```{r}
+#| echo: false
+#| fig-cap: "Confronto tra distribuzione a priori, a posteriori del punteggio vero e distribuzione predittiva per una nuova osservazione."
+
+x_seq <- seq(30, 120, length.out = 600)
+
+df_tre <- data.frame(
+  theta = rep(x_seq, 3),
+  densita = c(
+    dnorm(x_seq, mu_pop, sigma_pop),       # prior
+    dnorm(x_seq, mu_post, sigma_post),     # posterior
+    dnorm(x_seq, mu_pred, sigma_pred)      # predittiva
+  ),
+  Distribuzione = rep(c(
+    "Prior p(θ)",
+    "Posterior p(θ | X=72)",
+    "Predittiva p(X_nuovo | X=72)"
+  ), each = length(x_seq))
+)
+
+ggplot(df_tre, aes(x = theta, y = densita, color = Distribuzione)) +
+  geom_line(linewidth = 1.2) +
+  scale_color_manual(values = c("steelblue", "coral", "forestgreen")) +
+  geom_vline(xintercept = cut_off, linetype = "dashed", color = "firebrick", linewidth = 0.9) +
+  annotate("text", x = cut_off - 1, y = 0.058,
+           label = "cut-off = 70", hjust = 1, color = "firebrick", size = 3.2) +
+  labs(title = "Tre distribuzioni a confronto",
+       subtitle = "Prior, posterior del punteggio vero e distribuzione predittiva",
+       x = "Punteggio", y = "Densità") +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "bottom",
+        legend.title = element_blank())
+```
+
+::: {.callout-important title="Posterior vs. predittiva: quale usare?" icon=false}
+
+È fondamentale distinguere il ruolo delle due distribuzioni, poiché rispondono a domande diverse:
+
+- La **distribuzione a posteriori** di $\theta$ risponde alla domanda: *qual è il punteggio vero del paziente?* Questa è la base per la decisione diagnostica, poiché il punteggio vero è il costrutto di interesse clinico.
+
+- La **distribuzione predittiva a posteriori** risponde invece alla domanda: *se misurassi nuovamente questo paziente, quale punteggio otterrei?* Questa distribuzione è utile per pianificare una rivalutazione, per decidere se una seconda somministrazione possa fornire informazioni aggiuntive, o per stimare la stabilità dei punteggi nel tempo.
+
+Nel contesto della decisione clinica sul superamento di una soglia, è la **distribuzione a posteriori di $\theta$** la più rilevante. La distribuzione predittiva è più ampia (ha varianza maggiore) perché incorpora anche l'incertezza dovuta a una nuova misurazione. Utilizzare la distribuzione predittiva per la diagnosi condurrebbe a conclusioni eccessivamente conservative, sovrastimando l'incertezza effettiva sul costrutto di interesse.
+:::
+
+## Confronto e implicazioni cliniche {#sec-confronto}
+
+### Due filosofie a confronto
+
+Dopo aver esaminato entrambi gli approcci, è utile metterli a confronto in modo sistematico. La tabella seguente sintetizza le differenze concettuali e pratiche tra il metodo di @Kelley1923 (frequentista) e quello bayesiano.
+
+| Aspetto | Approccio frequentista (Kelley) | Approccio bayesiano |
+|---------|----------------------------------|---------------------|
+| **Natura di $\theta$** | Parametro fisso e sconosciuto | Variabile casuale |
+| **Output principale** | Stima puntuale $\hat{\theta}$ e IC 95% | Distribuzione a posteriori completa |
+| **Stima puntuale** | $\hat{\theta}_{\text{Kelley}} = 71.7$ | $\mu_{\text{post}} = 71.7$ |
+| **Intervallo al 95%** | $[68.7, 74.7]$ | $[68.7, 74.7]$ |
+| **Interpretazione dell'intervallo** | In 95% dei campioni, l'IC contiene $\theta$ | Probabilità del 95% che $\theta$ sia nell'intervallo |
+| **Risposta alla domanda clinica** | Non direttamente calcolabile | $P(\theta > 70 \mid X = 72) = 62\%$ |
+| **Vantaggio principale** | Semplicità e consolidamento storico | Interpretazione intuitiva e quantificazione dell'incertezza |
+
+Come si può osservare, le stime puntuali e gli intervalli numerici sono pressoché identici — e non potrebbe essere altrimenti, dato che la formula di @Kelley1923 costituisce un caso particolare del modello bayesiano Normale-Normale. La differenza fondamentale risiede nell'**interpretazione** e, di conseguenza, in ciò che ciascun metodo consente di comunicare.
+
+Il frequentista, dopo aver costruito l'intervallo di confidenza, non può affermare che esista una probabilità del 95% che il punteggio vero del paziente ricada in quell'intervallo. Tale affermazione, che sarebbe la più naturale per il clinico, è tecnicamente scorretta nel paradigma frequentista: l'intervallo è fissato e il parametro è fisso, la probabilità è attribuita alla procedura, non al parametro.
+
+Il bayesiano, al contrario, può formulare esattamente questo tipo di affermazione, e può spingersi oltre: calcola direttamente la probabilità che il punteggio vero superi qualsiasi soglia clinica di interesse. È questa la differenza sostanziale: non nei numeri, ma in ciò che i numeri significano e nelle domande a cui permettono di rispondere.
+
+
+### Il ritorno al caso clinico
+
+Torniamo ora al paziente con cui abbiamo aperto il capitolo: punteggio osservato $X = 72$, cut-off clinico $c = 70$.
+
+L'approccio **ingenuo** — quello che considera il punteggio osservato come se fosse esente da errore — porterebbe a una conclusione immediata e apparentemente inequivocabile: $72 > 70$, quindi il paziente supera la soglia e merita attenzione clinica. Questa conclusione, tuttavia, ignora completamente l'errore di misura che è parte integrante di ogni rilevazione psicometrica.
+
+L'approccio **frequentista** [@Kelley1923] corregge la stima, portandola a 71.7, e fornisce un intervallo di confidenza che va da 68.7 a 74.7. Ma il clinico che volesse tradurre queste informazioni in una decisione si troverebbe sprovvisto di uno strumento essenziale: una misura della probabilità che il paziente sia effettivamente sopra soglia.
+
+L'approccio **bayesiano** fornisce esattamente questa misura. Il risultato dell'analisi può essere comunicato in modo diretto e trasparente:
+
+> *"Dato il punteggio osservato di 72, la probabilità che il punteggio vero di questo paziente superi la soglia clinica è circa il 62%. Questo valore è superiore alla casualità (che sarebbe il 50%, data la simmetria della distribuzione attorno al cut-off), ma non è sufficientemente elevato per una diagnosi formale basata esclusivamente su questo singolo test. Sarebbe opportuno integrare questa informazione con altri indicatori clinici — come il colloquio, la storia del paziente o altri strumenti — prima di giungere a una conclusione diagnostica."*
+
+Questa è la risposta che uno psicologo clinico formato alla psicometria bayesiana può offrire. Non una certezza artificiosa, ma una quantificazione onesta dell'incertezza che accompagna ogni misurazione, e che può guidare in modo più consapevole il processo decisionale.
+
+### L'importanza dell'attendibilità
+
+La probabilità che il punteggio vero superi il cut-off non dipende solo dal punteggio osservato, ma anche dall'attendibilità del test. Test con attendibilità diversa, a parità di punteggio osservato, portano a conclusioni differenti.
+
+Il grafico seguente illustra come varia $P(\theta > 70 \mid X = 72)$ al variare del coefficiente di attendibilità $\rho$, mantenendo fissi gli altri parametri del nostro esempio.
+
+```{r}
+#| echo: false
+#| fig-cap: "Probabilità che il punteggio vero superi il cut-off al variare dell'attendibilità del test (X = 72, cut-off = 70, μ_pop = 70, σ_pop = 15)"
+
+rho_seq <- seq(0.50, 0.99, by = 0.01)
+
+probs <- sapply(rho_seq, function(r) {
+  s_e2   <- sigma_pop^2 * (1 - r)
+  s_p2   <- 1 / (1/sigma_pop^2 + 1/s_e2)
+  m_p    <- s_p2 * (mu_pop/sigma_pop^2 + X_obs/s_e2)
+  1 - pnorm(cut_off, m_p, sqrt(s_p2))
+})
+
+df_sens <- data.frame(rho = rho_seq, prob = probs)
+
+ggplot(df_sens, aes(x = rho, y = prob * 100)) +
+  geom_line(linewidth = 1.3, color = "coral") +
+  geom_point(aes(x = rho, y = prob * 100),
+             data = subset(df_sens, abs(rho - 0.85) < 0.005),
+             color = "firebrick", size = 3) +
+  annotate("text", x = 0.85, y = probs[rho_seq == 0.85] * 100 - 5,
+           label = paste0("ρ = 0.85\nP = ", round(probs[rho_seq == 0.85] * 100, 1), "%"),
+           color = "firebrick", size = 3.3) +
+  labs(title = "Sensibilità all'attendibilità del test",
+       subtitle = "All'aumentare dell'attendibilità, la probabilità si avvicina a 1",
+       x = "Attendibilità ρ", y = "P(θ > 70 | X = 72) (%)") +
+  scale_y_continuous(limits = c(40, 100)) +
+  theme_minimal(base_size = 13)
+```
+
+L'andamento è chiaro e intuitivo:
+
+- con **test altamente attendibili** ($\rho$ prossimo a 1), il punteggio osservato è quasi sovrapponibile al punteggio vero; poiché 72 è superiore a 70, la probabilità che $\theta$ superi il cut-off tende asintoticamente al 100%;
+- con **test poco attendibili** (ad esempio $\rho = 0.5$), l'incertezza domina: la distribuzione a posteriori è molto più dispersa e la probabilità si avvicina al 50%, cioè alla sostanziale equivalenza tra le due opzioni (sopra/sotto soglia).
+
+Questo grafico mostra perché l'attendibilità non è un mero dettaglio tecnico, ma una proprietà con ricadute cliniche concrete. Due pazienti con lo stesso punteggio osservato possono meritare considerazioni diagnostiche molto diverse se i test utilizzati hanno attendibilità differenti.
+
+### Una riflessione conclusiva
+
+La psicometria bayesiana non si propone di sostituire gli strumenti classici, ma di integrarli e completarli, offrendo al clinico un linguaggio più diretto e trasparente per esprimere l'incertezza. La formula di @Kelley1923 rimane valida e utile; ciò che cambia è la cornice interpretativa in cui viene collocata e le domande a cui può rispondere.
+
+In un'epoca in cui la pratica clinica richiede sempre maggiore consapevolezza dei limiti e delle potenzialità degli strumenti diagnostici, la capacità di quantificare l'incertezza e di comunicarla in modo comprensibile rappresenta una competenza fondamentale. Non si tratta di abbandonare la tradizione psicometrica, ma di arricchirla con gli strumenti concettuali che la statistica bayesiana mette a disposizione.
+
+
+## Riflessioni conclusive {.unnumbered .unlisted}
+
+Giunti al termine di questo percorso, è opportuno tornare con lo sguardo d'insieme sui concetti fondamentali che abbiamo esplorato. Abbiamo preso le mosse da una situazione clinica apparentemente semplice — un punteggio di 72, un cut-off di 70 — per scoprire la complessità che si cela dietro ogni atto di misurazione psicologica.
+
+### Il nucleo concettuale {.unnumbered .unlisted}
+
+Il primo insegnamento, e forse il più importante, è la distinzione tra **punteggio osservato** e **punteggio vero**. Ogni volta che uno psicologo somministra un test, il numero che registra non è il tratto psicologico che intende misurare, ma una sua versione contaminata dall'errore. La domanda clinica rilevante non riguarda mai il punteggio osservato in sé, ma ciò che esso ci dice — in modo imperfetto — sul punteggio vero del paziente.
+
+Abbiamo poi incontrato due modi di rispondere a questa domanda. L'approccio di @Kelley1923, nato nell'alveo della teoria classica dei test, fornisce una stima corretta che "regredisce" verso la media della popolazione, tenendo conto dell'attendibilità dello strumento. L'approccio bayesiano, riformulando il problema in termini di distribuzioni di probabilità, giunge alla medesima stima puntuale ma apre la strada a qualcosa di molto più prezioso: la possibilità di quantificare l'incertezza in modo diretto e intuitivo.
+
+### L'unità sostanziale dei due metodi {.unnumbered .unlisted}
+
+È importante sottolineare che l'approccio bayesiano non si pone in alternativa a quello classico, né lo sostituisce. La formula di @Kelley1923 non viene "confutata" o "superata" — essa rimane valida e utile. Ciò che cambia è la cornice interpretativa. Il modello bayesiano Normale-Normale mostra che la stima di @Kelley1923 è esattamente la media della distribuzione a posteriori che si ottiene assegnando una prior normale centrata sulla media della popolazione. In questo senso, l'approccio bayesiano **generalizza** e **completa** quello classico, fornendo non solo un punto di stima ma un'intera distribuzione, e con essa la possibilità di rispondere a domande che il frequentista non può porsi.
+
+### Dalla stima alla decisione clinica {.unnumbered .unlisted}
+
+La distribuzione a posteriori del punteggio vero diventa così uno strumento flessibile e potente. Consente di calcolare la probabilità che $\theta$ superi **qualsiasi soglia clinica** di interesse — non solo quella predefinita dal manuale, ma anche soglie alternative che il clinico potrebbe voler considerare in base al contesto. Nel nostro esempio, questa probabilità si attesta intorno al 62%: un valore che segnala la necessità di attenzione, ma che al contempo mette in guardia da una conclusione diagnostica affrettata basata sul solo dato quantitativo.
+
+La distribuzione predittiva a posteriori, dal canto suo, risponde a una domanda diversa ma altrettanto rilevante: cosa ci aspetteremmo se misurassimo nuovamente lo stesso paziente? Questa informazione è preziosa per pianificare rivalutazioni e per comprendere la stabilità nel tempo delle prestazioni del paziente.
+
+### L'importanza dell'attendibilità {.unnumbered .unlisted}
+
+L'analisi di sensibilità condotta sull'attendibilità del test rivela un aspetto spesso trascurato nella pratica clinica: la qualità psicometrica dello strumento non è un dettaglio tecnico di interesse solo per i metodologi, ma una proprietà con ricadute concrete sulle decisioni cliniche. A parità di punteggio osservato, test con diversa attendibilità portano a stime molto diverse della probabilità che il paziente sia effettivamente sopra soglia. Conoscere e saper comunicare questa relazione è parte integrante della competenza psicometrica del clinico.
+
+### Verso una pratica clinica più consapevole {.unnumbered .unlisted}
+
+L'obiettivo di questo capitolo non è stato solo quello di introdurre strumenti statistici, ma anche di promuovere un nuovo approccio mentale. La psicometria bayesiana insegna a convivere con l'incertezza in modo onesto e trasparente, anziché nasconderla dietro conclusioni dicotomiche artificiose. Insegna che un punteggio osservato non è mai "la" risposta, ma un'informazione da integrare con altre, da interpretare alla luce delle sue imperfezioni e da comunicare con la consapevolezza dei suoi limiti.
+
+Questo capitolo lascia un messaggio semplice ma fondamentale al clinico che si appresta a utilizzare i test psicometrici nella propria pratica: ogni valore osservato è accompagnato da una componente di incertezza. Imparare a riconoscerla, quantificarla e comunicarla non è un esercizio di sofisticazione statistica fine a sé stesso, ma un atto di rigore metodologico e onestà intellettuale verso sé stessi e i pazienti. La statistica bayesiana, con il suo linguaggio intuitivo e la capacità di esprimere l'incertezza in termini probabilistici direttamente interpretabili, rappresenta uno strumento prezioso per assolvere a questo compito. Spetta al clinico acquisire le competenze necessarie per utilizzarlo in modo appropriato e consapevole.
+
+::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+```{r}
+sessionInfo()
+```
+:::
+
+## Bibliografia {.unnumbered .unlisted}
