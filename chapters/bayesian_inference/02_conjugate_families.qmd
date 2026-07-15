@@ -1,11 +1,10 @@
-# Famiglie coniugate 
+# Famiglie coniugate come scorciatoie computazionali
 
 ::: {.callout-note appearance="minimal"}
-
-Questo materiale costituisce un approfondimento del capitolo 16 del manuale didattico, dedicato allo studio delle famiglie coniugate nell'inferenza bayesiana.
+Questo capitolo non introduce nuovi elementi della teoria della probabilità. Il suo scopo è più circoscritto: mostrare come alcune coppie prior-verosimiglianza permettano di calcolare la distribuzione a posteriori in forma chiusa. Le famiglie coniugate sono quindi utilizzate come **scorciatoie computazionali** per visualizzare chiaramente l'aggiornamento bayesiano.
 :::
 
-::: {.callout-caution collapse=true title="Preparazione del Notebook"}
+::: {.callout-caution collapse="true" title="Preparazione del notebook"}
 
 ```{r}
 here::here("code", "_common.R") |> 
@@ -13,703 +12,485 @@ here::here("code", "_common.R") |>
 
 # Load packages
 if (!requireNamespace("pacman")) install.packages("pacman")
-pacman::p_load(dplyr, tidyr, tibble, purrr, ggplot2, HDInterval)
+pacman::p_load(dplyr, tidyr, tibble, purrr, ggplot2)
 ```
 :::
 
-## Una soluzione in forma chiusa per la distribuzione a posteriori
+## Perché studiare le famiglie coniugate
 
-Una distribuzione a priori è **coniugata** per una funzione di verosimiglianza quando la distribuzione a posteriori risultante appartiene alla stessa famiglia. Questa proprietà consente un'inferenza bayesiana in forma analitica chiusa, fornendo una soluzione esatta senza l'utilizzo di metodi computazionali complessi.
+Nel capitolo precedente abbiamo visto l'idea fondamentale dell'inferenza bayesiana: combinare una distribuzione a priori con la verosimiglianza dei dati e normalizzare il risultato. In simboli:
 
-Per ogni funzione di verosimiglianza appartenente alla famiglia esponenziale (normale, bernoulliana, binomiale, poissoniana, esponenziale, gamma, beta o multinomiale) esiste sempre una distribuzione a priori coniugata. Nei modelli semplici, l'uso di *priors* coniugati consente di ottenere una soluzione analitica per la distribuzione a posteriori. La combinazione di una verosimiglianza esponenziale e di un prior coniugato costituisce un modello *coniugato-esponenziale*.
+$$
+p(\theta \mid y) \propto p(y \mid \theta)\,p(\theta).
+$$
 
-Il meccanismo di aggiornamento si riduce a una modifica algebrica dei parametri della distribuzione a priori. Nel modello Beta-Binomiale, ad esempio, la distribuzione a posteriori si ottiene sommando il numero di successi osservati al parametro $\alpha$ e il numero di insuccessi al parametro $\beta$ della distribuzione Beta iniziale. Questa semplicità di calcolo permette di concentrarsi sull'interpretazione dei risultati piuttosto che sugli aspetti tecnici del calcolo stesso.
+In molti modelli realistici questa operazione richiede metodi computazionali, come il campionamento MCMC. Tuttavia, in alcuni casi particolarmente semplici, la distribuzione a posteriori può essere ottenuta con poche operazioni algebriche. Questi casi prendono il nome di **modelli coniugati**.
 
-I parametri delle distribuzioni coniugate hanno un'interpretazione intuitiva: rappresentano una conoscenza a priori sotto forma di "pseudo-osservazioni". Ad esempio, per la distribuzione Beta, i parametri $\alpha$ e $\beta$ corrispondono rispettivamente al numero virtuale di successi e fallimenti pregressi.
+Una distribuzione a priori è detta **coniugata** rispetto a una verosimiglianza quando la distribuzione a posteriori appartiene alla stessa famiglia della distribuzione a priori. Ad esempio, se il parametro sconosciuto è una proporzione $\theta$ e si sceglie una distribuzione a priori Beta, l'osservazione di dati binomiali produce una distribuzione a posteriori ancora Beta.
 
-Questo meccanismo rende trasparente l'aggiornamento bayesiano, che si riduce alla semplice somma di queste osservazioni virtuali ai dati empirici. La distribuzione a posteriori risulta quindi dalla semplice addizione della conoscenza preesistente all'evidenza nuova.
+Il valore didattico della coniugazione è duplice:
 
-Il principio si estende anche ad altre famiglie coniugate, in cui i parametri del *prior* svolgono un ruolo analogo, quantificando sinteticamente l'informazione pregressa. Un ulteriore vantaggio è l'aggiornamento sequenziale: nuovi dati possono essere incorporati iterativamente utilizzando la distribuzione a posteriori come nuovo *prior*, senza dover rielaborare l'intero dataset. Questo è utile in contesti come il monitoraggio clinico, in cui le valutazioni richiedono un adattamento continuo.
+1. rende visibile il meccanismo dell'aggiornamento bayesiano;
+2. permette di distinguere il principio generale di Bayes dalla difficoltà tecnica del calcolo.
+
+I modelli coniugati non vanno però confusi con l'intera inferenza bayesiana. Si tratta di casi speciali utili per comprendere, controllare e sviluppare intuizioni. Nella pratica moderna, la scelta del modello e dei prior dovrebbe essere guidata dalla domanda di ricerca, dalla teoria psicologica e dalla struttura dei dati e non soltanto dalla convenienza matematica.
+
+## L'idea di base: aggiornare parametri, non formule
+
+La caratteristica più utile dei modelli coniugati è che l'aggiornamento bayesiano si traduce in una modifica diretta dei parametri della prior. Nel modello Beta-Binomiale, ad esempio, la prior Beta ha due parametri, $\alpha$ e $\beta$. Dopo avere osservato $y$ successi su $n$ prove, la posterior è:
+
+$$
+\theta \mid y \sim \text{Beta}(\alpha + y,\, \beta + n - y).
+$$
+
+In altre parole, ai parametri della prior si aggiungono i dati osservati. Per questo motivo i parametri della prior possono essere interpretati come **pseudo-osservazioni**: $\alpha$ rappresenta i successi virtuali e $\beta$ gli insuccessi virtuali.
+
+Algebricamente, questa interpretazione è letterale: $\alpha$ e $\beta$ si sommano ai conteggi come osservazioni aggiuntive (anche frazionari), e la media a posteriori è una media ponderata tra prior e dati. L'avvertimento è che non si tratta di dati passati reali, ma di una sintesi matematica delle convinzioni iniziali. È proprio questa sommabilità a rendere esplicito che la prior ha una forza informativa quantificabile e un peso relativo ben definito rispetto alle osservazioni empiriche.
 
 ## Panoramica delle principali coppie coniugate
 
-Prima di passare ai dettagli implementativi, presentiamo una sintesi delle principali coppie coniugate utilizzate negli esempi. Ogni riga mostra come una distribuzione dei dati si combini con un *prior* specifico per produrre una distribuzione a posteriori della stessa famiglia.
+La tabella seguente riassume alcune coppie coniugate ricorrenti. In questo capitolo useremo principalmente il modello Beta-Binomiale e il modello Normale-Normale come esempi. Gli altri casi sono riportati nei box seguenti a titolo di riferimento operativo.
 
-| Modello dati | Parametro | Prior coniugata | Posterior |
-|---|---|---|---|
-| Binomiale$(n,\theta)$ | $\theta \in [0,1]$ | Beta$(\alpha,\beta)$ | Beta$(\alpha+y, \beta+n-y)$ |
-| Poisson$(\theta)$ | $\theta > 0$ | Gamma$(a,b)$ | Gamma$(a+\sum y_i, b+n)$ |
-| Esponenziale$(\theta)$ | $\theta > 0$ | Gamma$(a,b)$ | Gamma$(a+n, b+\sum y_i)$ |
-| Normale$(\mu,\sigma^2)$ | $\mu \in \mathbb{R}$ | $\mathcal{N}(\mu_0,\tau_0^2)$ | $\mathcal{N}(\mu_n,\tau_n^2)$ |
+| Dati osservati | Parametro incognito | Prior coniugata | Posterior |
+|---|---:|---:|---:|
+| Binomiale$(n, \theta)$ | proporzione $\theta \in [0,1]$ | Beta$(\alpha, \beta)$ | Beta$(\alpha + y, \beta + n - y)$ |
+| Normale$(\mu, \sigma^2)$, con $\sigma$ nota | media $\mu$ | Normale$(\mu_0, \tau_0^2)$ | Normale$(\mu_n, \tau_n^2)$ |
+| Poisson$(\lambda)$ | tasso $\lambda > 0$ | Gamma$(a,b)$ | Gamma$(a + \sum y_i, b + n)$ |
+| Esponenziale$(\lambda)$ | tasso $\lambda > 0$ | Gamma$(a,b)$ | Gamma$(a + n, b + \sum t_i)$ |
 
-Osserviamo alcuni pattern ricorrenti. Nel modello Beta-Binomiale, i parametri della posterior si ottengono sommando i conteggi osservati ai parametri del prior. Nel modello Gamma-Poisson, la forma della distribuzione aumenta con il totale degli eventi, mentre il parametro di scala aumenta con il numero di osservazioni. Il modello Normale-Normale presenta invece una struttura più complessa, basata su una combinazione ponderata delle precisioni.
+Nel resto del capitolo useremo sempre la parametrizzazione Gamma con *shape* $a$ e *rate* $b$, cioè con media $a/b$.
 
-## Funzioni per l'aggiornamento bayesiano
+## Due funzioni essenziali
 
-Implementiamo ora quattro funzioni che automatizzano il calcolo dell'aggiornamento bayesiano per i modelli coniugati più comuni. Ciascuna funzione accetta come input i parametri del *prior* e i dati osservati, restituendo i parametri della distribuzione a posteriori. 
+Le funzioni seguenti non sostituiscono la comprensione del modello. Piuttosto, servono a rendere esplicito il passaggio dai parametri della prior ai parametri della posterior.
 
-### Beta-Binomiale: proporzioni e percentuali
+### Beta-Binomiale: inferenza su una proporzione
 
-Il modello Beta-Binomiale è appropriato per l'inferenza su una proporzione incognita. Esempi tipici includono la stima dell'accuratezza in un compito di riconoscimento, la proporzione di pazienti che rispondono a un trattamento o la frequenza di comportamenti osservati in un contesto educativo.
+Il modello Beta-Binomiale è appropriato quando il dato è il numero di successi su un numero fisso di prove. In psicologia, ad esempio, può descrivere la proporzione di risposte corrette, la quota di partecipanti che mostra un certo comportamento o la probabilità di risposta a un trattamento.
 
 ```{r}
 beta_binomiale_aggiorna <- function(successi, prove, alpha_prior, beta_prior) {
-  alpha_post <- alpha_prior + successi
   insuccessi <- prove - successi
-  beta_post <- beta_prior + insuccessi
-  list(alpha_post = alpha_post, beta_post = beta_post)
+  list(
+    alpha_post = alpha_prior + successi,
+    beta_post  = beta_prior + insuccessi
+  )
 }
 ```
 
-In questo modello, l'aggiornamento bayesiano è particolarmente intuitivo. I parametri $\alpha$ e $\beta$ della distribuzione Beta rappresentano conteggi virtuali di successi e insuccessi derivanti da conoscenze pregresse. L'aggiornamento con i dati osservati si riduce a una semplice somma: ai parametri del prior si aggiungono i successi e gli insuccessi empirici. 
+La regola è semplice: i successi osservati aumentano $\alpha$; gli insuccessi osservati aumentano $\beta$.
 
-Ad esempio, con un prior Beta($\alpha = 2, \beta = 2$) e l'osservazione di 7 successi su 10 prove, la distribuzione a posteriori è Beta($\alpha = 2 + 7, \beta = 2 + 3$) = Beta(9, 5). Il processo mostra in modo trasparente come le convinzioni iniziali si combinino con l'evidenza empirica.
+### Normale-Normale: inferenza su una media
 
-### Normale-Normale: medie e misure continue
-
-Il modello Normale-Normale stima la media di una variabile continua assumendo che la varianza sia nota. Questo modello è frequente in psicometria e neuropsicologia, dove molte misure standardizzate hanno una varianza nota per costruzione.
+Il modello Normale-Normale è utile quando il parametro di interesse è la media di una variabile continua e la deviazione standard osservativa può essere considerata nota. Questa assunzione è semplificatrice, ma rende molto chiara l'idea di **combinazione ponderata delle informazioni**.
 
 ```{r}
 normale_normale_aggiorna <- function(media_campionaria, numerosita,
                                      sigma_noto, mu_prior, tau_prior) {
-  precisione_prior <- 1 / (tau_prior^2)
-  precisione_dati  <- numerosita / (sigma_noto^2)
-  precisione_post   <- precisione_prior + precisione_dati
-  varianza_post     <- 1 / precisione_post
-  sd_post           <- sqrt(varianza_post)
-  mu_post <- varianza_post * (mu_prior * precisione_prior + media_campionaria * precisione_dati)
-  list(mu_post = mu_post, sd_post = sd_post)
+  precisione_prior <- 1 / tau_prior^2
+  precisione_dati  <- numerosita / sigma_noto^2
+  precisione_post  <- precisione_prior + precisione_dati
+  varianza_post    <- 1 / precisione_post
+  mu_post <- varianza_post * (
+    mu_prior * precisione_prior + media_campionaria * precisione_dati
+  )
+  list(
+    mu_post = mu_post,
+    sd_post = sqrt(varianza_post),
+    precisione_prior = precisione_prior,
+    precisione_dati = precisione_dati,
+    precisione_post = precisione_post
+  )
 }
 ```
 
-In questo modello, l'incertezza viene quantificata tramite la precisione, definita come il reciproco della varianza: $\tau = 1/\sigma^2$. Una varianza bassa corrisponde a un'alta precisione e indica una maggiore certezza nella stima.
+Qui il concetto chiave è la *precisione*, ovvero il reciproco della varianza. Una fonte di informazione più precisa incide maggiormente sulla media a posteriori.
 
-La caratteristica notevole di questo modello è che le precisioni si combinano linearmente: la precisione a posteriori è la somma della precisione a priori e della precisione dei dati osservati. Questa relazione semplifica l'aggiornamento delle credenze quando si combinano informazioni provenienti da fonti multiple.
+## Esempio guidato: il modello Beta-Binomiale nello studio di Milgram
 
-### Gamma-Poisson: conteggi di eventi
+Consideriamo un esempio tratto dallo studio classico di @milgram1963behavioral sull'obbedienza all'autorità. Nell'esperimento, 26 partecipanti su 40 proseguirono fino al livello massimo dello strumento sperimentale. Il dato osservato è quindi:
 
-Il modello Gamma-Poisson è adatto per l'analisi del conteggio di eventi in intervalli di tempo o spazio fissi. Alcuni esempi sono: il numero di episodi sintomatici per settimana, gli errori in un compito cognitivo o la frequenza di comportamenti target in sessioni di osservazione.
+$$
+y = 26, \qquad n = 40.
+$$
 
-```{r}
-gamma_poisson_aggiorna <- function(conteggi_osservati, a_prior, b_prior) {
-  eventi_totali <- sum(conteggi_osservati)
-  numero_intervalli <- length(conteggi_osservati)
-  a_post <- a_prior + eventi_totali
-  b_post <- b_prior + numero_intervalli
-  list(a_post = a_post, b_post = b_post)
-}
-```
+La domanda inferenziale non riguarda solo il campione osservato. Vogliamo stimare la proporzione $\theta$ nella popolazione di coloro che, in condizioni sperimentali analoghe, mostrerebbe un comportamento di obbedienza estrema.
 
-I parametri del modello hanno un'interpretazione intuitiva: una distribuzione a priori Gamma($\alpha$=2, $\beta$=4) equivale all'osservazione virtuale di $\alpha$=2 eventi in un periodo totale di $\beta$=4 unità temporali, suggerendo un tasso a priori di 0.5 eventi per unità.
+### Specificare una prior scettica
 
-L'aggiornamento bayesiano avviene mediante una semplice somma. Con l'osservazione di 4 eventi in 4 unità temporali, la distribuzione a posteriori risulta Gamma($\alpha$=2+4, $\beta$=4+4) = Gamma(6, 8). Ciò corrisponde a un'esperienza complessiva di 6 eventi in 8 unità temporali, mostrando come il prior si aggiorni attraverso l'accumulo di evidenza empirica.
-
-### Gamma-Esponenziale: tempi tra eventi
-
-Il modello Gamma-Esponenziale analizza i tempi di attesa tra eventi consecutivi. È complementare al modello Gamma-Poisson: quest'ultimo conta gli eventi in un tempo fisso, mentre il modello Gamma-Esponenziale misura l'intervallo tra un evento e il successivo.
+Supponiamo di partire da una posizione scettica: prima di vedere i dati, riteniamo poco plausibile che l'obbedienza estrema sia molto diffusa. Una prior Beta(1, 10) esprime questa idea.
 
 ```{r}
-gamma_esponenziale_aggiorna <- function(tempi_osservati, a_prior, b_prior) {
-  tempo_totale <- sum(tempi_osservati)
-  numero_intervalli <- length(tempi_osservati)
-  a_post <- a_prior + numero_intervalli
-  b_post <- b_prior + tempo_totale
-  list(a_post = a_post, b_post = b_post)
-}
-```
-
-In questo modello, la distribuzione a priori Gamma modella l'incertezza sul **tasso** $\lambda$ di un processo di eventi rari, mentre la verosimiglianza Esponenziale descrive la distribuzione dei **tempi di attesa** tra eventi consecutivi.
-
-L'aggiornamento bayesiano è diretto: il parametro di forma $\alpha$ della Gamma aumenta di un numero pari al numero di eventi osservati, mentre il parametro di velocità $\beta$ aumenta della somma dei tempi di attesa osservati.
-
-La distinzione tra i modelli Gamma-Poisson e Gamma-Esponenziale è fondamentale. Entrambi utilizzano una distribuzione a priori Gamma per il parametro di tasso $\lambda$, ma modellano fenomeni diversi.
-
-Il modello Gamma-Poisson descrive il numero di eventi che si verificano in un intervallo di tempo fisso, mentre il modello Gamma-Esponenziale descrive il tempo di attesa tra un evento e l'altro. Il suo processo di aggiornamento bayesiano aumenta il parametro $\alpha$ della distribuzione Gamma con il conteggio degli eventi osservati e il parametro $\beta$ con il numero di intervalli temporali presi in considerazione.
-
-Al contrario, il modello Gamma-Esponenziale si concentra sulla lunghezza degli intervalli tra gli eventi consecutivi. In questo caso, il parametro $\alpha$ viene aggiornato con il numero di eventi osservati, mentre il parametro $\beta$ viene aggiornato con la somma effettiva dei tempi di attesa misurati.
-
-Questa differenza riflette la natura distinta dei dati analizzati: da un lato i conteggi degli eventi e dall'altro le misure di tempo. Essa illustra inoltre come le distribuzioni a priori coniugate si adattino coerentemente a diverse strutture probabilistiche.
-
-## Il modello beta-binomiale: lo studio sull'obbedienza di Milgram
-
-Consideriamo un esempio applicativo del modello Beta-Binomiale [@Johnson2022bayesrules] basato sull'esperimento di @milgram1963behavioral. Questo studio rappresenta una pietra miliare nella psicologia sociale per l'analisi dei meccanismi di obbedienza all'autorità. Nell'esperimento, i partecipanti somministravano a un'altra persona quelle che credevano essere scosse elettriche di intensità crescente. I risultati mostrarono che 26 partecipanti su 40 (il 65%) proseguirono fino al livello massimo dello strumento, contrassegnato dalla dicitura "Pericolo: scossa grave".
-
-Da un punto di vista statistico, ci si può chiedere quale sia la proporzione della popolazione generale che, in condizioni sperimentali simili, mostrerebbe un livello analogo di obbedienza. L'inferenza bayesiana consente di quantificare l'incertezza associata a questa stima e di valutare esplicitamente come i dati modifichino le credenze iniziali.
-
-### Specificazione del prior: formalizzare lo scetticismo iniziale
-
-Prima di esaminare i dati, specifichiamo una distribuzione a priori che esprima scetticismo riguardo alla diffusione dell'obbedienza estrema. Adottiamo una distribuzione Beta(1,10).
-
-```{r}
-# Definiamo i parametri della distribuzione a priori
 alpha_prior <- 1
 beta_prior <- 10
 
-# La media di una distribuzione Beta(alpha, beta) è alpha/(alpha + beta)
 media_prior <- alpha_prior / (alpha_prior + beta_prior)
 
-# Creiamo una sequenza di possibili valori del parametro theta
-# che rappresenta la proporzione di obbedienza nella popolazione
-theta_valori <- seq(from = 0, to = 1, length.out = 500)
-
-# Calcoliamo la densità di probabilità per ciascun valore di theta
-# usando la funzione dbeta() che implementa la distribuzione Beta
-densita_prior <- dbeta(theta_valori, shape1 = alpha_prior, shape2 = beta_prior)
-
-# Organizziamo i dati in un dataframe per facilitare la visualizzazione
-dati_prior <- data.frame(
-  theta = theta_valori,
-  densita = densita_prior
-)
+successi_osservati <- 26
+prove_totali <- 40
 ```
 
-La distribuzione Beta(1,10) ha una media pari a `r round(media_prior, 3)`, riflettendo l'aspettativa che solo una piccola frazione della popolazione manifesti un'obbedienza estrema. I parametri possono essere interpretati come il risultato di un esperimento virtuale in cui un partecipante su undici mostra il comportamento target.
+La media della prior è `r round(media_prior, 3)`. In termini intuitivi, questa prior equivale a un'esperienza virtuale molto debole e sbilanciata verso valori bassi di $\theta$.
+
+### Aggiornare la prior con i dati
+
+Applichiamo ora la regola coniugata.
 
 ```{r}
-#| fig-width: 8
-#| fig-height: 5
-
-# Definisci i colori tematici
-col_prior <- palette_qualitative[8]      # Grigio per prior
-col_likelihood <- palette_qualitative[1] # Arancione per verosimiglianza
-col_posterior <- palette_qualitative[5]  # Blu per posterior
-col_mean <- palette_qualitative[6]       # Rosso-arancio per linee verticali/medie
-col_interval <- palette_qualitative[7]   # Rosa per intervalli
-col_prediction <- palette_qualitative[2] # Azzurro per distribuzioni predittive
-
-# Creiamo la visualizzazione della distribuzione a priori
-ggplot(dati_prior, aes(x = theta, y = densita)) +
-  geom_line(color = col_prior, size = 1.2) +
-  geom_area(fill = col_prior, alpha = 0.3) +
-  geom_vline(xintercept = media_prior, linetype = "dashed", 
-             color = col_mean, size = 0.8) +
-  annotate("text", x = 0.2, y = max(densita_prior) * 0.8,
-           label = paste("Media =", round(media_prior, 3)),
-           color = col_mean, size = 4) +
-  labs(
-    title = "Distribuzione a priori Beta(1, 10)",
-    subtitle = "Rappresenta lo scetticismo iniziale sulla diffusione dell'obbedienza estrema",
-    x = expression(theta ~ "(proporzione che obbedisce)"),
-    y = "Densità di probabilità"
-  )
-```
-
-Il grafico mostra che la distribuzione a priori concentra la maggior parte della massa di probabilità su valori bassi di $\theta$. La forma decrescente della curva indica che, a priori, sono considerate poco plausibili proporzioni più elevate di obbedienza.
-
-### L'aggiornamento bayesiano: integrare evidenza e credenze
-
-Aggiorniamo le credenze iniziali incorporando i dati osservati mediante la regola di aggiornamento coniugato:
-
-```{r}
-# Dati osservati nell'esperimento di Milgram
-successi_osservati <- 26  # partecipanti che hanno obbedito completamente
-prove_totali <- 40         # numero totale di partecipanti
-
-# Applichiamo la funzione di aggiornamento bayesiano
-parametri_posteriori <- beta_binomiale_aggiorna(
+post <- beta_binomiale_aggiorna(
   successi = successi_osservati,
   prove = prove_totali,
   alpha_prior = alpha_prior,
   beta_prior = beta_prior
 )
 
-# Estraiamo i parametri aggiornati dalla lista restituita
-alpha_post <- parametri_posteriori$alpha_post
-beta_post <- parametri_posteriori$beta_post
+alpha_post <- post$alpha_post
+beta_post <- post$beta_post
 
-# Calcoliamo la media della distribuzione a posteriori
 media_post <- alpha_post / (alpha_post + beta_post)
 ```
 
-I parametri della distribuzione a posteriori sono $\alpha$ = `r alpha_post` e $\beta$ = `r beta_post`. Questi valori riflettono l'accumulo di esperienza: i 26 successi osservati si sommano al singolo successo virtuale del prior (1 + 26 = 27), mentre i 14 insuccessi osservati si sommano ai 10 insuccessi virtuali (10 + 14 = 24). La media a posteriori è pari a `r round(media_post, 3)`, un valore considerevolmente più alto della media a priori del 9%. Questo spostamento evidenzia l'impatto dell'evidenza empirica nel moderare lo scetticismo iniziale.
+La posterior è:
 
-### Visualizzazione dell'aggiornamento: dalle credenze iniziali alla sintesi finale
+$$
+\theta \mid y \sim \text{Beta}(`r alpha_post`, `r beta_post`).
+$$
 
-Per comprendere il meccanismo dell'aggiornamento bayesiano, visualizziamo simultaneamente tre componenti: la distribuzione a priori, la funzione di verosimiglianza e la distribuzione a posteriori.
+Il significato dell'aggiornamento è evidente:
+
+- il parametro $\alpha$ passa da 1 a `r alpha_post`, perché ai successi virtuali si aggiungono i 26 successi osservati;
+- il parametro $\beta$ passa da 10 a `r beta_post`, perché agli insuccessi virtuali si aggiungono i 14 insuccessi osservati.
+
+La media a posteriori è pari a `r round(media_post, 3)`. Rispetto alla proporzione campionaria osservata, pari a `r round(successi_osservati / prove_totali, 3)`, la stima è spostata verso il basso, riflettendo l'effetto di regolarizzazione della prior scettica.
+
+### Visualizzare prior, verosimiglianza e posterior
 
 ```{r}
-# Prepariamo i dati per la visualizzazione di tutte e tre le curve
+theta <- seq(0, 1, length.out = 500)
 
-# Distribuzione a priori (già calcolata)
-prior_densita <- dbeta(theta_valori, alpha_prior, beta_prior)
-
-# Funzione di verosimiglianza
-# Indica quanto i dati sono compatibili con ciascun valore di theta
-likelihood_raw <- dbinom(
-  x = successi_osservati, 
-  size = prove_totali, 
-  prob = theta_valori
+prior_df <- tibble(
+  theta = theta,
+  densita = dbeta(theta, alpha_prior, beta_prior),
+  componente = "Prior"
 )
 
-# Distribuzione a posteriori
-posterior_densita <- dbeta(theta_valori, alpha_post, beta_post)
+lik_raw <- dbinom(successi_osservati, size = prove_totali, prob = theta)
+post_raw <- dbeta(theta, alpha_post, beta_post)
 
-# La verosimiglianza non è una densità di probabilità, quindi la scaliamo
-# per renderla visivamente confrontabile con prior e posterior
-likelihood_scaled <- likelihood_raw / max(likelihood_raw) * max(posterior_densita)
-
-# Creiamo un dataframe "lungo" per ggplot2 con tutte e tre le distribuzioni
-dati_complete <- data.frame(
-  theta = rep(theta_valori, 3),
-  densita = c(prior_densita, likelihood_scaled, posterior_densita),
-  tipo = rep(
-    c("Prior", "Verosimiglianza", "Posterior"), 
-    each = length(theta_valori)
-  )
+lik_df <- tibble(
+  theta = theta,
+  densita = lik_raw / max(lik_raw) * max(post_raw),
+  componente = "Verosimiglianza"
 )
 
-# Convertiamo 'tipo' in un fattore ordinato per controllare la legenda
-dati_complete$tipo <- factor(
-  dati_complete$tipo,
-  levels = c("Prior", "Verosimiglianza", "Posterior")
+post_df <- tibble(
+  theta = theta,
+  densita = post_raw,
+  componente = "Posterior"
 )
+
+agg_df <- bind_rows(prior_df, lik_df, post_df) |>
+  mutate(componente = factor(
+    componente,
+    levels = c("Prior", "Verosimiglianza", "Posterior")
+  ))
 ```
 
 ```{r}
-#| fig-width: 10
-#| fig-height: 6
+#| fig-width: 9
+#| fig-height: 5.5
 
-# Creiamo il grafico che mostra l'intero processo di aggiornamento
-ggplot(dati_complete, aes(x = theta, y = densita, color = tipo)) +
-  geom_line(size = 1.3) +
-  scale_color_manual(
-    values = c(
-      "Prior" = col_prior,
-      "Verosimiglianza" = col_likelihood,
-      "Posterior" = col_posterior
-    )
-  ) +
+ggplot(agg_df, aes(x = theta, y = densita, color = componente)) +
+  geom_line(linewidth = 1.2) +
   labs(
-    title = "Aggiornamento Bayesiano: Studio Milgram",
-    subtitle = paste0(
-      "Dati: ", successi_osservati, " obbedienti su ", 
-      prove_totali, " partecipanti"
-    ),
-    x = expression(theta ~ "(proporzione che obbedisce)"),
-    y = "Densità (scala relativa)",
+    title = "Aggiornamento Beta-Binomiale: dati dello studio di Milgram",
+    subtitle = paste0(successi_osservati, " successi su ", prove_totali, " osservazioni"),
+    x = expression(theta),
+    y = "Densita' / scala relativa",
     color = NULL
   )
 ```
 
-Il grafico illustra il meccanismo dell'inferenza bayesiana. La curva grigia rappresenta le credenze a priori, concentrate sui valori più bassi di $\theta$. La verosimiglianza (curva arancione) riflette l'informazione campionaria e presenta un picco in corrispondenza della proporzione osservata (26/40 = 0.65).
+La verosimiglianza mostra quali valori di $\theta$ rendono i dati osservati più compatibili. La prior esprime lo scetticismo iniziale. La posterior combina le due fonti di informazione. Il risultato non coincide né con la prior né con la verosimiglianza, ma rappresenta una sintesi probabilistica delle assunzioni iniziali e dell'evidenza empirica.
 
-La distribuzione a posteriori (curva blu) sintetizza queste due fonti di informazione posizionandosi in un punto di equilibrio tra il *prior* e i dati. La sua posizione, spostata verso la verosimiglianza ma non sovrapposta a essa, evidenzia l'effetto di regolarizzazione del prior: questo modera la stima puramente empirica incorporando nel risultato finale lo scetticismo iniziale.
+### Riassumere la posterior
 
-### Quantificazione dell'incertezza e inferenza probabilistica
-
-L'approccio bayesiano consente affermazioni probabilistiche direttamente interpretabili:
+Una volta ottenuta la posterior, possiamo rispondere a domande direttamente interpretabili.
 
 ```{r}
-# Statistiche descrittive della posterior
-media_posteriori <- alpha_post / (alpha_post + beta_post)
-moda_posteriori <- (alpha_post - 1) / (alpha_post + beta_post - 2)
-varianza_posteriori <- (alpha_post * beta_post) / ((alpha_post + beta_post)^2 * (alpha_post + beta_post + 1))
-sd_posteriori <- sqrt(varianza_posteriori)
-
-# Probabilità che θ > 0.5
-prob_maggioranza <- pbeta(0.5, shape1 = alpha_post, shape2 = beta_post, lower.tail = FALSE)
-
-# Intervallo di credibilità al 95%
-hdi_95 <- HDInterval::hdi(qbeta, credMass = 0.95, shape1 = alpha_post, shape2 = beta_post)
+media_posterior <- alpha_post / (alpha_post + beta_post)
+moda_posterior <- (alpha_post - 1) / (alpha_post + beta_post - 2)
+ci_95 <- qbeta(c(0.025, 0.975), alpha_post, beta_post)
+prob_maggioranza <- pbeta(0.5, alpha_post, beta_post, lower.tail = FALSE)
+prob_alta <- pbeta(0.6, alpha_post, beta_post, lower.tail = FALSE)
 ```
 
-La media della distribuzione a posteriori è `r round(media_posteriori, 3)`, che rappresenta la nostra migliore stima puntuale della proporzione $\theta$. La moda, pari a `r round(moda_posteriori, 3)`, indica il valore singolo più plausibile secondo la distribuzione a posteriori. La deviazione standard di `r round(sd_posteriori, 3)` quantifica l'incertezza residua sulla stima, corrispondente a circa `r round(sd_posteriori * 100, 1)` punti percentuali.
+| Domanda | Quantità bayesiana | Risultato |
+|---|---:|---:|
+| Quale valore è più plausibile in media? | $E(\theta \mid y)$ | `r round(media_posterior, 3)` |
+| Quale valore ha densità massima? | moda posterior | `r round(moda_posterior, 3)` |
+| Qual è un intervallo credibile al 95%? | quantili posterior | [`r round(ci_95[1], 3)`, `r round(ci_95[2], 3)`] |
+| Quanto è plausibile che la proporzione superi il 50%? | $P(\theta > .50 \mid y)$ | `r round(prob_maggioranza, 3)` |
+| Quanto è plausibile che superi il 60%? | $P(\theta > .60 \mid y)$ | `r round(prob_alta, 3)` |
 
-Un risultato di particolare interesse concerne la probabilità che più della metà della popolazione manifesti un'obbedienza estrema in condizioni analoghe. Tale probabilità è pari a `r round(prob_maggioranza, 3)` (circa il `r round(prob_maggioranza * 100, 1)`%). Questo valore fornisce una misura diretta dell'evidenza a favore dell'ipotesi che l'obbedienza estrema sia un fenomeno maggioritario nella popolazione.
+Il vantaggio dell'approccio bayesiano non consiste solo nell'ottenere una stima puntuale. La distribuzione a posteriori consente di formulare affermazioni probabilistiche del tipo: dati il modello, la distribuzione a priori e i dati osservati, la probabilità che il parametro $\theta$ superi una certa soglia è pari a un certo valore.
 
-**Interpretazione:** dati l'evidenza osservata e le nostre assunzioni iniziali, possiamo affermare con una probabilità del 0.95 che la vera proporzione di obbedienza estrema nella popolazione è compresa tra `r round(hdi_95[1] * 100, 1)`% e ´r round(hdi_95[2] * 100, 1)`%.
+### Sensibilità alla prior
 
-### Distribuzione predittiva a posteriori: proiezioni per studi futuri
+Poiché la prior influenza la posterior, è buona pratica verificare quanto i risultati dipendano dalla scelta iniziale. Confrontiamo tre prior:
 
-L'approccio bayesiano consente di formulare previsioni probabilistiche per osservazioni future. Supponendo di replicare l'esperimento con un nuovo campione di 40 partecipanti, ci si chiede quanti soggetti mostreranno un'obbedienza estrema. La risposta richiede una distribuzione di probabilità che integri due fonti di incertezza:
-
-1) l'incertezza sul parametro $\theta$, rappresentata dalla distribuzione a posteriori;
-2) la variabilità campionaria intrinseca al processo binomiale.
-
-Anche conoscendo il valore esatto di $\theta$, il numero di soggetti con obbedienza estrema in un nuovo campione varierebbe secondo la distribuzione binomiale. Poiché non conosciamo con precisione il valore di $\theta$, ma disponiamo della sua distribuzione a posteriori, la distribuzione predittiva integra queste due fonti di incertezza.
-
-Nel modello Beta-Binomiale, la distribuzione predittiva assume una forma analitica chiusa nota come distribuzione Beta-Binomiale.
-
-Per un nuovo campione di 40 partecipanti:
+- Beta(1, 1), uniforme;
+- Beta(1, 10), scettica;
+- Beta(10, 10), centrata su 0.5 e più concentrata.
 
 ```{r}
-dimensione_futura <- 40
-possibili_esiti <- 0:dimensione_futura
+prior_sens <- tribble(
+  ~prior, ~alpha_prior, ~beta_prior,
+  "Uniforme: Beta(1, 1)", 1, 1,
+  "Scettica: Beta(1, 10)", 1, 10,
+  "Moderata: Beta(10, 10)", 10, 10
+) |>
+  mutate(
+    alpha_post = alpha_prior + successi_osservati,
+    beta_post = beta_prior + prove_totali - successi_osservati,
+    media_post = alpha_post / (alpha_post + beta_post),
+    prob_theta_gt_50 = pbeta(0.5, alpha_post, beta_post, lower.tail = FALSE),
+    prob_theta_gt_60 = pbeta(0.6, alpha_post, beta_post, lower.tail = FALSE)
+  )
 
-beta_binomial_prob <- function(k, n, alpha, beta) {
-  choose(n, k) * beta(alpha + k, beta + n - k) / beta(alpha, beta)
+prior_sens
+```
+
+```{r}
+sens_df <- prior_sens |>
+  select(prior, alpha_post, beta_post) |>
+  tidyr::crossing(theta = theta) |>
+  mutate(densita = dbeta(theta, alpha_post, beta_post))
+```
+
+```{r}
+#| fig-width: 9
+#| fig-height: 5.5
+
+ggplot(sens_df, aes(x = theta, y = densita, color = prior)) +
+  geom_line(linewidth = 1.1) +
+  labs(
+    title = "Sensibilita' della posterior alla scelta della prior",
+    x = expression(theta),
+    y = "Densita' posterior",
+    color = NULL
+  )
+```
+
+Quando i dati sono numerosi e informativi, prior ragionevoli tendono a produrre posterior simili. Quando i dati sono pochi o rumorosi, la scelta della prior diventa più rilevante e deve essere giustificata con particolare attenzione.
+
+## Secondo esempio: il modello Normale-Normale
+
+Consideriamo ora una misura continua standardizzata. Supponiamo di voler stimare il punteggio medio di un gruppo a cui è stato somministrato un test psicologico. La deviazione standard del test è nota e pari a 15 punti. Prima di osservare i dati, utilizziamo una prior centrata sulla media normativa 100 con deviazione standard 10:
+
+$$
+\mu \sim \mathcal{N}(100, 10^2).
+$$
+
+In un campione di 25 persone osserviamo una media pari a 106.
+
+```{r}
+mu_prior <- 100
+tau_prior <- 10
+sigma_noto <- 15
+n <- 25
+media_campionaria <- 106
+
+post_norm <- normale_normale_aggiorna(
+  media_campionaria = media_campionaria,
+  numerosita = n,
+  sigma_noto = sigma_noto,
+  mu_prior = mu_prior,
+  tau_prior = tau_prior
+)
+
+post_norm
+```
+
+La media a posteriori è `r round(post_norm$mu_post, 2)` e la deviazione standard a posteriori è `r round(post_norm$sd_post, 2)`. La stima a posteriori si colloca tra la media a priori e la media campionaria. La sua posizione dipende dal rapporto tra la precisione della prior e la precisione dei dati.
+
+```{r}
+mu_grid <- seq(85, 120, length.out = 500)
+
+norm_df <- tibble(
+  mu = rep(mu_grid, 3),
+  densita = c(
+    dnorm(mu_grid, mu_prior, tau_prior),
+    dnorm(mu_grid, media_campionaria, sigma_noto / sqrt(n)),
+    dnorm(mu_grid, post_norm$mu_post, post_norm$sd_post)
+  ),
+  componente = rep(c("Prior", "Informazione dei dati", "Posterior"), each = length(mu_grid))
+) |>
+  mutate(componente = factor(
+    componente,
+    levels = c("Prior", "Informazione dei dati", "Posterior")
+  ))
+```
+
+```{r}
+#| fig-width: 9
+#| fig-height: 5.5
+
+ggplot(norm_df, aes(x = mu, y = densita, color = componente)) +
+  geom_line(linewidth = 1.2) +
+  labs(
+    title = "Aggiornamento Normale-Normale",
+    subtitle = "La posterior combina prior e informazione campionaria in base alle precisioni",
+    x = expression(mu),
+    y = "Densita'",
+    color = NULL
+  )
+```
+
+Questo esempio mostra un secondo schema ricorrente della coniugazione: non sempre l'aggiornamento equivale alla somma di successi e insuccessi. Nel modello Normale-Normale, le informazioni si combinano attraverso le precisioni. La fonte più precisa riceve più peso nella media a posteriori.
+
+::: {.callout-tip collapse="true" title="Formula della posterior nel modello Normale-Normale"}
+Se $\sigma$ è nota, $\bar y$ è la media campionaria e la prior è $\mu \sim \mathcal{N}(\mu_0, \tau_0^2)$, allora:
+
+$$
+\tau_n^2 = \left(\frac{1}{\tau_0^2} + \frac{n}{\sigma^2}\right)^{-1}
+$$
+
+e
+
+$$
+\mu_n = \tau_n^2 \left(\frac{\mu_0}{\tau_0^2} + \frac{n\bar y}{\sigma^2}\right).
+$$
+
+La media a posteriori è quindi una media ponderata tra la media a priori e la media campionaria. I pesi dipendono dalle rispettive precisioni.
+:::
+
+## Box operativi: altre famiglie coniugate
+
+Le famiglie seguenti sono utili in molti contesti applicativi, ma sono lasciate come riferimento. Il loro scopo qui non è ampliare la teoria delle distribuzioni, bensì mostrare che lo stesso schema di aggiornamento ricorre in modelli diversi.
+
+::: {.callout-note collapse="true" title="Gamma-Poisson: conteggi di eventi"}
+Il modello Gamma-Poisson è adatto a dati di conteggio: numero di errori in un compito, numero di episodi sintomatici in una settimana, numero di comportamenti osservati in sessioni comparabili.
+
+Se:
+
+$$
+y_i \mid \lambda \sim \text{Poisson}(\lambda)
+$$
+
+con prior:
+
+$$
+\lambda \sim \text{Gamma}(a, b),
+$$
+
+allora:
+
+$$
+\lambda \mid y \sim \text{Gamma}\left(a + \sum_i y_i,\, b + n\right).
+$$
+
+```{r}
+gamma_poisson_aggiorna <- function(conteggi_osservati, a_prior, b_prior) {
+  list(
+    a_post = a_prior + sum(conteggi_osservati),
+    b_post = b_prior + length(conteggi_osservati)
+  )
 }
 
-prob_predittive <- sapply(possibili_esiti, beta_binomial_prob, n = dimensione_futura,
-                          alpha = alpha_post, beta = beta_post)
-
-valore_atteso_predetto <- sum(possibili_esiti * prob_predittive)
-moda_predittiva <- possibili_esiti[which.max(prob_predittive)]
+conteggi <- c(2, 1, 0, 1)
+gp <- gamma_poisson_aggiorna(conteggi, a_prior = 1, b_prior = 1)
+gp
 ```
 
+Con questi dati la posterior è Gamma(`r gp$a_post`, `r gp$b_post`) e la media a posteriori del tasso è `r round(gp$a_post / gp$b_post, 2)` eventi per intervallo.
+
+La regola ha una lettura intuitiva: il parametro $a$ aumenta con il numero totale di eventi osservati, mentre $b$ aumenta con il numero di intervalli osservati.
+:::
+
+::: {.callout-note collapse="true" title="Gamma-Esponenziale: tempi di attesa tra eventi"}
+Il modello Gamma-Esponenziale è utile quando non contiamo gli eventi in intervalli fissi, ma osserviamo i tempi di attesa tra eventi consecutivi. Ad esempio: tempo tra episodi comportamentali, tempo tra ricadute, latenza fino a una risposta.
+
+Se:
+
+$$
+t_i \mid \lambda \sim \text{Esponenziale}(\lambda)
+$$
+
+con prior:
+
+$$
+\lambda \sim \text{Gamma}(a,b),
+$$
+
+allora:
+
+$$
+\lambda \mid t \sim \text{Gamma}\left(a + n,\, b + \sum_i t_i\right).
+$$
+
 ```{r}
-# dataframe per il plotting predittivo
-pred_df <- data.frame(
-  numero_obbedienti = possibili_esiti,
-  probabilita = prob_predittive
-)
+gamma_esponenziale_aggiorna <- function(tempi_osservati, a_prior, b_prior) {
+  list(
+    a_post = a_prior + length(tempi_osservati),
+    b_post = b_prior + sum(tempi_osservati)
+  )
+}
+
+intervalli <- c(0.5, 1.2, 0.8, 2.4)
+ge <- gamma_esponenziale_aggiorna(intervalli, a_prior = 1, b_prior = 1)
+ge
 ```
 
-Il valore medio predetto è `r round(valore_atteso_predetto, 1)` partecipanti, mentre l'esito più probabile (moda) è `r moda_predittiva` partecipanti.
+Con questi dati la posterior è Gamma(`r ge$a_post`, `r round(ge$b_post, 2)`). La media a posteriori del tasso è `r round(ge$a_post / ge$b_post, 2)` eventi per unità di tempo. Il tempo medio corrispondente è circa `r round(1 / (ge$a_post / ge$b_post), 2)` unità di tempo.
+
+La differenza rispetto al modello Gamma-Poisson è sostanziale: nel Gamma-Poisson osserviamo conteggi; nel Gamma-Esponenziale osserviamo durate.
+:::
+
+::: {.callout-note collapse="true" title="Aggiornamento sequenziale"}
+Una proprietà importante dell'inferenza bayesiana è che l'aggiornamento può essere sequenziale. La posterior ottenuta dopo una prima analisi può diventare la prior dell'analisi successiva.
+
+Nel modello Beta-Binomiale, ad esempio, dopo avere ottenuto Beta(`r alpha_post`, `r beta_post`) dai dati di Milgram, possiamo incorporare una replica con 19 successi su 40 prove:
 
 ```{r}
-#| fig-width: 10
-#| fig-height: 6
-
-# Plot della distribuzione predittiva
-ggplot(pred_df, aes(x = numero_obbedienti, y = probabilita)) +
-  geom_col(fill = col_prediction, alpha = 0.7, width = 0.9) +
-  geom_vline(xintercept = valore_atteso_predetto, 
-             color = col_mean, linetype = "dashed", size = 1) +
-  annotate("text",
-           x = valore_atteso_predetto + 3,
-           y = max(pred_df$probabilita) * 0.9,
-           label = paste("Media predetta =", round(valore_atteso_predetto, 1)),
-           color = col_mean, size = 4.5, hjust = 0) +
-  labs(
-    title = "Distribuzione Predittiva: Replica dell'esperimento di Milgram",
-    subtitle = paste0("Previsione per un nuovo studio con n = ", dimensione_futura, " partecipanti"),
-    x = "Numero di partecipanti che obbediscono completamente",
-    y = "Probabilità"
-  ) +
-  scale_x_continuous(breaks = seq(0, dimensione_futura, by = 5))
-```
-
-La distribuzione predittiva, approssimativamente normale e centrata attorno a 21 partecipanti, combina l'incertezza sul parametro $\theta$ e la variabilità campionaria. Presenta una lieve asimmetria, ereditata dalla forma non perfettamente simmetrica della distribuzione a posteriori di $\theta$.
-
-### Quantificazione dell'incertezza predittiva
-
-Per comprendere le implicazioni pratiche di questa distribuzione, calcoliamo gli intervalli e le probabilità di interesse. Questi valori aiutano a definire aspettative realistiche per gli studi futuri e a identificare i risultati che potrebbero essere considerati sorprendenti.
-
-```{r}
-# statistiche predittive
-prob_cumulativa <- cumsum(pred_df$probabilita)
-indice_inferiore <- which(prob_cumulativa >= 0.05)[1]
-indice_superiore <- which(prob_cumulativa >= 0.95)[1]
-limite_inf_90 <- pred_df$numero_obbedienti[indice_inferiore]
-limite_sup_90 <- pred_df$numero_obbedienti[indice_superiore]
-
-# probabilità estremi
-prob_molto_basso <- sum(pred_df$probabilita[pred_df$numero_obbedienti <= 15])  # 0..15
-prob_molto_alto  <- sum(pred_df$probabilita[pred_df$numero_obbedienti >= 30])  # 30..40
-
-# deviazione standard predittiva
-varianza_predittiva <- sum((pred_df$numero_obbedienti - valore_atteso_predetto)^2 * pred_df$probabilita)
-sd_predittiva <- sqrt(varianza_predittiva)
-```
-
-L'intervallo di predizione al 90% va da `r limite_inf_90` a `r limite_sup_90` partecipanti estremamente obbedienti. Ciò significa che, in una replica dell'esperimento, il numero di partecipanti estremamente obbedienti atteso ricadrebbe in questo intervallo con probabilità di 0.90. Valori inferiori a `r limite_inf_90` o superiori a `r limite_sup_90` risulterebbero insoliti.
-
-La probabilità di osservare un tasso di obbedienza "notevolmente basso" (inferiore a 15 partecipanti) è pari a `r round(prob_molto_basso, 3)` (circa `r round(prob_molto_basso * 100, 1)`%), quantificando quanto un simile risultato si discosterebbe dalle evidenze disponibili. Allo stesso modo, la probabilità di un risultato "notevolmente alto" (oltre 30 partecipanti) è `r round(prob_molto_alto, 3)` (circa `r round(prob_molto_alto * 100, 1)`%).
-
-La deviazione standard della distribuzione predittiva è pari a `r round(sd_predittiva, 2)` partecipanti, valore sensibilmente maggiore rispetto a quello della distribuzione a posteriori di $\theta$ (`r round(sd_posteriori * dimensione_futura, 1)` partecipanti). Questa differenza evidenzia come la variabilità predittiva incorpori sia l'incertezza sul parametro sia la variabilità campionaria intrinseca.
-
-### Implicazioni metodologiche ed etiche
-
-L'intervallo di predizione al 90% va da `r limite_inf_90` a `r limite_sup_90` partecipanti obbedienti. La probabilità di osservare un tasso insolitamente basso (<15 obbedienti) è `r round(prob_molto_basso, 3)`, mentre quella di un tasso insolitamente alto (>30 obbedienti) è `r round(prob_molto_alto, 3)`.
-
-Queste previsioni hanno conseguenze pratiche e metodologiche chiare: richiedono protocolli di debriefing e tutela dei partecipanti adeguati, data l’elevata probabilità stimata di obbedienza estrema; permettono di testare la validità del modello, perché le osservazioni che cadono al di fuori dell’intervallo predittivo indicano la probabile presenza di fattori contestuali mancanti; infine, guidano la pianificazione sperimentale, fornendo informazioni utili per scegliere la dimensione campionaria più efficiente per le future repliche.
-
-### Aggiornamento sequenziale: apprendimento cumulativo
-
-Il framework bayesiano supporta naturalmente l'aggiornamento sequenziale. Immaginiamo una replica con 19 obbedienti su 40 partecipanti:
-
-```{r}
-# Aggiornamento sequenziale
 successi_replica <- 19
 prove_replica <- 40
 
-alpha_post2 <- alpha_post + successi_replica
-beta_post2 <- beta_post + (prove_replica - successi_replica)
-media_post2 <- alpha_post2 / (alpha_post2 + beta_post2)
+alpha_post_2 <- alpha_post + successi_replica
+beta_post_2 <- beta_post + prove_replica - successi_replica
+media_post_2 <- alpha_post_2 / (alpha_post_2 + beta_post_2)
 ```
 
-La nuova distribuzione a posteriori avrebbe parametri $\alpha$ = `r alpha_post2`, $\beta$ = `r beta_post2` e media `r round(media_post2, 3)`. Questo meccanismo formalizza il processo cumulativo della scoperta scientifica, dove ogni nuovo studio affina le stime precedenti senza invalidarle.
+La nuova posterior è Beta(`r alpha_post_2`, `r beta_post_2`), con media `r round(media_post_2, 3)`. Questo mostra come l'inferenza bayesiana formalizzi l'accumulo progressivo dell'evidenza.
+:::
 
-## Il modello Gamma-Poisson: valutazione clinica degli attacchi di panico
+::: {.callout-note collapse="true" title="Nota sulle distribuzioni predittive"}
+I modelli coniugati permettono spesso di ottenere anche distribuzioni predittive in forma chiusa. Ad esempio, nel modello Beta-Binomiale la distribuzione predittiva del numero di successi in un nuovo campione segue una distribuzione Beta-Binomiale.
 
-Nel trattamento cognitivo-comportamentale del disturbo di panico, il monitoraggio della frequenza degli attacchi costituisce un indicatore cruciale dell'efficacia terapeutica. I pazienti tendono a sovrastimare la frequenza degli episodi nelle fasi acute e a sottovalutare i miglioramenti graduali, rendendo essenziale una registrazione sistematica che fornisca un riferimento oggettivo.
+In questo capitolo non sviluppiamo il tema in dettaglio, perché le distribuzioni predittive vengono trattate nei capitoli successivi. Qui è sufficiente ricordare la distinzione concettuale:
 
-Consideriamo il caso di un paziente monitorato per quattro settimane, con il seguente profilo: 2 attacchi nella prima settimana, 1 nella seconda, 0 nella terza e 1 nella quarta, per un totale di 4 attacchi nel periodo osservato. Questo andamento, sebbene suggerisca un miglioramento, presenta una variabilità che richiede un approccio probabilistico per inferenze robuste.
+- la **posterior** descrive l'incertezza sul parametro;
+- la **posterior predictive** descrive l'incertezza su dati futuri.
 
-### Fondamenti del modello Gamma-Poisson
+Questa distinzione sarà centrale quando useremo le predizioni per controllare l'adeguatezza dei modelli bayesiani.
+:::
 
-Gli attacchi di panico possono essere modellati come eventi rari mediante la distribuzione di Poisson, basata su tre assunzioni fondamentali: l'indipendenza tra gli eventi, un tasso medio costante nell'intervallo temporale considerato e una probabilità trascurabile di eventi simultanei.
+## Cosa imparare da questi esempi
 
-Il parametro centrale è $\theta$, ovvero il tasso medio settimanale di attacchi. L'approccio bayesiano affronta l'incertezza iniziale su $\theta$ assegnandogli una distribuzione a priori Gamma che, sfruttando la coniugazione con la verosimiglianza di Poisson, permette di ottenere una distribuzione a posteriori in forma chiusa.
+Le famiglie coniugate illustrano tre idee fondamentali.
 
-### Configurazione del modello e scelta del prior
+La prima è che l'aggiornamento bayesiano è una procedura ordinata: la posterior deriva dalla combinazione tra l'informazione iniziale e i dati osservati. Nei casi coniugati, questa combinazione è visibile direttamente nei parametri.
 
-Adottiamo un prior debolmente informativo Gamma(1,1) per rappresentare l'incertezza iniziale tipica delle fasi preliminari del trattamento.
+La seconda è che la prior ha una forza informativa. Una prior molto concentrata esercita un'influenza maggiore, soprattutto quando i dati sono pochi. Una prior debole lascia più spazio alla verosimiglianza.
 
-```{r}
-# Dati clinici osservati
-attacchi_settimanali <- c(2, 1, 0, 1)
-
-# Parametri del prior Gamma(1,1)
-a_prior <- 1
-b_prior <- 1
-
-# Statistiche descrittive del prior
-media_prior <- a_prior / b_prior
-sd_prior <- sqrt(a_prior) / b_prior
-```
-
-La distribuzione Gamma(1,1) presenta media `r media_prior` e deviazione standard `r sd_prior`, riflettendo un'incertezza sostanziale clinicamente appropriata per la fase iniziale del trattamento.
-
-### Aggiornamento bayesiano e distribuzione a posteriori
-
-Integriamo le osservazioni cliniche mediante l'aggiornamento coniugato:
-
-```{r}
-# Aggiornamento bayesiano
-a_post <- a_prior + sum(attacchi_settimanali)
-b_post <- b_prior + length(attacchi_settimanali)
-
-# Statistiche della posterior
-tasso_medio_post <- a_post / b_post
-sd_post <- sqrt(a_post) / b_post
-
-# Intervallo di credibilità al 95%
-hdi_95 <- qgamma(c(0.025, 0.975), shape = a_post, rate = b_post)
-```
-
-La distribuzione a posteriori risultante è Gamma(`r a_post`, `r b_post`), con:
-
-- **tasso medio stimato**: `r round(tasso_medio_post, 3)` attacchi/settimana;
-- **deviazione standard**: `r round(sd_post, 3)`;
-- **intervallo di credibilità al 95%**: [`r round(hdi_95[1], 3)`, `r round(hdi_95[2], 3)`].
-
-**Interpretazione:** dati l'evidenza osservata e le nostre assunzioni iniziali, possiamo affermare con probabilità 0.95 che il vero tasso medio di attacchi del paziente è compreso tra `r round(hdi_95[1], 3)` e `r round(hdi_95[2], 3)` episodi per settimana.
-
-### Distribuzione predittiva a posteriori
-
-La distribuzione predittiva integra l'incertezza sul parametro $\theta$ con la variabilità intrinseca del processo Poissoniano. Per una settimana futura:
-
-```{r}
-# Distribuzione predittiva Poisson-Gamma
-calc_negbin_prob <- function(k, r, beta) {
-  # r = alpha_post, beta = beta_post
-  (gamma(r + k) / (gamma(r) * factorial(k))) * 
-    (beta / (beta + 1))^r * (1 / (beta + 1))^k
-}
-
-k_values <- 0:10
-pred_probs <- calc_negbin_prob(k_values, a_post, b_post)
-
-# Statistiche predittive
-expected_attacks <- sum(k_values * pred_probs)
-mode_pred <- k_values[which.max(pred_probs)]
-```
-
-- **numero atteso di attacchi**: `r round(expected_attacks, 2)`;
-- **esito più probabile**: `r mode_pred` attacchi.
-
-### Implicazioni cliniche e terapeutiche
-
-L'analisi bayesiana fornisce diversi spunti di riflessione clinicamente rilevanti:
-
-1. **monitoraggio dell'efficacia**: il tasso medio post-terapia di `r round(tasso_medio_post, 2)` attacchi/settimana rappresenta un benchmark quantitativo per valutare i progressi;
-2. **pianificazione terapeutica**: l'intervallo di predizione fornisce informazioni sulle aspettative realistiche per le settimane successive, supportando la regolazione degli interventi;
-3. **comunicazione col paziente**: le stesse probabilità facilitano la psicoeducazione, mostrando l'andamento atteso in termini accessibili;
-4. **decisioni cliniche**: la probabilità di riacutizzazione può essere quantificata direttamente dalla distribuzione predittiva.
-
-### Aggiornamento sequenziale nel follow-up
-
-Il framework supporta naturalmente l'aggiornamento continuo man mano che nuovi dati divengono disponibili. Supponiamo che nelle due settimane successive si osservino 0 e 1 attacchi:
-
-```{r}
-# Aggiornamento sequenziale
-nuovi_dati <- c(0, 1)
-a_post2 <- a_post + sum(nuovi_dati)
-b_post2 <- b_post + length(nuovi_dati)
-media_post2 <- a_post2 / b_post2
-```
-
-La nuova distribuzione a posteriori Gamma(`r a_post2`, `r b_post2`) avrebbe media `r round(media_post2, 3)`, mostrando un ulteriore affinamento della stima che riflette il processo cumulativo di apprendimento clinico.
-
-### Valutazione dell'efficacia terapeutica mediante soglie probabilistiche
-
-Per tradurre l'analisi statistica in giudizi clinicamente operativi, definiamo una soglia di efficacia terapeutica di 0.5 attacchi settimanali, corrispondente a non più di due episodi mensili. Questo livello è comunemente associato a un buon controllo dei sintomi nel disturbo di panico.
-
-```{r}
-# Soglia di efficacia clinica
-soglia_efficacia <- 0.5
-
-# Probabilità a posteriori di efficacia
-probabilita_efficacia <- pgamma(soglia_efficacia, shape = a_post, rate = b_post)
-```
-
-La probabilità che il tasso effettivo di attacchi sia inferiore alla soglia di `r soglia_efficacia` episodi/settimana è `r round(probabilita_efficacia, 3)` (`r round(probabilita_efficacia * 100, 1)`%). Questo valore indica un'evidenza limitata a sostegno del raggiungimento dell'obiettivo terapeutico, con circa 11 scenari plausibili su 100 che soddisfano il criterio di efficacia.
-
-### Raccomandazioni cliniche basate su evidenza probabilistica
-
-La bassa probabilità di efficacia (`r round(probabilita_efficacia * 100, 1)`%) suggerisce la necessità di un aggiustamento terapeutico. La raccomandazione clinica è quindi quella di modificare il protocollo terapeutico, in quanto l'evidenza attuale non supporta l'efficacia del trattamento in corso. 
-
-Raccomandazioni utili potrebbero riguardare un’intensificazione mirata delle strategie per gestire l’ansia acuta, insieme a un controllo sistematico dell’aderenza agli esercizi di esposizione. In alcuni casi può essere opportuno valutare l’integrazione di un supporto farmacologico, mentre un’attenzione particolare andrebbe dedicata all’eventuale presenza di fattori di mantenimento finora non identificati.
-
-### Previsioni a breve termine mediante distribuzione predittiva
-
-La distribuzione predittiva a posteriori, che segue una Binomiale Negativa con parametri r = `r a_post` e p = `r round(b_post/(b_post+1), 3)`, fornisce previsioni probabilistiche per la settimana successiva:
-
-```{r}
-# Calcoli predittivi
-attacchi_attesi <- a_post / b_post
-prob_zero_attacchi <- dnbinom(0, size = a_post, prob = b_post/(b_post+1))
-prob_almeno_uno <- 1 - prob_zero_attacchi
-```
-
-- **Numero atteso di attacchi**: `r round(attacchi_attesi, 2)`.
-- **Probabilità di zero attacchi**: `r round(prob_zero_attacchi, 3)` (`r round(prob_zero_attacchi * 100, 1)`%).
-- **Probabilità di almeno un attacco**: `r round(prob_almeno_uno, 3)` (`r round(prob_almeno_uno * 100, 1)`%).
-
-### Implicazioni per il monitoraggio clinico
-
-La distribuzione predittiva fornisce un benchmark quantitativo per valutare l'evoluzione sintomatologica. 
-
-- Un risultato di 0 attacchi ricade nel `r round(prob_zero_attacchi * 100, 1)`% degli esiti più probabili.
-- Tre o più attacchi costituirebbero un'osservazione atipica (<5% di probabilità) che indicherebbe un peggioramento clinico.
-
-### Aggiornamento sequenziale e apprendimento continuo
-
-Il framework bayesiano supporta un aggiornamento iterativo delle stime. Con l'osservazione di nuove settimane:
-
-```{r}
-# Simulazione aggiornamento con dati aggiuntivi
-nuovi_dati <- 0  # Zero attacchi nella settimana successiva
-a_post2 <- a_post + nuovi_dati
-b_post2 <- b_post + 1
-prob_efficacia_aggiornata <- pgamma(soglia_efficacia, shape = a_post2, rate = b_post2)
-```
-
-L'osservazione di zero attacchi incrementerebbe la probabilità di efficacia a `r round(prob_efficacia_aggiornata, 3)` (`r round(prob_efficacia_aggiornata * 100, 1)`%), dimostrando come l'accumulo di evidenza favorisca un affinamento progressivo delle valutazioni cliniche.
-
-## Modello Gamma-Esponenziale: analisi dei tempi tra episodi comportamentali
-
-Nel monitoraggio educativo dei comportamenti dirompenti, l'analisi degli intervalli temporali tra episodi fornisce una prospettiva complementare al semplice conteggio degli eventi. Questo approccio è particolarmente rilevante quando l'obiettivo è estendere la durata dei periodi di comportamento adeguato.
-
-Consideriamo un bambino in età scolare che manifesta comportamenti dirompenti. Dopo l'implementazione di un intervento educativo, sono stati registrati i seguenti intervalli tra episodi consecutivi: 0.5, 1.2, 0.8 e 2.4 ore. Questi dati costituiscono la base per valutare l'efficacia dell'intervento.
-
-### Fondamenti del modello Gamma-Esponenziale
-
-La distribuzione esponenziale modella i tempi di attesa tra eventi che seguono un processo di Poisson. Se gli episodi si verificano con tasso costante $\theta$ (eventi/ora), il tempo $T$ tra eventi consecutivi segue una distribuzione esponenziale con parametro $\theta$. Il tempo medio atteso è 1/$\theta$.
-
-La distribuzione Gamma funge da prior coniugato per $\theta$, consentendo un aggiornamento bayesiano in forma chiusa. A differenza del modello Gamma-Poisson che utilizza conteggi in intervalli fissi, questo modello lavora direttamente con le durate temporali osservate.
-
-### Configurazione del modello e *prior* iniziale
-
-Adottiamo un *prior* debolmente informativo Gamma(1,1) per rappresentare l'incertezza iniziale tipica della fase preliminare dell'intervento.
-
-```{r}
-# Dati osservati (ore tra episodi)
-intervalli <- c(0.5, 1.2, 0.8, 2.4)
-
-# Parametri del prior Gamma(1,1)
-a_prior <- 1
-b_prior <- 1
-
-# Statistiche descrittive del prior
-tasso_prior <- a_prior / b_prior
-tempo_medio_prior <- 1 / tasso_prior
-```
-
-Il *prior* Gamma(1,1) corrisponde a un tempo medio atteso di `r round(tempo_medio_prior, 2)` ore, con un ampio intervallo di credibilità che riflette l'incertezza iniziale.
-
-### Aggiornamento bayesiano e distribuzione a posteriori
-
-Aggiorniamo le credenze iniziali incorporando i dati osservati:
-
-```{r}
-# Aggiornamento bayesiano
-a_post <- a_prior + length(intervalli)
-b_post <- b_prior + sum(intervalli)
-
-# Statistiche della posterior
-tasso_medio_post <- a_post / b_post
-tempo_medio_post <- 1 / tasso_medio_post
-
-# Campionamento per inferenza sul tempo medio
-set.seed(123)
-campioni_tasso <- rgamma(10000, shape = a_post, rate = b_post)
-campioni_tempo <- 1 / campioni_tasso
-hdi_tempo <- quantile(campioni_tempo, c(0.025, 0.975))
-```
-
-La distribuzione a posteriori risultante è Gamma(`r a_post`, `r round(b_post, 2)`), con **tasso medio stimato**: `r round(tasso_medio_post, 3)` episodi/ora, **tempo medio stimato**: `r round(tempo_medio_post, 2)` ore e **intervallo di credibilità 95% per il tempo medio**: [`r round(hdi_tempo[1], 2)`, `r round(hdi_tempo[2], 2)`] ore.
-
-### Valutazione rispetto agli obiettivi educativi
-
-Definiamo come obiettivo educativo un tempo medio tra episodi superiore a 2 ore (corrispondente a un tasso inferiore a 0.5 episodi/ora).
-
-```{r}
-# Valutazione dell'efficacia
-tempo_target <- 2
-tasso_target <- 1 / tempo_target
-prob_successo <- pgamma(tasso_target, shape = a_post, rate = b_post)
-```
-
-La probabilità che il tempo medio effettivo superi il target di 2 ore è `r round(prob_successo, 3)` (`r round(prob_successo * 100, 1)`%). Questo valore indica un'evidenza limitata a sostegno del raggiungimento dell'obiettivo educativo.
-
-### Distribuzione predittiva per il prossimo intervallo
-
-La distribuzione predittiva integra l'incertezza sul parametro $\theta$ con la variabilità intrinseca del processo esponenziale:
-
-```{r}
-# Distribuzione predittiva
-set.seed(456)
-theta_camp <- rgamma(10000, shape = a_post, rate = b_post)
-tempi_predetti <- rexp(10000, rate = theta_camp)
-
-# Statistiche predittive
-tempo_mediano_predetto <- median(tempi_predetti)
-prob_lungo <- mean(tempi_predetti > tempo_target)
-prob_breve <- mean(tempi_predetti < 0.5)
-hdi_pred <- quantile(tempi_predetti, c(0.05, 0.95))
-```
-
-- **Mediana predetta**: `r round(tempo_mediano_predetto, 2)` ore.
-- **Probabilità di intervallo lungo (>2h)**: `r round(prob_lungo, 3)` (`r round(prob_lungo * 100, 1)`%).
-- **Probabilità di intervallo breve (<0.5h)**: `r round(prob_breve, 3)` (`r round(prob_breve * 100, 1)`%).
-- **Intervallo di predizione 90%**: [`r round(hdi_pred[1], 2)`, `r round(hdi_pred[2], 2)`] ore.
-
-### Implicazioni per la gestione educativa
-
-1. **Pianificazione delle attività**: la probabilità di `r round(prob_breve * 100, 1)`% di intervalli brevi suggerisce di mantenere supporto ravvicinato durante le transizioni.
-2. **Valutazione dei progressi**: intervalli superiori a `r round(hdi_pred[2], 1)` ore costituirebbero evidenza di miglioramento significativo.
-3. **Comunicazione con stakeholders**: il tempo medio di `r round(tempo_medio_post, 1)` ore fornisce un benchmark quantitativo per discutere i progressi.
-
-### Aggiornamento sequenziale e monitoraggio longitudinale
-
-Il framework supporta l'aggiornamento iterativo man mano che nuovi dati diventano disponibili:
-
-```{r}
-# Simulazione aggiornamento con dati aggiuntivi
-nuovi_intervalli <- c(1.5, 2.8, 1.9)
-a_post2 <- a_post + length(nuovi_intervalli)
-b_post2 <- b_post + sum(nuovi_intervalli)
-prob_successo_agg <- pgamma(tasso_target, shape = a_post2, rate = b_post2)
-```
-
-Con l'aggiunta di tre nuovi intervalli (1.5, 2.8, 1.9 ore), la probabilità di successo aumenterebbe a `r round(prob_successo_agg, 3)` (`r round(prob_successo_agg * 100, 1)`%), dimostrando come l'accumulo di evidenza affini progressivamente le valutazioni educative.
-
-I vantaggi metodologici sono evidenti: l’analisi dei tempi che intercorrono tra gli eventi risulta più intuitiva rispetto al semplice conteggio, mentre la distribuzione predittiva consente di formulare previsioni probabilistiche immediatamente utilizzabili. L’aggiornamento sequenziale offre inoltre una descrizione formale di come l’esperienza modifichi progressivamente le credenze e lo stesso impianto probabilistico consente di prendere decisioni educative graduali e basate sull'evidenza.
+La terza è che i modelli coniugati sono strumenti didattici e non vincoli metodologici. La loro semplicità aiuta a capire, ma i fenomeni psicologici richiedono spesso modelli più flessibili, come strutture gerarchiche, effetti individuali, distribuzioni robuste, predittori multipli e relazioni non lineari.
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-I modelli coniugati esaminati (Beta-Binomiale, Normale-Normale, Gamma-Poisson e Gamma-Esponenziale) illustrano i meccanismi fondamentali dell'aggiornamento bayesiano. La proprietà di coniugazione, che preserva la forma funzionale della distribuzione durante l'aggiornamento, rende trasparente il processo di integrazione tra credenze a priori ed evidenza empirica.
+Le famiglie coniugate costituiscono una palestra concettuale per l'inferenza bayesiana. Nel modello Beta-Binomiale abbiamo visto l'aggiornamento come somma di successi e insuccessi. Nel modello Normale-Normale, invece, l'aggiornamento avviene tramite la combinazione di precisioni. Nei box operativi abbiamo incontrato altri due casi utili: il modello Gamma-Poisson per conteggi e il modello Gamma-Esponenziale per tempi di attesa.
 
-Questa trasparenza matematica mette in luce i principi del ragionamento bayesiano. Nel modello Beta-Binomiale, l'aggiornamento avviene mediante la semplice somma dei conteggi osservati. Nel modello Normale-Normale, le precisioni si combinano in modo additivo. I modelli Gamma-Poisson e Gamma-Esponenziale offrono prospettive complementari sullo stesso processo sottostante. Questa semplicità computazionale ha un valore euristico, in quanto consente di concentrarsi sui concetti fondamentali senza la complessità degli algoritmi.
+Il loro valore principale non risiede nella loro praticità matematica, ma nella loro capacità di rendere il ragionamento bayesiano più chiaro. Una volta compreso questo meccanismo, possiamo affrontare modelli più realistici senza perdere di vista l'idea centrale: l'inferenza bayesiana aggiorna in modo coerente l'incertezza alla luce dei dati.
 
-Tuttavia, i modelli coniugati costituiscono un caso particolare nell'analisi dei dati psicologici. La maggior parte dei fenomeni presenta una complessità che supera le loro assunzioni semplificatorie. Le variabili psicologiche presentano spesso asimmetrie e non normalità, richiedendo strutture di dipendenza che i modelli coniugati non riescono a catturare in modo adeguato. La scelta delle distribuzioni a priori dovrebbe essere guidata da considerazioni teoriche e non dalla convenienza computazionale.
-
-I progressi nei metodi computazionali, in particolare le tecniche MCMC, hanno superato questi limiti, consentendo l'inferenza bayesiana per modelli di complessità arbitraria. Questi metodi consentono l'uso di distribuzioni a priori non coniugate, strutture gerarchiche complesse e dipendenze multivariate articolate. I principi appresi dallo studio dei modelli coniugati rimangono validi anche in questi contesti più generali e forniscono l'intuizione necessaria per interpretare i risultati di analisi avanzate.
-
-I modelli coniugati rappresentano quindi un ponte essenziale tra i principi teorici del ragionamento bayesiano e la pratica dell'analisi dei dati. La loro comprensione fornisce le basi concettuali per affrontare modelli più complessi, mantenendo come criterio fondamentale l'adeguatezza delle scelte modellistiche rispetto alle domande di ricerca e alle caratteristiche specifiche dei dati psicologici.
+Nei capitoli successivi, lo stesso principio verrà esteso alle distribuzioni predittive e al controllo dei modelli. Questo passaggio è importante: non ci limiteremo più a stimare i parametri, ma useremo i modelli per generare dati plausibili e valutarne l'adeguatezza rispetto ai fenomeni psicologici osservati.
 
 ## Bibliografia {.unnumbered .unlisted}
-
