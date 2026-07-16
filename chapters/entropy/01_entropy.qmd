@@ -1,9 +1,9 @@
 # Entropia, sorpresa e informazione predittiva {#sec-entropy-shannon-information}
 
 ::: {.callout-note appearance="minimal"}
-Questo capitolo introduce l'entropia non come argomento isolato della teoria dell'informazione, ma come primo passo verso la valutazione predittiva dei modelli. L'idea guida è semplice: un modello probabilistico assegna una probabilità agli eventi; quando osserviamo un dato, possiamo chiederci quanto il modello fosse preparato a vederlo. Un dato molto probabile produce poca sorpresa, mentre un dato che il modello riteneva improbabile produce molta sorpresa.
+Questo capitolo introduce l'entropia non come argomento isolato della teoria dell'informazione, ma come primo passo verso la valutazione predittiva dei modelli. La logica è semplice: un modello probabilistico assegna una probabilità agli eventi; quando osserviamo un dato, possiamo chiederci quanto il modello fosse preparato a vederlo. Un dato molto probabile produce poca sorpresa, mentre un dato che il modello riteneva improbabile ne produce molta.
 
-L'entropia misura la sorpresa media attesa prima dell'osservazione. Nei capitoli successivi, questa idea verrà estesa: la divergenza di Kullback-Leibler misurerà il costo informazionale dell'uso di un modello al posto del processo generatore dei dati, mentre l'ELPD e il LOO forniranno strumenti operativi per valutare la capacità di un modello di predire dati nuovi.
+L'entropia misura la sorpresa media prima dell'osservazione. Nei capitoli successivi, questa idea verrà estesa: la divergenza di Kullback-Leibler quantificherà il costo informazionale dell'uso di un modello al posto del processo generatore dei dati, mentre ELPD e LOO forniranno strumenti operativi per valutare la capacità predittiva su nuovi dati.
 :::
 
 ## Panoramica del capitolo {.unnumbered .unlisted}
@@ -12,9 +12,9 @@ Alla fine del capitolo dovresti sapere:
 
 - interpretare l'informazione di Shannon come **sorpresa** associata a un evento;
 - definire l'entropia come **sorpresa media attesa** di una distribuzione;
-- distinguere tra entropia teorica di una distribuzione e stima campionaria dell'entropia;
+- distinguere tra entropia teorica di una distribuzione e stima campionaria;
 - comprendere il legame tra sorpresa, log-score ed ELPD;
-- riconoscere perché l'entropia prepara il terreno alla divergenza KL e al confronto predittivo tra modelli.
+- collegare l'entropia alla divergenza KL e al confronto predittivo tra modelli.
 
 ::: {.callout-tip collapse="true"}
 ## Prerequisiti
@@ -47,27 +47,27 @@ surprise <- function(p, base = 2) {
 
 ## Perché partire dall'entropia?
 
-Nel confronto tra i modelli bayesiani, ci interessa una domanda generale:
+Nel confronto tra modelli bayesiani, la domanda generale è:
 
 > Un modello riesce a prevedere bene dati che non ha ancora osservato?
 
-Questa domanda può sembrare lontana dall'entropia, ma in realtà nasce dalla stessa intuizione. Ogni modello assegna una distribuzione di probabilità agli esiti possibili. Se un esito osservato riceve un'alta probabilità, il modello non è sorpreso. Se riceve una bassa probabilità, il modello è sorpreso. Valutare un modello significa, quindi, almeno in parte, valutare quanta sorpresa produce di fronte ai dati.
+Questa domanda può sembrare lontana dall'entropia, ma in realtà nasce dalla stessa intuizione. Ogni modello assegna una distribuzione di probabilità agli esiti possibili: se un esito osservato riceve un'alta probabilità, il modello non è sorpreso; se ne riceve una bassa, lo è. Valutare un modello significa quindi, almeno in parte, valutare quanta sorpresa produce di fronte ai dati.
 
-L'entropia formalizza questa idea nel caso più elementare: una singola distribuzione di probabilità. Essa risponde alla domanda:
+L'entropia formalizza questa idea nel caso più elementare — una singola distribuzione di probabilità — e risponde alla domanda:
 
 > Quanta sorpresa ci aspettiamo, in media, prima di osservare il dato?
 
-Questa non è ancora una misura della bontà del modello. Tuttavia, è il vocabolario che ci servirà per costruirla. Nei capitoli successivi, passeremo da "quanta incertezza c'è in una distribuzione?" a "quanto spreco informativo produciamo se usiamo il modello sbagliato?" e poi a "quale modello predice meglio i dati nuovi?".
+Questa non è ancora una misura della bontà del modello, ma è il vocabolario che ci servirà per costruirla. Nei prossimi capitoli passeremo da "Quanta incertezza c'è in una distribuzione?" a "Quanto spreco informativo produciamo se usiamo il modello sbagliato?", fino a "Quale modello predice meglio i dati nuovi?".
 
 ## Informazione di un evento: la sorpresa
 
-Consideriamo un evento $y$ a cui un modello assegna probabilità $p(y)$. Se $p(y)$ è alta, l'evento era atteso. Se $p(y)$ è bassa, l'evento era inatteso. Shannon formalizza questa intuizione definendo l'informazione, o **sorpresa**, dell'evento come
+Consideriamo un evento $y$ a cui un modello assegna probabilità $p(y)$. Se $p(y)$ è alta, l'evento era atteso; se è bassa, era inatteso. Shannon formalizza questa intuizione definendo l'informazione, o **sorpresa**, dell'evento come
 
 $$
 I(y) = -\log_2 p(y).
 $$ {#eq-shannon-surprise}
 
-La base 2 del logaritmo misura l'informazione in **bit**. Un evento con probabilità $0.5$ contiene 1 bit di informazione, perché corrisponde alla risoluzione di un'incertezza binaria perfettamente equilibrata. Un evento con probabilità $0.25$ contiene 2 bit, perché corrisponde all'individuazione di un esito tra quattro alternative equiprobabili. Un evento con probabilità $0.10$ contiene circa 3.32 bit.
+La base 2 del logaritmo misura l'informazione in **bit**. Un evento con probabilità 0.5 contiene 1 bit di informazione, perché corrisponde alla risoluzione di un'incertezza binaria perfettamente equilibrata. Se la probabilità è 0.25, l'evento contiene 2 bit, poiché equivale a individuare un esito tra quattro alternative equiprobabili; con probabilità 0.10, la sorpresa sale a circa 3.32 bit.
 
 ```{r}
 #| label: fig-prob-surprise-revised
@@ -87,7 +87,7 @@ ggplot(df_surprise, aes(x = p, y = surprise_bits)) +
   theme_minimal()
 ```
 
-Questa formula è importante perché trasforma una valutazione intuitiva in una quantità misurabile. Se un modello assegna una probabilità molto bassa a un dato che poi si osserva, quel dato produce molta sorpresa. In termini predittivi, il modello ha fatto una previsione scadente.
+Questa formula è importante perché trasforma una valutazione intuitiva in una quantità misurabile. Se un modello assegna una probabilità molto bassa a un dato che poi si osserva, quel dato produce molta sorpresa; in termini predittivi, il modello ha fatto una previsione scadente.
 
 ::: {.callout-note title="Perché il logaritmo?" collapse="true"}
 Il logaritmo rende additiva l'informazione di eventi indipendenti. Se due eventi indipendenti hanno probabilità $p(a)$ e $p(b)$, la probabilità congiunta è $p(a,b)=p(a)p(b)$. La sorpresa congiunta diventa
@@ -96,12 +96,12 @@ $$
 -\log p(a,b) = -\log[p(a)p(b)] = -\log p(a) - \log p(b).
 $$
 
-In questo modo la sorpresa totale di due osservazioni indipendenti è la somma delle sorprese delle singole osservazioni. Questa proprietà sarà cruciale quando sommeremo i contributi predittivi delle singole osservazioni nell'ELPD.
+La sorpresa totale di due osservazioni indipendenti è quindi la somma delle sorprese delle singole osservazioni — proprietà che sarà cruciale quando sommeremo i contributi predittivi delle singole osservazioni nell'ELPD.
 :::
 
 ## Dalla sorpresa all'entropia
 
-La sorpresa riguarda un singolo evento osservato. L'**entropia**, invece, riguarda  una distribuzione nel suo complesso. Prima di osservare il dato, non sappiamo quale evento si verificherà, ma possiamo calcolare la sorpresa attesa media, ponderando ciascun evento per la sua probabilità.
+La sorpresa riguarda un singolo evento osservato; l'**entropia**, invece, si riferisce all'intera distribuzione. Prima di osservare il dato, non sappiamo quale evento si verificherà, ma possiamo calcolare la sorpresa attesa media, ponderando ciascun evento per la sua probabilità.
 
 Per una variabile discreta $Y$ con possibili valori $y \in \mathcal{Y}$ e probabilità $p(y)$, l'entropia è
 
@@ -110,7 +110,7 @@ H(Y) = \mathbb{E}_p[-\log_2 p(Y)]
      = -\sum_{y \in \mathcal{Y}} p(y)\log_2 p(y).
 $$ {#eq-entropy-def-revised}
 
-L'entropia è quindi la **sorpresa media attesa**. Una distribuzione uniforme ha un'entropia elevata, perché non c'è alcun esito che sia più prevedibile degli altri. Una distribuzione concentrata su pochi esiti ha un'entropia bassa, perché l'osservazione tende a confermare ciò che ci si aspettava.
+L'entropia è quindi la **sorpresa media attesa**. Una distribuzione uniforme ha entropia elevata, perché nessun esito è più prevedibile degli altri; una distribuzione concentrata su pochi esiti ha entropia bassa, perché l'osservazione tende a confermare quanto atteso.
 
 | Quantità | Formula | Interpretazione |
 |---|---:|---|
@@ -169,7 +169,7 @@ Questo esempio chiarisce un punto importante: l'entropia non misura se la previs
 
 ## Il ponte verso il confronto tra modelli: il log-score
 
-Finora abbiamo usato la base 2 e parlato di bit. Nel confronto tra modelli statistici si usa spesso il logaritmo naturale. L'unità di misura diventa il **nat** invece del bit, ma il significato non cambia: un dato è tanto più sorprendente quanto minore è la probabilità che il modello gli assegna.
+Finora abbiamo usato la base 2 e parlato di bit. Nel confronto tra modelli statistici si usa spesso il logaritmo naturale; l'unità di misura diventa il **nat**, ma il significato non cambia: un dato è tanto più sorprendente quanto minore è la probabilità che il modello gli assegna.
 
 Il **log-score** di un modello $M$ per un'osservazione $y$ è
 
@@ -177,7 +177,7 @@ $$
 \log p_M(y).
 $$
 
-La sorpresa corrispondente è
+La sorpresa a essa corrispondente è
 
 $$
 -\log p_M(y).
@@ -189,15 +189,15 @@ $$
 \log p(y_i \mid y_{-i}),
 $$
 
-dove $y_i$ è un'osservazione lasciata fuori e $y_{-i}$ indica i dati usati per stimare il modello. In altre parole, chiederemo: **Quanta probabilità il modello assegna a un dato che non ha usato per adattarsi?**
+dove $y_i$ è un'osservazione lasciata fuori e $y_{-i}$ indica i dati usati per stimare il modello. In altre parole, chiederemo: **quanta probabilità il modello assegna a un dato che non ha usato per adattarsi?**
 
 ::: {.callout-important title="Idea chiave"}
-L'entropia misura la sorpresa media attesa sotto una distribuzione. Il confronto predittivo tra modelli usa la stessa logica, ma la applica ai dati osservati: un buon modello è quello che assegna un'alta probabilità ai dati nuovi, ovvero che produce poca sorpresa fuori dal campione.
+L'entropia misura la sorpresa media attesa sotto una distribuzione. Il confronto predittivo tra modelli usa la stessa logica applicata ai dati osservati: un buon modello è quello che assegna un'alta probabilità ai dati nuovi, ovvero che produce poca sorpresa fuori campione.
 :::
 
 ## Stimare l'entropia dai dati
 
-L'entropia è una proprietà di una distribuzione di probabilità. Nella pratica empirica, però, la distribuzione generatrice dei dati non è nota. Possiamo allora stimare l'entropia usando le frequenze osservate:
+L'entropia è una proprietà di una distribuzione di probabilità; nella pratica empirica, però, la distribuzione generatrice dei dati non è nota. Possiamo allora stimare l'entropia usando le frequenze osservate:
 
 $$
 \hat p(y) = \frac{n_y}{n},
@@ -226,12 +226,12 @@ df_entropy_hat
 entropy_discrete(p_hat)
 ```
 
-Questa stima è utile, ma va interpretata con cautela. Con campioni piccoli o con molte categorie rare, alcune possibilità potrebbero non essere presenti nel campione e, di conseguenza, la distribuzione empirica tende spesso a sottostimare l'incertezza reale. Questo problema anticipa una difficoltà generale della valutazione dei modelli: non basta misurare il loro adattamento ai dati osservati, perché un modello può sembrare eccellente sul campione disponibile e generalizzare male.
+Questa stima è utile, ma va interpretata con cautela: con campioni piccoli o con molte categorie rare, alcune possibilità potrebbero non essere presenti nel campione, e la distribuzione empirica tende a sottostimare l'incertezza reale. Questo problema anticipa una difficoltà generale della valutazione dei modelli: non basta misurare il loro adattamento ai dati osservati, perché un modello può sembrare eccellente sul campione disponibile e generalizzare male.
 
 ::: {.callout-note title="Stima plug-in e overfitting" collapse="true"}
-La stima plug-in tratta le frequenze osservate come se fossero le probabilità vere. Questo metodo può funzionare bene quando si dispone di molti dati e poche categorie, ma diventa fragile quando il campione è piccolo. Le categorie non osservate ricevono una probabilità pari a zero, anche se potrebbero verificarsi in futuro.
+La stima plug-in tratta le frequenze osservate come se fossero le probabilità vere. Questo metodo può funzionare bene quando si dispone di molti dati e poche categorie, ma diventa fragile quando il campione è piccolo: le categorie non osservate ricevono probabilità zero, anche se potrebbero verificarsi in futuro.
 
-Questa difficoltà ha un parallelo diretto nel confronto tra modelli. Un modello molto flessibile può assegnare un'alta probabilità ai dati osservati perché li descrive in modo troppo dettagliato. Per questo motivo, nei capitoli successivi, valuteremo la capacità predittiva su dati non ancora osservati o lasciati fuori.
+Il parallelo con il confronto tra modelli è immediato: un modello molto flessibile può assegnare un'alta probabilità ai dati osservati perché li descrive in modo troppo dettagliato. Per questo motivo, nei prossimi capitoli valuteremo la capacità predittiva su dati non ancora osservati o lasciati fuori.
 :::
 
 ## Variabili continue: una cautela necessaria
@@ -242,9 +242,9 @@ $$
 H(Y) = -\int p(y)\log_2 p(y)\,dy.
 $$ {#eq-differential-entropy-revised}
 
-La forma ricorda quella discreta, ma la sua interpretazione richiede maggiore cautela. L'entropia differenziale può assumere valori negativi e dipende dall'unità di misura della variabile. Per questo motivo, il suo valore assoluto non può essere interpretato come una misura di incertezza nel senso dell'entropia discreta.
+La forma ricorda quella discreta, ma la sua interpretazione richiede maggiore cautela. L'entropia differenziale può assumere valori negativi e dipende dall'unità di misura della variabile; per questo motivo, il suo valore assoluto non può essere interpretato come una misura di incertezza nel senso discreto.
 
-Ciò che rimane ben definito e utile, soprattutto per il confronto tra modelli, sono le **differenze** e le quantità relative: entropia incrociata, divergenza KL e log-density predittiva. Per una distribuzione normale, ad esempio, l'entropia differenziale aumenta con la deviazione standard:
+Ciò che rimane ben definito e utile soprattutto per il confronto tra modelli sono le **differenze** e le quantità relative: entropia incrociata, divergenza KL e log-density predittiva. Per una distribuzione normale, ad esempio, l'entropia differenziale aumenta con la deviazione standard:
 
 $$
 H(\mathcal{N}(\mu,\sigma^2))
@@ -277,7 +277,7 @@ round(data.frame(sigma = sigmas, entropia_bit = h_norm_bits(sigmas)), 3)
 ::: {.callout-note title="Codifica di Huffman e limite di Shannon" collapse="true"}
 L'entropia ha anche un'interpretazione operativa nella teoria della comunicazione: rappresenta il limite inferiore teorico della lunghezza media di un codice senza perdita. Se una sorgente produce simboli con distribuzione $p(y)$, nessun codice binario può descrivere tali simboli usando in media meno di $H(Y)$ bit per simbolo.
 
-La codifica di Huffman costruisce un codice prefisso assegnando codici più brevi ai simboli più frequenti e codici più lunghi a quelli più rari. Per esempio, per la distribuzione
+La codifica di Huffman costruisce un codice prefisso assegnando codici più brevi ai simboli più frequenti e codici più lunghi a quelli più rari. Consideriamo, per esempio, la distribuzione
 
 | Simbolo | Probabilità |
 |---|---:|
@@ -286,7 +286,7 @@ La codifica di Huffman costruisce un codice prefisso assegnando codici più brev
 | C | 0.20 |
 | D | 0.10 |
 
-un possibile codice di Huffman è:
+Un possibile codice di Huffman è:
 
 | Simbolo | Codice | Lunghezza |
 |---|---:|---:|
@@ -308,14 +308,14 @@ prob_huffman <- c(A = .4, B = .3, C = .2, D = .1)
 entropy_discrete(prob_huffman)
 ```
 
-quindi il codice si avvicina molto al limite teorico. Il punto concettuale per noi è il seguente: l'uso di una codifica non ottimale comporta uno spreco di bit. Nel prossimo capitolo, la divergenza KL generalizzerà questo concetto: utilizzare una distribuzione $Q$ quando i dati sono generati da $P$ comporta uno spreco medio di informazione.
+Il codice si avvicina quindi molto al limite teorico. Il punto concettuale per noi è il seguente: l'uso di una codifica non ottimale comporta uno spreco di bit. Nel prossimo capitolo, la divergenza KL generalizzerà questo concetto: utilizzare una distribuzione $Q$ quando i dati sono generati da $P$ comporta uno spreco medio di informazione.
 :::
 
 ## Applicazione psicologica: aspettative e risposta emotiva
 
-L'informazione di Shannon offre un modo semplice per formalizzare il legame tra aspettative e sorpresa psicologica. Un evento non è sorprendente in assoluto, ma lo è rispetto a una distribuzione di aspettative. Una promozione inattesa, un feedback negativo improbabile o un cambiamento improvviso dell'ambiente possono avere un impatto emotivo maggiore proprio perché violano le aspettative probabilistiche.
+L'informazione di Shannon offre un modo semplice per formalizzare il legame tra aspettative e sorpresa psicologica. Un evento non è sorprendente di per sé, ma lo è rispetto a una distribuzione di aspettative. Una promozione inattesa, un feedback negativo improbabile o un cambiamento improvviso dell'ambiente possono avere un impatto emotivo maggiore proprio perché violano le attese probabilistiche.
 
-In questa prospettiva, la sorpresa non è solo una metafora. Se una persona assegna probabilità bassa a un evento e quell'evento si verifica, la quantità
+In questa prospettiva, la sorpresa non è solo una metafora: se una persona assegna probabilità bassa a un evento e quell'evento si verifica, la quantità
 
 $$
 -\log p(\text{evento})
@@ -323,7 +323,7 @@ $$
 
 misura quanto l'osservazione contraddiceva le aspettative. Studi classici sul ruolo delle aspettative nelle risposte affettive, come @spector1956expectations, sono coerenti con questa intuizione: l'impatto soggettivo di un esito dipende anche da quanto era atteso.
 
-Naturalmente, la risposta emotiva non dipende solo dalla sorpresa informazionale. Valenza, rilevanza personale, storia individuale e contesto sociale possono modulare fortemente l'effetto. L'utilità dell'entropia non consiste nel ridurre l'emozione a una formula, ma nel rendere esplicita una componente del problema: la struttura probabilistica delle aspettative.
+Naturalmente, la risposta emotiva non dipende solo dalla sorpresa informazionale: valenza, rilevanza personale, storia individuale e contesto sociale possono modularla fortemente. L'utilità dell'entropia non consiste nel ridurre l'emozione a una formula, ma nel rendere esplicita una componente del problema: la struttura probabilistica delle aspettative.
 
 ::: {.callout-tip title="Esempio simulato: sorpresa e variazione dell'umore" collapse="true"}
 
@@ -349,22 +349,21 @@ ggplot(df_mood, aes(x = surprise_bits, y = delta_mood)) +
   theme_minimal()
 ```
 
-La simulazione non pretende di essere un modello psicologico realistico. Ha solo lo scopo di rendere visibile l'idea: se la risposta emotiva è sensibile alla violazione delle aspettative, allora la sorpresa informazionale può essere inserita come predittore in un modello psicologico.
+La simulazione non pretende di essere un modello psicologico realistico; serve solo a illustrare l'idea: se la risposta emotiva è sensibile alla violazione delle aspettative, allora la sorpresa informazionale può essere utilizzata come predittore in un modello psicologico.
 :::
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-L'entropia ci ha permesso di trasformare un'intuizione qualitativa in una quantità formale. Affermare che una situazione è incerta significa aspettarsi, prima di osservare il dato, una certa quantità media di sorpresa. La formula
+L'entropia ci ha permesso di trasformare un'intuizione qualitativa in una quantità formale. Affermare che una situazione è incerta significa aspettarsi, prima ancora di osservare il dato, una certa quantità media di sorpresa. La formula
 
 $$
 H(Y)=\mathbb{E}_p[-\log p(Y)]
 $$
+rende precisa questa idea: l'incertezza di una distribuzione è la sorpresa media che essa genera.
 
-rende questa idea precisa: l'incertezza di una distribuzione è la sorpresa media che essa genera.
+Il punto cruciale di questa sezione è il legame tra entropia e previsione. Un modello probabilistico non fornisce solo stime puntuali, ma assegna anche probabilità agli eventi. Quando osserviamo un dato, possiamo valutare quanto il modello fosse in grado di prevederlo: questo è il nucleo del log-score e, più avanti, dell'ELPD.
 
-Per quanto riguarda il percorso di questa sezione, il punto cruciale è il legame tra entropia e previsione. Un modello probabilistico non fornisce solo stime puntuali, ma assegna anche probabilità agli eventi. Quando osserviamo un dato, possiamo valutare quanto il modello fosse in grado di prevederlo. Questo è il nucleo del log-score e, più avanti, dell'ELPD.
-
-Il passo successivo sarà quello di confrontare due distribuzioni. Se $P$ rappresenta il processo che genera i dati e $Q$ rappresenta un modello approssimato, quanta informazione perdiamo utilizzando $Q$ al posto di $P$? La risposta è la divergenza di Kullback-Leibler. In questo senso, l'entropia non è una digressione tecnica, ma il primo gradino di un ragionamento epistemologico più ampio: valutare i modelli in base alla loro capacità di ridurre la sorpresa di fronte a dati nuovi.
+Il passo successivo sarà confrontare due distribuzioni. Se $P$ rappresenta il processo che genera i dati e $Q$ un modello approssimato, quanta informazione perdiamo utilizzando $Q$ al posto di $P$? La risposta è la divergenza di Kullback-Leibler. In questo senso, l'entropia non è una digressione tecnica, ma il primo gradino di un ragionamento epistemologico più ampio: valutare i modelli in base alla loro capacità di ridurre la sorpresa sui dati nuovi.
 
 ::: {.callout-note collapse="true" title="Mappa concettuale: dall'entropia alla valutazione dei modelli"}
 

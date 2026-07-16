@@ -2,9 +2,9 @@
 
 ::: {.callout-note appearance="minimal"}
 
-Nel manuale didattico, il *confronto tra due medie* viene presentato nell'ambito della *regressione lineare con un predittore dicotomico* (0 = controllo, 1 = intervento). In quella sede si mostra che la differenza tra le medie di gruppo coincida con il coefficiente del predittore, e come l'incertezza su tale differenza corrisponda alla varianza stimata del coefficiente stesso.
+Nel manuale didattico, il *confronto tra due medie* viene presentato nell'ambito della *regressione lineare con un predittore dicotomico* (0 = controllo, 1 = intervento). In quella sede si mostra che la differenza tra le medie di gruppo coincide con il coefficiente del predittore, e come l'incertezza su tale differenza corrisponda alla varianza stimata del coefficiente stesso.
 
-In questo capitolo affronteremo lo stesso problema, ma ma adottando un'ottica *generativa-bayesiana mediante Stan*. approccio ci consentirà di: (i) rendere esplicite le assunzioni stocastiche sottostanti il processo generativo dei dati, (ii) specificare *prior* debolmente informative, coerenti con una variabile standardizzata, (iii) stimare *congiuntamente* la differenza tra le medie e la differenza tra le varianze, e (iv) scegliere tra modelli sulla base della loro capacità predittiva, utilizzando l'ELPD calcolato con PSIS-LOO.
+In questo capitolo affronteremo lo stesso problema, ma adottando un'ottica *generativa-bayesiana mediante Stan*. Questo approccio ci consentirà di: (i) rendere esplicite le assunzioni stocastiche sottostanti il processo generativo dei dati, (ii) specificare *prior* debolmente informative, coerenti con una variabile standardizzata, (iii) stimare *congiuntamente* la differenza tra le medie e la differenza tra le varianze, e (iv) scegliere tra modelli sulla base della loro capacità predittiva, utilizzando l'ELPD calcolato con PSIS-LOO.
 :::
 
 ## Panoramica del capitolo {.unnumbered .unlisted}
@@ -14,9 +14,6 @@ In questo capitolo affronteremo lo stesso problema, ma ma adottando un'ottica *g
 * Implementare in *Stan* un modello con varianza comune e uno con varianze distinte.
 * Valutare la capacità predittiva dei modelli attraverso PSIS-LOO.
 * Interpretare la distribuzione a posteriori della differenza tra le medie e le verifiche predittive.
-* Comprendere i limiti degli effetti medi di gruppo e la necessità dell'analisi idiografica.
-* Applicare il ragionamento bayesiano alla valutazione del cambiamento individuale.
-* Anticipare il ruolo dei modelli multilivello nell'integrare analisi di gruppo e individuali.
 
 ::: {.callout-caution collapse=true title="Preparazione del Notebook"}
 
@@ -170,7 +167,7 @@ generated quantities {
 mod_eq <- cmdstanr::cmdstan_model(write_stan_file(stan_equal_var))
 ```
 
-Eseguiamo il campionaento dalla distribuzione a posteriori:
+Eseguiamo il campionamento dalla distribuzione a posteriori:
 
 ```{r}
 #| output: false
@@ -196,7 +193,7 @@ q975 <- function(x) posterior::quantile2(x, probs = 0.975)
 posterior::summarize_draws(diff_draws, mean, sd, q025, q975)
 ```
 
-L'oggetto `diff_mu` rappresenta la quantità principale di principale interesse della nostra analisi. Un suo valore negativo indica che, in media, il gruppo *Mindfulness* presenta un livello di affetto negativo inferiore rispetto al gruppo di controllo.
+L'oggetto `diff_mu` rappresenta la quantità di principale interesse della nostra analisi. Un suo valore negativo indica che, in media, il gruppo *Mindfulness* presenta un livello di affetto negativo inferiore rispetto al gruppo di controllo.
 
 Per tradurre direttamente questo risultato statistico in un'interpretazione dal punto di vista psicologico, calcoliamo la probabilità a posteriori che la differenza effettiva tra i gruppi superi una soglia di rilevanza clinica. A titolo esemplificativo, definiamo un intervallo di effetti clinicamente irrilevanti pari a $\pm$0,1 deviazioni standard. La scelta di questa soglia critica non è di natura statistica, ma scientifica: adattarla al contesto specifico della ricerca è parte integrante della responsabilità dello sperimentatore.
 
@@ -217,7 +214,7 @@ tibble(
 )
 ```
 
-Queste probabilità rivelano ciò che un semplice *t*-test non può offrire: non ci dicono solo se la differenza sia statisticamente diversa da zero, ma ci permettono anche di classificarla come ***trascurabile***, ***peggiorativa*** o ***migliorativa*** rispetto a una soglia di rilevanza pratica predeterminata. In un report didattico completo, queste stime probabilistiche dovrebbero sempre essere sempre accompagnate da un **confronto predittivo** tra modelli e da una **verifica grafica** della coerenza del modello con i dati osservati.
+Queste probabilità rivelano ciò che un semplice *t*-test non può offrire: non ci dicono solo se la differenza sia statisticamente diversa da zero, ma ci permettono anche di classificarla come ***trascurabile***, ***peggiorativa*** o ***migliorativa*** rispetto a una soglia di rilevanza pratica predeterminata. In un report didattico completo, queste stime probabilistiche dovrebbero sempre essere accompagnate da un **confronto predittivo** tra modelli e da una **verifica grafica** della coerenza del modello con i dati osservati.
 
 A questo punto, abbiamo tutti gli elementi per interpretare in modo sostanziale il modello a varianza comune: la distribuzione a posteriori della differenza tra le medie con il relativo intervallo di credibilità, la probabilità a posteriori che quantifica direttamente la plausibilità di effetti clinicamente rilevanti o trascurabili e la verifica predittiva che conferma la capacità del modello di riprodurre dati verosimili.
 
@@ -343,7 +340,7 @@ Oltre alla differenza di ELPD, *esaminiamo attentamente i diagnostici Pareto-k*.
 La decisione finale segue un criterio pragmatico:
 
 - se il vantaggio predittivo del modello più complesso (`fit_neq`) è *marginale e incerto*, si privilegia il principio più parsimonioso, mantenendo il modello a varianza comune;
-- se il vantaggio è *netto, stabile e supportato da diagnostici solidi*, si giustifica l'adozione del modello a varianze distinte, accettandone la maggiore complessità parametrale.
+- se il vantaggio è *netto, stabile e supportato da diagnostici solidi*, si giustifica l'adozione del modello a varianze distinte, accettandone la maggiore complessità parametrica.
 
 ```{r}
 # LOO per entrambi i modelli
@@ -406,345 +403,13 @@ bayesplot::ppc_dens_overlay(y = stan_data$y, yrep = yrep_neq[1:50, ])
 
 3. **Capacità predittiva**. Il confronto PSIS-LOO ci guida nella scelta del livello di complessità. Se ΔELPD è piccolo e incerto, preferiamo la parsimonia (varianza comune); se il vantaggio è stabile e sostanziale, ha senso adottare il modello con varianze distinte.
 
-## Dall'effetto medio al cambiamento individuale: un cambio di prospettiva
-
-### Il limite fondamentale delle medie di gruppo
-
-L'analisi presentata finora risponde a una domanda importante: **in media**, il gruppo che ha seguito il training di mindfulness mostra un affetto negativo inferiore rispetto al gruppo di controllo? Tuttavia, questa domanda, per quanto centrale nella ricerca sperimentale, può risultare insufficiente, e talvolta persino fuorviante, quando l'obiettivo è comprendere l'efficacia di un intervento nella pratica clinica.
-
-Il problema è che l'effetto medio di gruppo può mascherare un'enorme eterogeneità nelle risposte individuali. Consideriamo uno scenario concreto: supponiamo che il nostro training di mindfulness produca una riduzione media dell'affetto negativo pari a 0.5 deviazioni standard, ovvero un effetto di dimensione medio-grande secondo le convenzioni di Cohen. Questo risultato potrebbe derivare da situazioni molto diverse:
-
-- **scenario A**: tutti i partecipanti migliorano in modo simile, con riduzioni individuali comprese tra 0.4 e 0.6 SD;
-- **scenario B**: metà dei partecipanti mostra miglioramenti sostanziali (circa 1.0 SD), mentre l'altra metà non mostra alcun cambiamento o addirittura peggiora leggermente;
-- **scenario C**: la maggior parte dei partecipanti mostra cambiamenti minimi, ma alcuni "*super-responder*" mostrano miglioramenti drammatici che spingono la media verso l'alto.
-
-In tutti e tre gli scenari, l'effetto medio di gruppo sarebbe identico. Tuttavia, le implicazioni cliniche sarebbero radicalmente diverse. Nel primo scenario, potremmo raccomandare l'intervento con fiducia a qualsiasi paziente. Nel secondo scenario, dovremmo chiederci quali caratteristiche distinguono i *responder* dai *non-responder*. Nel terzo scenario, l'intervento potrebbe rivelarsi inefficace per la maggior parte delle persone e la media positiva sarebbe solo il risultato di pochi casi eccezionali.
-
-### La fallacia ecologica e i suoi rischi
-
-Nella letteratura metodologica questo problema prende il nome di **fallacia ecologica** (o *ecological fallacy*). Si tratta dell'errore logico di inferire caratteristiche individuali a partire da dati aggregati. In termini formali, il fatto che $\mathbb{E}[Y \mid \text{gruppo} = \text{trattamento}] < \mathbb{E}[Y \mid \text{gruppo} = \text{controllo}]$ non implica che per ogni individuo $i$ nel gruppo di trattamento valga $Y_i^{\text{post}} < Y_i^{\text{pre}}$.
-
-La psicologia clinica è particolarmente vulnerabile a questa fallacia, in quanto si occupa di individui e non di gruppi. Quando uno psicologo clinico deve decidere se raccomandare un determinato trattamento a un paziente specifico, la domanda rilevante non è "Il trattamento funziona **in media**?" ma "Il trattamento funzionerà **per questa persona**?". Allo stesso modo, quando si valuta l'efficacia di un percorso terapeutico già concluso, la domanda da porsi è: "Questo paziente ha **effettivamente** beneficiato dell'intervento, o il cambiamento osservato è compatibile con la semplice variabilità dell'errore di misurazione?".
-
-### Perché l'analisi idiografica è essenziale
-
-L'approccio **idiografico**, termine derivato dal greco *ἴδιος* (proprio, privato, particolare), si concentra sull'individuo come unità di analisi primaria, in contrasto con l'approccio **nomotetico** che cerca leggi generali applicabili a popolazioni.[^idio-nomo] In psicologia, questa distinzione ha una lunga storia che risale almeno a Gordon Allport, e assume particolare rilevanza nell'era della **medicina personalizzata** e degli **interventi evidence-based**.
-
-[^idio-nomo]: I concetti di "nomotetico" e "idiografico" furono introdotti dal filosofo neokantiano Wilhelm Windelband per distinguere due orientamenti fondamentali della conoscenza scientifica. Secondo Windelband, l'attività scientifica può legittimamente avvalersi di entrambi gli approcci, in quanto rappresentano prospettive complementari sull'oggetto di studio. L’approccio nomotetico, riconducibile a quella che Kant descriveva come una tendenza alla generalizzazione, è tipico delle scienze naturali e mira alla formulazione di leggi generali capaci di spiegare classi di fenomeni in termini universali. L’approccio idiografico, invece, si fonda sulla tendenza kantiana alla specificazione ed è caratteristico delle scienze umane: esso è orientato alla comprensione di eventi singolari, contingenti e irripetibili, spesso connessi a dimensioni storiche, culturali o soggettive.
-
-L'analisi idiografica del cambiamento individuale risponde a domande cruciali dal punto di vista della psicologia clinica: il paziente è migliorato in modo clinicamente rilevante? Il cambiamento osservato supera ciò che ci si potrebbe aspettare dalla sola imprecisione dello strumento di misurazione? Qual è la probabilità che il cambiamento sia sostanziale piuttosto che trascurabile?
-
-Queste domande non possono trovare risposta nelle statistiche aggregate di gruppo. Richiedono un framework inferenziale che operi a livello del singolo individuo e che incorpori esplicitamente l'incertezza della misurazione, in modo da poter fare affermazioni probabilistiche sul cambiamento **vero** (latente) a partire da quello **osservato**.
-
-### Le sfide dell'inferenza a livello del singolo individuo
-
-L'analisi a livello individuale presenta però notevoli sfide metodologiche. La più importante è la **scarsità di informazioni**: mentre l'analisi a livello di gruppo può contare su decine o centinaia di osservazioni, l'analisi del caso singolo si basa tipicamente su due soli punti temporali (prima e dopo l'intervento). Questa asimmetria ha importanti conseguenze.
-
-In primo luogo, **l'incertezza è necessariamente maggiore**. Con soli due punteggi per persona, la stima del cambiamento individuale è fortemente influenzata dall'errore di misurazione. Un miglioramento osservato di 5 punti potrebbe riflettere un vero miglioramento di 5 punti, ma potrebbe anche essere compatibile con un miglioramento reale di 10 punti mascherato da un errore di misurazione di segno negativo o con l'assenza di un miglioramento reale in presenza di un errore di misurazione di segno positivo di 5 punti.
-
-In secondo luogo, **la distribuzione a posteriori sarà più ampia**. Mentre la distribuzione a posteriori della differenza tra le medie dei gruppi, basata su molte osservazioni, può essere relativamente stretta e precisa, la distribuzione a posteriori del cambiamento individuale, basata su soli due punti, sarà inevitabilmente più dispersa. Questo non è un difetto dell'analisi bayesiana, ma una corretta rappresentazione dell'incertezza epistemica: con pochi dati siamo più incerti.
-
-In terzo luogo, **le conclusioni saranno più sfumate**. Raramente potremo affermare con assoluta certezza che un individuo sia migliorato o peggiorato. Piuttosto, dovremo ragionare in termini probabilistici, ad esempio: "La probabilità di un miglioramento clinicamente rilevante è del 72%" o "C'è una probabilità del 15% che il cambiamento osservato sia dovuto solo all'errore di misurazione".
-
-### Verso un'integrazione delle due prospettive: l'anticipazione dei modelli multilivello
-
-Le difficoltà dell’analisi idiografica “pura”, ovvero condotta separatamente per ciascun individuo, possono essere in parte superate attraverso i modelli multilivello (o gerarchici), che saranno trattati nei capitoli successivi. In questi modelli, le stime individuali non vengono calcolate in isolamento, ma sono **informate anche dai dati dell’intero campione**, grazie a un meccanismo di condivisione statistica dell’informazione.
-
-In un modello multilivello, i cambiamenti individuali sono concepiti come realizzazioni di una distribuzione comune a livello di popolazione. Questo impianto conduce a un fenomeno noto come ***shrinkage*** (o regolarizzazione), per cui le stime individuali vengono “tirate” verso la media di gruppo in misura proporzionale alla loro incertezza. Gli individui con dati più rumorosi o con osservazioni estreme sono soggetti a una maggiore regolarizzazione, mentre quelli con dati più informativi mantengono stime più vicine ai valori osservati.
-
-Questo approccio presenta due vantaggi. Da un lato, le stime individuali sono più stabili e meno sensibili all'errore casuale; dall'altro, il modello fornisce simultaneamente una stima dell'effetto medio di gruppo, coerente con una prospettiva nomotetica, e stime dei cambiamenti individuali, coerenti con una prospettiva idiografica. I due livelli di analisi non sono più considerati come alternativi, ma sono integrati all'interno di un unico framework concettuale e statistico.
-
-Nel presente capitolo, tuttavia, adotteremo un approccio più semplice che non richiede la specifica esplicita di un modello multilivello completo. Questo approccio, basato sulla teoria classica dei test, fornisce un'introduzione accessibile all'inferenza bayesiana sul cambiamento individuale e fornisce una base concettuale per le successive estensioni di tipo gerarchico.
-
-## L'analisi del cambiamento individuale
-
-### Il modello di misurazione del cambiamento
-
-L’obiettivo è stimare il cambiamento **vero** di un individuo a partire dalla differenza **osservata** tra due somministrazioni dello stesso test, tipicamente in un disegno pre–post intervento. Indichiamo con
-$$
-D = X_{\text{post}} - X_{\text{pre}}
-$$
-la differenza osservata per un dato individuo. È importante chiarire che $D$ rappresenta un’informazione direttamente osservabile, mentre il cambiamento psicologico di interesse teorico è il cambiamento **vero**, che indichiamo con $\Delta$. Quest’ultimo non è osservabile direttamente ed è inevitabilmente contaminato dall’errore di misurazione associato alle singole osservazioni.
-
-Il problema centrale consiste quindi nel distinguere tra $D$ e $\Delta$. Poiché ogni misura psicometrica è affetta da errore, non possiamo assumere che $D = \Delta$. La questione inferenziale fondamentale diventa allora la seguente: dato un valore osservato di $D$, quali conclusioni possiamo trarre in merito al valore plausibile di $\Delta$?
-
-### La quantificazione dell’errore di misura
-
-Il quadro concettuale di riferimento per la formalizzazione dell’incertezza di misura è fornito dalla *Teoria Classica dei Test* (TCT) [@lord2008statistical]. In tale prospettiva, ogni punteggio osservato $X$ viene scomposto in una componente vera $T$ e in una componente di errore casuale $E$, secondo la relazione:
-$$
-X = T + E .
-$$
-L’affidabilità del test ($r_{xx}$) è definita come il rapporto tra la varianza del punteggio vero e la varianza del punteggio osservato:
-$$
-r_{xx} = \frac{\mathrm{Var}(T)}{\mathrm{Var}(X)} .
-$$
-Da questa definizione segue immediatamente che la varianza dell’errore di misura è
-$$
-\mathrm{Var}(E) = \mathrm{Var}(X)(1 - r_{xx}) ,
-$$
-e che lo *Standard Error of Measurement* (SEM) è dato da
-$$
-\mathrm{SEM} = SD_X \sqrt{1 - r_{xx}} ,
-$$
-dove $SD_X$ indica la deviazione standard campionaria dei punteggi osservati.
-
-Per quanto riguarda la varianza della differenza tra due misurazioni, consideriamo il caso più semplice, in cui gli errori associati alle misure pre e post siano indipendenti e caratterizzati dalla medesima deviazione standard, pari al SEM del test. In queste condizioni, la varianza della differenza
-$$
-D = X_{\text{post}} - X_{\text{pre}}
-$$
-è pari alla somma delle varianze degli errori di misura:
-$$
-\mathrm{Var}(D) = \mathrm{Var}(E_{\text{post}}) + \mathrm{Var}(E_{\text{pre}})
-= \mathrm{SEM}^2 + \mathrm{SEM}^2
-= 2\,\mathrm{SEM}^2 .
-$$
-Ne consegue che la deviazione standard associata alla differenza osservata è
-$$
-\mathrm{SE}_{\mathrm{diff}} = \sqrt{2}\,\mathrm{SEM} .
-$$
-
-Questo risultato ha una conseguenza rilevante sul piano interpretativo: l’incertezza associata a un punteggio di cambiamento è **maggiore** di quella relativa a una singola misurazione. Nel calcolo della differenza tra due punteggi, infatti, l’errore di misura non si annulla, ma si somma, riflettendo l’incertezza presente in entrambe le misurazioni.
-
-### Il modello bayesiano per il cambiamento individuale
-
-Il modello probabilistico che mette in relazione la differenza osservata $D$ con il cambiamento vero $\Delta$ si basa su una funzione di verosimiglianza di tipo normale:
-$$
-D \mid \Delta \sim \mathcal{N}\!\left(\Delta, \mathrm{SE}_{\mathrm{diff}}^{,2}\right).
-$$
-Questa specificazione formalizza l’idea che, a parità di cambiamento vero $\Delta$, le differenze osservate si distribuiscano normalmente attorno a $\Delta$, con una dispersione determinata esclusivamente dall’errore di misurazione associato al punteggio di cambiamento.
-
-Il modello viene completato specificando una distribuzione *a priori* per $\Delta$. In assenza di informazioni specifiche, assumiamo una distribuzione normale centrata sull’assenza di cambiamento:
-$$
-\Delta \sim \mathcal{N}(0, \sigma_0^2),
-$$
-dove $\sigma_0^2$ rappresenta la varianza *a priori*. Il centramento della *prior* sullo zero riflette un’assunzione deliberatamente conservativa: in mancanza di evidenze preliminari, miglioramenti e peggioramenti di piccola entità sono considerati ugualmente plausibili. Il parametro $\sigma_0$ definisce invece la scala dei cambiamenti ritenuti verosimili *a priori*.
-
-È importante sottolineare che questa scelta della distribuzione *a priori* non è neutra, ma intenzionalmente prudente. In contesti applicativi in cui esistono solide ragioni teoriche o empiriche per attendersi un effetto positivo dell’intervento, potrebbe essere appropriato adottare una *prior* moderatamente spostata verso valori positivi di $\Delta$. Tuttavia, una *prior* centrata sullo zero costituisce una scelta metodologicamente produente, in quanto evita di introdurre un’informazione favorevole all’ipotesi di efficacia che non sia giustificata dai dati.
-
-### L’inferenza e la sua interpretazione clinica
-
-La combinazione di una distribuzione *a priori* normale e di una verosimiglianza normale conduce a una distribuzione *a posteriori* anch’essa normale per il cambiamento vero $\Delta$, i cui parametri sono dati da:
-$$
-\sigma_{\text{post}}^2
-= \left( \frac{1}{\sigma_0^2} + \frac{1}{\mathrm{SE}_{\mathrm{diff}}^2} \right)^{-1},
-\qquad
-\mu_{\text{post}}
-= \sigma_{\text{post}}^2 \cdot \frac{D}{\mathrm{SE}_{\mathrm{diff}}^2}.
-$$
-
-Queste espressioni rendono esplicito il meccanismo di **regolarizzazione** (*shrinkage*) caratteristico dell’inferenza bayesiana. In termini intuitivi, la media a posteriori $\mu_{\text{post}}$ può essere interpretata come una media ponderata tra il dato osservato $D$ e il centro della distribuzione *a priori* (zero), in cui i pesi sono determinati dalle rispettive **precisioni** (ovvero dagli inversi delle varianze).
-
-In termini intuitivi:
-
-* se l’errore di misura è piccolo rispetto alla varianza *a priori* ($\mathrm{SE}_{\mathrm{diff}}^2 \ll \sigma_0^2$), l’informazione empirica è altamente affidabile e la stima a posteriori risulta prossima al valore osservato $D$;
-* se l’errore di misura è grande rispetto alla varianza *a priori* ($\mathrm{SE}_{\mathrm{diff}}^2 \gg \sigma_0^2$), l’informazione empirica è debole e la stima a posteriori viene fortemente “attratta” verso zero, dando luogo a uno *shrinkage* marcato.
-
-Questo comportamento è esattamente quello desiderabile in un contesto applicativo: quando i dati sono informativi, il modello li valorizza; quando sono rumorosi, l’inferenza diventa più prudente e si affida maggiormente alle assunzioni *a priori*.
-
-Un ulteriore vantaggio dell’approccio bayesiano è che la distribuzione *a posteriori* consente di formulare risposte dirette a quesiti clinicamente rilevanti, sotto forma di probabilità facilmente interpretabili:
-
-* **probabilità di cambiamento trascurabile**:
-  $$
-  P(-\rho < \Delta < \rho \mid D),
-  $$
-  ovvero la massa della distribuzione *a posteriori* contenuta nell’intervallo di equivalenza pratica, dove $\rho$ definisce la soglia di irrilevanza clinica;
-
-* **probabilità di miglioramento clinicamente rilevante**:
-  $$
-  P(\Delta < -\tau \mid D),
-  $$
-  corrispondente all’area della coda sinistra oltre la soglia clinica $\tau > 0$ (assumendo, come nel caso dell’affetto negativo, che valori più bassi indichino un miglioramento);
-
-* **probabilità di peggioramento clinicamente rilevante**:
-  $$
-  P(\Delta > \tau \mid D),
-  $$
-  ovvero l’area della coda destra oltre la soglia $\tau$.
-
-Queste quantità forniscono un quadro inferenziale ricco e direttamente utilizzabile in ambito clinico, che supera il tradizionale esito dicotomico (“cambiamento affidabile sì/no”) associato al *Reliable Change Index* [@jacobson1992], restituendo invece una rappresentazione probabilistica del cambiamento individuale.
-
-### Implementazione
-
-L’implementazione che segue può essere letta come una **generalizzazione bayesiana del *Reliable Change Index* (RCI)** di @jacobson1992. Nel RCI classico, un cambiamento viene considerato clinicamente rilevante solo se soddisfa **due criteri distinti**:
-
-1. **significatività statistica**, ossia un cambiamento sufficientemente grande da eccedere l’errore di misurazione;
-2. **rilevanza pratica o clinica**, ossia il superamento di una soglia che distingua cambiamenti sostanziali da variazioni di entità trascurabile.
-
-Nel modello bayesiano questi due criteri non vengono più valutati tramite regole dicotomiche, ma sono tradotti in termini probabilistici. In particolare:
-
-* l’**errore di misurazione** è incorporato nella verosimiglianza attraverso $\mathrm{SE}_{\mathrm{diff}}$;
-* la **trascurabilità pratica** è formalizzata mediante una *ROPE* (*Region of Practical Equivalence*), centrata su zero;
-* la **rilevanza clinica** è definita tramite una soglia $\tau_{\text{clin}}$, espressa in unità di deviazione standard.
-
-Nel codice che segue, utilizziamo a titolo illustrativo:
-
-* una ROPE di ampiezza ±0.10 SD, coerente con quanto discusso nei capitoli precedenti;
-* una soglia clinica $\tau_{\text{clin}} = 0.30$ SD, un valore che rappresenta una convenzione metodologica consolidata per indicare un cambiamento di entità moderata. È importante sottolineare che tale soglia **non è universale**, ma deve essere giustificata in base al costrutto, allo strumento e al contesto clinico.
-
-```{r}
-# ------------------------------------------------------------
-# RCI bayesiano (versione semplice, chiusa-forma)
-# ------------------------------------------------------------
-# Likelihood:  D = post - pre  ~ Normal(Delta, SEdiff^2)
-# Prior:       Delta ~ Normal(0, prior_sd_delta^2)
-# Posterior:   Delta | D ~ Normal(m_post, s_post^2)
-# ------------------------------------------------------------
-
-rci_bayes <- function(pre, post,
-                      test_sd, reliability,
-                      rope_width = 0.10,   # ROPE ±0.10 SD (coerente con capitolo)
-                      tau_clin   = 0.30,   # soglia clinica 0.30 SD (esempio)
-                      prior_sd_delta = 0.60) {
-  # 1) Differenza osservata
-  D <- post - pre
-  
-  # 2) SEM e SE della differenza
-  #    SEM = SD * sqrt(1 - reliability)
-  SEM    <- test_sd * sqrt(max(0, 1 - reliability))
-  SEdiff <- sqrt(SEM^2 + SEM^2)  # ipotesi: stessa metrica/affidabilità a pre e post
-  
-  # 3) Prior e posteriori (Normale–Normale)
-  s0 <- prior_sd_delta
-  s  <- SEdiff
-  
-  s2_post <- 1 / (1/s0^2 + 1/s^2)
-  s_post  <- sqrt(s2_post)
-  m_post  <- (s2_post / s^2) * D
-  
-  # 4) Probabilità di interesse
-  p_in_rope   <- pnorm( rope_width, mean = m_post, sd = s_post) -
-                 pnorm(-rope_width, mean = m_post, sd = s_post)
-  p_gt_tau    <- 1 - pnorm(tau_clin,  mean = m_post, sd = s_post)
-  p_lt_neg_tau<- pnorm(-tau_clin,     mean = m_post, sd = s_post)
-  
-  list(
-    observed_diff   = D,
-    SEM             = SEM,
-    SEdiff          = SEdiff,
-    prior_sd_delta  = s0,
-    post_mean       = m_post,
-    post_sd         = s_post,
-    rope            = c(-rope_width, rope_width),
-    tau_clin        = tau_clin,
-    probs = c(
-      P_in_ROPE         = p_in_rope,
-      P_diff_gt_tau     = p_gt_tau,
-      P_diff_lt_neg_tau = p_lt_neg_tau
-    )
-  )
-}
-```
-
-### Esempio numerico
-
-Applichiamo il modello a un soggetto del gruppo sperimentale dello studio sull'intervento di mindfulness. I punteggi, espressi in deviazioni standard rispetto alla media normativa, sono: pre = 0.40, post = 0.05. Ciò corrisponde a una riduzione osservata dell'affetto negativo pari a 0.35 SD.
-
-Assumiamo un'affidabilità del test pari a 0.85, un valore tipico per questionari psicometrici ben costruiti, e utilizziamo la deviazione standard campionaria dell'intero dataset come metrica di riferimento.
-
-```{r}
-# 'df' proviene dalle sezioni precedenti del capitolo (score in SD naturali)
-test_sd <- sd(df$score)
-
-res_demo <- rci_bayes(
-  pre  = 0.40,
-  post = 0.05,
-  test_sd     = test_sd,
-  reliability = 0.85,
-  rope_width  = 0.10,  # ROPE ±0.10 SD (trascurabile)
-  tau_clin    = 0.30,  # soglia clinica 0.30 SD (rilevante)
-  prior_sd_delta = 0.60
-)
-
-cat(sprintf(
-  "\nRCI bayesiano (soggetto esempio)\n---------------------------------\nDiff. osservata (post-pre): %.3f\nSEM: %.3f | SE diff: %.3f\nPosterior Delta ~ Normal(%.3f, %.3f^2)\nROPE: [%.2f, %.2f] | tau_clin: ±%.2f\nP(Delta in ROPE)      = %.3f\nP(Delta >  tau_clin)  = %.3f\nP(Delta < -tau_clin)  = %.3f\n",
-  res_demo$observed_diff, res_demo$SEM, res_demo$SEdiff,
-  res_demo$post_mean, res_demo$post_sd,
-  res_demo$rope[1], res_demo$rope[2], res_demo$tau_clin,
-  res_demo$probs["P_in_ROPE"], res_demo$probs["P_diff_gt_tau"], res_demo$probs["P_diff_lt_neg_tau"]
-))
-```
-
-### Interpretazione dei risultati
-
-I risultati dell’analisi bayesiana delineano un profilo di cambiamento **probabilistico** che supera la logica dicotomica tipica dell'RCI tradizionale. Analizziamo i principali elementi.
-
-Il soggetto mostra una riduzione osservata dell’affetto negativo pari a
-$$
-D = -0.350 \text{ SD}.
-$$
-Tenendo conto dell’errore di misurazione e dell’informazione *a priori*, la stima bayesiana del cambiamento vero risulta pari a
-$$
-\mu_{\text{post}} = -0.192 \text{ SD}.
-$$
-La differenza tra $D$ e $\mu_{\text{post}}$ riflette l’effetto di **regolarizzazione** (*shrinkage*): il cambiamento osservato viene ridimensionato verso lo zero, poiché parte di esso potrebbe essere attribuibile all’errore di misurazione.
-
-La deviazione standard a posteriori ($\sigma_{\text{post}} = 0.301$) quantifica l’incertezza residua sul vero valore di $\Delta$. Da essa si può ricavare un intervallo di credibilità al 95% approssimativamente pari a
-$$
-[-0.78,\; +0.40].
-$$
-L’intervallo include lo zero, ma è chiaramente sbilanciato verso valori negativi, coerenti con un miglioramento.
-
-Le probabilità derivate dalla distribuzione a posteriori permettono una lettura clinicamente informata:
-
-* $P(\text{cambiamento trascurabile})$ = 0.175. 
-  La probabilità che il vero cambiamento rientri in una regione di irrilevanza pratica è relativamente bassa.
-
-* $P(\text{peggioramento clinicamente rilevante})$ = 0.111.
-  La probabilità di un peggioramento sostanziale è contenuta.
-
-* $P(\text{miglioramento clinicamente rilevante})$ = 0.395.
-  Questa è la probabilità più elevata tra quelle considerate, suggerendo che l’ipotesi di un miglioramento clinicamente rilevante è quella maggiormente supportata dai dati.
-
-Si noti che la somma di queste probabilità non è 1, poiché esiste uno spazio di esiti intermedi (ad esempio, cambiamenti piccoli ma clinicamente ambigui) che non vengono catturati né dalla definizione di ROPE né dal superamento della soglia clinica.
-
-### Confronto concettuale con l'RCI classico
-
-L'RCI tradizionale produce un giudizio binario, classificando il cambiamento come semplicemente "affidabile e clinicamente significativo" oppure no. L'approccio bayesiano qui proposto non sostituisce i due criteri fondamentali, ma li trasforma da constatazioni categoriche in stime probabilistiche informate dai dati:
-
-* **Affidabilità del cambiamento:** non più un "sì/no" sull'attraversamento di una soglia di errore, ma una probabilità che la variazione osservata superi l'incertezza di misurazione.
-
-* **Rilevanza clinica:** non più un giudizio basato su una soglia fissa, ma una probabilità che il cambiamento ecceda una soglia clinicamente sostanziale.
-
-Mentre l'RCI classico confronta un singolo punteggio di differenza con un intervallo di errore statico, il metodo bayesiano quantifica l'incertezza posteriore attorno alla stima del cambiamento vero, confrontandola direttamente con le regioni di interesse (ROPE e soglia clinica).
-
-**Cosa comunicare al clinico?**
-Una possibile sintesi è la seguente:
-
-> *Il paziente mostra segnali coerenti con un miglioramento dell’affetto negativo. La probabilità che tale miglioramento sia clinicamente rilevante è di circa il 40%, mentre la probabilità di un peggioramento rilevante è inferiore al 12%. Sebbene non si possa escludere un contributo dell’errore di misurazione, l’evidenza complessiva è più compatibile con un effetto benefico dell’intervento che con un effetto nullo o negativo.*
-
-Questa formulazione restituisce l’incertezza in modo esplicito, senza rinunciare alla rilevanza decisionale, e rappresenta uno dei principali vantaggi dell’approccio bayesiano al cambiamento individuale.
-
-### Considerazioni metodologiche
-
-La versione del modello presentata in questo capitolo è **intenzionalmente minimale** e risponde a finalità eminentemente didattiche. In contesti di ricerca o di pratica clinica più avanzati, sono possibili, e spesso auspicabili, diverse estensioni che ne aumentano il realismo e la flessibilità inferenziale.
-
-**Incertezza sull’affidabilità.**
-Nel modello illustrato, l’affidabilità del test ($r = 0.85$) è considerata un valore noto e privo di incertezza. In realtà, l’affidabilità è essa stessa una stima campionaria e, in quanto tale, soggetta a variabilità. Un’estensione naturale consiste nel modellare $r$ come un parametro aleatorio dotato di una propria distribuzione *a priori*, consentendo di propagare l’incertezza sull’affidabilità attraverso l’intero processo inferenziale.
-
-**Robustezza agli outlier.**
-L’assunzione di normalità degli errori di misura può risultare inadeguata in presenza di osservazioni anomale o di distribuzioni a code pesanti. In tali situazioni, la sostituzione della distribuzione normale con una distribuzione $t$ di Student nella funzione di verosimiglianza consente di ottenere inferenze più robuste, riducendo l'influenza indebita degli outlier sulle stime del cambiamento.
-
-**Distribuzioni *a priori* informative.**
-La distribuzione *a priori* $\mathcal{N}(0, 0.6^2)$ utilizzata negli esempi precedenti è volutamente debole e conservativa. In contesti applicativi in cui siano disponibili evidenze cumulative — ad esempio meta-analisi sugli effetti medi di un determinato intervento — è possibile specificare *prior* più informative, in grado di incorporare in modo esplicito la conoscenza pregressa e migliorare l’efficienza inferenziale.
-
-**Estensione gerarchica.**
-Il limite principale dell'approccio presentato è che ciascun individuo viene analizzato in modo indipendente dagli altri. Come anticipato, i modelli multilivello (o gerarchici) permettono di analizzare simultaneamente tutti gli individui, assumendo che i cambiamenti individuali derivino da una distribuzione comune stimata dai dati. Questo meccanismo di *pooling* parziale produce stime individuali più stabili e meno rumorose, preservando al contempo la stima dell’effetto medio di gruppo.
-
-Questa estensione rappresenta il collegamento naturale tra l’analisi di gruppo discussa nella prima parte del capitolo e l’analisi idiografica sviluppata in questa sezione. Nei modelli multilivello, i livelli nomotetico e idiografico non sono più considerati come alternativi o separati, ma sono integrati all'interno di un unico framework inferenziale coerente. L’approfondimento di questi modelli sarà oggetto dei capitoli successivi.
-
 ## Riflessioni conclusive {.unnumbered}
 
-L’analisi sviluppata in questo capitolo mette in luce i principali punti di forza dell’approccio bayesiano applicato al confronto tra gruppi e, più in generale, alla valutazione del cambiamento psicologico. La quantità centrale dell’inferenza non è più un singolo indice riassuntivo né un valore-$p$, bensì l’intera distribuzione *a posteriori* delle differenze di interesse. È questa distribuzione a costituire l’oggetto sostantivo dell’interpretazione: nel nostro esempio, essa descrive non solo di quanto il gruppo sottoposto all’intervento di mindfulness differisca in media dal gruppo di controllo, ma anche con quale grado di incertezza ciascun valore della differenza sia plausibile. In questo modo, l’inferenza si libera dal verdetto dicotomico “c’è/non c’è una differenza” per assumere la forma di un ragionamento continuo basato su gradazioni di plausibilità.
+L'analisi sviluppata in questo capitolo mette in luce i principali punti di forza dell'approccio bayesiano applicato al confronto tra gruppi. La quantità centrale dell'inferenza non è più un singolo indice riassuntivo né un valore-$p$, bensì l'intera distribuzione a posteriori della differenza tra le medie. È questa distribuzione a costituire l'oggetto sostantivo dell'interpretazione: descrive non solo di quanto il gruppo sottoposto all'intervento differisca in media dal controllo, ma con quale grado di incertezza ciascun valore della differenza sia plausibile. In questo modo l'inferenza si libera dal verdetto dicotomico "c'è / non c'è una differenza" per assumere la forma di un ragionamento continuo basato su gradazioni di plausibilità.
 
-Un ulteriore vantaggio dell'approccio bayesiano riguarda la possibilità di valutare direttamente la **rilevanza pratica** degli effetti stimati. L’introduzione di una *Region Of Practical Equivalence* (ROPE) permette di distinguere tra differenze che, pur essendo statisticamente distinguibili da zero, sono trascurabili dal punto di vista psicologico, e differenze che invece raggiungono un’entità potenzialmente rilevante per la pratica clinica. Questo approccio permette di rispondere a domande sostanziali, quali: "*Qual è la probabilità che l’effetto osservato sia, non soltanto diverso da zero, ma anche sufficientemente grande da essere clinicamente rilevante?*".
+La stima congiunta della differenza tra le medie e tra le varianze permette inoltre di cogliere aspetti spesso trascurati, come un eventuale effetto dell'intervento sull'eterogeneità delle risposte. L'introduzione di una *Region of Practical Equivalence* (ROPE) consente infine di distinguere differenze statisticamente distinguibili da zero ma trascurabili sul piano psicologico da differenze di entità potenzialmente rilevante, rispondendo a domande sostanziali sulla rilevanza pratica dell'effetto.
 
-Il confronto tra modelli con varianza comune e modelli con varianze distinte ha inoltre messo in evidenza che le assunzioni statistiche devono essere valutate in termini **predittivi**, piuttosto che essere accettate o rifiutate in modo automatico. Attraverso il criterio ELPD stimato con PSIS-LOO, abbiamo verificato se la maggiore complessità del modello con varianze distinte si traducesse effettivamente in una migliore capacità di predire dati simili a quelli osservati. Quando il guadagno predittivo risulta marginale, il principio di parsimonia suggerisce di preferire il modello più semplice; quando invece il miglioramento è sostanziale, la complessità aggiuntiva risulta giustificata. Questo modo di procedere è più trasparente e metodologicamente coerente rispetto a molte alternative frequentiste, in cui le decisioni modellistiche sono spesso delegate a test di difficile interpretazione sostanziale per le domande della ricerca.
-
-Il passaggio all’analisi idiografica ha consentito di estendere il ragionamento bayesiano dal livello di gruppo a quello individuale. È emerso come l’effetto medio, pur informativo, possa mascherare una notevole eterogeneità nelle risposte individuali e come la fallacia ecologica rappresenti un rischio concreto quando si traggono conclusioni cliniche a partire da statistiche aggregate. L’analisi bayesiana del cambiamento individuale, anche nella sua formulazione semplificata, fornisce un quadro concettuale e operativo per quantificare la probabilità che un singolo paziente abbia effettivamente tratto beneficio dall’intervento, distinguendo tra cambiamenti trascurabili, clinicamente rilevanti e compatibili con il solo errore di misurazione.
-
-Le difficoltà tipiche dell’analisi idiografica, quali la scarsità di dati a livello individuale, l’elevata incertezza e la necessità di conclusioni non dicotomiche, non rappresentano dei limiti per l’approccio bayesiano, ma piuttosto una rappresentazione onesta della complessità del fenomeno studiato. L’inferenza bayesiana non elimina queste difficoltà, ma le rende esplicite e gestibili mediante un linguaggio probabilistico. Il percorso verso stime individuali più precise passa naturalmente attraverso i modelli multilivello, che consentono di integrare in modo coerente l’informazione proveniente dal livello di gruppo e da quello individuale.
-
-In sintesi, l’approccio bayesiano invita a ripensare il significato stesso dell’inferenza statistica: non come un meccanismo per accettare o rifiutare un’ipotesi nulla, ma come uno strumento per descrivere la plausibilità di diversi scenari e collegarli al significato psicologico dei dati. Questo vale tanto per le differenze tra gruppi quanto per i cambiamenti nei singoli individui. In tal senso, l’approccio bayesiano allinea la statistica alle domande rilevanti per la psicologia, senza limitarsi a stabilire se un effetto esista, ma esplorando la sua entità, quantificando l’incertezza, valutandone la rilevanza clinica e stimandone la probabilità di beneficio per il singolo paziente. È in questa capacità di produrre inferenze interpretabili dal punto di vista sostanziale che risiede il principale valore aggiunto dell’approccio bayesiano.
+Il confronto tra il modello a varianza comune e quello a varianze distinte ha infine mostrato che le assunzioni statistiche vanno valutate in termini predittivi, tramite l'ELPD stimato con PSIS-LOO, anziché accettate o rifiutate in modo automatico: quando il guadagno predittivo è marginale si preferisce il modello più parsimonioso, quando è sostanziale la complessità aggiuntiva è giustificata. Lo stesso ragionamento bayesiano si estende poi dal confronto tra gruppi all'inferenza sul singolo individuo — la stima del punteggio vero di un paziente e la valutazione del suo cambiamento nel tempo — temi ripresi nel capitolo sul singolo paziente e nell'appendice sul *Reliable Change Index* bayesiano.
 
 ::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
 ```{r}
