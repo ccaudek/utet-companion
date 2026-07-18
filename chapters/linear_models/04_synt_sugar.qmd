@@ -129,13 +129,13 @@ Per le sintesi numeriche a posteriori useremo `posterior::summarise_draws()`, ch
 
 ## Specificare i priors
 
-Senza istruzioni, `brms` sceglie priors deboli di default, ispezionabili con `get_prior()`:
+In assenza di specifiche, `brms` adotta priors deboli per impostazione predefinita, consultabili tramite `get_prior()`:
 
 ```{r}
 get_prior(extent ~ 1 + year_c, data = df)
 ```
 
-Per rendere esplicite le nostre ipotesi, li definiamo a mano — un prior per l'intercetta, uno per la pendenza, uno per la deviazione residua:
+Per rendere esplicite le nostre ipotesi, li definiamo manualmente — un prior per l'intercetta, uno per la pendenza, uno per la deviazione residua:
 
 ```{r}
 prior_gaussian <-
@@ -162,11 +162,11 @@ draws <- posterior::as_draws(fit_prior, variable = "^b_", regex = TRUE)
 posterior::summarise_draws(draws, "mean", "sd", "mcse_mean", "mcse_sd")
 ```
 
-Nel nostro caso i priors espliciti *non cambiano in modo apprezzabile* le distribuzioni a posteriori: i dati sono numerosi e informativi, e dominano sulle ipotesi iniziali. È una lezione generale — con pochi dati o dati rumorosi, invece, la scelta dei priors diventa determinante. Per la *verifica* dei priors tramite prior predictive check si veda il @sec-linmod-bayesian-reg.
+Nel nostro caso, i priors espliciti non modificano in modo apprezzabile le distribuzioni a posteriori: i dati sono numerosi e informativi, e prevalgono sulle assunzioni iniziali. Si tratta di una lezione generale: con dati scarsi o rumorosi, invece, la scelta dei priors riveste un ruolo determinante. Per la verifica dei priors mediante prior predictive check si rimanda al @sec-linmod-bayesian-reg.
 
 ## Cambiare la verosimiglianza: la regressione robusta
 
-Ecco l'esempio più limpido di che cosa significhi "cambiare una componente con un argomento". Gli *outlier* possono trascinare la retta stimata. Aggiungiamone uno artificiale:
+Ecco un esempio che chiarisce cosa si intende per "cambiare una componente del modello con un singolo argomento". Gli *outlier* possono distorcere la retta stimata. Aggiungiamone uno artificiale:
 
 ```{r}
 df_outlier <- df
@@ -174,7 +174,7 @@ df_outlier$extent[1] <- 20
 df_outlier$year_c[1] <- -25
 ```
 
-Un modello gaussiano ne risente pesantemente:
+Un modello gaussiano ne risulta sensibilmente influenzato:
 
 ```{r}
 #| message: false
@@ -189,7 +189,7 @@ fit_gauss <- brm(
 )
 ```
 
-Per renderlo robusto basta sostituire la verosimiglianza gaussiana con una *t* di Student, dalle code più pesanti — un solo argomento, `family = student()`:
+Per renderlo robusto, è sufficiente sostituire la verosimiglianza gaussiana con una *t* di Student, caratterizzata da code più pesanti — un solo argomento, `family = student()`:
 
 ```{r}
 #| message: false
@@ -214,21 +214,22 @@ posterior::summarise_draws(
 )
 ```
 
-La pendenza del modello robusto resta vicina a quella stimata senza outlier, mentre quella del modello gaussiano è distorta. Il modello *t* stima anche il parametro $\nu$, che governa la pesantezza delle code: valori bassi ($\nu \approx 4$) indicano code pesanti e quindi maggiore tolleranza ai valori estremi; valori alti ($\nu > 30$) riportano la *t* verso la normale. È tutto ciò che serve, concettualmente, per una regressione robusta.
+
+La pendenza del modello robusto rimane prossima a quella stimata in assenza di *outlier*, mentre quella del modello gaussiano risulta distorta. Il modello *t* stima inoltre il parametro $\nu$ che governa la pesantezza delle code: valori bassi ($\nu \approx 4$) indicano code pesanti e quindi una maggiore tolleranza ai valori estremi, mentre valori alti ($\nu > 30$) riconducono la *t* verso la normale. Questo è tutto ciò che è richiesto, dal punto di vista concettuale, per ottenere una regressione robusta.
 
 ## Una misura di adattamento: il Bayes $R^2$
 
-`brms` fornisce anche il *Bayes $R^2$*, la versione bayesiana dell'indice di determinazione, con la differenza che non è un singolo numero ma una distribuzione a posteriori, dotata quindi di un proprio intervallo di credibilità:
+Il pacchetto `brms` include anche il *Bayes $R^2$*, che costituisce la controparte bayesiana del coefficiente di determinazione. A differenza della versione classica, esso non fornisce una stima puntuale, ma una distribuzione a posteriori dotata di un proprio intervallo di credibilità:
 
 ```{r}
 bayes_R2(fit)
 ```
 
-`Estimate` è la proporzione media di varianza spiegata; `Q2.5`–`Q97.5` ne danno l'intervallo di credibilità al 95%. È utile qui come lettura rapida dell'adattamento; la valutazione e il *confronto* fra modelli — con strumenti più adeguati come la validazione incrociata — sono trattati nella sezione *Valutazione*.
+Il valore riportato come `Estimate` corrisponde alla proporzione media di varianza spiegata, mentre gli intervalli `Q2.5`–`Q97.5` ne definiscono l'intervallo di credibilità al 95%. Rappresenta un indicatore sintetico utile per una prima valutazione dell'adattamento. Per la valutazione e il confronto tra modelli, che richiedono strumenti più idonei, quali la validazione incrociata, si rimanda alla sezione *Validazione*.
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-L'interfaccia a formula di `brms` non aggiunge nulla di nuovo alla logica bayesiana: esprime in modo compatto ciò che nel @sec-linmod-bayesian-reg avevamo scritto per esteso. Il suo valore sta nell'agilità — cambiare la distribuzione degli errori, aggiungere un predittore, imporre un prior sono modifiche di un argomento — ed è questa agilità che ci permetterà, nei capitoli seguenti, di passare a modelli via via più complessi senza riscrivere ogni volta il codice da zero. Nel prossimo capitolo scenderemo invece "sotto il cofano", scrivendo in Stan gli stessi modelli, per capire che cosa `brms` fa per noi e quando conviene il controllo diretto.
+L'interfaccia a formula di `brms` non introduce elementi concettualmente nuovi rispetto alla logica bayesiana: esprime in forma compatta ciò che nel @sec-linmod-bayesian-reg avevamo specificato in modo esteso. Il suo valore risiede nell'agilità operativa: modificare la distribuzione degli errori, aggiungere un predittore o impostare un prior sono operazioni che richiedono la modifica di un solo argomento. È proprio questa agilità che ci permette, nei capitoli seguenti, di affrontare modelli via via più complessi senza dover riscrivere il codice integralmente ogni volta. Nel prossimo capitolo, invece, ci addentreremo nei dettagli dell'implementazione, scrivendo gli stessi modelli in Stan, al fine di comprendere meglio le operazioni che `brms` automatizza e in quali contesti sia preferibile un controllo diretto.
 
 ::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
 ```{r}
