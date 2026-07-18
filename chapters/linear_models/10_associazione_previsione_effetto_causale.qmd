@@ -1,0 +1,577 @@
+# Associazione, previsione ed effetto causale {#sec-association-prediction-causality}
+
+Un modello lineare può essere usato per descrivere una relazione osservata, per prevedere un nuovo valore o per stimare una quantità causale. La formula statistica può apparire molto simile nei tre casi, ma la domanda scientifica, la quantità di interesse e le condizioni che rendono valida la conclusione sono diverse.
+
+Consideriamo, per esempio, una regressione del livello di ansia su un indicatore di trattamento:
+
+$$
+Y_i \sim \operatorname{Normal}(\alpha + \beta A_i,\sigma).
+$$
+
+Il coefficiente $\beta$ può rappresentare:
+
+- una **differenza osservata** tra persone trattate e non trattate;
+- un elemento di una **regola predittiva** per nuovi individui;
+- una stima dell'**effetto medio del trattamento**, ma soltanto se il disegno e le assunzioni causali consentono questa interpretazione.
+
+Il modello matematico, da solo, non stabilisce quale delle tre letture sia corretta. Questo capitolo chiarisce la distinzione e prepara il passaggio dalla parte **Modelli** alla parte **Causalità** del Companion.
+
+::: {.callout-note title="Obiettivi del capitolo"}
+Al termine del capitolo dovresti essere in grado di:
+
+- distinguere una domanda associativa, predittiva e causale;
+- identificare la quantità di interesse appropriata per ciascuna domanda;
+- spiegare perché una buona previsione non implica una corretta interpretazione causale;
+- definire un effetto causale mediante i potenziali esiti;
+- comprendere il ruolo della randomizzazione;
+- riconoscere, a livello introduttivo, confondenti, mediatori e collider;
+- spiegare perché l'inferenza bayesiana quantifica l'incertezza ma non risolve automaticamente il problema dell'identificazione causale;
+- formulare conclusioni coerenti con il disegno dello studio.
+:::
+
+::: {.callout-tip collapse=true title="Percorsi di lettura"}
+Il capitolo appartiene al **percorso essenziale** e al **percorso concettuale**. Le simulazioni costituiscono un supporto operativo, ma il punto centrale è distinguere le domande inferenziali. La formalizzazione completa dei controfattuali, dei DAG e delle strategie per i dati osservazionali è sviluppata nella successiva parte **Causalità**, a partire dal @sec-causality-propedeutics e dal @sec-eda-causality.
+:::
+
+::: {.callout-caution collapse=true title="Preparazione del Notebook"}
+
+```{r}
+#| label: setup-association-causality
+#| include: false
+
+here::here("code", "_common.R") |>
+  source()
+
+if (!requireNamespace("pacman", quietly = TRUE)) {
+  install.packages("pacman")
+}
+
+pacman::p_load(
+  dplyr,
+  ggplot2,
+  tidyr,
+  tibble,
+  broom
+)
+
+set.seed(1234)
+```
+:::
+
+## Tre domande, tre quantità di interesse
+
+La prima decisione non riguarda il software o il tipo di prior. Riguarda la domanda alla quale vogliamo rispondere.
+
+| Obiettivo | Domanda tipica | Quantità di interesse | Principale criterio di validità |
+|---|---|---|---|
+| Associazione | Come differisce $Y$ tra unità con valori diversi di $X$? | $\mathbb{E}(Y\mid X=x)$ o un contrasto condizionato | Adeguatezza del modello alla distribuzione osservata |
+| Previsione | Quale valore di $Y$ è plausibile per una nuova unità? | $p(\widetilde{Y}\mid X,\mathcal{D})$ | Prestazione predittiva su dati nuovi e popolazione bersaglio pertinente |
+| Causalità | Che cosa accadrebbe a $Y$ se intervenissimo su $X$? | Contrasto tra potenziali esiti, per esempio $\mathbb{E}[Y(1)-Y(0)]$ | Disegno, identificazione e assunzioni causali |
+
+Le tre domande possono essere rivolte agli stessi dati. Non sono però intercambiabili.
+
+::: {.callout-important title="L'estimand viene prima del modello"}
+Prima di adattare una regressione è utile completare una frase del tipo:
+
+> Voglio stimare ... nella popolazione ... sotto le condizioni ...
+
+Una formula come `y ~ x + z` non specifica da sola se l'obiettivo sia descrittivo, predittivo o causale.
+:::
+
+## Associazione: descrivere differenze osservate
+
+Una quantità associativa riguarda la distribuzione osservata. Con un trattamento binario $A$, una differenza associativa elementare è
+
+$$
+\Delta_{\text{ass}}=
+\mathbb{E}(Y\mid A=1)-\mathbb{E}(Y\mid A=0).
+$$
+
+Questa quantità confronta due gruppi che esistono nei dati. Se le persone trattate differiscono da quelle non trattate per gravità iniziale, motivazione, accesso alle cure o altre caratteristiche, tali differenze contribuiscono a $\Delta_{\text{ass}}$.
+
+Una regressione può rendere il confronto condizionato rispetto ad alcune covariate:
+
+$$
+\mathbb{E}(Y\mid A,X)
+=
+\alpha+\beta_A A+\boldsymbol{\beta}_X^\mathsf{T}X.
+$$
+
+Il coefficiente $\beta_A$ descrive allora una differenza tra unità con gli stessi valori delle covariate incluse, secondo la forma funzionale adottata. Anche questa è, in prima istanza, una quantità associativa. Per leggerla come effetto causale servono condizioni aggiuntive.
+
+### Un'associazione può essere scientificamente utile
+
+Definire una relazione come associativa non la rende poco interessante. Le associazioni possono:
+
+- descrivere disuguaglianze o pattern rilevanti;
+- suggerire ipotesi teoriche;
+- individuare gruppi con bisogni diversi;
+- contribuire alla previsione;
+- mettere in discussione un modello esistente.
+
+Il problema nasce quando il linguaggio causale eccede ciò che il disegno consente di sostenere.
+
+## Previsione: anticipare osservazioni nuove
+
+Una domanda predittiva riguarda una nuova osservazione $\widetilde{Y}$. Nel quadro bayesiano, la quantità centrale è la distribuzione predittiva
+
+$$
+p(\widetilde{Y}\mid \widetilde{X},\mathcal{D})
+=
+\int
+p(\widetilde{Y}\mid \widetilde{X},\theta)
+\,p(\theta\mid\mathcal{D})
+\,d\theta.
+$$
+
+Questa distribuzione incorpora:
+
+1. l'incertezza sui parametri $\theta$;
+2. la variabilità delle nuove osservazioni attorno alla media prevista.
+
+La qualità di una previsione non si valuta osservando soltanto quanto il modello si adatta ai dati usati per stimarlo. Occorre verificare la prestazione su dati nuovi o mediante procedure di validazione appropriate.
+
+### Previsione e spiegazione possono divergere
+
+Una variabile può migliorare la previsione senza possedere il ruolo causale che le attribuiamo. Per esempio:
+
+- un indicatore costruito dopo il trattamento può essere molto predittivo dell'esito;
+- un proxy della gravità può migliorare le previsioni cliniche;
+- una variabile di selezione può separare bene casi con esiti differenti.
+
+Tali variabili non sono per questo cause manipolabili dell'outcome. Inoltre, includere una variabile post-trattamento o un collider può migliorare alcuni indici predittivi e, nello stesso tempo, compromettere la stima dell'effetto causale.
+
+::: {.callout-warning title="Buona previsione non significa buona identificazione"}
+Un modello può prevedere accuratamente $Y$ e produrre una stima distorta dell'effetto di $A$. In senso opposto, un esperimento randomizzato di dimensioni limitate può identificare un effetto medio pur avendo modesta accuratezza nella previsione degli esiti individuali.
+:::
+
+## Effetto causale: confrontare mondi possibili
+
+Per definire un effetto causale dobbiamo esplicitare un intervento. Sia $A_i\in\{0,1\}$ un trattamento. Per l'unità $i$ definiamo due potenziali esiti:
+
+$$
+Y_i(1)=\text{esito che osserveremmo sotto trattamento},
+$$
+
+$$
+Y_i(0)=\text{esito che osserveremmo senza trattamento}.
+$$
+
+L'effetto causale individuale è
+
+$$
+\tau_i=Y_i(1)-Y_i(0).
+$$
+
+Non possiamo osservare entrambi i potenziali esiti per la stessa unità nello stesso momento. Questo è il problema fondamentale dell'inferenza causale [@hernan2020]. Possiamo però definire effetti medi, per esempio
+
+$$
+\tau_{\text{ATE}}
+=
+\mathbb{E}\left[Y(1)-Y(0)\right].
+$$ {#eq-average-treatment-effect}
+
+L'ATE non coincide, in generale, con la differenza associativa
+
+$$
+\mathbb{E}(Y\mid A=1)-\mathbb{E}(Y\mid A=0).
+$$
+
+Le due quantità coincidono soltanto sotto condizioni che rendono confrontabili i gruppi rispetto ai potenziali esiti.
+
+### Il ruolo della consistenza e dell'interferenza
+
+La notazione dei potenziali esiti richiede che il trattamento sia definito abbastanza chiaramente da collegare il valore osservato al corrispondente potenziale esito. Inoltre, l'esito di un'unità non dovrebbe dipendere, salvo esplicita modellazione, dal trattamento assegnato ad altre unità. Queste condizioni fanno parte del quadro sintetizzato dalla nozione di SUTVA e saranno riprese nella parte causale.
+
+## Perché associazione ed effetto possono differire
+
+Supponiamo di studiare un intervento per ridurre l'ansia. Le persone con ansia iniziale più elevata potrebbero avere una probabilità maggiore di ricevere il trattamento. La gravità iniziale $U$ influenza quindi sia l'assegnazione $A$ sia l'esito $Y$:
+
+$$
+U\longrightarrow A,
+\qquad
+U\longrightarrow Y,
+\qquad
+A\longrightarrow Y.
+$$
+
+In questa configurazione, $U$ è un **confondente**. Il confronto grezzo tra trattati e non trattati mescola l'effetto del trattamento con le differenze iniziali tra i gruppi.
+
+### Una simulazione di confondimento
+
+Generiamo dati in cui l'effetto causale vero del trattamento è pari a quattro punti, ma la probabilità di ricevere il trattamento aumenta con la gravità iniziale.
+
+```{r}
+#| label: simulate-observational-confounding
+
+n <- 1000
+true_effect <- 4
+
+observational_data <- tibble(
+  baseline = rnorm(n, mean = 0, sd = 1),
+  treatment = rbinom(
+    n,
+    size = 1,
+    prob = plogis(-0.3 + 1.3 * baseline)
+  )
+) |>
+  mutate(
+    outcome = 50 +
+      true_effect * treatment +
+      8 * baseline +
+      rnorm(n, mean = 0, sd = 4),
+    group = if_else(treatment == 1, "Trattamento", "Controllo")
+  )
+```
+
+Esaminiamo la differenza osservata negli esiti e la differenza nella gravità iniziale.
+
+```{r}
+#| label: summarize-observational-confounding
+
+observational_summary <- observational_data |>
+  group_by(group) |>
+  summarise(
+    n = n(),
+    mean_baseline = mean(baseline),
+    mean_outcome = mean(outcome),
+    .groups = "drop"
+  )
+
+observational_summary
+```
+
+```{r}
+#| label: fit-associational-models
+
+fit_naive <- lm(outcome ~ treatment, data = observational_data)
+fit_adjusted <- lm(outcome ~ treatment + baseline, data = observational_data)
+
+bind_rows(
+  broom::tidy(fit_naive) |>
+    filter(term == "treatment") |>
+    mutate(model = "Confronto non aggiustato"),
+  broom::tidy(fit_adjusted) |>
+    filter(term == "treatment") |>
+    mutate(model = "Aggiustamento per baseline")
+) |>
+  select(model, estimate, std.error)
+```
+
+Il modello non aggiustato attribuisce al trattamento anche parte della differenza dovuta alla gravità iniziale. Il modello che include `baseline` si avvicina al valore usato per generare i dati, perché nella simulazione abbiamo misurato correttamente il confondente e specificato la relazione nella forma appropriata.
+
+Questo risultato non dimostra che, nei dati reali, sia sufficiente aggiungere una covariata. Nella simulazione conosciamo il processo generativo; in un'applicazione osservazionale dobbiamo giustificare quali variabili siano confondenti, come siano state misurate e quali assunzioni rendano valido l'aggiustamento. Il bias da variabile omessa può sovrastimare, sottostimare o perfino invertire una relazione [@wilms2021omitted].
+
+```{r}
+#| label: fig-observational-confounding
+#| fig-cap: "Nel campione osservazionale simulato, le persone trattate presentano una gravità iniziale maggiore. La differenza negli esiti combina quindi effetto del trattamento e differenze preesistenti."
+#| fig-width: 8
+#| fig-height: 4.8
+
+plot_observational <- observational_data |>
+  pivot_longer(
+    cols = c(baseline, outcome),
+    names_to = "variable",
+    values_to = "value"
+  ) |>
+  mutate(
+    variable = recode(
+      variable,
+      baseline = "Gravità iniziale",
+      outcome = "Esito"
+    )
+  )
+
+plot_observational |>
+  ggplot(aes(x = group, y = value)) +
+  geom_boxplot(outlier.alpha = 0.25) +
+  facet_wrap(~variable, scales = "free_y") +
+  labs(x = NULL, y = NULL)
+```
+
+## Randomizzazione: quando il confronto identifica l'effetto
+
+La randomizzazione rende l'assegnazione del trattamento indipendente, in aspettativa, dai potenziali esiti e dalle caratteristiche pre-trattamento. Ripetiamo la simulazione assegnando il trattamento casualmente.
+
+```{r}
+#| label: simulate-randomized-study
+
+randomized_data <- tibble(
+  baseline = rnorm(n, mean = 0, sd = 1),
+  treatment = rbinom(n, size = 1, prob = 0.5)
+) |>
+  mutate(
+    outcome = 50 +
+      true_effect * treatment +
+      8 * baseline +
+      rnorm(n, mean = 0, sd = 4),
+    group = if_else(treatment == 1, "Trattamento", "Controllo")
+  )
+```
+
+```{r}
+#| label: compare-randomized-groups
+
+randomized_data |>
+  group_by(group) |>
+  summarise(
+    n = n(),
+    mean_baseline = mean(baseline),
+    mean_outcome = mean(outcome),
+    .groups = "drop"
+  )
+```
+
+```{r}
+#| label: fit-randomized-model
+
+fit_randomized <- lm(outcome ~ treatment, data = randomized_data)
+
+broom::tidy(fit_randomized) |>
+  filter(term == "treatment") |>
+  select(estimate, std.error)
+```
+
+In questo caso, il confronto non aggiustato stima l'effetto medio perché il trattamento è stato assegnato indipendentemente dalla gravità iniziale. L'aggiustamento per covariate pre-trattamento può aumentare la precisione, ma non è ciò che crea l'identificazione causale: è il disegno randomizzato a giustificare il confronto.
+
+::: {.callout-important title="L'identificazione precede la stima"}
+La randomizzazione, un esperimento naturale o un insieme esplicito di assunzioni sui dati osservazionali può identificare una quantità causale. Soltanto dopo questa fase ha senso scegliere come stimarla e come rappresentarne l'incertezza.
+:::
+
+## Che cosa aggiunge l'approccio bayesiano
+
+Una volta identificato l'estimand, l'approccio bayesiano permette di:
+
+- incorporare conoscenze pregresse mediante prior trasparenti;
+- propagare l'incertezza dai parametri alle quantità causali derivate;
+- rappresentare l'eterogeneità degli effetti;
+- produrre distribuzioni predittive sotto interventi definiti;
+- svolgere analisi di sensibilità rispetto a componenti del modello.
+
+Il posterior di una quantità causale dipende però sia dal modello statistico sia dalle assunzioni che collegano i dati osservati ai potenziali esiti. In forma schematica,
+
+$$
+p(\tau\mid\mathcal{D},\mathcal{M},\mathcal{A}),
+$$
+
+dove $\mathcal{M}$ rappresenta il modello probabilistico e $\mathcal{A}$ le assunzioni causali e di identificazione.
+
+Una distribuzione a posteriori molto concentrata può quindi descrivere con grande precisione una quantità associativa distorta. Cambiare algoritmo, aumentare il numero di iterazioni o usare prior più sofisticati non corregge automaticamente confondenti non misurati, collider condizionati o trattamenti definiti in modo ambiguo.
+
+::: {.callout-warning title="Bayes non trasforma l'associazione in causalità"}
+L'inferenza bayesiana quantifica l'incertezza **condizionatamente al modello e alle assunzioni**. Se l'estimand causale non è identificato, il problema non è risolto da una posterior numericamente stabile.
+:::
+
+## Scegliere le variabili: il ruolo della struttura causale
+
+Nel lavoro descrittivo o predittivo, le covariate possono essere selezionate in base alla domanda e alla capacità di generalizzazione. Nella stima causale, la scelta deve essere guidata dal ruolo che ciascuna variabile occupa rispetto al trattamento e all'esito.
+
+### Confondente
+
+Una causa comune di trattamento ed esito:
+
+$$
+A\leftarrow U\rightarrow Y.
+$$
+
+Se le condizioni necessarie sono soddisfatte, aggiustare per $U$ può bloccare il percorso non causale tra $A$ e $Y$.
+
+### Mediatore
+
+Una variabile attraverso cui passa parte dell'effetto:
+
+$$
+A\rightarrow M\rightarrow Y.
+$$
+
+Se l'obiettivo è l'effetto totale, controllare per $M$ elimina parte della quantità che vogliamo stimare. Se l'obiettivo è un effetto diretto, il ruolo di $M$ deve essere definito esplicitamente e sono necessarie assunzioni ulteriori.
+
+### Collider
+
+Un effetto comune del trattamento e dell'esito, o di loro cause:
+
+$$
+A\rightarrow C\leftarrow Y.
+$$
+
+Condizionare su $C$, o in alcuni casi su un suo discendente, può creare un'associazione che prima non esisteva.
+
+### Moderatore
+
+Un moderatore descrive eterogeneità dell'effetto: il contrasto causale varia in funzione di una caratteristica $W$. Non è una categoria alternativa a confondente, mediatore o collider. La stessa variabile può avere ruoli diversi in differenti teorie causali, e tali ruoli devono essere specificati nel grafo e nell'estimand.
+
+::: {.callout-tip title="Non controllare automaticamente tutto ciò che è disponibile"}
+Aumentare $R^2$, ridurre l'AIC o migliorare la previsione non sono criteri sufficienti per scegliere un insieme di aggiustamento causale. I DAG e il criterio *backdoor*, sviluppati nel @sec-eda-causality, formalizzano quali percorsi debbano essere chiusi e quali non debbano essere aperti.
+:::
+
+## Lo stesso coefficiente, significati diversi
+
+Consideriamo nuovamente
+
+$$
+Y_i\sim\operatorname{Normal}(\alpha+\beta A_i,\sigma).
+$$
+
+Il significato di $\beta$ dipende dal contesto:
+
+- **studio osservazionale non aggiustato:** differenza media osservata tra i gruppi;
+- **modello predittivo:** contributo del trattamento alla previsione, condizionato alle altre variabili e alla specificazione;
+- **esperimento randomizzato:** stima della differenza media causale, sotto consistenza, assenza di interferenza e corretta gestione dei dati mancanti;
+- **studio osservazionale aggiustato:** possibile stima causale soltanto sotto ipotesi di scambiabilità condizionata, positività, consistenza e adeguata specificazione.
+
+La formula non contiene l'informazione relativa al meccanismo di assegnazione. Due dataset con le stesse colonne e lo stesso modello di regressione possono sostenere conclusioni causali molto diverse.
+
+## Linguaggio coerente con l'evidenza
+
+La formulazione dei risultati dovrebbe riflettere la domanda e il disegno.
+
+### Linguaggio associativo
+
+> Nel campione analizzato, il gruppo trattato presenta in media un punteggio di ansia inferiore di 3.2 punti rispetto al gruppo non trattato.
+
+### Linguaggio predittivo
+
+> L'inclusione dell'indicatore di trattamento migliora la previsione dell'ansia in nuovi casi della popolazione considerata.
+
+### Linguaggio causale
+
+> Nell'esperimento randomizzato, l'assegnazione al trattamento riduce in media il punteggio di ansia di 3.2 punti rispetto al controllo, sotto le assunzioni dichiarate.
+
+Nel terzo caso, il verbo causale è sostenuto dal disegno e da un estimand definito. Non deriva semplicemente dal fatto che il coefficiente sia diverso da zero.
+
+## Collegamento con la parte Causalità
+
+Questo capitolo ha stabilito il confine tra tre obiettivi inferenziali. Non ha ancora fornito una procedura completa per identificare effetti da dati osservazionali.
+
+La parte **Causalità** svilupperà in modo sistematico:
+
+- il quadro controfattuale e gli estimand causali;
+- la distinzione tra effetto totale, diretto e condizionato;
+- i DAG e le indipendenze implicate;
+- catene, cause comuni, collider e discendenti;
+- il criterio *backdoor* e la scelta delle variabili di aggiustamento;
+- strategie sperimentali, quasi-sperimentali e osservazionali;
+- limiti dovuti al confondimento non osservato.
+
+Il @sec-causality-propedeutics approfondisce la notazione dei potenziali esiti e il ruolo della randomizzazione. Il @sec-eda-causality introduce gli strumenti operativi per ragionare sui dati osservazionali. Tra i riferimenti utili per questo passaggio figurano @hernan2020, @McElreath_rethinking, @byrnes2024causal, @riedererdesignpatterns e @alexander2023telling.
+
+## Errori frequenti
+
+::: {.callout-caution}
+1. **Chiamare effetto ogni coefficiente.** Un coefficiente di regressione è inizialmente una quantità del modello associativo; l'interpretazione causale richiede identificazione.
+2. **Confondere buona previsione e buona spiegazione.** Un predittore accurato non è necessariamente una leva causale.
+3. **Pensare che l'aggiustamento sia sempre protettivo.** Controllare mediatori o collider può cambiare l'estimand o introdurre bias.
+4. **Usare la significatività o la precisione come prova causale.** Un intervallo stretto può concentrarsi attorno a una quantità distorta.
+5. **Definire il trattamento in modo vago.** Un effetto causale richiede un intervento sufficientemente preciso.
+6. **Dimenticare la popolazione bersaglio.** Un effetto identificato nel campione non si generalizza automaticamente ad altri contesti.
+7. **Interpretare l'aggiustamento per covariate come sostituto della randomizzazione.** Nei dati osservazionali l'aggiustamento è valido soltanto sotto assunzioni sostantive non verificabili interamente dai dati.
+:::
+
+## Riflessioni conclusive
+
+Associazione, previsione e causalità non sono tre livelli crescenti di una stessa analisi. Sono obiettivi differenti.
+
+- Una domanda **associativa** riguarda come le variabili si distribuiscono insieme nei dati osservati.
+- Una domanda **predittiva** riguarda la distribuzione di nuove osservazioni e richiede validazione fuori campione.
+- Una domanda **causale** riguarda il confronto tra esiti sotto interventi alternativi e richiede un estimand, una strategia di identificazione e assunzioni sul processo che ha prodotto i dati.
+
+L'approccio bayesiano è utile in tutti e tre i casi, perché consente di rappresentare e propagare l'incertezza. Non elimina però la distinzione tra essi. La posterior risponde alla domanda codificata dal modello e dalle assunzioni: non può trasformare retroattivamente una domanda associativa in una domanda causale.
+
+Con questo capitolo termina la progressione principale della parte **Modelli**. Abbiamo costruito il modello lineare, ne abbiamo esaminato casi particolari ed estensioni, abbiamo modellato l'eterogeneità e abbiamo visto come controllarne e revisionarne la specificazione. La parte **Causalità** aggiungerà ora il livello necessario per interpretare alcune quantità come conseguenze di interventi.
+
+## Concetti da ricordare
+
+1. La stessa formula di regressione può servire a obiettivi associativi, predittivi o causali.
+2. L'estimand deve essere definito prima della procedura di stima.
+3. Una differenza osservata tra gruppi non coincide generalmente con un effetto causale.
+4. La previsione riguarda nuovi dati; la causalità riguarda interventi alternativi.
+5. La randomizzazione giustifica, in aspettativa, il confronto causale tra i gruppi.
+6. Nei dati osservazionali l'aggiustamento richiede ipotesi sulla struttura causale.
+7. Confondenti, mediatori e collider non devono essere trattati allo stesso modo.
+8. Un moderatore descrive eterogeneità dell'effetto e non è, di per sé, una variabile da aggiustare.
+9. La posterior quantifica l'incertezza condizionatamente al modello e alle assunzioni.
+10. Una stima precisa può essere causalmente distorta.
+
+::: {.callout-important title="Esercizi" collapse="true"}
+
+### 1. Classificare la domanda
+
+Classifica ciascuna domanda come associativa, predittiva o causale:
+
+1. Qual è la differenza media nell'ansia tra chi pratica e chi non pratica meditazione?
+2. Quanto accuratamente possiamo prevedere una ricaduta entro sei mesi?
+3. Di quanto cambierebbe l'ansia se assegnassimo le persone a otto settimane di meditazione?
+
+### 2. Definire l'estimand
+
+Per uno studio sull'effetto di un programma di tutoraggio sul voto finale, definisci:
+
+- una quantità associativa;
+- una quantità predittiva;
+- un ATE causale.
+
+### 3. Confondimento
+
+Supponi che gli studenti con maggiori difficoltà iniziali siano più propensi a iscriversi al tutoraggio. Disegna verbalmente il DAG minimo e spiega perché il confronto grezzo può sottostimare l'efficacia del programma.
+
+### 4. Mediatore
+
+Il tutoraggio aumenta le ore di studio, che a loro volta migliorano il voto. Spiega perché controllare per le ore di studio cambia la domanda dall'effetto totale a una forma di effetto diretto.
+
+### 5. Collider
+
+L'ammissione a un programma selettivo dipende sia dalla motivazione sia dal rendimento precedente. Spiega perché analizzare soltanto gli studenti ammessi può creare un'associazione tra motivazione e rendimento precedente anche se nella popolazione non sono associati.
+
+### 6. Randomizzazione
+
+Modifica la simulazione osservazionale sostituendo l'assegnazione dipendente da `baseline` con un'assegnazione Bernoulli con probabilità 0.5. Confronta:
+
+- differenza nella baseline;
+- differenza negli esiti;
+- coefficiente non aggiustato del trattamento.
+
+### 7. Precisione senza validità
+
+Immagina un dataset osservazionale enorme con un confondente non misurato. Spiega perché l'intervallo di credibilità del coefficiente può diventare molto stretto senza avvicinarsi all'effetto causale.
+
+### 8. Riscrivere una conclusione
+
+Riscrivi la frase seguente in una forma appropriata per uno studio osservazionale:
+
+> La solitudine causa un aumento di 4 punti nella depressione.
+
+### 9. Predizione e variabili post-trattamento
+
+Una misura raccolta a metà della terapia migliora fortemente la previsione dell'esito finale. Spiega perché questa variabile può essere utile per la previsione ma problematica se l'obiettivo è stimare l'effetto totale dell'assegnazione alla terapia.
+:::
+
+::: {.callout-tip collapse="true" title="Tracce di soluzione"}
+1. Le domande sono, nell'ordine, associativa, predittiva e causale.
+2. Associazione: differenza osservata tra iscritti e non iscritti. Predizione: distribuzione del voto per un nuovo studente date le covariate. Causalità: media di $Y(1)-Y(0)$ nella popolazione bersaglio.
+3. Il DAG minimo è `difficoltà → tutoraggio`, `difficoltà → voto`, `tutoraggio → voto`. Poiché chi riceve il programma parte svantaggiato, il confronto grezzo può mascherarne un effetto positivo.
+4. Le ore di studio appartengono al percorso attraverso cui il programma agisce. Condizionarle blocca tale percorso e modifica l'estimand.
+5. L'ammissione è un effetto comune. Condizionare sull'ammissione apre un percorso tra le sue cause e produce dipendenza da selezione.
+6. Con randomizzazione la baseline è bilanciata in aspettativa e il coefficiente non aggiustato oscilla attorno all'effetto generativo vero.
+7. L'aumento di $n$ riduce l'incertezza campionaria attorno alla quantità identificata dal modello, ma non elimina il bias strutturale dovuto al confondente omesso.
+8. Una formulazione appropriata è: «Nel campione analizzato, livelli maggiori di solitudine sono associati a punteggi di depressione più elevati di circa quattro punti, a parità delle covariate incluse».
+9. La misura intermedia può incorporare parte della risposta al trattamento. Usarla nella previsione è legittimo; condizionarla nella stima dell'effetto totale può bloccare un percorso mediato o introdurre selezione.
+:::
+
+::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+```{r}
+sessionInfo()
+```
+:::
+
+## Bibliografia {.unnumbered .unlisted}
+
+<!--
+Note per l'integrazione editoriale:
+- collocare questo capitolo dopo 09_quando_il_modello_sbaglia.qmd e prima delle conclusioni della parte Modelli;
+- mantenere la parte Causalità come sezione autonoma;
+- aggiornare l'introduzione della parte Causalità per rinviare a questo capitolo ed evitare ripetizioni;
+- rimuovere o riconvertire chapters/causality/01_specification_error.qmd, poiché il materiale è già integrato nel capitolo 9;
+- rimuovere chapters/linear_models/12_method_variance.qmd dall'indice, poiché il materiale è già integrato nel capitolo 9;
+- verificare che le chiavi bibliografiche hernan2020, wilms2021omitted, McElreath_rethinking, byrnes2024causal, riedererdesignpatterns e alexander2023telling siano presenti nel file .bib;
+- verificare i riferimenti incrociati sec-causality-propedeutics e sec-eda-causality dopo l'eventuale revisione della parte Causalità.
+-->

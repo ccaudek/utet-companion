@@ -1,0 +1,1027 @@
+# Modelli multilivello: eterogeneità e partial pooling {#sec-multilevel}
+
+I dati psicologici presentano spesso una struttura gerarchica. Le misurazioni possono essere ripetute sulla stessa persona, gli studenti possono appartenere a classi diverse, i pazienti possono essere seguiti in centri clinici differenti e gli stimoli possono essere raggruppati in categorie. In tutti questi casi, osservazioni appartenenti alla stessa unità tendono ad assomigliarsi più di osservazioni appartenenti a unità diverse.
+
+Un modello lineare che ignora questa struttura tratta implicitamente tutte le osservazioni come intercambiabili. Il problema non riguarda soltanto il calcolo dell'incertezza. In psicologia siamo spesso interessati a due domande simultanee:
+
+1. quale relazione emerge, in media, nella popolazione considerata;
+2. quanto e in quale modo le persone o i gruppi differiscono da tale relazione media.
+
+I modelli multilivello rispondono a entrambe le domande costruendo una distribuzione comune per i parametri delle diverse unità. Le stime individuali non vengono né completamente identificate con la media generale né trattate come se fossero indipendenti. Sono stimate mediante **partial pooling**, cioè combinando l'informazione specifica dell'unità con quella condivisa dall'insieme delle unità.
+
+::: {.callout-note title="Obiettivi del capitolo"}
+Al termine del capitolo dovresti essere in grado di:
+
+- riconoscere una struttura annidata o gerarchica nei dati;
+- distinguere *complete pooling*, *no pooling* e *partial pooling*;
+- leggere un modello con intercette e pendenze variabili;
+- interpretare i parametri di popolazione, le deviazioni di gruppo e la loro variabilità;
+- spiegare da quali informazioni dipende lo shrinkage;
+- distinguere `ranef()` da `coef()`;
+- costruire previsioni per un'unità osservata, per la relazione media e per una nuova unità;
+- valutare criticamente l'ipotesi che le differenze individuali siano variazioni quantitative attorno a una struttura comune.
+:::
+
+::: {.callout-tip collapse=true title="Percorsi di lettura"}
+Il capitolo appartiene al **percorso essenziale** e al **percorso concettuale**. Le sezioni sulla matrice di covarianza degli effetti di gruppo e sulle previsioni per nuovi livelli costituiscono anche un raccordo con il **percorso computazionale avanzato**.
+:::
+
+::: {.callout-tip collapse=true title="Prerequisiti"}
+Sono particolarmente utili:
+
+- il confronto tra più gruppi (@sec-anova1via), nel quale le medie erano stimate separatamente senza una distribuzione gerarchica;
+- il workflow bayesiano con `brms` (@sec-linmod-bayesian-reg);
+- l'interfaccia a formula di `brms` (@sec-linar-models-brms);
+- come riferimento generale, la trattazione dei modelli multilivello in *Statistical Rethinking* [@McElreath_rethinking].
+:::
+
+::: {.callout-caution collapse=true title="Preparazione del Notebook"}
+
+```{r}
+#| label: setup-multilevel
+#| include: false
+
+here::here("code", "_common.R") |>
+  source()
+
+if (!requireNamespace("pacman", quietly = TRUE)) {
+  install.packages("pacman")
+}
+
+pacman::p_load(
+  brms,
+  cmdstanr,
+  dplyr,
+  ggplot2,
+  posterior,
+  purrr,
+  rio,
+  tidyr
+)
+
+set.seed(1234)
+```
+:::
+
+## Dalla struttura dei dati alla domanda scientifica
+
+Useremo i dati dello studio di @belenky2003patterns sugli effetti cumulativi della restrizione del sonno sulla vigilanza psicomotoria. I partecipanti eseguono ripetutamente un compito di reazione durante più giorni di sonno ridotto. La variabile `Reaction` rappresenta il tempo medio di reazione in millisecondi; `days_deprived` indica il numero di giorni trascorsi dalla baseline.
+
+```{r}
+#| label: load-sleep-multilevel
+
+sleep2 <- rio::import(
+  here::here("data", "sleep2.csv")
+) |>
+  mutate(
+    Subject = factor(Subject),
+    days_deprived = as.numeric(days_deprived)
+  )
+
+glimpse(sleep2)
+```
+
+Ogni partecipante contribuisce con più osservazioni. L'unità statistica non è quindi soltanto la singola riga del dataset: le righe sono raggruppate entro partecipante.
+
+```{r}
+#| label: fig-sleep-trajectories
+#| fig-cap: "Tempi di reazione osservati nei diversi giorni di deprivazione. I partecipanti differiscono sia nel livello iniziale sia nell'andamento nel tempo."
+#| fig-width: 8
+#| fig-height: 6
+
+sleep2 |>
+  ggplot(aes(x = days_deprived, y = Reaction)) +
+  geom_point(alpha = 0.65) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.7) +
+  facet_wrap(~ Subject) +
+  labs(
+    x = "Giorni di deprivazione del sonno (0 = baseline)",
+    y = "Tempo medio di reazione (ms)"
+  )
+```
+
+Il grafico suggerisce almeno tre quantità di interesse:
+
+- il tempo di reazione medio alla baseline;
+- l'incremento medio giornaliero del tempo di reazione;
+- l'eterogeneità tra partecipanti nei livelli iniziali e nelle pendenze.
+
+La seconda quantità descrive la relazione media. La terza stabilisce quanto tale relazione possa essere generalizzata ai singoli partecipanti.
+
+::: {.callout-important title="Una relazione media e una distribuzione di relazioni"}
+Un modello multilivello non sostituisce la pendenza media con diciotto analisi separate. Stima una pendenza media e una distribuzione delle deviazioni individuali da essa.
+:::
+
+## Tre strategie di modellazione
+
+Prima di specificare il modello gerarchico, confrontiamo tre possibili strategie.
+
+### Complete pooling
+
+Il **complete pooling** ignora l'identità dei partecipanti e stima una sola retta:
+
+$$
+Y_{ij} \sim \operatorname{Normal}(\alpha + \beta x_{ij}, \sigma),
+$$
+
+dove $i$ identifica l'osservazione e $j$ il partecipante. La notazione contiene l'indice $j$, ma i parametri non variano tra i partecipanti.
+
+Per rendere il prior sull'intercetta direttamente interpretabile alla baseline, usiamo la parametrizzazione `0 + Intercept`.
+
+```{r}
+#| label: fit-complete-pooling
+#| output: false
+
+priors_cp <- c(
+  prior(normal(250, 50), class = "b", coef = "Intercept"),
+  prior(normal(10, 10), class = "b", coef = "days_deprived"),
+  prior(student_t(3, 0, 30), class = "sigma")
+)
+
+cp_model <- brm(
+  Reaction ~ 0 + Intercept + days_deprived,
+  data = sleep2,
+  family = gaussian(),
+  prior = priors_cp,
+  chains = 4,
+  iter = 2000,
+  warmup = 1000,
+  cores = 4,
+  seed = 1234,
+  backend = "cmdstanr",
+  refresh = 0
+)
+```
+
+```{r}
+#| label: fig-complete-pooling
+#| fig-cap: "Complete pooling: una sola relazione per tutti i partecipanti."
+#| fig-width: 8
+#| fig-height: 6
+
+cp_fixef <- fixef(cp_model)
+
+sleep2 |>
+  ggplot(aes(x = days_deprived, y = Reaction)) +
+  geom_abline(
+    intercept = cp_fixef["Intercept", "Estimate"],
+    slope = cp_fixef["days_deprived", "Estimate"],
+    linewidth = 0.8
+  ) +
+  geom_point(alpha = 0.6) +
+  facet_wrap(~ Subject) +
+  labs(
+    x = "Giorni di deprivazione del sonno",
+    y = "Tempo di reazione (ms)"
+  )
+```
+
+Il modello sintetizza la tendenza generale, ma non rappresenta le differenze sistematiche tra partecipanti. Inoltre, attribuisce alla componente residua tutta la dipendenza non spiegata tra osservazioni della stessa persona. Quando tale dipendenza è sostanziale, l'incertezza dei coefficienti può risultare descritta in modo inadeguato.
+
+### No pooling
+
+Il **no pooling** stima una relazione separata per ogni partecipante, senza imporre alcun legame tra le rette. Per visualizzare questo estremo, stimiamo una regressione indipendente in ciascun gruppo.
+
+```{r}
+#| label: fit-no-pooling
+
+subject_coefs <- sleep2 |>
+  group_split(Subject) |>
+  purrr::map_dfr(\(d) {
+    fit_i <- lm(Reaction ~ days_deprived, data = d)
+
+    tibble(
+      Subject = as.character(unique(d$Subject)),
+      intercept_np = unname(coef(fit_i)["(Intercept)"]),
+      slope_np = unname(coef(fit_i)["days_deprived"]),
+      n_i = nrow(d)
+    )
+  })
+
+subject_coefs
+```
+
+```{r}
+#| label: fig-no-pooling
+#| fig-cap: "No pooling: ciascun partecipante è descritto da una regressione stimata indipendentemente dalle altre."
+#| fig-width: 8
+#| fig-height: 6
+
+sleep2 |>
+  ggplot(aes(x = days_deprived, y = Reaction)) +
+  geom_abline(
+    data = subject_coefs,
+    aes(intercept = intercept_np, slope = slope_np),
+    linewidth = 0.7
+  ) +
+  geom_point(alpha = 0.6) +
+  facet_wrap(~ Subject) +
+  labs(
+    x = "Giorni di deprivazione del sonno",
+    y = "Tempo di reazione (ms)"
+  )
+```
+
+Le differenze individuali diventano visibili, ma ciascuna retta dipende soltanto dalle osservazioni di un partecipante. Se i dati di una persona sono pochi o rumorosi, la relativa stima può essere instabile. Il modello non usa l'informazione secondo cui tutti i partecipanti appartengono allo stesso studio e potrebbero condividere una struttura comune.
+
+### Partial pooling
+
+Il **partial pooling** stima rette individuali, ma considera i relativi coefficienti come estrazioni da una distribuzione di popolazione. Le unità condividono informazione senza essere costrette ad avere parametri identici.
+
+Nel linguaggio di `brms`, la formula
+
+```r
+Reaction ~ 0 + Intercept + days_deprived +
+  (1 + days_deprived | Subject)
+```
+
+specifica:
+
+- un'intercetta e una pendenza medie;
+- una deviazione individuale dell'intercetta;
+- una deviazione individuale della pendenza;
+- una possibile correlazione tra le due deviazioni.
+
+## Il modello generativo multilivello
+
+Indichiamo con $Y_{ij}$ il tempo di reazione dell'osservazione $i$ del partecipante $j$. Il modello può essere scritto come
+
+$$
+\begin{aligned}
+Y_{ij} \mid \mu_{ij}, \sigma
+  &\sim \operatorname{Normal}(\mu_{ij}, \sigma), \\
+\mu_{ij}
+  &= (\alpha + a_j) + (\beta + b_j)x_{ij}.
+\end{aligned}
+$$ {#eq-multilevel-observation}
+
+I parametri $\alpha$ e $\beta$ descrivono rispettivamente l'intercetta e la pendenza medie. Le quantità $a_j$ e $b_j$ sono gli scostamenti del partecipante $j$:
+
+$$
+\begin{pmatrix}
+a_j \\
+b_j
+\end{pmatrix}
+\sim
+\operatorname{MVNormal}
+\left[
+\begin{pmatrix}
+0 \\
+0
+\end{pmatrix},
+\mathbf{\Sigma}
+\right].
+$$ {#eq-multilevel-group}
+
+La matrice di covarianza può essere scomposta come
+
+$$
+\mathbf{\Sigma}
+=
+\begin{pmatrix}
+\tau_\alpha & 0 \\
+0 & \tau_\beta
+\end{pmatrix}
+\begin{pmatrix}
+1 & \rho \\
+\rho & 1
+\end{pmatrix}
+\begin{pmatrix}
+\tau_\alpha & 0 \\
+0 & \tau_\beta
+\end{pmatrix}.
+$$
+
+- $\tau_\alpha$ misura l'eterogeneità delle intercette;
+- $\tau_\beta$ misura l'eterogeneità delle pendenze;
+- $\rho$ descrive l'associazione tra livello iniziale e cambiamento giornaliero;
+- $\sigma$ descrive la variabilità delle osservazioni attorno alla traiettoria individuale.
+
+La distribuzione degli effetti di gruppo costituisce il legame tra i partecipanti. È questo livello del modello che produce il partial pooling.
+
+::: {.callout-warning title="Quattro fonti di incertezza da non confondere"}
+Nel modello compaiono almeno quattro elementi distinti:
+
+1. incertezza sulla pendenza media $\beta$;
+2. variabilità reale delle pendenze $\tau_\beta$;
+3. incertezza sulla pendenza di uno specifico partecipante;
+4. variabilità residua $\sigma$ delle sue singole osservazioni.
+
+Una stima precisa della pendenza media non implica che tutti i partecipanti abbiano pendenze simili.
+:::
+
+## Specificare i prior
+
+I prior devono essere calibrati sulla scala dei tempi di reazione e sulla struttura gerarchica. Useremo:
+
+$$
+\begin{aligned}
+\alpha &\sim \operatorname{Normal}(250,50), \\
+\beta  &\sim \operatorname{Normal}(10,10), \\
+\tau_\alpha &\sim \operatorname{Student\text{-}t}^{+}(3,0,50), \\
+\tau_\beta  &\sim \operatorname{Student\text{-}t}^{+}(3,0,10), \\
+\rho &\sim \operatorname{LKJ}(2), \\
+\sigma &\sim \operatorname{Student\text{-}t}^{+}(3,0,30).
+\end{aligned}
+$$
+
+I prior sulle deviazioni standard sono definiti su quantità non negative. Il prior LKJ con parametro 2 concentra moderatamente la massa verso correlazioni non estreme, senza escludere associazioni positive o negative.
+
+```{r}
+#| label: priors-partial-pooling
+
+priors_pp <- c(
+  prior(normal(250, 50), class = "b", coef = "Intercept"),
+  prior(normal(10, 10), class = "b", coef = "days_deprived"),
+  prior(
+    student_t(3, 0, 50),
+    class = "sd",
+    group = "Subject",
+    coef = "Intercept"
+  ),
+  prior(
+    student_t(3, 0, 10),
+    class = "sd",
+    group = "Subject",
+    coef = "days_deprived"
+  ),
+  prior(lkj(2), class = "cor", group = "Subject"),
+  prior(student_t(3, 0, 30), class = "sigma")
+)
+
+get_prior(
+  Reaction ~ 0 + Intercept + days_deprived +
+    (1 + days_deprived | Subject),
+  data = sleep2,
+  family = gaussian()
+)
+```
+
+### Controllo predittivo a priori
+
+Il controllo predittivo a priori verifica se la combinazione dei prior può generare traiettorie plausibili prima di usare i dati osservati.
+
+```{r}
+#| label: fit-prior-multilevel
+#| output: false
+
+pp_prior_model <- brm(
+  Reaction ~ 0 + Intercept + days_deprived +
+    (1 + days_deprived | Subject),
+  data = sleep2,
+  family = gaussian(),
+  prior = priors_pp,
+  sample_prior = "only",
+  chains = 4,
+  iter = 1000,
+  warmup = 500,
+  cores = 4,
+  seed = 1234,
+  backend = "cmdstanr",
+  refresh = 0
+)
+```
+
+Per evitare un grafico eccessivamente affollato, visualizziamo quattro partecipanti e un sottoinsieme delle traiettorie simulate.
+
+```{r}
+#| label: fig-prior-trajectories-multilevel
+#| fig-cap: "Traiettorie individuali generate dalla distribuzione predittiva a priori per quattro partecipanti. Il controllo serve a verificare la plausibilità congiunta dei livelli iniziali, delle pendenze e dell'eterogeneità."
+#| fig-width: 8
+#| fig-height: 5.5
+
+subjects_demo <- levels(sleep2$Subject)[1:4]
+
+prior_grid <- tidyr::crossing(
+  Subject = factor(subjects_demo, levels = levels(sleep2$Subject)),
+  days_deprived = sort(unique(sleep2$days_deprived))
+)
+
+prior_mu <- posterior_epred(
+  pp_prior_model,
+  newdata = prior_grid,
+  re_formula = NULL,
+  ndraws = 40
+)
+
+prior_lines <- as.data.frame(prior_mu) |>
+  mutate(.draw = row_number()) |>
+  pivot_longer(
+    cols = -.draw,
+    names_to = ".observation",
+    values_to = "Reaction"
+  ) |>
+  mutate(
+    .observation = as.integer(sub("V", "", .observation))
+  ) |>
+  left_join(
+    prior_grid |>
+      mutate(.observation = row_number()),
+    by = ".observation"
+  )
+
+prior_lines |>
+  ggplot(aes(
+    x = days_deprived,
+    y = Reaction,
+    group = interaction(.draw, Subject)
+  )) +
+  geom_line(alpha = 0.18) +
+  facet_wrap(~ Subject) +
+  labs(
+    x = "Giorni di deprivazione del sonno",
+    y = "Tempo di reazione generato a priori (ms)"
+  )
+```
+
+Il controllo deve essere valutato sulla scala sostantiva: le traiettorie generate devono consentire una variabilità realistica senza assegnare probabilità eccessiva a tempi di reazione impossibili o a peggioramenti giornalieri incompatibili con il fenomeno.
+
+## Adattare il modello di partial pooling
+
+```{r}
+#| label: fit-partial-pooling
+#| output: false
+
+pp_model <- brm(
+  Reaction ~ 0 + Intercept + days_deprived +
+    (1 + days_deprived | Subject),
+  data = sleep2,
+  family = gaussian(),
+  prior = priors_pp,
+  chains = 4,
+  iter = 3000,
+  warmup = 1500,
+  cores = 4,
+  seed = 1234,
+  backend = "cmdstanr",
+  control = list(adapt_delta = 0.95),
+  refresh = 0
+)
+```
+
+### Diagnostica computazionale
+
+```{r}
+#| label: summary-partial-pooling
+
+summary(pp_model)
+```
+
+```{r}
+#| label: plots-mcmc-partial-pooling
+
+plot(pp_model)
+```
+
+```{r}
+#| label: divergences-partial-pooling
+
+nuts <- nuts_params(pp_model)
+
+nuts |>
+  filter(Parameter == "divergent__") |>
+  summarise(n_divergent = sum(Value))
+```
+
+La diagnostica computazionale risponde alla domanda se il campionatore abbia esplorato adeguatamente la distribuzione a posteriori. Non stabilisce se la struttura lineare, la distribuzione normale o la gerarchia scelta siano scientificamente adeguate.
+
+## Leggere il modello
+
+È utile distinguere tre livelli dell'output.
+
+### Parametri di popolazione
+
+```{r}
+#| label: population-effects-multilevel
+
+fixef(pp_model)
+```
+
+- `Intercept` rappresenta il tempo di reazione medio stimato alla baseline;
+- `days_deprived` rappresenta l'incremento medio giornaliero.
+
+Questi parametri vengono tradizionalmente chiamati *effetti fissi*. L'espressione **parametri di popolazione** è spesso più informativa: indica che descrivono il centro della distribuzione delle traiettorie individuali.
+
+### Deviazioni individuali
+
+```{r}
+#| label: group-deviations-multilevel
+
+ranef(pp_model)$Subject
+```
+
+`ranef()` restituisce, per ogni partecipante, gli scostamenti dall'intercetta e dalla pendenza medie. Una deviazione dell'intercetta pari a 30 ms non è l'intercetta del partecipante: deve essere aggiunta al parametro medio.
+
+Per ottenere direttamente i coefficienti individuali completi usiamo `coef()`.
+
+```{r}
+#| label: subject-coefficients-multilevel
+
+coef(pp_model)$Subject
+```
+
+::: {.callout-note title="`ranef()` e `coef()` non restituiscono la stessa quantità"}
+- `ranef()` restituisce le **deviazioni** individuali dalla media;
+- `coef()` restituisce i **coefficienti individuali completi**, ottenuti sommando parametri di popolazione e deviazioni di gruppo.
+:::
+
+### Eterogeneità tra partecipanti
+
+```{r}
+#| label: variance-components-multilevel
+
+VarCorr(pp_model)$Subject
+```
+
+Le deviazioni standard degli effetti di gruppo quantificano quanto variano livelli iniziali e pendenze. La correlazione indica se i partecipanti con tempi più elevati alla baseline tendono anche a mostrare incrementi giornalieri diversi.
+
+Con un numero limitato di partecipanti, soprattutto la correlazione tra intercetta e pendenza può essere stimata con ampia incertezza. Una posterior molto estesa non prova l'assenza di relazione: segnala che il disegno contiene poche informazioni per distinguerne i valori plausibili.
+
+| Funzione | Quantità restituita | Interpretazione |
+|---|---|---|
+| `fixef()` | Parametri medi | Centro della distribuzione delle traiettorie |
+| `ranef()` | Deviazioni di gruppo | Scostamenti rispetto alla traiettoria media |
+| `coef()` | Coefficienti completi per gruppo | Intercetta e pendenza di ciascun partecipante |
+| `VarCorr()` | Deviazioni standard e correlazioni | Entità e struttura dell'eterogeneità |
+
+## Lo shrinkage
+
+Lo shrinkage emerge confrontando le stime separate con quelle gerarchiche.
+
+```{r}
+#| label: compute-shrinkage
+
+pp_coefs <- coef(pp_model)$Subject[, "Estimate", ] |>
+  as.data.frame() |>
+  tibble::rownames_to_column("Subject") |>
+  transmute(
+    Subject,
+    intercept_pp = Intercept,
+    slope_pp = days_deprived
+  )
+
+shrinkage_data <- subject_coefs |>
+  left_join(pp_coefs, by = "Subject")
+
+shrinkage_data
+```
+
+```{r}
+#| label: fig-shrinkage
+#| fig-cap: "Ogni segmento collega la stima no pooling di un partecipante alla corrispondente stima partial pooling. La croce indica i parametri medi del modello gerarchico."
+#| fig-width: 7
+#| fig-height: 5.5
+
+population_center <- tibble(
+  intercept = fixef(pp_model)["Intercept", "Estimate"],
+  slope = fixef(pp_model)["days_deprived", "Estimate"]
+)
+
+shrinkage_data |>
+  ggplot() +
+  geom_segment(
+    aes(
+      x = intercept_np,
+      y = slope_np,
+      xend = intercept_pp,
+      yend = slope_pp
+    ),
+    arrow = arrow(length = grid::unit(0.16, "cm")),
+    alpha = 0.7
+  ) +
+  geom_point(
+    aes(x = intercept_np, y = slope_np),
+    shape = 1,
+    size = 2.2
+  ) +
+  geom_point(
+    aes(x = intercept_pp, y = slope_pp),
+    size = 2.2
+  ) +
+  geom_point(
+    data = population_center,
+    aes(x = intercept, y = slope),
+    shape = 4,
+    size = 4,
+    stroke = 1.2
+  ) +
+  labs(
+    x = "Intercetta stimata alla baseline (ms)",
+    y = "Incremento stimato per giorno (ms)"
+  )
+```
+
+Le stime gerarchiche tendono ad avvicinarsi alla distribuzione comune, ma la contrazione non è una percentuale fissa. Dipende da:
+
+- numero e distribuzione delle osservazioni disponibili per l'unità;
+- variabilità residua;
+- eterogeneità stimata tra le unità;
+- prior sui parametri gerarchici;
+- struttura del modello.
+
+Quando un partecipante fornisce dati numerosi e coerenti, la sua likelihood è informativa e la stima resta vicina a quella separata. Quando i dati sono poco informativi, la distribuzione comune esercita un'influenza maggiore.
+
+```{r}
+#| label: compare-dispersion-shrinkage
+
+shrinkage_data |>
+  summarise(
+    sd_intercepts_no_pooling = sd(intercept_np),
+    sd_intercepts_partial_pooling = sd(intercept_pp),
+    sd_slopes_no_pooling = sd(slope_np),
+    sd_slopes_partial_pooling = sd(slope_pp)
+  )
+```
+
+La minore dispersione delle stime di partial pooling non significa che il modello abbia eliminato differenze reali. Significa che non interpreta integralmente ogni differenza osservata come un parametro stabile dell'individuo.
+
+::: {.callout-note appearance="simple" title="Perché lo shrinkage può migliorare le stime"}
+Le stime separate sono libere di inseguire il rumore di ogni piccolo campione individuale. Il modello gerarchico richiede invece evidenza sufficiente prima di collocare un partecipante molto lontano dalla distribuzione comune. In media, questa regolarizzazione migliora la previsione di dati futuri, anche se una singola stima individuale può naturalmente rimanere imperfetta.
+:::
+
+## Visualizzare le traiettorie posteriori
+
+```{r}
+#| label: subject-grid-multilevel
+
+subject_grid <- tidyr::crossing(
+  Subject = levels(sleep2$Subject),
+  days_deprived = seq(
+    min(sleep2$days_deprived),
+    max(sleep2$days_deprived),
+    length.out = 30
+  )
+) |>
+  mutate(Subject = factor(Subject, levels = levels(sleep2$Subject)))
+
+subject_epred <- posterior_epred(
+  pp_model,
+  newdata = subject_grid,
+  re_formula = NULL
+)
+
+summarise_draw_matrix <- function(draws, newdata, probs = c(0.05, 0.95)) {
+  intervals <- apply(draws, 2, quantile, probs = probs)
+
+  newdata |>
+    mutate(
+      estimate = colMeans(draws),
+      lower = intervals[1, ],
+      upper = intervals[2, ]
+    )
+}
+
+subject_summary <- summarise_draw_matrix(
+  subject_epred,
+  subject_grid
+)
+```
+
+```{r}
+#| label: fig-partial-pooling-trajectories
+#| fig-cap: "Traiettorie individuali stimate mediante partial pooling. Le fasce rappresentano l'incertezza sulla media condizionata di ciascun partecipante."
+#| fig-width: 8
+#| fig-height: 6
+
+sleep2 |>
+  ggplot(aes(x = days_deprived, y = Reaction)) +
+  geom_ribbon(
+    data = subject_summary,
+    aes(x = days_deprived, ymin = lower, ymax = upper, group = Subject),
+    inherit.aes = FALSE,
+    alpha = 0.18
+  ) +
+  geom_line(
+    data = subject_summary,
+    aes(y = estimate, group = Subject),
+    linewidth = 0.7
+  ) +
+  geom_point(alpha = 0.55) +
+  facet_wrap(~ Subject) +
+  labs(
+    x = "Giorni di deprivazione del sonno",
+    y = "Tempo di reazione (ms)"
+  )
+```
+
+## Tre domande predittive diverse
+
+Nei modelli multilivello, la parola “previsione” è ambigua. Dobbiamo specificare per quale unità vogliamo prevedere e quali fonti di variabilità intendiamo includere.
+
+### Un partecipante già osservato
+
+Per un livello presente nei dati, `re_formula = NULL` include gli effetti di gruppo stimati.
+
+```{r}
+#| label: predict-known-subject
+
+known_subject <- levels(sleep2$Subject)[1]
+
+known_grid <- tibble(
+  Subject = factor(
+    known_subject,
+    levels = levels(sleep2$Subject)
+  ),
+  days_deprived = 0:7
+)
+
+known_mean_draws <- posterior_epred(
+  pp_model,
+  newdata = known_grid,
+  re_formula = NULL
+)
+
+known_observation_draws <- posterior_predict(
+  pp_model,
+  newdata = known_grid,
+  re_formula = NULL
+)
+```
+
+`posterior_epred()` descrive l'incertezza sulla traiettoria media del partecipante. `posterior_predict()` aggiunge la variabilità residua di nuove osservazioni dello stesso partecipante.
+
+### La relazione media di popolazione
+
+Per escludere le deviazioni individuali e descrivere la relazione media usiamo `re_formula = NA`.
+
+```{r}
+#| label: predict-population-line
+
+population_grid <- tibble(
+  Subject = factor(
+    levels(sleep2$Subject)[1],
+    levels = levels(sleep2$Subject)
+  ),
+  days_deprived = 0:7
+)
+
+population_mean_draws <- posterior_epred(
+  pp_model,
+  newdata = population_grid,
+  re_formula = NA
+)
+```
+
+Questa distribuzione riguarda il centro della popolazione dei coefficienti. Non rappresenta la traiettoria completa di una persona “media” estratta casualmente, perché non incorpora l'eterogeneità tra persone.
+
+### Un nuovo partecipante
+
+Per una persona non presente nei dati, il modello deve generare nuove deviazioni dalla distribuzione di gruppo.
+
+```{r}
+#| label: predict-new-subject
+
+new_subject_grid <- tibble(
+  Subject = "new_subject",
+  days_deprived = 0:7
+)
+
+new_subject_mean_draws <- posterior_epred(
+  pp_model,
+  newdata = new_subject_grid,
+  re_formula = NULL,
+  allow_new_levels = TRUE,
+  sample_new_levels = "gaussian"
+)
+
+new_subject_observation_draws <- posterior_predict(
+  pp_model,
+  newdata = new_subject_grid,
+  re_formula = NULL,
+  allow_new_levels = TRUE,
+  sample_new_levels = "gaussian"
+)
+```
+
+La previsione per un nuovo partecipante è più incerta della linea media perché include la distribuzione delle intercette e delle pendenze individuali. La previsione di una nuova osservazione aggiunge anche la variabilità residua.
+
+::: {.callout-important title="Quattro oggetti predittivi"}
+È utile distinguere:
+
+1. media condizionata di un partecipante noto;
+2. nuova osservazione dello stesso partecipante;
+3. relazione media di popolazione;
+4. traiettoria o osservazione di un nuovo partecipante.
+
+Questi oggetti rispondono a domande diverse e non devono essere sostituiti l'uno con l'altro.
+:::
+
+## Controllare l'adeguatezza del modello
+
+Un buon campionamento non dimostra che il modello rappresenti bene i dati. Eseguiamo controlli predittivi a posteriori sia complessivi sia raggruppati per partecipante.
+
+```{r}
+#| label: ppc-density-multilevel
+
+pp_check(
+  pp_model,
+  type = "dens_overlay",
+  ndraws = 50
+)
+```
+
+```{r}
+#| label: ppc-subject-means-multilevel
+
+pp_check(
+  pp_model,
+  type = "stat_grouped",
+  stat = "mean",
+  group = "Subject",
+  ndraws = 100
+)
+```
+
+```{r}
+#| label: ppc-subject-sd-multilevel
+
+pp_check(
+  pp_model,
+  type = "stat_grouped",
+  stat = "sd",
+  group = "Subject",
+  ndraws = 100
+)
+```
+
+Il controllo marginale può essere soddisfacente anche se il modello riproduce male alcuni partecipanti. I controlli raggruppati verificano se la specificazione riesce a rappresentare le differenze nei livelli e nella dispersione individuale.
+
+Tra i possibili segnali di inadeguatezza vi sono:
+
+- curvature sistematiche nelle traiettorie;
+- dispersione crescente nel tempo;
+- osservazioni estreme non riprodotte;
+- partecipanti con andamenti qualitativamente diversi;
+- correlazione seriale residua entro partecipante.
+
+Questi segnali richiedono una revisione della specificazione, non soltanto un aumento di `adapt_delta`.
+
+## Scegliere la struttura degli effetti di gruppo
+
+Il modello con intercette e pendenze correlate non è l'unica possibilità.
+
+### Soltanto intercette variabili
+
+```r
+Reaction ~ 0 + Intercept + days_deprived + (1 | Subject)
+```
+
+Questa specificazione assume che i partecipanti differiscano nel livello basale, ma condividano la stessa pendenza.
+
+### Intercette e pendenze variabili
+
+```r
+Reaction ~ 0 + Intercept + days_deprived +
+  (1 + days_deprived | Subject)
+```
+
+I partecipanti possono differire sia nel livello iniziale sia nella variazione giornaliera.
+
+### Intercette e pendenze non correlate
+
+```r
+Reaction ~ 0 + Intercept + days_deprived +
+  (1 + days_deprived || Subject)
+```
+
+La sintassi `||` fissa a zero la correlazione tra le deviazioni dell'intercetta e della pendenza. Può essere utile quando il numero di gruppi è limitato e i dati forniscono poche informazioni sulla correlazione, ma costituisce comunque un'assunzione da giustificare.
+
+::: {.callout-warning title="Il modello più complesso non è automaticamente il migliore"}
+Una struttura gerarchica più ricca può rappresentare forme aggiuntive di eterogeneità, ma richiede anche informazioni sufficienti. La scelta dovrebbe dipendere dalla domanda, dal disegno, dai controlli predittivi e dalla stabilità delle stime, non da una regola secondo cui ogni coefficiente debba necessariamente variare.
+:::
+
+## L'effetto medio descrive gli individui?
+
+I modelli multilivello attenuano la contrapposizione tra analisi nomotetica e analisi idiografica perché stimano simultaneamente una tendenza condivisa e deviazioni individuali. Non risolvono però automaticamente il problema della generalizzazione dal gruppo all'individuo.
+
+Una pendenza media positiva può coesistere con:
+
+- pendenze individuali molto disperse;
+- alcune pendenze prossime a zero;
+- pendenze negative per una parte dei partecipanti;
+- forme funzionali non lineari diverse tra persone.
+
+@richters2021incredible usa il termine *ergodica* per descrivere l'assunzione secondo cui le relazioni osservate tra persone corrispondono ai processi che si sviluppano entro la singola persona nel tempo. Tale assunzione è spesso problematica in psicologia. Un'associazione media tra due variabili non coincide necessariamente con la dinamica intraindividuale.
+
+Il modello usato in questo capitolo rappresenta l'eterogeneità come variazione quantitativa attorno a una forma comune: per tutti i partecipanti la traiettoria è una retta e cambiano soltanto intercetta e pendenza. Se le persone differissero qualitativamente nel processo che genera i dati, sarebbero necessari modelli differenti, sottogruppi teoricamente motivati o modelli propriamente idiografici.
+
+::: {.callout-note title="Eterogeneità non significa automaticamente personalizzazione"}
+La presenza di parametri individuali non garantisce che il modello sia sufficientemente accurato per decisioni sulla singola persona. La validità idiografica richiede dati informativi per quella persona, controlli predittivi pertinenti e una valutazione fuori campione.
+:::
+
+## Interpretazione scientifica e causalità
+
+La pendenza media descrive come cambiano i tempi di reazione al variare dei giorni nel protocollo osservato. La sua interpretazione causale dipende dal disegno dello studio, dalla manipolazione della deprivazione, dalle condizioni di controllo e dalle assunzioni che collegano il modello ai potenziali outcome.
+
+La struttura multilivello risolve il problema della dipendenza e rappresenta l'eterogeneità; non trasforma da sola un'associazione in un effetto causale. Analogamente, una correlazione tra intercetta e pendenza non identifica un meccanismo psicologico: descrive una caratteristica della distribuzione dei coefficienti nel modello specificato.
+
+## Errori frequenti
+
+::: {.callout-caution}
+- Considerare tutte le righe come osservazioni indipendenti quando sono annidate entro persone o gruppi.
+- Interpretare `ranef()` come se restituisse i coefficienti individuali completi.
+- Chiamare la pendenza media “effetto di ogni partecipante”.
+- Descrivere lo shrinkage come una correzione applicata dopo la stima.
+- Concludere che le differenze individuali siano reali perché le stime no pooling sono disperse.
+- Confondere la linea di popolazione con la previsione per una nuova persona.
+- Usare `re_formula = NA` quando la domanda riguarda un partecipante specifico.
+- Interpretare una correlazione incerta tra intercetta e pendenza come prova di assenza di relazione.
+- Aggiungere automaticamente pendenze variabili senza verificare se il disegno le renda identificabili.
+- Considerare un posterior predictive check complessivo sufficiente a validare la struttura individuale.
+:::
+
+## Riflessioni conclusive
+
+I modelli multilivello sono un'estensione naturale del modello lineare quando le osservazioni sono organizzate in unità correlate. Il complete pooling rappresenta soltanto la relazione media; il no pooling tratta ogni unità come isolata; il partial pooling costruisce invece una distribuzione comune per i coefficienti e combina informazione individuale e informazione condivisa.
+
+Lo shrinkage non è una penalizzazione arbitraria. Emerge dalla struttura gerarchica e varia in funzione della precisione dei dati individuali, dell'eterogeneità tra gruppi e dei prior. Il suo obiettivo non è rendere artificialmente simili le persone, ma evitare che ogni fluttuazione campionaria venga interpretata come una differenza stabile.
+
+Il capitolo ha inoltre distinto parametri di popolazione, deviazioni di gruppo, coefficienti individuali e componenti di varianza. Questa distinzione diventa essenziale nelle previsioni: una traiettoria per un partecipante già osservato, la linea media e una traiettoria per una nuova persona sono distribuzioni diverse.
+
+Infine, modellare l'eterogeneità non rende automaticamente valido l'effetto medio per ogni individuo. Il modello continua ad assumere una forma funzionale condivisa e deve essere controllato rispetto a curvature, dipendenze residue, differenze qualitative e capacità predittiva fuori campione.
+
+Nel capitolo successivo passeremo dalla variabilità correttamente rappresentata agli errori che possono derivare da una specificazione inadeguata: forma funzionale errata, variabili omesse, eteroschedasticità, osservazioni estreme e dipendenze ignorate.
+
+## Concetti da ricordare
+
+1. I dati annidati richiedono una rappresentazione esplicita della dipendenza tra osservazioni.
+2. Complete pooling, no pooling e partial pooling esprimono tre differenti ipotesi sulla condivisione dell'informazione.
+3. Un modello con pendenze variabili stima una distribuzione delle relazioni individuali.
+4. Le deviazioni individuali hanno media zero rispetto ai parametri di popolazione.
+5. `ranef()` restituisce deviazioni; `coef()` restituisce coefficienti completi.
+6. Lo shrinkage dipende dalla quantità di informazione e dalla struttura gerarchica.
+7. La variabilità tra pendenze è distinta dall'incertezza sulla pendenza media.
+8. Le previsioni per unità note, popolazione media e nuove unità non sono intercambiabili.
+9. Una diagnostica MCMC soddisfacente non dimostra l'adeguatezza del modello.
+10. L'eterogeneità quantitativa attorno a una relazione comune è un'ipotesi, non una conseguenza necessaria dei dati.
+
+::: {.callout-important title="Esercizi" collapse="true"}
+
+### 1. Riconoscere i livelli
+
+Per ciascuno dei seguenti studi, identifica il livello delle osservazioni e il fattore di raggruppamento:
+
+- risposte a 40 item entro partecipante;
+- studenti entro classi e classi entro scuole;
+- sedute terapeutiche entro paziente;
+- valutazioni di più giudici sugli stessi elaborati.
+
+### 2. Complete pooling e no pooling
+
+Spiega quale informazione viene ignorata dal complete pooling e quale informazione non viene condivisa nel no pooling.
+
+### 3. Leggere il modello generativo
+
+Interpreta $\alpha$, $\beta$, $\tau_\alpha$, $\tau_\beta$, $\rho$ e $\sigma$ nelle @eq-multilevel-observation e @eq-multilevel-group.
+
+### 4. Modificare la struttura
+
+Adatta un modello con sole intercette variabili e confronta i controlli predittivi con quelli del modello che include anche pendenze variabili.
+
+### 5. Correlazione degli effetti di gruppo
+
+Adatta il modello usando `||`. Confronta la posterior dei parametri comuni e le previsioni con quelle del modello correlato.
+
+### 6. Previsioni
+
+Costruisci e confronta gli intervalli per:
+
+- la media di un partecipante già osservato;
+- una nuova osservazione dello stesso partecipante;
+- la relazione media;
+- la media di un nuovo partecipante;
+- una nuova osservazione di un nuovo partecipante.
+
+### 7. Shrinkage e quantità di dati
+
+Simula un dataset nel quale alcuni partecipanti abbiano molte osservazioni e altri soltanto due. Verifica graficamente se la contrazione è maggiore per le unità meno informative.
+
+### 8. Criticare la linearità
+
+Esamina le traiettorie individuali e individua eventuali partecipanti per i quali una retta appare inadeguata. Proponi una specificazione alternativa.
+
+### 9. Effetto medio ed eterogeneità
+
+Immagina una posterior della pendenza media interamente positiva, ma una distribuzione delle pendenze individuali che assegna massa anche a valori negativi. Formula una comunicazione dei risultati che rappresenti entrambe le informazioni.
+
+### 10. Disegno e causalità
+
+Elenca le informazioni sul disegno sperimentale necessarie per attribuire alla pendenza media un'interpretazione causale.
+:::
+
+::: {.callout-tip collapse="true" title="Tracce di soluzione"}
+- Nel complete pooling si ignora la struttura tra unità; nel no pooling si ignora la loro appartenenza a una popolazione comune.
+- $\tau_\beta$ descrive l'eterogeneità delle pendenze, non l'incertezza su $\beta$.
+- Per la relazione media usa `re_formula = NA`; per un livello noto usa `re_formula = NULL`.
+- Per un nuovo livello imposta `allow_new_levels = TRUE` e specifica come generare i nuovi effetti di gruppo.
+- Lo shrinkage dovrebbe aumentare quando diminuisce la precisione della stima individuale.
+- Una comunicazione completa riporta sia la tendenza media sia la dispersione delle pendenze individuali.
+:::
+
+::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+```{r}
+sessionInfo()
+```
+:::
+
+## Bibliografia {.unnumbered .unlisted}

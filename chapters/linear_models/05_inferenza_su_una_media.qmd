@@ -1,0 +1,701 @@
+# Inferenza su una media: il modello a sola intercetta {#sec-mcmc-one-mean}
+
+Nei capitoli precedenti abbiamo descritto il modello lineare mediante una media condizionata che varia al variare di uno o più predittori. Il caso più semplice si ottiene eliminando tutti i predittori:
+
+$$
+Y_i \sim \operatorname{Normal}(\mu, \sigma).
+$$
+
+Il parametro $\mu$ rappresenta il valore medio della popolazione descritta dal modello, mentre $\sigma$ rappresenta la variabilità delle osservazioni individuali attorno a tale media. In termini di regressione, questo è un **modello a sola intercetta**:
+
+$$
+Y_i = \alpha + \varepsilon_i,
+\qquad
+\varepsilon_i \sim \operatorname{Normal}(0, \sigma),
+$$
+
+con $\alpha=\mu$. In `brms` la componente sistematica si scrive `y ~ 1`.
+
+Il modello è minimale, ma contiene già tutti gli elementi del workflow bayesiano: una verosimiglianza, prior espliciti, una distribuzione a posteriori, previsioni e controlli dell'adeguatezza. È quindi un caso particolarmente utile per distinguere tre quantità che vengono spesso confuse:
+
+- la media della popolazione rappresentata dal modello;
+- la variabilità tra individui;
+- il valore di una nuova osservazione individuale.
+
+::: {.callout-note title="Obiettivi del capitolo"}
+Al termine del capitolo dovresti essere in grado di:
+
+- riconoscere la stima di una media come un modello lineare a sola intercetta;
+- distinguere il parametro di posizione $\mu$ dal parametro di dispersione $\sigma$;
+- formulare prior plausibili sulla scala originale della variabile;
+- calibrare tali prior mediante simulazioni predittive a priori;
+- interpretare la distribuzione a posteriori della media;
+- distinguere l'incertezza sulla media dalla distribuzione predittiva di una nuova osservazione;
+- valutare quando una verosimiglianza Student-$t$ possa essere preferibile a una normale;
+- formulare conclusioni probabilistiche coerenti con il modello e con la popolazione campionata.
+:::
+
+::: {.callout-tip collapse=true title="Percorsi di lettura"}
+Il capitolo appartiene al **percorso essenziale** e al **percorso concettuale**. Chi segue il percorso essenziale dovrebbe concentrarsi sulla formulazione del modello, sui prior, sulle quantità posteriori e sulle previsioni. Le sezioni dedicate al confronto tra verosimiglianza normale e Student-$t$ costituiscono un primo approfondimento sulla revisione della specificazione.
+:::
+
+::: {.callout-tip collapse=true title="Prerequisiti e approfondimenti"}
+- Il modello lineare come modello generativo è introdotto nell'@sec-linear-generative.
+- Il workflow bayesiano completo con `brms` è sviluppato nell'@sec-linmod-bayesian-reg.
+- La relazione tra formule R, matrice del disegno e programma Stan è discussa nell'@sec-linar-models-brms.
+- Per il trattamento frequentista della media campionaria, del test $t$ e dell'intervallo di confidenza si veda il modulo [utet-frequentista](https://ccaudek.github.io/utet-frequentista).
+- L'esempio sulle altezze degli adulti !Kung San è tratto da @McElreath_rethinking.
+:::
+
+::: {.callout-caution collapse=true title="Preparazione del Notebook"}
+
+```{r}
+#| label: setup-one-mean
+#| include: false
+
+here::here("code", "_common.R") |>
+  source()
+
+if (!requireNamespace("pacman", quietly = TRUE)) {
+  install.packages("pacman")
+}
+
+pacman::p_load(
+  bayesplot,
+  brms,
+  cmdstanr,
+  dplyr,
+  ggplot2,
+  posterior,
+  rio,
+  tibble,
+  tidyr
+)
+
+set.seed(1234)
+```
+:::
+
+## Dalla domanda scientifica alla quantità di interesse
+
+Consideriamo le altezze rilevate da Nancy Howell tra gli adulti !Kung San del Kalahari [@McElreath_rethinking]. La domanda descrittiva è:
+
+> Qual è l'altezza media degli adulti appartenenti alla popolazione rappresentata dal campione, e quanta variabilità individuale esiste attorno a tale media?
+
+Le quantità principali sono:
+
+- $\mu$: altezza media della popolazione rappresentata dal modello;
+- $\sigma$: deviazione standard delle altezze individuali;
+- $\Pr(\mu>c\mid y)$: probabilità a posteriori che la media superi un'eventuale soglia sostantiva $c$;
+- $p(\widetilde{y}\mid y)$: distribuzione predittiva per l'altezza $\widetilde{y}$ di un nuovo individuo.
+
+::: {.callout-important title="La popolazione deve essere definita"}
+La posterior non descrive automaticamente «l'altezza media degli esseri umani». Descrive il parametro $\mu$ all'interno del modello e rispetto alla popolazione alla quale il campionamento consente di generalizzare. La validità esterna dipende dal disegno, non dalla sola ampiezza dell'intervallo di credibilità.
+:::
+
+## Esplorare i dati
+
+```{r}
+#| label: load-howell-adults
+
+height_data <- rio::import(
+  here::here("data", "Howell_18.csv")
+)
+
+dplyr::glimpse(height_data)
+```
+
+Il file contiene già gli individui adulti utilizzati nell'esempio. Prima di specificare il modello, esaminiamo numerosità, valori mancanti, posizione, dispersione e forma della distribuzione.
+
+```{r}
+#| label: summarize-howell-height
+
+height_summary <- height_data |>
+  summarise(
+    n = sum(!is.na(height)),
+    missing = sum(is.na(height)),
+    mean = mean(height, na.rm = TRUE),
+    sd = sd(height, na.rm = TRUE),
+    min = min(height, na.rm = TRUE),
+    max = max(height, na.rm = TRUE)
+  )
+
+height_summary
+```
+
+```{r}
+#| label: plot-howell-height
+#| fig-cap: "Distribuzione osservata delle altezze nel campione di adulti !Kung San."
+
+height_data |>
+  filter(!is.na(height)) |>
+  ggplot(aes(x = height)) +
+  geom_histogram(binwidth = 3, boundary = 0) +
+  labs(
+    x = "Altezza (cm)",
+    y = "Frequenza"
+  )
+```
+
+Il grafico non serve a decidere meccanicamente se «i dati sono normali». Serve a individuare caratteristiche che il modello dovrebbe riuscire a rappresentare: posizione, dispersione, asimmetria, code ed eventuali osservazioni isolate.
+
+## Il modello a sola intercetta
+
+La specificazione normale è
+
+$$
+\begin{aligned}
+Y_i \mid \mu,\sigma &\sim
+\operatorname{Normal}(\mu,\sigma),\\
+\mu &= \alpha.
+\end{aligned}
+$$
+
+La stessa struttura si esprime con la matrice del disegno
+
+$$
+\mathbf{y}=\mathbf{1}\alpha+\boldsymbol{\varepsilon},
+$$
+
+nella quale la matrice $\mathbf{X}$ contiene una sola colonna di 1. La formula R
+
+```r
+height ~ 1
+```
+
+chiede quindi di stimare un solo coefficiente population-level: l'intercetta.
+
+::: {.callout-note title="Che cosa rappresenta l'intercetta"}
+Nei modelli con predittori, l'intercetta è la media condizionata per particolari valori di riferimento. Nel modello `height ~ 1` non esistono predittori: l'intercetta coincide direttamente con la media $\mu$.
+:::
+
+## Specificare prior sulla scala delle altezze
+
+I prior devono essere valutati attraverso le conseguenze che producono sulla scala osservata. Per un'altezza adulta espressa in centimetri, scegliamo a scopo didattico:
+
+$$
+\begin{aligned}
+\mu &\sim \operatorname{Normal}(160,20),\\
+\sigma &\sim \operatorname{LogNormal}\!\left(\log 15,0.5\right).
+\end{aligned}
+$$
+
+Il prior su $\mu$ attribuisce gran parte della massa a medie compatibili con altezze umane adulte, ma rimane ampio. Il prior su $\sigma$ impone positività e consente una gamma sostanziale di differenze individuali.
+
+```{r}
+#| label: define-one-mean-priors
+
+height_priors <- c(
+  prior(normal(160, 20), class = "Intercept"),
+  prior(lognormal(log(15), 0.5), class = "sigma")
+)
+
+height_priors
+```
+
+Le etichette «debole» o «informativo» non sono proprietà assolute di una distribuzione. Un prior è più o meno restrittivo in relazione alla scala della variabile e alla domanda.
+
+## Controllo predittivo a priori
+
+Prima di utilizzare le altezze osservate, simuliamo dataset implicati dai prior.
+
+```{r}
+#| label: fit-one-mean-prior-only
+#| message: false
+#| warning: false
+#| output: false
+
+fit_height_prior <- brm(
+  formula = height ~ 1,
+  data = height_data,
+  family = gaussian(),
+  prior = height_priors,
+  sample_prior = "only",
+  chains = 4,
+  iter = 1000,
+  seed = 1234,
+  backend = "cmdstanr",
+  refresh = 0
+)
+```
+
+```{r}
+#| label: prior-predictive-one-mean
+#| fig-cap: "Distribuzioni delle altezze simulate dai prior, prima di utilizzare i valori osservati."
+
+pp_check(
+  fit_height_prior,
+  type = "dens_overlay",
+  ndraws = 50
+)
+```
+
+Nel grafico occorre chiedersi:
+
+- vengono generate altezze fisicamente impossibili con frequenza rilevante?
+- alcune distribuzioni simulate sono quasi prive di variabilità?
+- altre sono tanto disperse da non rappresentare plausibilmente una popolazione umana?
+- la gamma delle medie simulate è coerente con l'incertezza sostantiva che intendiamo dichiarare?
+
+Un controllo predittivo insoddisfacente richiede di rivedere i prior prima di adattare il modello ai dati.
+
+## Adattare il modello normale
+
+```{r}
+#| label: fit-one-mean-normal
+#| message: false
+#| warning: false
+#| output: false
+
+fit_height_normal <- brm(
+  formula = height ~ 1,
+  data = height_data,
+  family = gaussian(),
+  prior = height_priors,
+  chains = 4,
+  iter = 2000,
+  warmup = 1000,
+  seed = 1234,
+  backend = "cmdstanr",
+  refresh = 0
+)
+```
+
+Prima di interpretare i parametri, controlliamo che il campionamento non mostri problemi evidenti.
+
+```{r}
+#| label: summarize-one-mean-fit
+
+summary(fit_height_normal)
+```
+
+```{r}
+#| label: diagnose-one-mean-fit
+
+fit_height_normal |>
+  as_draws_df() |>
+  summarise_draws(
+    mean,
+    sd,
+    ~quantile2(.x, probs = c(0.025, 0.5, 0.975)),
+    rhat,
+    ess_bulk,
+    ess_tail
+  )
+```
+
+```{r}
+#| label: trace-one-mean-fit
+#| fig-cap: "Trace plot dei parametri del modello a sola intercetta."
+
+mcmc_trace(
+  fit_height_normal,
+  pars = c("b_Intercept", "sigma")
+)
+```
+
+Questi controlli riguardano la qualità dell'approssimazione computazionale. Non dimostrano che la distribuzione normale sia una buona descrizione delle altezze.
+
+## Interpretare la distribuzione a posteriori
+
+```{r}
+#| label: extract-one-mean-draws
+
+height_draws <- as_draws_df(fit_height_normal)
+
+height_posterior_summary <- height_draws |>
+  transmute(
+    mu = b_Intercept,
+    sigma = sigma
+  ) |>
+  summarise(
+    mu_median = median(mu),
+    mu_lower = quantile(mu, 0.025),
+    mu_upper = quantile(mu, 0.975),
+    sigma_median = median(sigma),
+    sigma_lower = quantile(sigma, 0.025),
+    sigma_upper = quantile(sigma, 0.975)
+  )
+
+height_posterior_summary
+```
+
+Nel modello a sola intercetta:
+
+- `b_Intercept` rappresenta $\mu$;
+- `sigma` rappresenta la deviazione standard delle osservazioni individuali attorno a $\mu$.
+
+L'intervallo di credibilità di $\mu$ quantifica l'incertezza sul valore medio. L'intervallo di `sigma` quantifica l'incertezza sulla variabilità tra individui. Sono due problemi inferenziali distinti.
+
+```{r}
+#| label: plot-one-mean-posterior
+#| fig-cap: "Distribuzioni a posteriori della media e della deviazione standard."
+
+mcmc_areas(
+  fit_height_normal,
+  pars = c("b_Intercept", "sigma"),
+  prob = 0.95
+)
+```
+
+### Probabilità relative a soglie sostantive
+
+I campioni posteriori consentono di calcolare direttamente probabilità relative a soglie definite dalla domanda.
+
+```{r}
+#| label: threshold-one-mean
+
+threshold_cm <- 155
+
+mean(height_draws$b_Intercept > threshold_cm)
+```
+
+Il risultato rappresenta
+
+$$
+\Pr(\mu>155\mid y,\mathcal{M}),
+$$
+
+dove $\mathcal{M}$ indica l'intera specificazione: verosimiglianza, prior e assunzioni sul campionamento. La soglia deve avere un significato sostantivo; non va scelta dopo aver osservato la posterior soltanto per produrre una probabilità molto alta o molto bassa.
+
+## Media della popolazione e nuova osservazione
+
+Un intervallo stretto per $\mu$ non implica che tutte le persone abbiano altezze vicine al valore medio. Per una nuova osservazione occorre integrare:
+
+1. l'incertezza su $\mu$;
+2. l'incertezza su $\sigma$;
+3. la variabilità individuale descritta dalla verosimiglianza.
+
+```{r}
+#| label: predict-new-height
+
+new_height_draws <- posterior_predict(
+  fit_height_normal,
+  newdata = data.frame(.row = 1)
+)[, 1]
+
+prediction_summary <- tibble(
+  quantity = c("Media mu", "Nuova altezza"),
+  median = c(
+    median(height_draws$b_Intercept),
+    median(new_height_draws)
+  ),
+  lower = c(
+    quantile(height_draws$b_Intercept, 0.025),
+    quantile(new_height_draws, 0.025)
+  ),
+  upper = c(
+    quantile(height_draws$b_Intercept, 0.975),
+    quantile(new_height_draws, 0.975)
+  )
+)
+
+prediction_summary
+```
+
+```{r}
+#| label: compare-mean-and-new-height
+#| fig-cap: "Confronto tra incertezza sulla media e distribuzione predittiva di una nuova altezza."
+
+bind_rows(
+  tibble(value = height_draws$b_Intercept, quantity = "Media mu"),
+  tibble(value = new_height_draws, quantity = "Nuova altezza")
+) |>
+  ggplot(aes(x = value, fill = quantity)) +
+  geom_density(alpha = 0.35) +
+  labs(
+    x = "Altezza (cm)",
+    y = "Densità",
+    fill = NULL
+  )
+```
+
+La distribuzione di $\mu$ può essere molto concentrata perché molte osservazioni informano la media. La distribuzione predittiva rimane invece ampia perché una nuova persona può differire sostanzialmente dalla media.
+
+::: {.callout-important title="Precisione della media e omogeneità non sono sinonimi"}
+Un grande campione può consentire di stimare con precisione una media anche quando la variabilità individuale è elevata. La precisione di $\mu$ non deve essere interpretata come uniformità della popolazione.
+:::
+
+## Controlli predittivi a posteriori
+
+Ora verifichiamo se il modello normale riproduce alcune caratteristiche delle altezze osservate.
+
+```{r}
+#| label: posterior-predictive-density-height
+#| fig-cap: "Confronto tra distribuzione osservata e repliche generate dal modello normale."
+
+pp_check(
+  fit_height_normal,
+  type = "dens_overlay",
+  ndraws = 50
+)
+```
+
+```{r}
+#| label: posterior-predictive-stat-height
+#| fig-cap: "Controllo predittivo a posteriori della deviazione standard osservata."
+
+pp_check(
+  fit_height_normal,
+  type = "stat",
+  stat = "sd",
+  ndraws = 200
+)
+```
+
+Il primo grafico valuta la forma marginale complessiva; il secondo si concentra sulla dispersione. Nessuno dei due convalida l'intero modello. Un controllo è informativo soltanto rispetto alla caratteristica scelta.
+
+## Una specificazione robusta con la distribuzione Student-$t$
+
+La normale attribuisce probabilità relativamente piccole alle osservazioni molto lontane dalla media. Se i dati presentano code più pesanti o valori isolati, poche osservazioni possono influenzare in modo rilevante $\mu$ e $\sigma$.
+
+Una possibile alternativa è
+
+$$
+Y_i \sim \operatorname{StudentT}(\nu,\mu,\sigma),
+$$
+
+nella quale $\nu$ controlla lo spessore delle code. Per valori grandi di $\nu$, la distribuzione si avvicina alla normale; per valori più piccoli, ammette con maggiore probabilità osservazioni lontane dal centro.
+
+```{r}
+#| label: fit-one-mean-student
+#| message: false
+#| warning: false
+#| output: false
+
+fit_height_student <- brm(
+  formula = height ~ 1,
+  data = height_data,
+  family = student(),
+  prior = c(
+    prior(normal(160, 20), class = "Intercept"),
+    prior(lognormal(log(15), 0.5), class = "sigma"),
+    prior(gamma(2, 0.1), class = "nu")
+  ),
+  chains = 4,
+  iter = 2000,
+  warmup = 1000,
+  seed = 1234,
+  backend = "cmdstanr",
+  refresh = 0
+)
+```
+
+Confrontiamo le posteriori di $\mu$ sotto le due specificazioni.
+
+```{r}
+#| label: compare-normal-student-mu
+#| fig-cap: "Distribuzione a posteriori della media sotto verosimiglianza normale e Student-t."
+
+bind_rows(
+  as_draws_df(fit_height_normal) |>
+    transmute(mu = b_Intercept, model = "Normale"),
+  as_draws_df(fit_height_student) |>
+    transmute(mu = b_Intercept, model = "Student-t")
+) |>
+  ggplot(aes(x = mu, fill = model)) +
+  geom_density(alpha = 0.35) +
+  labs(
+    x = expression(mu),
+    y = "Densità",
+    fill = "Modello"
+  )
+```
+
+Eseguiamo inoltre controlli predittivi mirati alle code.
+
+```{r}
+#| label: compare-normal-student-tails
+#| fig-cap: "Controllo predittivo del valore minimo per i modelli normale e Student-t."
+
+pp_check(
+  fit_height_normal,
+  type = "stat",
+  stat = "min",
+  ndraws = 200
+)
+
+pp_check(
+  fit_height_student,
+  type = "stat",
+  stat = "min",
+  ndraws = 200
+)
+```
+
+La Student-$t$ non deve essere scelta automaticamente perché è «più robusta». La decisione dipende dalla plausibilità del processo generativo e dalle caratteristiche che si desidera rappresentare. Una maggiore flessibilità può essere utile, ma introduce anche un parametro aggiuntivo e non risolve forme di errore diverse dalle code pesanti.
+
+## Sensibilità dei risultati ai prior
+
+Quando il campione è numeroso e informativo, prior ragionevoli possono produrre posteriori molto simili. Questo non rende i prior irrilevanti: significa che, per quella quantità e in quel dataset, la verosimiglianza domina l'aggiornamento.
+
+Confrontiamo il prior precedente con una specificazione più ampia.
+
+```{r}
+#| label: fit-one-mean-wide-priors
+#| message: false
+#| warning: false
+#| output: false
+
+fit_height_wide <- brm(
+  formula = height ~ 1,
+  data = height_data,
+  family = gaussian(),
+  prior = c(
+    prior(normal(160, 50), class = "Intercept"),
+    prior(lognormal(log(20), 1), class = "sigma")
+  ),
+  chains = 4,
+  iter = 2000,
+  warmup = 1000,
+  seed = 1234,
+  backend = "cmdstanr",
+  refresh = 0
+)
+```
+
+```{r}
+#| label: compare-one-mean-priors
+#| fig-cap: "Sensibilità della posterior della media a due specificazioni a priori."
+
+bind_rows(
+  as_draws_df(fit_height_normal) |>
+    transmute(mu = b_Intercept, prior = "Calibrato"),
+  as_draws_df(fit_height_wide) |>
+    transmute(mu = b_Intercept, prior = "Più ampio")
+) |>
+  ggplot(aes(x = mu, fill = prior)) +
+  geom_density(alpha = 0.35) +
+  labs(
+    x = expression(mu),
+    y = "Densità",
+    fill = "Prior"
+  )
+```
+
+Un'analisi di sensibilità deve essere interpretata rispetto alle conclusioni sostantive. Piccole differenze nelle ultime cifre decimali non sono necessariamente rilevanti; differenze che cambiano una decisione o una probabilità centrale per la domanda richiedono invece una discussione esplicita.
+
+## Comunicare i risultati
+
+Una formulazione appropriata potrebbe essere:
+
+> Abbiamo modellato le altezze degli adulti !Kung San mediante una distribuzione normale con media e deviazione standard ignote. I prior sono stati calibrati sulla scala dei centimetri e controllati mediante simulazioni predittive. La posterior indica che la media della popolazione rappresentata dal campione è concentrata nell'intervallo riportato, mentre le altezze individuali presentano una dispersione sostanzialmente più ampia. I controlli predittivi mostrano in quale misura il modello riproduce la forma e la variabilità osservate; il confronto con una verosimiglianza Student-$t$ valuta la sensibilità della conclusione alla rappresentazione delle code.
+
+Nel testo finale, i valori numerici devono essere riportati insieme a:
+
+- definizione della popolazione;
+- unità di misura;
+- modello e prior;
+- mediana o media a posteriori;
+- intervallo di credibilità;
+- eventuali probabilità relative a soglie definite in anticipo;
+- risultati dei controlli predittivi rilevanti.
+
+## Errori frequenti
+
+::: {.callout-caution}
+1. **Confondere la media campionaria con la media della popolazione.** La prima è una statistica osservata; la seconda è un parametro del modello la cui interpretazione dipende dal campionamento.
+2. **Interpretare $\sigma$ come incertezza su $\mu$.** $\sigma$ descrive la dispersione individuale; l'incertezza su $\mu$ è descritta dalla sua posterior.
+3. **Usare l'intervallo di $\mu$ come intervallo per una nuova persona.** La distribuzione predittiva individuale è normalmente molto più ampia.
+4. **Scegliere prior senza considerarne le conseguenze osservabili.** Parametri apparentemente ragionevoli possono generare dataset implausibili.
+5. **Dichiarare la normalità sulla base del solo istogramma.** L'adeguatezza dipende dalle caratteristiche rilevanti per l'inferenza e va valutata predittivamente.
+6. **Usare automaticamente la Student-$t$ per ogni dataset.** Una verosimiglianza robusta rappresenta code pesanti, ma non corregge asimmetria, multimodalità, dipendenza o errori di campionamento.
+7. **Generalizzare oltre la popolazione rappresentata.** Un intervallo stretto non compensa un campionamento selettivo o non rappresentativo.
+:::
+
+## Riflessioni conclusive
+
+Stimare una media significa adattare il più semplice dei modelli lineari: un modello con la sola intercetta. Questa formulazione rende evidente che la media non esiste isolatamente. È definita insieme a una distribuzione delle osservazioni e a un parametro di variabilità.
+
+Il workflow bayesiano consente di:
+
+- esprimere conoscenze iniziali sulla scala reale;
+- controllarne le conseguenze mediante simulazioni a priori;
+- ottenere una distribuzione a posteriori per $\mu$ e $\sigma$;
+- calcolare probabilità relative a soglie sostantive;
+- distinguere l'incertezza sulla media dalla previsione di una nuova osservazione;
+- valutare specificazioni alternative quando la normale non rappresenta adeguatamente le code.
+
+Il modello a sola intercetta costituisce anche la base per i capitoli successivi. Aggiungendo un predittore categoriale, l'intercetta e il nuovo coefficiente possono rappresentare le medie di due gruppi e la loro differenza. Il passaggio dal problema di una media al confronto tra medie non richiede quindi un nuovo paradigma: richiede una diversa matrice del disegno e nuove quantità di interesse.
+
+## Concetti da ricordare
+
+1. La stima di una media è un modello lineare `y ~ 1`.
+2. Nel modello a sola intercetta, `b_Intercept` coincide con $\mu$.
+3. $\mu$ descrive il centro della popolazione modellata; $\sigma$ descrive la dispersione individuale.
+4. I prior devono essere controllati attraverso le distribuzioni dei dati che implicano.
+5. La posterior di $\mu$ e la distribuzione predittiva di una nuova osservazione rispondono a domande diverse.
+6. Un intervallo stretto per la media non implica bassa variabilità individuale.
+7. I posterior predictive checks valutano caratteristiche specifiche, non la validità globale del modello.
+8. La Student-$t$ può rappresentare code più pesanti, ma non è una soluzione generale a ogni errore di specificazione.
+9. La sensibilità ai prior va valutata rispetto alle conclusioni sostantive.
+10. La possibilità di generalizzare dipende dal disegno di campionamento, non soltanto dalla precisione della posterior.
+
+::: {.callout-important title="Esercizi" collapse="true"}
+
+### 1. Leggere il modello
+
+Interpreta i parametri del modello
+
+$$
+Y_i \sim \operatorname{Normal}(72,8).
+$$
+
+Quale quantità rappresenta 72? Quale rappresenta 8? Quale delle due descrive l'incertezza sulla media?
+
+### 2. Prior sulla scala osservata
+
+Supponi di modellare un tempo di reazione in millisecondi. Spiega perché il prior $\mu\sim\operatorname{Normal}(0,1)$ sarebbe generalmente poco plausibile sulla scala originale. Proponi un prior alternativo e descrivine le conseguenze predittive attese.
+
+### 3. Prior predictive check
+
+Amplia la deviazione standard del prior sull'intercetta da 20 a 80. Ripeti il controllo predittivo a priori e descrivi quali dataset implausibili diventano più frequenti.
+
+### 4. Media e nuova osservazione
+
+Confronta l'intervallo di credibilità di `b_Intercept` con l'intervallo predittivo di `new_height_draws`. Spiega perché il secondo è più ampio anche quando l'incertezza su $\mu$ è piccola.
+
+### 5. Soglia sostantiva
+
+Scegli una soglia per $\mu$ prima di ispezionare i draw. Calcola la probabilità che la media la superi. Spiega quale decisione o interpretazione renderebbe scientificamente utile tale soglia.
+
+### 6. Valore estremo
+
+Aggiungi artificialmente un'altezza molto bassa al dataset. Adatta nuovamente i modelli normale e Student-$t$. Confronta le posteriori di $\mu$ e $\sigma$ e descrivi quale modello è più sensibile alla nuova osservazione.
+
+### 7. Controllo predittivo mirato
+
+Oltre alla deviazione standard, scegli una caratteristica da controllare tra minimo, massimo, mediana e intervallo interquartile. Motiva la scelta rispetto all'adeguatezza della verosimiglianza.
+
+### 8. Generalizzazione
+
+Immagina che il campione includa soltanto persone di un'unica fascia di età. Spiega perché la posterior di $\mu$ non può essere generalizzata automaticamente all'intera popolazione adulta.
+:::
+
+::: {.callout-tip collapse="true" title="Tracce di soluzione"}
+1. 72 è la media della distribuzione; 8 è la deviazione standard delle osservazioni. Nessuna delle due, da sola, è l'incertezza sulla media: quest'ultima emergerebbe dalla posterior di $\mu$ dopo aver osservato dati.
+2. Un prior centrato su 0 ms genera prevalentemente valori impossibili. Un prior plausibile deve essere espresso nell'ordine di grandezza dei tempi attesi e verificato mediante simulazioni predittive.
+3. Il prior più ampio attribuisce massa a medie estremamente basse o alte e può produrre interi dataset fuori dalla gamma fisiologicamente plausibile.
+4. L'intervallo di $\mu$ riguarda il centro della popolazione; la previsione individuale include anche la dispersione $\sigma$ e quindi rimane più ampia.
+5. La soglia è utile soltanto se corrisponde a una differenza teorica, clinica o decisionale definita indipendentemente dalla posterior osservata.
+6. La normale tende a modificare maggiormente media e dispersione per incorporare l'osservazione estrema. La Student-$t$ può rappresentarla attraverso code più pesanti, ma la conclusione va verificata sui draw e sui controlli predittivi.
+7. Per studiare le code sono informativi minimo e massimo; per una misura robusta della dispersione è utile l'intervallo interquartile. La scelta dipende dalla caratteristica che potrebbe mettere in discussione il modello.
+8. Il campionamento non contiene informazione diretta sulle fasce di età escluse. La precisione statistica entro il campione non elimina tale limite di validità esterna.
+:::
+
+::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+```{r}
+sessionInfo()
+```
+:::
+
+## Bibliografia {.unnumbered .unlisted}
+
+<!--
+Note per l'integrazione editoriale:
+- verificare che il riferimento @McElreath_rethinking sia presente nella bibliografia del progetto;
+- verificare il percorso e la struttura del file data/Howell_18.csv;
+- aggiornare, se necessario, gli identificatori dei capitoli dopo il consolidamento dell'indice;
+- valutare se mantenere nel testo principale il confronto con Student-t o spostarlo in un approfondimento;
+- eseguire tutti i chunk e controllare i valori riportati prima della pubblicazione.
+-->

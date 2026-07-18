@@ -1,0 +1,543 @@
+# Regressione verso la media: che cosa predice una retta {#sec-linear-models-regression-toward_mean}
+
+La regressione verso la media è una conseguenza della previsione imperfetta. Quando due misure sono associate ma non coincidono perfettamente, un valore estremo della prima non implica, in media, un valore altrettanto estremo della seconda. La previsione rimane nella stessa direzione, ma si colloca più vicino alla media.
+
+Il fenomeno fu descritto da Francis Galton studiando la relazione tra l'altezza dei genitori e quella dei figli. I figli di padri molto alti tendevano a essere più alti della media, ma meno estremi dei padri; analogamente, i figli di padri molto bassi tendevano a essere più bassi della media, ma meno estremi. Galton chiamò questo andamento *regression toward mediocrity*. Il termine moderno è **regressione verso la media**.
+
+Il punto essenziale non riguarda un meccanismo biologico specifico. Riguarda la struttura della previsione: se la correlazione è imperfetta, la parte estrema di un'osservazione non è interamente condivisa dalla misura che vogliamo prevedere.
+
+::: {.callout-note title="Obiettivi del capitolo"}
+Al termine del capitolo dovresti essere in grado di:
+
+- spiegare la regressione verso la media come conseguenza della correlazione imperfetta;
+- distinguere la retta di regressione dalla bisettrice che rappresenta una corrispondenza perfetta;
+- mostrare perché, con variabili standardizzate, la pendenza coincide con la correlazione;
+- riconoscere il fenomeno quando i partecipanti vengono selezionati in base a punteggi estremi;
+- spiegare perché un cambiamento pre–post non identifica automaticamente un effetto dell'intervento;
+- collegare l'ampiezza della regressione verso la media all'affidabilità della misura;
+- evitare alcune interpretazioni errate del fenomeno.
+:::
+
+::: {.callout-tip collapse=true title="Percorsi di lettura"}
+Questo capitolo appartiene soprattutto al **percorso concettuale**, ma è rilevante anche per il **percorso essenziale**. Approfondisce il significato della previsione lineare introdotta nel capitolo precedente e prepara la discussione successiva del workflow bayesiano. Le simulazioni possono essere lette anche senza esaminare ogni dettaglio del codice.
+:::
+
+::: {.callout-caution collapse=true title="Preparazione del Notebook"}
+
+```{r}
+#| label: setup-regression-toward-mean
+#| include: false
+
+here::here("code", "_common.R") |>
+  source()
+
+if (!requireNamespace("pacman", quietly = TRUE)) {
+  install.packages("pacman")
+}
+
+pacman::p_load(
+  dplyr,
+  ggplot2,
+  HistData,
+  tidyr
+)
+
+set.seed(1234)
+```
+:::
+
+## Dalla domanda scientifica alla quantità di interesse
+
+Consideriamo due misure, $X$ e $Y$, associate ma non perfettamente correlate. La domanda è:
+
+> Quale valore medio di $Y$ dobbiamo aspettarci tra le unità che presentano un valore particolarmente alto o basso di $X$?
+
+La quantità di interesse è la media condizionata
+
+$$
+\mathbb{E}(Y \mid X=x).
+$$
+
+La regressione verso la media descrive il fatto che, in molte situazioni, questa media condizionata è meno estrema del valore di $X$ usato per selezionare o descrivere le unità. Per confrontare direttamente le due variabili occorre però esprimerle rispetto alle rispettive medie e deviazioni standard.
+
+Definiamo quindi
+
+$$
+Z_X = \frac{X-\mu_X}{\sigma_X},
+\qquad
+Z_Y = \frac{Y-\mu_Y}{\sigma_Y}.
+$$
+
+Nel modello lineare per variabili standardizzate,
+
+$$
+\mathbb{E}(Z_Y \mid Z_X=z) = \rho z,
+$$ {#eq-regression-toward-mean-standardized}
+
+dove $\rho$ è la correlazione tra $X$ e $Y$. Se $0<\rho<1$, la previsione ha lo stesso segno di $z$, ma un valore assoluto più piccolo:
+
+$$
+|\rho z| < |z|.
+$$
+
+Un'unità che si trova due deviazioni standard sopra la media in $X$ avrà quindi, in media, un valore inferiore a due deviazioni standard sopra la media in $Y$, a meno che la correlazione sia perfetta.
+
+::: {.callout-important title="La regressione riguarda una media condizionata"}
+Il fenomeno non afferma che ogni individuo con un punteggio estremo debba necessariamente avvicinarsi alla media alla misurazione successiva. Afferma che **la media del gruppo selezionato in base a un valore estremo** sarà generalmente meno estrema in una misura correlata in modo imperfetto.
+:::
+
+## Il fenomeno nei dati di Galton
+
+Esaminiamo i dati sulle altezze familiari raccolti da Galton e distribuiti nel pacchetto `HistData`. Per evitare che le famiglie con più figli contribuiscano più volte, selezioniamo casualmente un figlio maschio per famiglia.
+
+```{r}
+#| label: prepare-galton-data
+
+galton_heights <- HistData::GaltonFamilies |>
+  filter(gender == "male") |>
+  group_by(family) |>
+  slice_sample(n = 1) |>
+  ungroup() |>
+  transmute(
+    father = father,
+    son = childHeight
+  )
+
+galton_heights |>
+  summarise(
+    n = n(),
+    mean_father = mean(father),
+    sd_father = sd(father),
+    mean_son = mean(son),
+    sd_son = sd(son),
+    correlation = cor(father, son)
+  )
+```
+
+Le due distribuzioni hanno medie e deviazioni standard simili, mentre la correlazione è nettamente inferiore a 1. Rappresentiamo i dati insieme a:
+
+- la retta di regressione;
+- una retta con pendenza 1 che attraversa il punto formato dalle due medie.
+
+La seconda retta rappresenta ciò che osserveremmo se gli scarti dalla media del padre fossero riprodotti senza attenuazione nei figli.
+
+```{r}
+#| label: fig-rtm-galton
+#| fig-cap: "Altezza dei figli in funzione di quella dei padri. La retta di regressione è più piatta della retta con pendenza 1: per padri estremamente alti o bassi, l'altezza media prevista dei figli è più vicina alla media dei figli."
+#| fig-width: 7
+#| fig-height: 5
+
+father_mean <- mean(galton_heights$father)
+son_mean <- mean(galton_heights$son)
+
+galton_heights |>
+  ggplot(aes(x = father, y = son)) +
+  geom_point(alpha = 0.45) +
+  geom_abline(
+    slope = 1,
+    intercept = son_mean - father_mean,
+    linetype = "dashed"
+  ) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.9) +
+  labs(
+    x = "Altezza del padre (pollici)",
+    y = "Altezza del figlio (pollici)"
+  )
+  # + theme_manuscript()
+```
+
+La retta tratteggiata non è la bisettrice $Y=X$ in senso letterale, perché padre e figlio possono avere medie differenti. È la retta di pendenza 1 che passa per $(\bar{x},\bar{y})$. Su questa retta, uno scarto di due pollici dalla media del padre corrisponderebbe a uno scarto di due pollici dalla media del figlio.
+
+La retta adattata è più piatta. I figli di padri alti sono mediamente alti, ma la loro distanza dalla media è inferiore a quella dei padri. Lo stesso andamento si osserva, in direzione opposta, per i padri bassi.
+
+## Correlazione e pendenza
+
+Nella regressione lineare semplice, la pendenza stimata può essere scritta come
+
+$$
+\widehat{\beta}_1
+=
+ r\frac{s_Y}{s_X},
+$$ {#eq-slope-correlation}
+
+dove $r$ è la correlazione campionaria e $s_X$, $s_Y$ sono le deviazioni standard delle due variabili.
+
+```{r}
+#| label: galton-correlation-slope
+
+r_galton <- cor(galton_heights$father, galton_heights$son)
+
+slope_from_identity <-
+  r_galton *
+  sd(galton_heights$son) /
+  sd(galton_heights$father)
+
+slope_from_lm <- coef(lm(son ~ father, data = galton_heights))[["father"]]
+
+tibble(
+  quantity = c("Correlazione", "Pendenza dalla relazione algebrica", "Pendenza da lm()"),
+  value = c(r_galton, slope_from_identity, slope_from_lm)
+)
+```
+
+Poiché le deviazioni standard delle altezze dei padri e dei figli sono simili, la pendenza sulla scala originale è vicina alla correlazione. L'identità diventa ancora più trasparente dopo la standardizzazione.
+
+```{r}
+#| label: standardize-galton-data
+
+galton_standardized <- galton_heights |>
+  mutate(
+    father_z = as.numeric(scale(father)),
+    son_z = as.numeric(scale(son))
+  )
+
+standardized_fit <- lm(son_z ~ father_z, data = galton_standardized)
+
+c(
+  correlation = cor(galton_standardized$father_z, galton_standardized$son_z),
+  standardized_slope = coef(standardized_fit)[["father_z"]]
+)
+```
+
+Con variabili standardizzate, la pendenza coincide con $r$. Se, per esempio, $r=0.45$, un padre collocato due deviazioni standard sopra la propria media ha un figlio la cui altezza media prevista è
+
+$$
+0.45 \times 2 = 0.90
+$$
+
+deviazioni standard sopra la media dei figli. La previsione rimane superiore alla media, ma è meno estrema.
+
+::: {.callout-note title="La scala è importante"}
+Dire che la pendenza è inferiore a 1 non basta, da solo, a dimostrare la regressione verso la media. Su scale arbitrarie, la pendenza dipende anche dal rapporto $s_Y/s_X$. Il confronto corretto si ottiene usando variabili standardizzate oppure confrontando gli scarti rispetto alle rispettive medie e deviazioni standard.
+:::
+
+## Vedere il fenomeno mediante simulazione
+
+La relazione in @eq-regression-toward-mean-standardized può essere resa visibile generando coppie di variabili standardizzate con correlazioni diverse. Costruiamo
+
+$$
+Z_Y = \rho Z_X + \sqrt{1-\rho^2}\,\varepsilon,
+\qquad
+\varepsilon \sim \operatorname{Normal}(0,1).
+$$
+
+Questa costruzione produce due variabili con media 0, deviazione standard circa 1 e correlazione circa $\rho$.
+
+```{r}
+#| label: simulate-regression-toward-mean
+
+simulate_correlated_pair <- function(n, rho) {
+  x <- rnorm(n)
+  epsilon <- rnorm(n)
+  y <- rho * x + sqrt(1 - rho^2) * epsilon
+
+  tibble(
+    x = x,
+    y = y,
+    rho = factor(
+      rho,
+      levels = c(0.2, 0.5, 0.8, 1),
+      labels = c("rho = 0.2", "rho = 0.5", "rho = 0.8", "rho = 1.0")
+    )
+  )
+}
+
+simulated_correlations <- bind_rows(
+  simulate_correlated_pair(500, 0.2),
+  simulate_correlated_pair(500, 0.5),
+  simulate_correlated_pair(500, 0.8),
+  simulate_correlated_pair(500, 1.0)
+)
+```
+
+```{r}
+#| label: fig-rtm-correlation-simulation
+#| fig-cap: "Relazione tra due variabili standardizzate per quattro livelli di correlazione. Quanto più la correlazione è lontana da 1, tanto più la retta di regressione è piatta rispetto alla retta di identità."
+#| fig-width: 8
+#| fig-height: 7
+
+simulated_correlations |>
+  ggplot(aes(x = x, y = y)) +
+  geom_point(alpha = 0.25) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
+  facet_wrap(~ rho) +
+  coord_equal() +
+  labs(
+    x = expression(Z[X]),
+    y = expression(Z[Y])
+  )
+  # + theme_manuscript()
+```
+
+Quando $\rho=1$, ogni scarto viene riprodotto perfettamente e le due rette coincidono. Quando $\rho<1$, la pendenza della previsione è $\rho$ e i valori medi previsti sono meno estremi. Quanto più debole è la correlazione, tanto più pronunciata è la regressione verso la media.
+
+## Selezionare casi estremi e rimisurarli
+
+Il fenomeno diventa particolarmente insidioso quando si selezionano partecipanti in base a una prima misurazione estrema e si valuta il loro cambiamento usando una seconda misurazione.
+
+Supponiamo che ogni persona possieda un livello relativamente stabile $T_i$, ma che il punteggio osservato includa anche una componente occasionale:
+
+$$
+\begin{aligned}
+X_{i1} &= T_i + E_{i1},\\
+X_{i2} &= T_i + E_{i2}.
+\end{aligned}
+$$
+
+Se selezioniamo le persone con i valori più alti di $X_{i1}$, il gruppo comprenderà:
+
+- persone con valori elevati di $T_i$;
+- persone che, alla prima rilevazione, hanno anche avuto un errore positivo o uno stato transitoriamente elevato.
+
+Alla seconda misurazione, la componente occasionale non tende a ripetersi con lo stesso segno e la stessa intensità. Di conseguenza, la media di $X_{i2}$ sarà generalmente meno estrema, anche in completa assenza di trattamento.
+
+```{r}
+#| label: simulate-pre-post-selection
+
+n_people <- 4000
+
+pre_post_population <- tibble(
+  id = seq_len(n_people),
+  stable_level = rnorm(n_people, mean = 50, sd = 10),
+  pre = stable_level + rnorm(n_people, mean = 0, sd = 8),
+  post = stable_level + rnorm(n_people, mean = 0, sd = 8)
+)
+
+selection_cutoff <- quantile(pre_post_population$pre, 0.90)
+
+selected_high <- pre_post_population |>
+  filter(pre >= selection_cutoff) |>
+  select(id, pre, post) |>
+  pivot_longer(
+    cols = c(pre, post),
+    names_to = "occasion",
+    values_to = "score"
+  ) |>
+  mutate(
+    occasion = factor(
+      occasion,
+      levels = c("pre", "post"),
+      labels = c("Prima misurazione", "Seconda misurazione")
+    )
+  )
+
+selected_high |>
+  group_by(occasion) |>
+  summarise(
+    mean = mean(score),
+    sd = sd(score),
+    .groups = "drop"
+  )
+```
+
+```{r}
+#| label: fig-rtm-pre-post
+#| fig-cap: "Punteggi medi nelle due occasioni per le persone selezionate perché appartenevano al 10% superiore alla prima misurazione. Il calo compare senza alcun intervento."
+#| fig-width: 6.5
+#| fig-height: 4.5
+
+selected_high |>
+  group_by(occasion) |>
+  summarise(
+    mean_score = mean(score),
+    se = sd(score) / sqrt(n()),
+    .groups = "drop"
+  ) |>
+  ggplot(aes(x = occasion, y = mean_score, group = 1)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 2.5) +
+  geom_errorbar(
+    aes(ymin = mean_score - 1.96 * se, ymax = mean_score + 1.96 * se),
+    width = 0.08
+  ) +
+  labs(
+    x = NULL,
+    y = "Punteggio medio"
+  )
+  # + theme_manuscript()
+```
+
+Il gruppo sembra migliorare o peggiorare a seconda della direzione della selezione:
+
+- selezionando punteggi inizialmente molto alti, la media tende a diminuire;
+- selezionando punteggi inizialmente molto bassi, la media tende ad aumentare.
+
+Nessuno dei due cambiamenti dimostra l'esistenza di un processo correttivo. È la conseguenza attesa della selezione su una misura imperfettamente stabile.
+
+::: {.callout-warning title="Perché il solo confronto pre–post non basta"}
+Se l'accesso a un intervento dipende da un punteggio iniziale estremo, il cambiamento osservato combina almeno tre componenti:
+
+1. l'eventuale effetto dell'intervento;
+2. la regressione verso la media;
+3. altri cambiamenti temporali, come maturazione, eventi esterni o variazioni della procedura.
+
+Senza un confronto adeguato, queste componenti non possono essere separate dal semplice cambiamento medio.
+:::
+
+## Il ruolo del gruppo di controllo
+
+Un gruppo di controllo è informativo quando è sottoposto:
+
+- allo stesso criterio di selezione;
+- alle stesse occasioni di misurazione;
+- allo stesso intervallo temporale;
+- ma non all'intervento di interesse, oppure a una condizione di confronto appropriata.
+
+Se entrambi i gruppi regrediscono verso la media, ma il gruppo trattato cambia più del controllo, la differenza tra i cambiamenti può essere compatibile con un effetto dell'intervento, sotto le ulteriori assunzioni richieste dal disegno.
+
+Il gruppo di controllo non “elimina” materialmente la regressione verso la media. Permette di stimare quale cambiamento si sarebbe osservato anche senza il trattamento, purché i gruppi siano comparabili e la loro formazione non introduca ulteriori distorsioni.
+
+::: {.callout-important title="La regressione verso la media non è una spiegazione universale"}
+Osservare un cambiamento verso valori meno estremi non dimostra che tutto il cambiamento sia dovuto alla regressione verso la media. Il fenomeno è una spiegazione alternativa che deve essere considerata nel disegno e nell'interpretazione, non un'etichetta da applicare automaticamente a ogni variazione.
+:::
+
+## Affidabilità e ampiezza del fenomeno
+
+Nel modello classico di misurazione,
+
+$$
+X = T + E,
+$$
+
+l'affidabilità rappresenta la quota della varianza osservata attribuibile alle differenze stabili tra le unità. Se due misurazioni parallele condividono lo stesso punteggio vero e hanno errori indipendenti, la loro correlazione coincide con l'affidabilità.
+
+In tale situazione, per punteggi standardizzati,
+
+$$
+\mathbb{E}(Z_2 \mid Z_1=z)
+=
+\operatorname{Rel}(X)\,z.
+$$
+
+Una misura con affidabilità elevata produce una previsione più vicina al punteggio iniziale; una misura con affidabilità bassa produce una previsione più vicina alla media.
+
+Per esempio:
+
+- con affidabilità $0.90$, un punteggio iniziale di $z=2$ corrisponde a una media prevista di $1.80$ alla seconda misurazione;
+- con affidabilità $0.50$, la media prevista è $1.00$;
+- con affidabilità $0.20$, la media prevista è $0.40$.
+
+Il collegamento è intuitivo: quanto maggiore è la componente occasionale o di errore, tanto meno l'estremità osservata alla prima rilevazione è destinata a ripresentarsi.
+
+::: {.callout-note title="Un'anticipazione sull'errore di misurazione"}
+La relazione precedente vale sotto ipotesi precise: misure parallele, errori indipendenti e stessa struttura nelle due occasioni. Nei capitoli dedicati all'errore di misurazione distingueremo più attentamente affidabilità, errore casuale e componenti sistematiche di metodo.
+:::
+
+## Un'apparente asimmetria
+
+La regressione di $Y$ su $X$ e la regressione di $X$ su $Y$ non sono la stessa retta. Entrambe, dopo la standardizzazione, hanno pendenza $r$, ma rispondono a domande condizionali diverse:
+
+$$
+\mathbb{E}(Z_Y \mid Z_X=z_x)=rz_x,
+$$
+
+$$
+\mathbb{E}(Z_X \mid Z_Y=z_y)=rz_y.
+$$
+
+Non c'è contraddizione. Se selezioniamo unità estreme in $X$, chiediamo come si distribuisce $Y$ condizionatamente a $X$. Se selezioniamo unità estreme in $Y$, invertiamo la condizione e formuliamo una domanda diversa.
+
+Questa distinzione ricorda che la regressione non descrive una relazione geometrica completamente simmetrica: specifica quale variabile viene prevista e quale informazione viene condizionata.
+
+## Errori frequenti
+
+::: {.callout-caution}
+1. **Pensare che ogni individuo debba avvicinarsi alla media.** La regressione verso la media riguarda il valore atteso del gruppo condizionato su un estremo; i singoli casi possono muoversi in entrambe le direzioni.
+2. **Confrontare direttamente una pendenza con 1 senza considerare la scala.** La lettura più chiara richiede variabili standardizzate o scale comparabili.
+3. **Interpretare il fenomeno come una forza che spinge i valori verso il centro.** Non è necessario postulare un meccanismo correttivo: basta una correlazione imperfetta.
+4. **Attribuire tutto il cambiamento osservato alla regressione verso la media.** Un intervento può avere un effetto reale; il problema è che un semplice pre–post non lo separa dalle variazioni attese in assenza di trattamento.
+5. **Credere che una seconda misurazione più vicina alla media dimostri un errore nella prima.** Entrambe le misure possono essere valide ma contenere componenti transitorie o non condivise.
+6. **Dimenticare il criterio di selezione.** Il fenomeno diventa particolarmente rilevante quando l'inclusione dipende da un punteggio estremo.
+:::
+
+## Riflessioni conclusive
+
+La regressione verso la media è una conseguenza della previsione lineare quando l'associazione tra due misure è imperfetta. Dopo la standardizzazione, la media condizionata è $\rho z$: un valore estremo del predittore conduce quindi a una previsione nella stessa direzione, ma meno estrema, ogni volta che $|\rho|<1$.
+
+Il fenomeno non implica che ogni individuo si muova verso il centro della distribuzione e non costituisce una spiegazione causale. È un'affermazione sul valore atteso di una misura condizionatamente a un'altra. Diventa però cruciale nei disegni in cui i partecipanti vengono selezionati perché presentano punteggi molto alti o molto bassi. In questi casi, una parte del cambiamento medio alla seconda rilevazione si produrrebbe anche senza intervento.
+
+La qualità del disegno deve quindi precedere l'interpretazione del modello. Un confronto adeguato permette di distinguere la variazione attesa in assenza di trattamento dal cambiamento aggiuntivo compatibile con l'intervento. Inoltre, il legame con l'affidabilità mostra che la regressione verso la media non è un'anomalia separata dai problemi di misurazione: quanto maggiore è la componente non stabile della misura, tanto più debole è la prevedibilità dei punteggi estremi.
+
+Nel prossimo capitolo applicheremo l'intero workflow bayesiano al modello lineare. Le stime puntuali saranno sostituite da distribuzioni a posteriori e useremo simulazioni predittive per rappresentare esplicitamente l'incertezza sulla retta e sulle nuove osservazioni.
+
+## Concetti da ricordare
+
+1. La regressione verso la media deriva dalla correlazione imperfetta tra la misura usata per selezionare i casi e la misura successiva o correlata.
+2. Con variabili standardizzate, la pendenza della regressione semplice coincide con la correlazione.
+3. Se $|\rho|<1$, il valore medio previsto è meno estremo del valore sul quale si condiziona.
+4. Il fenomeno riguarda medie condizionate, non il destino necessario di ogni individuo.
+5. La selezione su valori estremi può produrre cambiamenti pre–post anche senza trattamento.
+6. Un gruppo di controllo comparabile aiuta a separare il cambiamento atteso dall'eventuale effetto aggiuntivo dell'intervento.
+7. Una minore affidabilità implica, sotto ipotesi appropriate, una regressione verso la media più pronunciata.
+
+::: {.callout-important title="Esercizi" collapse="true"}
+
+### 1. Previsione standardizzata
+
+Supponi che due misure standardizzate abbiano correlazione $0.60$. Qual è il valore medio previsto della seconda misura per un gruppo con valore $z=2.5$ nella prima? Quanto dista questa previsione dalla media?
+
+### 2. Confrontare due affidabilità
+
+Un test viene somministrato due volte. Calcola il punteggio standardizzato medio atteso alla seconda somministrazione per persone con $z=2$ alla prima, assumendo alternativamente affidabilità $0.85$ e $0.40$. Interpreta la differenza.
+
+### 3. Scala originale e scala standardizzata
+
+Nel dataset di Galton, verifica che la pendenza sulla scala originale sia uguale a
+
+$$
+r\frac{s_Y}{s_X}.
+$$
+
+Spiega perché non è corretto attribuire la regressione verso la media al solo fatto che questa pendenza sia inferiore a 1.
+
+### 4. Selezione dalla coda inferiore
+
+Modifica la simulazione pre–post selezionando il 10% dei punteggi iniziali più bassi. Rappresenta le medie nelle due occasioni e descrivi il risultato.
+
+### 5. Aggiungere un trattamento reale
+
+Nella simulazione pre–post, aggiungi 4 punti alla seconda misurazione di metà delle persone selezionate, assegnate casualmente al trattamento. Confronta:
+
+- il cambiamento nel gruppo trattato;
+- il cambiamento nel controllo;
+- la differenza tra i cambiamenti.
+
+Quale di queste quantità è più informativa sull'effetto del trattamento?
+
+### 6. Criticare un'interpretazione
+
+Uno studio seleziona pazienti con ansia molto elevata, somministra un intervento e osserva una riduzione media di 8 punti. Non è presente un gruppo di controllo. Elenca almeno tre ragioni per cui il cambiamento non può essere attribuito interamente all'intervento.
+
+### 7. Individui e gruppi
+
+Spiega perché l'affermazione seguente è errata:
+
+> Poiché esiste regressione verso la media, ogni persona con un punteggio estremo peggiorerà o migliorerà alla misurazione successiva.
+:::
+
+::: {.callout-tip collapse="true" title="Tracce di soluzione"}
+1. La previsione è $0.60\times2.5=1.5$. Rimane 1.5 deviazioni standard sopra la media, ma è meno estrema del valore iniziale.
+2. Con affidabilità $0.85$, la previsione è $1.70$; con affidabilità $0.40$, è $0.80$. La misura meno affidabile conserva una quota minore dell'estremità iniziale nella previsione della seconda misurazione.
+3. La pendenza originale dipende sia da $r$ sia dal rapporto tra le deviazioni standard. La regressione verso la media si valuta confrontando scarti standardizzati o scale comparabili.
+4. Il gruppo selezionato per punteggi bassi tenderà ad avere una media più alta alla seconda misurazione anche senza intervento.
+5. Il cambiamento trattato include effetto, regressione verso la media e cambiamenti temporali. Il cambiamento del controllo stima le componenti non dovute al trattamento. La differenza tra i cambiamenti è quindi più informativa, sotto le assunzioni del disegno randomizzato.
+6. Tra le possibili ragioni: regressione verso la media, cambiamenti spontanei nel tempo, eventi esterni, familiarità con il test, cambiamenti nella procedura e selezione non comparabile.
+7. La regressione verso la media riguarda il valore atteso del gruppo condizionato su un punteggio estremo. I singoli individui possono aumentare, diminuire o rimanere stabili.
+:::
+
+::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+```{r}
+sessionInfo()
+```
+:::
+
+## Bibliografia {.unnumbered .unlisted}
+
+<!--
+Note per l'integrazione editoriale:
+- mantenuto l'identificatore originale del capitolo per non interrompere i riferimenti incrociati;
+- verificare che HistData sia incluso nell'ambiente del progetto;
+- aggiungere eventuali riferimenti bibliografici storici a Galton usando le chiavi già presenti nel file .bib del Companion;
+- verificare che theme_manuscript() sia disponibile in code/_common.R.
+-->
