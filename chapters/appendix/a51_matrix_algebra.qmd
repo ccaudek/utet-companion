@@ -1,0 +1,113 @@
+# Algebra delle matrici per la regressione {#sec-apx-matrix-algebra}
+
+::: {.callout-note appearance="minimal"}
+Il modello di regressione multipla si scrive in forma compatta come $\mathbf{y} = \mathbf{X}\boldsymbol{\beta} + \boldsymbol{\varepsilon}$, e in Stan la previsione lineare è semplicemente `X * beta`. Perché quella scrittura funzioni — e per leggere senza incertezze il codice Stan del @sec-multiple-regression — serve un ripasso essenziale di *come si moltiplicano due matrici*. Questa appendice raccoglie quel ripasso in forma autosufficiente, con un esempio numerico e la verifica in R. Non presuppone conoscenze pregresse di algebra lineare.
+:::
+
+## Come funziona la moltiplicazione tra matrici (ripasso essenziale)
+
+**Conformabilità.** Due matrici si possono moltiplicare solo se il *numero di colonne* della prima coincide con il *numero di righe* della seconda. Se $A$ è $m \times k$ e $B$ è $k \times n$, allora il prodotto $C = A B$ *esiste* ed è una matrice di dimensione $m \times n$.
+
+**Elemento $c_{ij}$.** L'elemento sulla *riga $i$* e *colonna $j$* di $C$ si ottiene come *prodotto scalare* tra:
+
+- la riga $i$-esima di $A$ e
+- la colonna $j$-esima di $B$.
+
+Per prodotto scalare intendiamo: *somma dei prodotti degli elementi corrispondenti*.  
+Formalmente,
+
+$$
+c_{ij} \;=\; \sum_{t=1}^{k} a_{i t}\, b_{t j}.
+$$
+
+**Esempio numerico.**
+
+Siano
+
+$$
+A=\begin{bmatrix}
+1 & 2 & 3\\
+4 & 5 & 6
+\end{bmatrix}
+\quad (2\times 3), \qquad
+B=\begin{bmatrix}
+1 & 0\\
+-1 & 2\\
+2 & 1
+\end{bmatrix}
+\quad (3\times 2).
+$$
+
+Sono *conformabili* (3 colonne di $A$ = 3 righe di $B$). Il prodotto $C=AB$ sarà $2\times 2$.
+
+Calcoliamo i singoli elementi:
+
+- $c_{11} = [1,2,3]\cdot[1,-1,2]^\top = 1\cdot 1 + 2\cdot(-1) + 3\cdot 2 = 1 - 2 + 6 = 5$
+- $c_{12} = [1,2,3]\cdot[0,2,1]^\top = 1\cdot 0 + 2\cdot 2 + 3\cdot 1 = 0 + 4 + 3 = 7$
+- $c_{21} = [4,5,6]\cdot[1,-1,2]^\top = 4\cdot 1 + 5\cdot(-1) + 6\cdot 2 = 4 - 5 + 12 = 11$
+- $c_{22} = [4,5,6]\cdot[0,2,1]^\top = 4\cdot 0 + 5\cdot 2 + 6\cdot 1 = 0 + 10 + 6 = 16$
+
+Quindi
+
+$$
+C=AB=\begin{bmatrix}
+5 & 7\\
+11 & 16
+\end{bmatrix}.
+$$
+
+**Verifica in R.**
+
+```{r}
+A <- matrix(c(1,2,3, 4,5,6), nrow = 2, byrow = TRUE)
+B <- matrix(c(1,0, -1,2, 2,1), nrow = 3, byrow = TRUE)
+A %*% B
+```
+
+## Dalla moltiplicazione tra matrici alla previsione lineare
+
+Nel modello di regressione multipla la matrice dei predittori $\mathbf{X}$ ha dimensione $N \times K$ (una riga per osservazione, una colonna per predittore) e il vettore dei coefficienti $\boldsymbol{\beta}$ ha dimensione $K \times 1$. Sono conformabili, e il prodotto $\mathbf{X}\boldsymbol{\beta}$ è un vettore $N \times 1$ di previsioni: una per ogni osservazione. Scrivendo esplicitamente il contenuto della moltiplicazione:
+
+$$
+\begin{bmatrix}
+y_{1} \\
+y_{2} \\
+\vdots \\
+y_{N}
+\end{bmatrix}
+=
+\begin{bmatrix}
+1 & x_{11} & x_{12} & \dots & x_{1,K-1} \\
+1 & x_{21} & x_{22} & \dots & x_{2,K-1} \\
+\vdots & \vdots & \vdots & \ddots & \vdots \\
+1 & x_{N1} & x_{N2} & \dots & x_{N,K-1}
+\end{bmatrix}
+\begin{bmatrix}
+\beta_{0} \\
+\beta_{1} \\
+\beta_{2} \\
+\vdots \\
+\beta_{K-1}
+\end{bmatrix}
++
+\begin{bmatrix}
+\varepsilon_{1} \\
+\varepsilon_{2} \\
+\vdots \\
+\varepsilon_{N}
+\end{bmatrix}
+$$
+
+Riga per riga, questo equivale a $N$ equazioni della forma $y_i = \beta_0 + \beta_1 x_{i1} + \dots + \varepsilon_i$. In sintesi:
+
+- *Ogni riga* della matrice $\mathbf{X}$ contiene i valori dei predittori per una singola osservazione.
+- *Lo stesso* coefficiente $\beta_j$ si applica a tutte le righe, moltiplicando il rispettivo valore del predittore.
+- Il termine $\beta_0$ è l'intercetta: costante, si applica a tutte le osservazioni.
+- La moltiplicazione $\mathbf{X}\boldsymbol{\beta}$ produce il vettore $N \times 1$ dei *valori previsti* $\hat{\mathbf{y}}$.
+- Gli *errori* $\boldsymbol{\varepsilon}$ rappresentano la differenza tra il valore osservato $y_i$ e il valore previsto $\hat{y}_i$.
+
+## Intercetta come colonna della matrice dei predittori
+
+Nella scrittura precedente la prima colonna di $\mathbf{X}$ è una *colonna di 1*: serve a includere l'intercetta $\beta_0$ direttamente nel prodotto $\mathbf{X}\boldsymbol{\beta}$. In questo caso il primo elemento di $\boldsymbol{\beta}$ (`beta[1]`) funge da intercetta e non occorre dichiarare un parametro separato.
+
+In pratica, però, spesso conviene dichiarare l'intercetta come parametro a sé (`alpha`) e tenerla fuori dalla matrice dei predittori. Ci sono due ragioni: permette di assegnarle un *prior diverso* da quello dei coefficienti (spesso l'intercetta ha una scala e un significato differenti), ed è leggermente più efficiente. La differenza di velocità è trascurabile: la scelta va fatta soprattutto per *chiarezza del codice*. È la convenzione adottata nel @sec-multiple-regression, dove il modello Stan usa `X * beta + alpha`.

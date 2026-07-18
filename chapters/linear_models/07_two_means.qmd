@@ -2,223 +2,79 @@
 
 ::: {.callout-note appearance="minimal"}
 
-Uno dei problemi più ricorrenti nella ricerca psicologica è il confronto tra due gruppi o condizioni. Spesso ci si chiede se chi ha ricevuto un trattamento migliori più di chi non lo ha ricevuto o se un campione clinico differisca da un campione non clinico per quanto riguarda una determinata variabile. In tutte queste situazioni, la domanda davvero utile non riguarda soltanto l'esistenza di una differenza, ma la sua ampiezza e il grado di incertezza con cui possiamo descriverla.
+Uno dei problemi più ricorrenti nella ricerca psicologica è il confronto tra due gruppi o condizioni: chi ha ricevuto un trattamento mostra un miglioramento maggiore rispetto a chi non lo ha ricevuto? Un campione clinico si differenzia da uno non clinico? In tutte queste situazioni, la domanda sostantiva non riguarda soltanto l'*esistenza* di una differenza, ma anche la sua **ampiezza** e il grado di incertezza con cui è possibile descriverla.
 
-In questo capitolo affronteremo la questione adottando un approccio bayesiano. Immaginiamo una variabile di esito continua, $y_{ig}$, dove $i$ indica l’osservazione e $g\in{0,1}$ l’appartenenza al gruppo. Un modello semplice e naturale assume che i punteggi di ciascun gruppo provengano da una distribuzione normale con la propria media: $y_{ig}\sim\mathcal N(\mu_g,\sigma)$. La quantità che desideriamo conoscere è la differenza tra le due medie, $\Delta=\mu_1-\mu_0$, in quanto esprime sinteticamente la variazione attesa passando da un gruppo all'altro.
+Nel @sec-mcmc-one-mean abbiamo visto che la stima di una media equivale a specificare un modello con solo l'intercetta, `y ~ 1`. Per il confronto tra due gruppi è necessaria un'ulteriore specificazione: l'aggiunta di un predittore che indichi l'appartenenza al gruppo. Se $x_i$ vale 0 per il gruppo di riferimento e 1 per il gruppo di confronto, il modello $y_i \sim \mathcal N(\alpha + \beta x_i, \sigma)$ definisce l'intercetta $\alpha$ come la media del gruppo di riferimento ($\mu_0$) e il coefficiente $\beta$ come la differenza tra le medie, $\Delta = \mu_1 - \mu_0$. Il *test t per campioni indipendenti* non è dunque uno strumento autonomo, ma si configura come una regressione con un predittore dicotomico.
 
-Lo stesso modello può essere espresso come una regressione lineare con una variabile indicatrice $x_i$ che vale 0 per il gruppo di riferimento e 1 per il gruppo di confronto: $y_i\sim \mathcal N(\alpha+\beta x_i,\sigma)$. In questa forma, l’intercetta $\alpha$ coincide con la media del gruppo di riferimento $(\mu_0)$, mentre il coefficiente $\beta$ coincide con la differenza tra le medie $(\Delta)$. Quando vogliamo rendere la differenza indipendente dall’unità di misura, consideriamo anche la versione standardizzata $d=\Delta/\sigma$, che rappresenta una misura di ampiezza dell’effetto.
-
-L’approccio frequentista tradizionale pone l’accento sul calcolo di un *p*-value rispetto all’ipotesi nulla di uguaglianza tra le medie. L’approccio bayesiano, invece, fornisce un quadro più informativo: produce una distribuzione a posteriori per $\Delta$, cioè una descrizione probabilistica di quanto riteniamo plausibili i diversi valori della differenza dopo aver osservato i dati. Da questa distribuzione possiamo derivare quantità con interpretazione immediata, come la probabilità che la differenza sia positiva, $\Pr(\Delta>0\mid\text{dati})$, oppure la probabilità che superi una soglia di rilevanza pratica definita *prima* dell’analisi, $\Pr(|\Delta|>\text{SESOI}\mid\text{dati})$. In più, l’inferenza bayesiana rende esplicito il ruolo dell’informazione pregressa tramite le distribuzioni a priori e chiarisce le assunzioni del modello, migliorando la trasparenza e la leggibilità scientifica dell’intero processo.
+L'approccio frequentista si concentra sul valore-$p$ rispetto all'ipotesi nulla di uguaglianza. L'approccio bayesiano, invece, produce  una distribuzione a posteriori per $\Delta$, dalla quale è possibile derivare quantità di immediata interpretazione: la probabilità che la differenza sia positiva, $\Pr(\Delta > 0 \mid \text{dati})$, o che superi una soglia di rilevanza pratica fissata *prima* dell'analisi, $\Pr(|\Delta| > \text{SESOI} \mid \text{dati})$.
 :::
 
 ::: {.callout-note title="Le assunzioni del modello base"}
-Il modello di base si fonda su poche ma importanti ipotesi. Le osservazioni devono essere indipendenti, una volta tenuto conto dell’effetto del gruppo; i residui, cioè la parte di variabilità che il modello non spiega, dovrebbero essere approssimativamente normali; la dispersione dei residui, rappresentata da $\sigma$, è assunta uguale nei due gruppi. Quest’ultima è un’idealizzazione utile per cominciare: più avanti vedremo come rilassarla per gestire varianze diverse tra gruppi.
+Il modello di base si basa su poche, ma importanti, ipotesi. Le osservazioni devono essere indipendenti, una volta tenuto conto dell'effetto del gruppo; i residui, ovvero la parte di variabilità non spiegata dal modello, dovrebbero essere approssimativamente normali; la dispersione dei residui, rappresentata da $\sigma$, è assunta uguale per entrambi i gruppi. Quest'ultima è un'ipotesi utile per iniziare: più avanti vedremo come rilassarla.
 :::
 
-::: {.callout-tip title = "La soglia di rilevanza pratica (SESOI)"}
-Nella ricerca applicata non basta stabilire che una differenza esista: occorre chiedersi se quell’ampiezza abbia senso dal punto di vista sostantivo. Per questo è utile definire in anticipo una *soglia di rilevanza pratica* (SESOI). Se, ad esempio, riteniamo che in un test cognitivo una differenza di 5 punti sia il minimo cambiamento che conti davvero, allora la nostra analisi non si limiterà a valutare se $\Delta$ sia diverso da zero, ma quantificherà anche la probabilità che $|\Delta|$ superi tale soglia. Questo semplice accorgimento aiuta a collegare l’inferenza statistica al significato scientifico.
+::: {.callout-tip title="La soglia di rilevanza pratica (SESOI)"}
+Nella ricerca applicata, non è sufficiente stabilire che una differenza esista: è necessario chiedersi se l'ampiezza rilevata abbia un senso dal punto di vista sostanziale. Per questo motivo, è utile definire in anticipo una soglia di rilevanza pratica (SESOI, ovvero *smallest effect size of interest*). Se, ad esempio, riteniamo che in un test cognitivo una differenza di 5 punti sia il minimo cambiamento rilevante, allora la nostra analisi non si limiterà a verificare se $\Delta$ sia diverso da zero, ma quantificherà anche la probabilità che $|\Delta|$ superi tale soglia. Questo semplice accorgimento collega l'inferenza statistica al significato scientifico.
 :::
-
-Il percorso del capitolo seguirà un filo logico lineare. Partiremo dalla descrizione del modello per due gruppi e introdurremo alcune varianti più robuste quando la normalità è una semplificazione eccessiva. Discuteremo delle scelte di prior debolmente informative ancorate alla scala di misura della variabile di esito. Una volta stimato il modello, presenteremo le quantità di interesse, ovvero la differenza $\Delta$ e, quando utile, la versione standardizzata $d$, insieme alle relative distribuzioni a posteriori e alle probabilità più rilevanti per l'interpretazione. Concluderemo con delle verifiche predittive per valutare l'adeguatezza del modello e, quando necessario, con un breve confronto tra modelli alternativi.
 
 ## Panoramica del capitolo {.unnumbered .unlisted}
 
-In seguito, chiariremo come modellare la differenza tra le medie mediante la regressione lineare bayesiana e vedremo che la variabile indicatrice può essere codificata in modi diversi, tutti equivalenti dal punto di vista sostanziale, ma talvolta più comodi per l'interpretazione o la scelta delle prior. Infine, discuteremo come comunicare i risultati in termini di intervalli di credibilità e previsioni probabilistiche che rispondano a domande sostanziali.
+- Il confronto tra due gruppi mediante regressione con predittore dicotomico.
+- Le possibili parametrizzazioni dell'indicatore e quando conviene ciascuna.
+- La distribuzione a posteriori di $\Delta$ e le probabilità sostantive: $\Pr(\Delta>0)$ e $\Pr(|\Delta|>\text{SESOI})$.
+- Il disegno appaiato come modello di sola intercetta sulle differenze.
+
+::: {.callout-tip collapse=true}
+## Prerequisiti
+
+- Il modello di sola intercetta (@sec-mcmc-one-mean) e l'interfaccia `brms` (@sec-linar-models-brms).
+- Per il test *t* nella sua trattazione classica, il modulo [utet-frequentista](https://ccaudek.github.io/utet-frequentista).
+- L'esempio sul QI è tratto da @gelman2021regression.
+:::
 
 ::: {.callout-caution collapse=true title="Preparazione del Notebook"}
 
 ```{r}
 #| output: false
-here::here("code", "_common.R") |> 
+here::here("code", "_common.R") |>
   source()
 
 if (!requireNamespace("pacman")) install.packages("pacman")
-pacman::p_load(cmdstanr, posterior, brms, bayestestR, insight, dplyr, ggplot2, tibble)
-conflicts_prefer(loo::loo)
+pacman::p_load(cmdstanr, posterior, brms, readxl)
 ```
-
 :::
 
-## Il modello con un indicatore binario e le quantità di interesse
+## Il modello con un indicatore binario
 
-Per poter confrontare in modo rigoroso due gruppi, introduciamo un predittore binario $x_i$, che vale 0 per il gruppo di riferimento e 1 per il gruppo di confronto. Il modello lineare è $y_i=\alpha+\beta x_i+\varepsilon_i$, con $\varepsilon_i\sim \mathcal N(0,\sigma)$. In questa formulazione, $\alpha$ rappresenta la differenza tra le due medie. L'assunzione di omoschedasticità, ovvero di una varianza uguale nei due gruppi, rende il modello particolarmente trasparente al primo incontro.
+Si consideri un predittore binario $x_i$, codificato come 0 per il gruppo di riferimento e come 1 per il gruppo di confronto. Il modello lineare assume la forma:
 
-Le quantità che ci interessano di più sono direttamente ricostruibili dai parametri. La media del gruppo di riferimento è $\mu_0 = \alpha$, quella del gruppo di confronto è $\mu_1 = \alpha + \beta$ e la differenza $\Delta$ coincide con $\beta$. Il parametro $\sigma$ descrive la variabilità residua comune, una sorta di "rumore" interno ai gruppi. In alternativa, lo stesso contenuto può essere espresso senza passare dalla forma lineare, specificando semplicemente che $y_i$ proviene da $\mathcal{N}(\mu_{x_i},\sigma)$, con $\mu_{x_i}=\mu_0$ se $x_i=0$ e $\mu_{x_i}=\mu_1$ se $x_i=1$. Questa "forma a medie di cella" non cambia la sostanza, ma rende i parametri ancora più espliciti.
+$$
+y_i = \alpha + \beta x_i + \varepsilon_i, \qquad \varepsilon_i \sim \mathcal{N}(0, \sigma).
+$$
 
-## La codifica centrata dell’indicatore
+I parametri del modello forniscono direttamente le quantità di interesse: la media del gruppo di riferimento è $\mu_0 = \alpha$, quella del gruppo di confronto è $\mu_1 = \alpha + \beta$, e la differenza $\Delta = \mu_1 - \mu_0$ coincide con $\beta$. Il parametro $\sigma$ quantifica la variabilità residua comune all'interno dei gruppi. Quando si desidera esprimere la differenza in una forma indipendente dall'unità di misura, si ricorre alla sua versione standardizzata, $d = \Delta / \sigma$, che verrà trattata in modo approfondito nel prossimo capitolo.
 
-Talvolta è comodo ricentrare l’indicatore intorno a zero, definendo $x_c=x-\tfrac12$, in modo che i suoi valori diventino $-\tfrac12$ e $+\tfrac12$. La regressione, scritta in termini di $x_c$, conserva la stessa struttura, ma ne cambia l'interpretazione: l'intercetta $\alpha_c$ diventa la media complessiva dei due gruppi, ovvero $\mu_0+\mu_1/2$, mentre il coefficiente della variabile centrata rimane la differenza $\Delta=\mu_1-\mu_0$. Questo piccolo cambiamento rende spesso più naturale la scelta delle prior, perché consente di esprimere separatamente ciò che si sa sulla media generale e ciò che si ritiene plausibile per l’ampiezza della differenza. Nei modelli più complessi, inoltre, la centratura riduce la correlazione a posteriori tra i parametri e può facilitare la stima.
+### Tre parametrizzazioni equivalenti
 
-## Dati di esempio (simulati)
+Il medesimo modello può essere espresso in diverse forme algebricamente equivalenti, che producono le medesime stime per $\mu_0$, $\mu_1$ e $\Delta$, ma che differiscono per il significato dell'intercetta e, di conseguenza, per la naturalezza con cui si specificano le distribuzioni a priori.
 
-Per rendere riproducibili i blocchi di codice che seguono, generiamo un dataset simulato con due gruppi. La differenza tra le medie è moderata e superiore a una possibile soglia di rilevanza pratica pari a 5 unità; le varianze sono uguali, in linea con il modello di base; le numerosità sono lievemente sbilanciate, come spesso accade nei dati reali.
-
-```{r}
-#| message: false
-#| warning: false
-set.seed(1234)
-
-n0    <- 120   # gruppo di riferimento
-n1    <-  90   # gruppo di confronto
-mu0   <- 80
-mu1   <- 88    # Delta = 8 (> SESOI = 5)
-sigma <- 12    # sd comune
-
-x <- c(rep(0, n0), rep(1, n1))
-y <- rnorm(n0 + n1, mean = ifelse(x == 0, mu0, mu1), sd = sigma)
-
-df <- tibble(x = x, y = y)
-
-df |>
-  mutate(group = factor(x, levels = c(0,1), labels = c("G0","G1"))) |>
-  group_by(group) |>
-  summarise(n = n(), mean = mean(y), sd = sd(y), .groups = "drop")
-```
-
-Questa impostazione produce un effetto standardizzato di grandezza approssimativamente pari a $d\approx 0.67$, sufficiente per illustrare come una stima di $\Delta$ possa essere interpretata sia in termini di segno e ampiezza, sia in relazione a una soglia di rilevanza.
-
-## Stima con `brms`
-
-Mostreremo tre parametrizzazioni equivalenti. La prima usa l’indicatore 0/1; la seconda adotta la variabile centrata per interpretare l’intercetta come media complessiva; la terza rinuncia all’intercetta e stima direttamente le due medie di gruppo, cosa utile quando si desidera controllare in modo indipendente le prior su $\mu_0$ e $\mu_1$.
-
-### Codifica dummy $x\in{0,1}$
-
-L’intercetta stima la media del gruppo di riferimento, mentre il coefficiente sull’indicatore stima la differenza tra le due medie. Utilizziamo prior debolmente informative, sufficienti a stabilizzare la stima senza imporre vincoli eccessivi.
-
-```{r}
-#| output: false
-fit <- brm(
-  y ~ 1 + x,
-  data = df,
-  family = gaussian(),
-  prior = c(
-    prior(student_t(3, 0, 10), class = "Intercept"),
-    prior(student_t(3, 0, 10), class = "b"),
-    prior(student_t(3, 0, 10), class = "sigma")
-  ),
-  backend = "cmdstanr",
-  chains = 4, iter = 2000, seed = 123
-)
-```
-
-Dai campioni a posteriori ricaviamo le medie di gruppo, la differenza $\Delta$, la deviazione standard residua e l’effetto standardizzato.
-
-```{r}
-draws <- as_draws_df(fit)
-post <- draws %>%
-  transmute(
-    mu0   = b_Intercept,
-    mu1   = b_Intercept + b_x,
-    delta = b_x,
-    sigma = sigma,
-    d     = delta / sigma
-  )
-posterior::summarise_draws(post[, c("mu0","mu1","delta","d","sigma")])
-
-SESOI <- 5
-c(
-  P_delta_gt0  = mean(post$delta > 0),
-  P_delta_gtS  = mean(abs(post$delta) > SESOI)
-)
-```
-
-La lettura delle quantità è diretta: $\mu_0$ e $\mu_1$ descrivono i livelli medi dei due gruppi; $\Delta$ quantifica la differenza; $d$ la riporta su una scala standardizzata. Le due probabilità a posteriori rispondono rispettivamente alla domanda sul segno della differenza e alla domanda sulla sua rilevanza pratica.
-
-### Codifica centrata $x_c=x-\tfrac12$
-
-Centrando la variabile, l’intercetta diventa la media complessiva e il coefficiente della variabile centrata rimane la differenza tra le medie. Questa forma è spesso comoda quando si desidera esprimere due priorità distinte sulla media generale e sull'ampiezza dell'effetto.
-
-```{r}
-#| output: false
-df <- df %>% mutate(xc = x - 0.5)
-
-fit_c <- brm(
-  y ~ 1 + xc,
-  data = df,
-  family = gaussian(),
-  prior = c(
-    prior(normal(0, 10), class = "Intercept"),
-    prior(normal(0, 10), class = "b"),
-    prior(student_t(3, 0, 10), class = "sigma")
-  ),
-  backend = "cmdstanr",
-  chains = 4, iter = 2000, seed = 123
-)
-
-draws_c <- as_draws_df(fit_c)
-post_c <- draws_c %>%
-  transmute(
-    grand_mean = b_Intercept,
-    delta      = b_xc,
-    mu0        = b_Intercept - 0.5*b_xc,
-    mu1        = b_Intercept + 0.5*b_xc,
-    sigma      = sigma,
-    d          = delta / sigma
-  )
-posterior::summarise_draws(post_c[, c("grand_mean","mu0","mu1","delta","d","sigma")])
-```
-
-### Medie di cella (senza intercetta)
-
-In questa terza variante, i coefficienti del modello coincidono direttamente con le due medie di gruppo. Questa è la parametrizzazione naturale quando si desidera assegnare *prior* indipendenti su $\mu_0$ e $\mu_1$.
-
-```{r}
-#| output: false
-df <- df %>% mutate(group = factor(x, levels = c(0,1), labels = c("G0","G1")))
-
-fit_cells <- brm(
-  y ~ 0 + group,
-  data = df, family = gaussian(),
-  prior = c(
-    prior(normal(0, 10), class = "b", coef = "groupG0"),
-    prior(normal(0, 10), class = "b", coef = "groupG1"),
-    prior(student_t(3, 0, 10), class = "sigma")
-  ),
-  backend = "cmdstanr",
-  chains = 4, iter = 2000, seed = 123
-)
-
-draws_cells <- as_draws_df(fit_cells)
-post_cells <- draws_cells %>%
-  transmute(
-    mu0   = b_groupG0,
-    mu1   = b_groupG1,
-    delta = b_groupG1 - b_groupG0,
-    sigma = sigma,
-    d     = delta / sigma
-  )
-posterior::summarise_draws(post_cells[, c("mu0","mu1","delta","d","sigma")])
-```
+| Parametrizzazione | Formula `brms` | Intercetta | Coefficiente | Contesto d'uso |
+|---|---|---|---|---|
+| Dummy $x \in \{0,1\}$ | `y ~ 1 + x` | $\mu_0$ (media del gruppo di riferimento) | $\Delta$ | Caso standard; la differenza è letta direttamente |
+| Centrata $x_c = x - \tfrac12$ | `y ~ 1 + xc` | media complessiva $(\mu_0 + \mu_1)/2$ | $\Delta$ | Prior separati su livello generale e ampiezza dell'effetto; riduce la correlazione a posteriori tra parametri |
+| Medie di cella | `y ~ 0 + gruppo` | — | $\mu_0$ e $\mu_1$ direttamente | Quando si desiderano prior *indipendenti* sulle due medie |
 
 ::: {.callout-important}
-
 ### Una nota sulle prior indotte
 
-Quando il modello viene parametrizzato come "intercetta + differenza", le prior indipendenti su $\alpha$ e $\beta$ generano, per trasformazione lineare, una dipendenza a priori tra $\mu_0$ e $\mu_1$. Se l'indipendenza a priori delle due medie è un requisito desiderato, la forma a medie di cella è la più adatta.
+Quando il modello è parametrizzato come "intercetta + differenza", prior indipendenti su $\alpha$ e $\beta$ generano, per trasformazione lineare, una *dipendenza a priori* tra $\mu_0$ e $\mu_1$. Se l'indipendenza a priori delle due medie è un requisito desiderato, la forma a medie di cella è la più adatta.
 :::
 
-::: {.callout-warning}
-
-### Controlli essenziali di stima
-
-Qualunque parametrizzazione si adotti, è opportuno verificare la qualità della stima: valori di $\widehat R$ prossimi a 1, dimensioni campionarie efficaci adeguate, assenza di divergenze e riscontri favorevoli nei posteriori controlli predittivi. In caso di necessità, i parametri "adapt_delta" e "max_treedepth" possono essere aumentati per stabilizzare l'esplorazione della posteriore.
-:::
-
-### Interpretare le distribuzioni a posteriori
-
-L’interpretazione ruota sempre attorno a poche quantità chiave. Le medie di gruppo, $\mu_0$ e $\mu_1$, descrivono i livelli attesi in ciascun gruppo, la differenza, $\Delta=\mu_1-\mu_0$, quantifica il contrasto di interesse, mentre l’effetto standardizzato, $d=\Delta/\sigma$, consente il confronto su una scala priva di unità. Oltre a riportare gli intervalli di credibilità di queste grandezze, l'approccio bayesiano permette di esprimere chiaramente la probabilità che la differenza sia positiva o superi una soglia di rilevanza pratica. Se, per esempio, la distribuzione posteriore di $\Delta$ ha una media di 4,8, un intervallo di credibilità al 95% pari a [2,1; 7,4] e una probabilità di $\Delta>0$ pari a 0,99 e di $\Pr(|\Delta|>5)$ pari a 0,46 con un SESOI pari a 5, potremo concludere che la differenza è verosimilmente positiva, mentre la probabilità che raggiunga la rilevanza pratica prefissata è intermedia: un'informazione preziosa per le decisioni applicative.
-
-## Confronto tra prospettive: frequentista e bayesiana
-
-Le due tradizioni inferenziali rispondono a domande simili con linguaggi diversi. Il frequentismo affida il giudizio a un valore p e a un intervallo di confidenza, concetti legati alla ripetizione ipotetica del campionamento e alla compatibilità dei dati con l'ipotesi nulla. Il bayesismo, invece, descrive direttamente l'incertezza sul parametro di interesse, fornendo una distribuzione a posteriori per $\Delta$ da cui derivare probabilità con significato immediato: quanto è plausibile che l'effetto sia maggiore di zero o che superi una soglia di rilevanza scelta a priori? Inoltre, l'approccio bayesiano integra senza difficoltà le conoscenze precedenti attraverso le prior e incoraggia a esplicitare le assunzioni del modello, favorendo una rendicontazione più trasparente e strettamente collegata alle domande sostanziali della ricerca.
+Nel seguito si adotterà la codifica dummy, la più diretta quando l'interesse è centrato sulla differenza.
 
 ## Esempio: istruzione materna e QI
 
-Per dare concretezza alle idee esposte finora, analizzeremo un dataset relativo allo studio dello sviluppo cognitivo [@gelman2021regression]. Per ogni bambino sono disponibili il punteggio di QI (`kid_score`) e l'indicazione se la madre ha completato la scuola superiore (`mom_hs`: 0 = non diplomata; 1 = diplomata). La domanda è semplice, ma al tempo stesso paradigmatica: i figli di madri diplomate hanno, in media, un QI diverso dagli altri? Per interpretare i risultati in modo sostanziale, fissiamo anche una soglia di rilevanza pratica pari a 5 punti di QI (SESOI = 5), che in questo contesto può rappresentare il minimo scostamento a cui attribuire un significato concreto.
-
-### Esplorazione iniziale dei dati
-
-Come sempre, iniziamo orientandoci nel dataset: importiamo i dati, rendiamo leggibili le etichette e verifichiamo che le due variabili di interesse siano complete. Questo passaggio, per quanto elementare, è essenziale per evitare fraintendimenti successivi.
+Analizziamo un dataset relativo allo sviluppo cognitivo [@gelman2021regression]. Per ciascun bambino sono disponibili il punteggio di QI (`kid_score`) e l'informazione se la madre è in possesso di un diploma di scuola superiore (`mom_hs`). Il quesito, seppur elementare, è rappresentativo di un'ampia classe di problemi in psicologia: i figli di madri diplomate presentano, in media, un QI diverso da quello dei figli di madri non diplomate? Si definisce preliminarmente una soglia di rilevanza pratica di 5 punti di QI  (SESOI = 5).
 
 ```{r}
 kidiq <- rio::import(here::here("data", "kidiq.dta"))
@@ -229,23 +85,14 @@ kidiq <- kidiq |>
                     labels = c("Non diplomata", "Diplomata"))
   )
 
-glimpse(kidiq)
-colSums(is.na(kidiq[, c("kid_score", "mom_hs")]))
-```
-
-Una volta chiarita la struttura, conviene avere un primo colpo d’occhio su come si distribuiscono i punteggi nei due gruppi. Le statistiche descrittive per gruppo offrono un riassunto compatto (numerosità, media e variabilità), mentre una rappresentazione grafica semplice — ad esempio violini, boxplot e punti jitter — aiuta a percepire l’ampiezza della sovrapposizione tra le distribuzioni.
-
-```{r}
 kidiq |>
   group_by(mom_hs) |>
   summarise(
     n        = n(),
-    media_QI = mean(kid_score, na.rm = TRUE),
-    sd_QI    = sd(kid_score, na.rm = TRUE),
-    mediana  = median(kid_score, na.rm = TRUE),
-    IQR      = IQR(kid_score, na.rm = TRUE)
-  ) |>
-  ungroup()
+    media_QI = mean(kid_score),
+    sd_QI    = sd(kid_score),
+    .groups  = "drop"
+  )
 ```
 
 ```{r}
@@ -253,71 +100,50 @@ ggplot(kidiq, aes(x = mom_hs, y = kid_score)) +
   geom_violin(trim = FALSE) +
   geom_boxplot(width = 0.12, outlier.shape = NA) +
   geom_jitter(width = 0.08, alpha = 0.25, size = 1) +
-  labs(
-    x = "Istruzione materna",
-    y = "QI del bambino"
-  ) +
-  theme_minimal()
+  labs(x = "Istruzione materna", y = "QI del bambino")
 ```
 
-Queste prime ispezioni suggeriscono che la media del gruppo con madri diplomate sia più alta, ma mostrano anche un’ampia sovrapposizione tra le due distribuzioni. È un quadro tipico nelle scienze psicologiche: un confronto di media può indicare una tendenza, ma non esaurisce l’informazione. Il passo successivo è trasformare questa intuizione in un’analisi inferenziale che quantifichi l’ampiezza della differenza e, soprattutto, l’incertezza che le si accompagna.
+La media del gruppo di madri diplomate è più elevata, ma le due distribuzioni presentano una considerevole sovrapposizione. Si tratta di un quadro tipico delle scienze psicologiche: il confronto delle medie può far emergere una tendenza, ma non esaurisce l'informazione rilevante. Il passo successivo consiste nel quantificare l'ampiezza della differenza e, soprattutto, l'incertezza che la accompagna.
 
-### Due vie inferenziali a confronto
+### La stima bayesiana
 
-Possiamo procedere in parallelo lungo due tradizioni. La via frequentista risponde alla domanda se la differenza osservata sia compatibile con la sola variabilità campionaria; la via bayesiana descrive direttamente l’incertezza su $\Delta$ e consente di calcolare probabilità con interpretazione immediata, ad esempio la probabilità che la differenza sia positiva o che superi la nostra soglia di rilevanza pratica.
-
-#### La lettura frequentista
-
-Come primo riferimento, applichiamo un *t*-test per campioni indipendenti nella versione con varianze uguali. L’obiettivo è capire se, assumendo che nella popolazione le due medie siano uguali, una differenza grande quanto quella osservata sia rara o meno. Va ricordato che il *p*-value non è la probabilità che l’ipotesi nulla sia vera, ma una misura della rarità dei dati alla luce di quell’ipotesi.
-
-```{r}
-t.test(
-  kid_score ~ mom_hs, 
-  data = kidiq, 
-  var.equal = TRUE
-)
-```
-
-In genere si osserva una media più bassa nel gruppo “Non diplomata” e più alta nel gruppo “Diplomata”, con una differenza nell’ordine di una decina di punti QI. L’intervallo di confidenza fornisce un range di valori compatibili con i dati alla luce del modello frequentista adottato. Nella pratica, quando le varianze e le numerosità tra gruppi sono diverse, la versione di Welch — che in R è il default — risulta più robusta.
-
-#### La lettura bayesiana
-
-Passiamo ora al modello gaussiano in `brms`, che per semplicità assume varianza comune nei due gruppi. Per ottenere coefficienti interpretabili in modo diretto, fissiamo come riferimento il gruppo “Non diplomata”. In questo modo l’intercetta stima la media del gruppo di riferimento, mentre il coefficiente associato a “Diplomata” stima la differenza tra le due medie.
+Si assume come riferimento il gruppo "Non diplomata", in modo che l'intercetta ne stimerà la media e il coefficiente la differenza
 
 ```{r}
 #| output: false
 kidiq$mom_hs <- relevel(kidiq$mom_hs, ref = "Non diplomata")
 
-fit_1 <- brm(
-  kid_score ~ mom_hs,
+fit <- brm(
+  kid_score ~ 1 + mom_hs,
   data   = kidiq,
   family = gaussian(),
+  prior = c(
+    prior(normal(90, 20),      class = "Intercept"),
+    prior(normal(0, 15),       class = "b"),
+    prior(student_t(3, 0, 20), class = "sigma")
+  ),
   backend = "cmdstanr",
   chains = 4, iter = 2000, seed = 123
 )
 ```
 
-Dai campioni a posteriori ricaviamo le quantità sostantive. La media del gruppo di riferimento, la media del gruppo con madri diplomate e la loro differenza $\Delta$ sono direttamente disponibili dai coefficienti del modello; la deviazione standard residua $\sigma$ quantifica la variabilità non spiegata; l’effetto standardizzato $d=\Delta/\sigma$ consente di riportare la differenza su una scala priva di unità. Definita la soglia di rilevanza a 5 punti, possiamo infine calcolare la probabilità che la differenza superi il SESOI.
+I prior sono calibrati sulla scala del QI: un livello medio plausibile è intorno a 90, con una differenza a priori centrata su zero che ammette scostamenti fino a circa quindici punti. Dalla distribuzione a posteriori si ricavano le quantità sostantive:
 
 ```{r}
-# Ponte tra nomi “umani” e nomi dei draw
-term_names <- setdiff(rownames(fixef(fit_1)), "Intercept")
-stopifnot(length(term_names) == 1)
-b_name <- paste0("b_", term_names)
-
-dr <- as_draws_df(fit_1)
-
-post <- dr %>%
+post <- as_draws_df(fit) |>
   transmute(
     mu0   = b_Intercept,
-    delta = .data[[b_name]],
+    delta = b_mom_hsDiplomata,
     mu1   = b_Intercept + delta,
     sigma = sigma,
     d     = delta / sigma
   )
 
+posterior::summarise_draws(post[, c("mu0", "mu1", "delta", "d", "sigma")])
+```
+
+```{r}
 SESOI <- 5
-posterior::summarise_draws(post[, c("mu0","mu1","delta","d","sigma")])
 
 c(
   P_delta_gt0    = mean(post$delta > 0),
@@ -325,94 +151,79 @@ c(
 )
 ```
 
-La lettura che ne deriva è immediata. Le due medie di gruppo sono stimate con i rispettivi intervalli credibili; la differenza $\Delta$ esprime l’ampiezza del contrasto, mentre (d) ne offre una versione standardizzata. Le probabilità a posteriori rispondono alle due domande cruciali: quanto è plausibile che la differenza sia positiva e quanto è plausibile che sia anche sufficientemente grande da superare la soglia di rilevanza stabilita a priori.
+L'interpretazione è immediata. Le medie di gruppo sono stimate con i rispettivi intervalli di credibilità; $\Delta$ esprime l'ampiezza del contrasto. Le due probabilità rispondono a domande distinte e ugualmente rilevanti: **Quanto è plausibile che la differenza sia positiva** e **Quanto è plausibile che sia anche sufficientemente ampia da risultare rilevante**, secondo la soglia stabilita prima di esaminare i dati? Questo passaggio rappresenta il passaggio dall'astrazione della significatività statistica alla concretezza della rilevanza sostantiva.
 
-## Approfondimenti bayesiani
-
-Stimare una differenza non basta: occorre interrogarsi sulla *qualità* del modello. La prospettiva bayesiana offre strumenti particolarmente naturali per farlo, mettendo a confronto i dati osservati con quelli che il modello sarebbe in grado di generare e valutando, quando necessario, specificazioni alternative.
-
-### Verifica predittiva a posteriori
-
-Il primo controllo consiste nel chiedersi se il modello sa rigenerare dati simili a quelli che abbiamo osservato. Le posterior predictive checks fanno esattamente questo: simulano nuovi dati dalle posteriori e li confrontano con i dati reali. Se le distribuzioni simulata e osservata divergono in modo sistematico — ad esempio perché il modello sottostima le code o non cattura una leggera asimmetria — è un segnale che la specificazione può essere raffinata.
-
-```{r}
-pp_check(fit_1)   # confronto globale tra densità osservata e replicata
-```
-
-### Verifica predittiva a priori
-
-È altrettanto istruttivo chiedersi se le *prior* che abbiamo scelto, prese di per sé, producano dati plausibili. Con `sample_prior = "only"` il modello ignora i dati reali e simula direttamente dai prior. Se i punteggi simulati finiscono spesso in regioni irrealistiche — ad esempio QI troppo estremi — conviene riallineare le prior alla conoscenza di dominio.
-
-```{r}
-#| output: false
-pri <- c(
-  prior(normal(90, 20), class = "Intercept"),
-  prior(normal(0, 15),  class = "b"),
-  prior(student_t(3, 0, 20), class = "sigma")
-)
-
-fit_prior <- brm(
-  kid_score ~ mom_hs,
-  data = kidiq,
-  family = gaussian(),
-  prior = pri,
-  sample_prior = "only",
-  backend = "cmdstanr",
-  chains = 2, iter = 1000, seed = 123
-)
-```
-
-```{r}
-pp_check(fit_prior, ndraws = 100)
-```
-
-### Varianti del modello e scelta predittiva
-
-Quando le verifiche evidenziano limitazioni, si possono considerare varianti mirate. La *t* di Student gestisce meglio la presenza di code pesanti o outlier; un modello eteroscedastico consente varianze diverse nei due gruppi; una skew-normal può accomodare una lieve asimmetria. La scelta non è meramente estetica: modelli diversi implicano assunzioni diverse sul meccanismo che ha generato i dati e possono cambiare, talora di poco, le stime delle quantità sostantive.
-
-```{r}
-#| output: false
-fit_t <- brm(kid_score ~ mom_hs, family = student(), data = kidiq,
-             backend = "cmdstanr", chains = 4, iter = 2000, seed = 123)
-
-fit_het <- brm(bf(kid_score ~ mom_hs, sigma ~ mom_hs),
-               family = gaussian(), data = kidiq,
-               backend = "cmdstanr", chains = 4, iter = 2000, seed = 123)
-
-fit_sn <- brm(kid_score ~ mom_hs, family = skew_normal(), data = kidiq,
-              backend = "cmdstanr", chains = 4, iter = 2000, seed = 123)
-```
-
-Per orientare la scelta finale, è utile confrontare i modelli sul piano predittivo tramite PSIS–LOO ed ELPD. Un valore di ELPD più alto indica, a parità d’informazione, una migliore capacità di predire dati nuovi e simili a quelli osservati. Quando le differenze sono dell’ordine del loro errore standard, il vantaggio è modesto e conviene privilegiare il modello più semplice che superi le verifiche predittive; valori di Pareto (k) persistentemente elevati invitano a considerare procedure come il *reloo* o una validazione incrociata *k*-fold.
-
-```{r}
-loo_fit1   <- loo(fit_1)
-loo_fit_t  <- loo(fit_t)
-loo_fit_het<- loo(fit_het)
-loo_fit_sn <- loo(fit_sn)
-
-loo_compare(loo_fit1, loo_fit_t, loo_fit_het, loo_fit_sn)
-```
-
-Nelle applicazioni su `kidiq` si osserva spesso un lieve vantaggio di specificazioni che catturano meglio leggere deviazioni dalla normalità (ad esempio una skew-normal), ma le differenze predittive sono in genere contenute. In queste circostanze, la decisione si appoggia a tre pilastri: compatibilità predittiva (LOO/ELPD), esito delle posterior predictive checks e stabilità delle quantità sostantive — come $\Delta$, $\Pr(\Delta>0)$ e $\Pr(|\Delta|>\text{SESOI})$ — al variare di assunzioni ragionevoli. Quando queste grandezze restano stabili tra modelli vicini, la scelta finale può legittimamente cadere sulla specificazione più semplice e più comunicabile.
-
-::: {.callout-warning title="Nota operativa sulla stima MCMC"}
-Prima di interpretare i risultati, è opportuno verificare che la stima sia affidabile: $\widehat R$ vicino a 1, dimensione campionaria efficace adeguata e assenza di divergenze. Eventuali difficoltà possono essere mitigate aumentando `adapt_delta` e `max_treedepth` o, se necessario, semplificando la parametrizzazione.
+::: {.callout-note appearance="simple"}
+**Confronto con la lettura frequentista.** Un test $t$ per campioni indipendenti sugli stessi dati (`t.test(kid_score ~ mom_hs, data = kidiq)`) restituirebbe una differenza puntuale analoga, con un intervallo di confidenza numericamente vicino all'intervallo di credibilità. La differenza risiede nella logica inferenziale: il valore $p$ quantifica la rarità di dati come i nostri *assumendo* che le medie siano uguali, e non esprime la probabilità che l'ipotesi nulla sia vera; la distribuzione a posteriori quantifica invece direttamente il grado di plausibilità dei diversi valori di $\Delta$. Solo quest'ultima consente di calcolare la probabilità $\Pr(|\Delta| > \text{SESOI})$.
 :::
 
-### Una sintesi interpretativa
+### Verifica predittiva
 
-Il valore aggiunto dell’analisi bayesiana non sta nel sostituire un test con un altro, ma nel produrre una descrizione completa dell’incertezza sulle quantità che contano. Nel nostro esempio, la stima della differenza tra le medie è accompagnata da una distribuzione a posteriori dalla quale derivano due informazioni decisive: la plausibilità del segno dell’effetto e la plausibilità che l’effetto sia anche *rilevante* in senso sostantivo, rispetto alla soglia stabilita prima di guardare i dati. È esattamente questo passaggio — dall’astrazione della significatività statistica alla concretezza della rilevanza pratica — che rende l’inferenza più utile per prendere decisioni informate nella ricerca psicologica.
+La stima di una differenza non costituisce un risultato conclusivo: è necessario verificare altresì se il modello sia in grado di generare dati simili a quelli osservati.
+
+```{r}
+pp_check(fit)
+```
+
+Qualora le distribuzioni replicate e quella osservata divergessero in modo sistematico, ad esempio perché il modello sottostima le code o non riproduce un'asimmetria, la specificazione può essere perfezionata. Le estensioni naturali sono quelle già discusse: una *t* di Student per le osservazioni con code pesanti (@sec-linar-models-brms), un modello eteroscedastico (`sigma ~ gruppo`) quando le varianze differiscono tra gruppi, una distribuzione skew-normal per asimmetrie lievi. Il criterio per la selezione tra le specificazioni alternative, ovvero il confronto predittivo mediante validazione incrociata, è affrontato nella sezione *Valutazione*. Vale tuttavia un principio pratico: se le quantità sostanziali ($\Delta$ e le probabilità a essa associate) rimangono stabili al variare di assunzioni ragionevoli, è opportuno preferire il modello più semplice e comunicabile.
+
+## Il disegno appaiato: due misure sugli stessi soggetti
+
+Finora ci siamo occupati del confronto tra **gruppi indipendenti**. Nella ricerca psicologica, tuttavia, è frequente che le due misure provengano *dagli stessi individui*: un punteggio rilevato prima e dopo un intervento o in due condizioni sperimentali diverse. Trattare questi dati come se appartenessero a gruppi indipendenti sarebbe un errore, in quanto si trascurerebbe la dipendenza tra le due osservazioni di ciascun soggetto.
+
+La soluzione è concettualmente lineare e richiama il capitolo precedente: si calcola la *differenza* tra le due misure per ciascun soggetto e si stima la media di tali differenze. Il modello si riconduce pertanto a quello di sola intercetta, `diff ~ 1`, applicato a un dato derivato.
+
+A titolo esemplificativo, utilizziamo i dati di uno studio con misure pre e post su una scala di sintomi depressivi (CES-D) [@tarrats2025efficacy]:
+
+```{r}
+df_pre_post <- read_excel(
+  here::here("data", "Tarrats-Pons.xlsx"), sheet = 3
+) |>
+  select(IdentificationNumber, Sample, CESD = `CESS-D`) |>
+  tidyr::pivot_wider(
+    names_from   = Sample,
+    values_from  = CESD,
+    names_prefix = "CESD_"
+  ) |>
+  mutate(diff = CESD_PRE - CESD_POST)
+```
+
+```{r}
+#| output: false
+fit_paired <- brm(
+  diff ~ 1,
+  data   = df_pre_post,
+  family = gaussian(),
+  prior  = c(
+    prior(normal(0, 10),       class = "Intercept"),
+    prior(student_t(3, 0, 10), class = "sigma")
+  ),
+  backend = "cmdstanr",
+  chains = 4, iter = 2000, seed = 1234
+)
+```
+
+```{r}
+post_paired <- as_draws_df(fit_paired)
+
+posterior::summarise_draws(
+  post_paired[, c("b_Intercept", "sigma")]
+)
+
+mean(post_paired$b_Intercept > 0)   # Pr(riduzione dei sintomi)
+```
+
+L'intercetta stima ora la **riduzione media** dei sintomi tra il pre e il post, e la probabilità a posteriori che essa sia positiva quantifica quanto riteniamo plausibile un effettivo miglioramento. Si tratta dello stesso modello del @sec-mcmc-one-mean, con l'unica differenza che l'oggetto di analisi è una differenza intra-soggetto anziché una misura grezza.
+
+È importante sottolineare il motivo per cui l'appaiamento è vantaggioso: eliminando le differenze stabili tra gli individui, come ad esempio chi parte da livelli elevati e chi da livelli più contenuti, il disegno appaiato riduce la variabilità residua e, a parità di numerosità campionaria, rende la stima dell'effetto più precisa.
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-In questo capitolo abbiamo riletto il confronto tra due gruppi con gli strumenti dell’inferenza bayesiana, mostrando come il problema possa essere formulato sia come differenza tra le medie di due distribuzioni normali, $\Delta=\mu_1-\mu_0$, sia come un semplice modello di regressione con variabile indicatrice. Le due prospettive sono equivalenti sul piano matematico e, soprattutto, conducono alla stessa idea centrale: ciò che conta non è un verdetto sì/no sull’esistenza di una differenza, bensì una descrizione calibrata della sua ampiezza e dell’incertezza che l’accompagna. Questa descrizione è fornita dalla distribuzione a posteriori di $\Delta$, che consente di rispondere a domande sostantive in linguaggio probabilistico: quanto è plausibile che la differenza sia positiva? quanto è plausibile che superi una soglia di rilevanza stabilita *prima* dell’analisi?
+Il confronto tra due gruppi non è uno strumento autonomo, ma un modello lineare con un predittore dicotomico: l'intercetta corrisponde alla media del gruppo di riferimento, mentre il coefficiente esprime la differenza. Da tale formulazione discende ciò che sostanzialmente rileva, ovvero non un giudizio binario sull'esistenza di una differenza, ma una stima calibrata della sua ampiezza e dell'incertezza associata, sintetizzata nella distribuzione a posteriori di $\Delta$.
 
-Il passaggio dalla logica della significatività a quella della rilevanza pratica è, a ben vedere, il guadagno principale. La soglia SESOI scandisce il confine fra differenze che, pur esistendo, non cambiano le conclusioni sostantive, e differenze che invece contano nel contesto applicativo. Allo stesso tempo, l’approccio bayesiano rende trasparente il ruolo dell’informazione pregressa attraverso le prior e invita a esplicitare le assunzioni del modello. Quando l’ipotesi di normalità o di varianza comune è troppo restrittiva, abbiamo visto come sia naturale introdurre varianti più robuste — ad esempio una *t* di Student per gestire code pesanti, un modello eteroscedastico per varianze diverse o una skew-normal per leggere asimmetrie — e valutare in che misura le nostre conclusioni su $\Delta$ rimangano stabili. Le verifiche predittive a posteriori, affiancate al confronto predittivo tramite LOO/ELPD, offrono una bussola pratica per bilanciare adeguatezza descrittiva e parsimonia.
+Il vantaggio principale risiede nel passaggio dalla logica della significatività a quella della **rilevanza pratica**. La soglia SESOI, definita prima dell'analisi, traccia il confine tra differenze statisticamente rilevabili ma prive di concrete implicazioni e differenze che assumono un peso effettivo nel contesto applicativo. La distribuzione a posteriori consente di rispondere a entrambi gli interrogativi in termini probabilistici. Si è inoltre osservato che lo stesso modello si adatta al disegno appaiato, riconducendosi al modello di sola intercetta applicato alle differenze intra-soggetto.
 
-Dal punto di vista della comunicazione dei risultati, la buona pratica è ormai chiara: presentare $\mu_0$ e $\mu_1$ con i rispettivi intervalli credibili, riportare $\Delta$ e, quando utile, l’effetto standardizzato $d=\Delta/\sigma$, accompagnando queste quantità con le probabilità a posteriori più direttamente interpretabili $(\Pr(\Delta>0)$ e $\Pr(|\Delta|>\text{SESOI}))$. Quando differenze predittive fra modelli sono piccole, la coerenza di queste grandezze attraverso specificazioni ragionevoli diventa l’argomento decisivo per la scelta del modello: se le conclusioni sostantive non cambiano, è legittimo preferire la formulazione più semplice e più comunicabile.
-
-Il confronto tra due gruppi, così riformulato, non è un punto di arrivo ma un punto di partenza. Gli stessi principi — centralità della quantità di interesse, esplicitazione delle assunzioni, uso di prior debolmente informative ma sensibili al contesto, verifica predittiva e attenzione alla rilevanza pratica — si estendono naturalmente a scenari più complessi, con covariate, gerarchie e dipendenze nel tempo. Nel capitolo successivo riprenderemo il filo introducendo la nozione di grandezza dell’effetto in modo sistematico: collegheremo la differenza tra medie alla variabilità dei dati, discuteremo il ruolo della standardizzazione e mostreremo come integrare la prospettiva della SESOI in un quadro coerente di valutazione dell’importanza scientifica degli effetti.
+Nel calcolo delle quantità di interesse è emersa anche la versione standardizzata della differenza, $d = \Delta / \sigma$, utilizzata finora solo come strumento. Nel prossimo capitolo la porremo al centro dell'attenzione: esamineremo il significato della standardizzazione di un effetto, le insidie che cela e, soprattutto, come l'approccio bayesiano trasformi l'effetto da entità puntuale a *distribuzione*, sulla quale è possibile formulare affermazioni probabilistiche altrettanto dirette di quelle finora discusse.
 
 ::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
 ```{r}
@@ -420,5 +231,4 @@ sessionInfo()
 ```
 :::
 
-## Bibliografia {.unnumbered .unlisted} 
-
+## Bibliografia {.unnumbered .unlisted}

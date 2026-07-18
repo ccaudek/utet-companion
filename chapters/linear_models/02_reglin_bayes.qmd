@@ -32,12 +32,9 @@ Nel prosieguo del capitolo vedremo come specificare e stimare un modello bayesia
 ::: {.callout-tip collapse=true}
 ## Prerequisiti
 
-- Leggere l'@sec-apx-install-cmdstan.
-- Leggere il capitolo *Simple Normal Regression* di @Johnson2022bayesrules.
-- Consultare *Regression and Other Stories* [@gelman2021regression].
-  - Il pdf del libro è consultabile gratuitamente su questo [sito](https://avehtari.github.io/ROS-Examples/#Contents).
-  - Prestare particolare attenzione ai capitoli 1 "Overview", 6 "Background on Regression Modeling", 7 "Linear Regression with a Single Predictor" e 8 "Fitting regression models", che offrono una guida dettagliata al modello di regressione bivariato da una prospettiva bayesiana.
-- Per utilizzare il pacchetto R *brms*, è necessario installare preliminarmente *Stan* o *CmdStan* sul proprio computer. Si consiglia di optare per *CmdStan*. Il metodo più semplice per installare *CmdStan* consiste nell'installare il pacchetto R *cmdstanr* e seguire le istruzioni fornite nella documentazione.
+- Aver letto il @sec-regression-questions, di cui questo capitolo è la formalizzazione.
+- Per l'installazione di *CmdStan* (necessaria per `brms`), l'@sec-apx-install-cmdstan.
+- Come approfondimenti: il capitolo *Simple Normal Regression* di @Johnson2022bayesrules e i capitoli sulla regressione di *Regression and Other Stories* [@gelman2021regression] (pdf gratuito al [sito](https://avehtari.github.io/ROS-Examples/#Contents); si vedano in particolare i capitoli 6–8).
 :::
 
 ::: {.callout-caution collapse=true title="Preparazione del Notebook"}
@@ -161,7 +158,7 @@ $$ {#eq-log-likelihood-simple-regression}
 Nell'approccio bayesiano, la verosimiglianza costituisce, insieme alla distribuzione a priori, uno dei due pilastri fondamentali del teorema di Bayes. A differenza della stima di massima verosimiglianza in ambito frequentista, il suo scopo non è produrre stime puntuali dei parametri, bensì fornire l'evidenza empirica che verrà combinata con le informazioni pregresse. La formula bayesiana sintetizza tale aggiornamento:
 
 $$
-\text{Posterior} ;\propto; \text{Likelihood} \times \text{Prior}.
+\text{Posterior} \;\propto\; \text{Likelihood} \times \text{Prior}.
 $$
 
 In altre parole, la verosimiglianza rappresenta *ciò che i dati ci indicano*, mentre il prior codifica *ciò che già ritenevamo plausibile*. La distribuzione a posteriori nasce dall'integrazione di queste due fonti e rappresenta lo stato aggiornato della conoscenza. È proprio questa combinazione sistematica tra evidenza empirica e conoscenza pregressa che distingue l’inferenza bayesiana e le conferisce la sua capacità di fornire stime probabilistiche direttamente interpretabili.
@@ -247,25 +244,29 @@ Definiamo i parametri e simuliamo i dati.
 ```{r}
 set.seed(123)
 
-# Definizione delle variabili
-x <- 1:100
-n <- length(x)
-alpha <- 1.5
-beta <- 0.5
+n <- 100
+
+# Ore di sonno riportate (predittore), in un intervallo plausibile
+sonno   <- runif(n, 3, 10)
+sonno_c <- sonno - mean(sonno)   # centrato: 0 = quantità media di sonno
+
+# Parametri "veri" sulla scala dell'ansia (0-100)
+beta0 <- 50    # ansia attesa a sonno medio
+beta1 <- -4    # ogni ora di sonno in più ~ 4 punti di ansia in meno
 sigma <- 10
 
-# Generazione di y
-y <- alpha + beta * x + rnorm(n, 0, sigma)
+# Generazione della risposta
+ansia <- beta0 + beta1 * sonno_c + rnorm(n, 0, sigma)
 
 # Creazione del dataframe
-fake <- tibble(x = x, y = y)
+fake <- tibble(sonno = sonno, sonno_c = sonno_c, ansia = ansia)
 head(fake)
 ```
 
 Iniziamo adattando ai dati un modello frequentista:
 
 ```{r}
-fm1 <- lm(y ~ x, data = fake)
+fm1 <- lm(ansia ~ sonno_c, data = fake)
 ```
 
 ```{r}
@@ -278,20 +279,20 @@ Per ottenere l'intervallo di confidenza (nel senso frequentista) della stima dei
 confint(fm1, level = 0.95)
 ```
 
-Adattiamo ora ai dati un modello di regressione bayesiano utilizzando *brms*. Si noti che, anche in questo caso, usiamo la sintassi di Wilkinson `y ~ x`, come per `lm()`. Specifichiamo esplicitamente i prior ed eseguiamo il campionamento:
+Adattiamo ora ai dati un modello di regressione bayesiano utilizzando *brms*. Si noti che, anche in questo caso, usiamo la sintassi di Wilkinson `ansia ~ sonno_c`, come per `lm()`. Specifichiamo esplicitamente i prior ed eseguiamo il campionamento:
 
 ```{r}
 #| output: false
 
-# Prior debolmente informativi
+# Prior moderatamente informativi, coerenti con la scala dell'ansia (0-100)
 my_priors <- c(
-  prior(normal(0, 50), class = "Intercept"),
-  prior(normal(0, 10), class = "b"),
-  prior(exponential(0.1), class = "sigma")
+  prior(normal(50, 15), class = "Intercept"),
+  prior(normal(-2, 2),  class = "b"),
+  prior(cauchy(0, 5),   class = "sigma")
 )
 
 fm2 <- brm(
-  y ~ x, 
+  ansia ~ sonno_c,
   data = fake,
   prior = my_priors,
   backend = "cmdstanr"
@@ -316,7 +317,7 @@ Per condurre il *prior predictive check* è necessario specificare distribuzioni
 #| output: false
 
 fm2_prior <- brm(
-  y ~ x, 
+  ansia ~ sonno_c,
   data = fake,
   prior = my_priors,
   sample_prior = "only",
@@ -329,7 +330,7 @@ pp_check(fm2_prior, ndraws = 50) +
   labs(title = "Prior Predictive Check")
 ```
 
-Nel grafico, le linee rappresentano le distribuzioni di $y$ considerate plausibili dal modello *prima* di osservare i dati. Qualora le previsioni risultassero incompatibili con i valori realistici per il fenomeno, sarebbe necessario rivedere le distribuzioni a priori. Con distribuzioni a priori debolmente informative come quelle specificate, è ragionevole attendersi un'ampia variabilità dei valori generati, coerente con l'assenza di informazioni pregresse fortemente vincolanti, che consente al modello di adattarsi efficacemente ai dati osservati.
+Nel grafico, le linee rappresentano le distribuzioni di $y$ considerate plausibili dal modello *prima* di osservare i dati. Qualora le previsioni risultassero incompatibili con i valori realistici per il fenomeno, sarebbe necessario rivedere le distribuzioni a priori. Con le distribuzioni a priori moderatamente informative qui specificate, ci aspettiamo che i valori generati cadano in un intervallo *plausibile* per un punteggio di ansia — attorno a 50 e all'interno della scala 0–100 — senza produrre valori assurdi. È proprio questo che un buon *prior predictive check* dovrebbe mostrare: prior che codificano aspettative sostantive ragionevoli, lasciando comunque ai dati il compito di raffinare le stime.
 
 ## Diagnostica della convergenza
 
@@ -342,7 +343,7 @@ I *trace plot* dei parametri si ottengono come segue:
 ```{r fig.asp=1}
 mcmc_trace(
   fm2, 
-  pars = c("b_Intercept", "b_x", "sigma"),
+  pars = c("b_Intercept", "b_sonno_c", "sigma"),
   facet_args = list(nrow = 3)
 )
 ```
@@ -352,17 +353,17 @@ Gli istogrammi delle distribuzioni a posteriori dei parametri si generano nel mo
 ```{r fig.asp=1}
 mcmc_hist(
   fm2, 
-  pars = c("b_Intercept", "b_x", "sigma"),
+  pars = c("b_Intercept", "b_sonno_c", "sigma"),
   facet_args = list(nrow = 3)
 )
 ```
 
 ### Diagnostica dell'autocorrelazione
 
-Per valutare l'autocorrelazione tra i campioni a posteriori del parametro `b_x`, si utilizza il seguente comando:
+Per valutare l'autocorrelazione tra i campioni a posteriori del parametro `b_sonno_c`, si utilizza il seguente comando:
 
 ```{r fig.asp=1}
-mcmc_acf(fm2, pars = "b_x")
+mcmc_acf(fm2, pars = "b_sonno_c")
 ```
 
 L'autocorrelazione quantifica la dipendenza lineare tra campioni successivi nella catena di Markov. Poiché gli algoritmi MCMC generano campioni correlati per costruzione, è fisiologico osservare una certa autocorrelazione tra campioni prossimi. Tuttavia, una catena adeguatamente mescolata dovrebbe mostrare un decadimento rapido dell'autocorrelazione all'aumentare del lag, segno che i campioni si comportano approssimativamente come indipendenti per lag sufficientemente ampi.
@@ -375,7 +376,7 @@ Nel nostro caso, l'autocorrelazione decade rapidamente fino ad annullarsi, sugge
 summary(fm2)
 ```
 
-Il sommario del modello riporta le stime a posteriori dei parametri. Se confrontati con i valori generativi utilizzati nella simulazione ($\alpha = 1.5$, $\beta = 0.5$, $\sigma = 10$), si osserva che gli intervalli di credibilità al 95% contengono i valori generativi: l'intervallo per l'intercetta include il valore reale, analogamente a quanto si osserva per la pendenza. Questo risultato suggerisce che il modello recuperi con accuratezza i parametri sottostanti e quantifichi adeguatamente l'incertezza delle stime.
+Il sommario del modello riporta le stime a posteriori dei parametri. Se confrontati con i valori generativi utilizzati nella simulazione ($\beta_0 = 50$, $\beta_1 = -4$, $\sigma = 10$), si osserva che gli intervalli di credibilità al 95% contengono i valori generativi: l'intervallo per l'intercetta include il valore reale, così come quello per la pendenza (negativa, coerentemente con l'ipotesi che più sonno si associ a minore ansia). Questo risultato suggerisce che il modello recuperi con accuratezza i parametri sottostanti e quantifichi adeguatamente l'incertezza delle stime.
 
 ## Verifica predittiva a posteriori
 
