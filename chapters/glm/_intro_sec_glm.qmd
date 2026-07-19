@@ -1,22 +1,64 @@
+# Dove siamo nel percorso {.unnumbered .unlisted}
+
 ::: {.callout-note appearance="minimal"}
-## 📍 Dove siamo nel percorso {.unnumbered .unlisted}
+Nella parte precedente abbiamo studiato il modello lineare come una distribuzione condizionata: il predittore lineare descrive come cambia il valore atteso dell'outcome, mentre la distribuzione normale rappresenta la variabilità delle osservazioni attorno a quel valore. Questa costruzione è molto generale, ma non è adatta a ogni tipo di dato. Una risposta corretta o errata può assumere soltanto i valori 0 e 1; una proporzione è vincolata tra 0 e 1; un conteggio non può essere negativo e presenta spesso una variabilità che cresce con il suo livello medio.
 
-I modelli di regressione della sezione precedente assumono una **variabile dipendente continua** distribuita secondo una Normale. In psicologia, tuttavia, ci troviamo spesso a lavorare con variabili **categoriali** (es. risposta corretta/errata) o **discrete di conteggio** (es. numero di occorrenze). Per modellare questi dati, dobbiamo **generalizzare la nostra famiglia di modelli**.
+La parte *Estensioni* mostra come conservare la logica del modello lineare adattando la componente osservazionale al tipo di outcome. L'obiettivo non è introdurre una nuova collezione di tecniche, ma riconoscere una struttura comune dietro modelli apparentemente diversi.
 :::
 
-::: {.callout-tip}
-## 🎯 Cosa faremo in questa sezione {.unnumbered .unlisted}
+## Dal modello lineare al modello lineare generalizzato
 
-Questa sezione estende la logica di regressione per adattarsi a diverse strutture dei dati:
+Nel modello lineare gaussiano, la media condizionata è collegata direttamente ai predittori:
 
-- **Regressione logistica:** modellare **decisioni binarie** e variabili **dicotomiche**.
-- **Inferenza su proporzioni:** stima e confronto di probabilità.
-- **Regressione di Poisson:** analisi di **variabili di conteggio** e gestione della **sovradispersione**.
-- **Modelli processuali:** dalla correlazione all'**identificazione di meccanismi causali**.
-- **Gestione dei dati mancanti:** strategie di imputazione in ottica bayesiana.
-- **Validazione predittiva:** valutare la capacità generalizzabile del modello.
-:::
+$$
+Y_i \sim \operatorname{Normal}(\mu_i, \sigma),
+\qquad
+\mu_i = \alpha + \mathbf{x}_i^\top\boldsymbol\beta.
+$$
 
-::: {.callout-caution appearance="simple"}
-💡 **Prospettiva unificante:** il Modello Lineare Generalizzato non costituisce una tecnica a sé stante, ma **un’estensione naturale** della regressione. Il **framework concettuale è lo stesso**: un predittore lineare è collegato al parametro di una distribuzione. La vera differenza sta nell'**abbandonare la distribuzione Normale** per adattarsi a strutture di dati diverse (binarie, di conteggio). **La logica inferenziale bayesiana rimane identica.**
-:::
+Questa formulazione permette a $\mu_i$ di assumere qualsiasi valore reale. Il vincolo è appropriato per molti outcome continui, ma non per una probabilità o un tasso, che devono rimanere rispettivamente nell'intervallo $(0,1)$ e nell'intervallo positivo.
+
+Un modello lineare generalizzato separa tre componenti:
+
+$$
+Y_i \sim \mathcal F(\theta_i),
+\qquad
+g(\theta_i)=\eta_i,
+\qquad
+\eta_i=\alpha+\mathbf{x}_i^\top\boldsymbol\beta.
+$$
+
+La distribuzione $\mathcal F$ rappresenta il tipo di osservazione; $\theta_i$ è il parametro della distribuzione che varia con i predittori; $g$ è la funzione di collegamento; $\eta_i$ è il predittore lineare. La funzione di collegamento consente di modellare una quantità vincolata mediante una combinazione lineare non vincolata.
+
+| Tipo di outcome | Distribuzione osservazionale | Parametro modellato | Collegamento tipico |
+|---|---|---|---|
+| continuo | normale | media $\mu$ | identità |
+| binario | Bernoulli | probabilità $p$ | logit |
+| successi su $n$ prove | binomiale | probabilità $p$ | logit |
+| conteggio | Poisson | valore atteso $\lambda$ | log |
+
+Questa tabella non va letta come un elenco di procedure indipendenti. In tutti i casi, il predittore lineare organizza le relazioni sistematiche; ciò che cambia è il modo in cui esso viene trasformato nel parametro di una distribuzione plausibile per i dati.
+
+## Che cosa rimane invariato
+
+Il passaggio ai GLM non modifica il workflow bayesiano. La domanda di ricerca e la quantità di interesse devono essere definite prima del modello; i prior devono essere esaminati attraverso le loro conseguenze predittive; la stima richiede diagnostiche computazionali; l'adeguatezza della specificazione viene valutata confrontando dati osservati e dati replicati.
+
+Ciò che cambia è soprattutto la scala dell'interpretazione. In una regressione logistica, i coefficienti sono additivi sulla scala dei log-odds, ma le domande sostantive riguardano spesso probabilità, differenze di probabilità o rapporti tra rischi. In una regressione di Poisson, i coefficienti sono additivi sulla scala logaritmica, ma diventano moltiplicativi sulla scala dei conteggi attesi. Per comunicare i risultati sarà quindi spesso necessario trasformare i campioni posteriori e costruire quantità derivate sulla scala dell'outcome.
+
+La non linearità introdotta dalla funzione di collegamento rende particolarmente importante il controllo predittivo a priori. Un prior apparentemente moderato sulla scala del coefficiente può generare probabilità quasi sempre prossime a 0 o 1, oppure conteggi irrealisticamente grandi. La plausibilità dei prior deve perciò essere valutata nella scala in cui i dati vengono osservati.
+
+## Il percorso della parte
+
+Il primo capitolo, @sec-reg-logistic-stan, introduce la regressione logistica come esempio fondamentale di GLM. La probabilità di un esito binario viene collegata ai predittori attraverso la funzione logit. L'attenzione sarà rivolta non soltanto ai coefficienti, ma soprattutto alle probabilità predette e ai confronti sostantivi costruiti a partire dalla posterior.
+
+Il capitolo successivo riunisce l'inferenza su una proporzione e il confronto tra due proporzioni. Questi problemi non richiedono metodi separati: una proporzione è un modello binomiale a sola intercetta, mentre il confronto tra proporzioni aggiunge un predittore di gruppo. La differenza di rischio, il rapporto di rischio e l'odds ratio emergeranno come diverse funzioni degli stessi campioni posteriori.
+
+Il modello di Poisson, discusso in @sec-poisson-model, estende la stessa architettura ai conteggi. Il collegamento logaritmico garantisce valori attesi positivi e rende i coefficienti interpretabili in termini moltiplicativi. Il confronto con il modello binomiale negativo mostrerà inoltre che scegliere una famiglia distributiva non è un atto definitivo: la specificazione deve essere rivista quando le repliche del modello non riproducono la dispersione osservata.
+
+L'ultimo capitolo, @sec-ar1, svolge una funzione diversa. Parte da un outcome binario, ma introduce una dipendenza temporale e uno stato latente. Il suo scopo è mostrare il confine tra un GLM statico, che descrive una distribuzione condizionata delle risposte, e un modello processuale, che ipotizza come uno stato interno evolva nel tempo e generi il comportamento osservato.
+
+## Una precisazione sul significato dell'estensione
+
+Ampliare la distribuzione osservazionale rende il modello più adatto alla struttura dei dati, ma non ne modifica automaticamente l'ambizione teorica. Una regressione logistica può descrivere accuratamente come la probabilità di una risposta vari con un predittore; una regressione di Poisson può rappresentare come cambia un tasso di eventi. Questi risultati sono scientificamente utili, ma non identificano necessariamente il processo psicologico che produce le risposte o gli eventi.
+
+La distinzione sarà importante per il seguito del Companion. In questa parte impariamo a costruire modelli più adeguati per differenti tipi di outcome. Nella parte *Applicazione* useremo la stessa logica generativa per una domanda più ambiziosa: specificare stati, regole di aggiornamento e modelli osservazionali che rappresentino possibili processi psicologici.

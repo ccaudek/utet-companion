@@ -1,0 +1,772 @@
+# Costruire un modello dinamico: la revisione degli obiettivi {#sec-dynamic-models-goal-updating}
+
+::: {.callout-note appearance="minimal"}
+Molti fenomeni psicologici non sono fotografie, ma processi. Un obiettivo personale, un'aspettativa o un sintomo osservato in un dato momento dipendono anche da ciò che è accaduto prima.
+
+In questo capitolo traduciamo una teoria verbale della regolazione degli obiettivi in una regola di aggiornamento eseguibile. Seguiremo l'ordine appropriato per un modello processuale: prima ne studieremo le conseguenze mediante simulazione; soltanto dopo collegheremo il processo ai dati e ne stimeremo i parametri.
+:::
+
+::: {.callout-note title="Obiettivi del capitolo"}
+Al termine del capitolo dovresti essere in grado di:
+
+- riconoscere stato, input, errore di previsione e regola di aggiornamento;
+- interpretare i parametri del modello senza trasformarli automaticamente in tratti psicologici;
+- simulare traiettorie prima di osservare o analizzare dati;
+- distinguere il modello del processo dal modello osservazionale;
+- comprendere quali informazioni fornisce un modello con parametri condivisi dall'intero campione;
+- specificare e stimare il modello in Stan;
+- eseguire controlli predittivi e un semplice esercizio di recupero dei parametri;
+- individuare le principali assunzioni e i limiti della specificazione.
+:::
+
+::: {.callout-tip collapse=true title="Percorsi di lettura"}
+**Percorso concettuale.** Concentrati sulla regola di aggiornamento, sulle simulazioni e sulla distinzione tra processo e osservazione.
+
+**Percorso applicativo.** Esegui le funzioni di simulazione, il controllo predittivo a priori e l'analisi del dataset.
+
+**Percorso computazionale.** Studia la traduzione della ricorsione nel programma Stan e il controllo di recuperabilità.
+:::
+
+::: {.callout-tip collapse=true title="Prerequisiti"}
+- Il capitolo @sec-bayes-stat-models, per il vocabolario dei modelli formali.
+- La parte **Calcolo**, per campionamento MCMC e controlli predittivi.
+- Come lettura facoltativa, *The role of the individual in the coming era of process-based therapy* [@hayes2019role].
+:::
+
+::: {.callout-caution collapse=true title="Preparazione del Notebook"}
+
+```{r}
+#| label: setup-goal-update
+#| include: false
+
+here::here("code", "_common.R") |>
+  source()
+
+suppressPackageStartupMessages({
+  library(cmdstanr)
+  library(bayesplot)
+  library(posterior)
+  library(tidybayes)
+  library(rio)
+})
+
+set.seed(4817)
+```
+:::
+
+## Dalla teoria verbale a una regola di cambiamento
+
+Consideriamo un compito ripetuto nel quale, prima di ogni prova, una persona dichiara il risultato che intende raggiungere. Dopo la prova osserva la propria prestazione e può modificare l'obiettivo successivo.
+
+Una teoria verbale minima potrebbe essere formulata così:
+
+> Le persone confrontano la prestazione ottenuta con l'obiettivo precedente. Se la prestazione supera l'obiettivo, tendono ad alzarlo; se è inferiore, tendono ad abbassarlo. Può inoltre esistere una deriva sistematica verso obiettivi più alti o più bassi.
+
+Seguendo l'esempio discusso da @knight2023tutorial, formalizziamo questa idea mediante:
+
+$$
+G_t
+=
+G_{t-1}
++
+\alpha\left(P_{t-1}-G_{t-1}\right)
++
+\beta,
+$$ {#eq-knight2023}
+
+dove:
+
+- $G_t$ è lo stato dell'obiettivo al trial $t$;
+- $P_{t-1}$ è la prestazione osservata al trial precedente;
+- $P_{t-1}-G_{t-1}$ è la discrepanza, o errore di previsione;
+- $\alpha$ determina quanto della discrepanza viene incorporato nell'obiettivo successivo;
+- $\beta$ rappresenta uno spostamento sistematico per trial non spiegato dalla discrepanza.
+
+Il modello contiene quindi quattro componenti.
+
+| Componente | Ruolo nel modello |
+|---|---|
+| **Stato** $G_t$ | quantità che conserva la memoria del processo |
+| **Input** $P_t$ | informazione esterna che può modificare lo stato |
+| **Errore** $P_t-G_t$ | segnale che indica direzione e ampiezza della revisione |
+| **Regola di aggiornamento** | trasforma lo stato corrente nello stato successivo |
+
+::: {.callout-important title="Il parametro non è ancora un costrutto validato"}
+È utile descrivere $\alpha$ come *sensibilità alla discrepanza* e $\beta$ come *deriva*. Non possiamo però concludere, soltanto dal nome dei parametri, che $\alpha$ misuri un tratto stabile di adattabilità o che $\beta$ misuri direttamente motivazione, ottimismo o resilienza.
+
+Queste interpretazioni richiedono validazione: recuperabilità, stabilità, capacità predittiva e relazione con misure esterne.
+:::
+
+## Comprendere un singolo aggiornamento
+
+Supponiamo che l'obiettivo precedente sia 50, la prestazione sia 60, $\alpha=0.5$ e $\beta=2$:
+
+$$
+G_t=50+0.5(60-50)+2=57.
+$$
+
+La discrepanza positiva produce un incremento di 5 punti; la deriva aggiunge altri 2 punti.
+
+Se, con gli stessi parametri, la prestazione fosse 40:
+
+$$
+G_t=50+0.5(40-50)+2=47.
+$$
+
+La revisione dovuta al feedback sarebbe pari a $-5$, parzialmente compensata dalla deriva positiva.
+
+Questi esempi chiariscono la scomposizione matematica, ma una dinamica non si comprende davvero osservando un solo passaggio. Occorre simulare l'intera sequenza.
+
+## Simulare prima di stimare
+
+Definiamo una funzione che genera lo stato previsto e, facoltativamente, osservazioni rumorose.
+
+```{r}
+#| label: simulate-goal-path-function
+
+simulate_goal_path <- function(
+    performance,
+    initial_goal,
+    alpha,
+    beta,
+    sigma = 0
+) {
+  n_trials <- length(performance)
+  state <- numeric(n_trials)
+  observed <- numeric(n_trials)
+
+  state[1] <- initial_goal
+  observed[1] <- initial_goal
+
+  if (n_trials > 1) {
+    for (t in 2:n_trials) {
+      state[t] <- state[t - 1] +
+        alpha * (performance[t - 1] - state[t - 1]) +
+        beta
+
+      observed[t] <- rnorm(1, mean = state[t], sd = sigma)
+    }
+  }
+
+  tibble(
+    trial = seq_len(n_trials),
+    performance = performance,
+    state = state,
+    observed = observed
+  )
+}
+```
+
+Costruiamo una sequenza di prestazioni che prima migliora, poi peggiora e infine si stabilizza.
+
+```{r}
+#| label: simulate-goal-paths
+
+performance_example <- c(4, 5, 6, 7, 8, 5, 4, 6, 7, 7, 8, 8)
+
+parameter_scenarios <- tribble(
+  ~scenario, ~alpha, ~beta,
+  "Revisione lenta", 0.15, 0.00,
+  "Revisione rapida", 0.75, 0.00,
+  "Revisione con deriva", 0.45, 0.20
+)
+
+simulated_paths <- parameter_scenarios |>
+  mutate(
+    simulation = purrr::pmap(
+      list(alpha, beta),
+      ~ simulate_goal_path(
+        performance = performance_example,
+        initial_goal = 5,
+        alpha = ..1,
+        beta = ..2
+      )
+    )
+  ) |>
+  select(scenario, simulation) |>
+  tidyr::unnest(simulation)
+```
+
+```{r}
+#| label: fig-goal-parameter-scenarios
+#| fig-cap: "Traiettorie generate dallo stesso input di prestazione con tre combinazioni dei parametri. Il parametro alpha regola la rapidità della revisione; beta introduce uno spostamento sistematico per trial."
+#| fig-width: 9
+#| fig-height: 5.5
+#| echo: false
+
+simulated_paths |>
+  ggplot(aes(x = trial)) +
+  geom_line(aes(y = performance), linetype = "dashed") +
+  geom_point(aes(y = performance)) +
+  geom_line(aes(y = state), linewidth = 1) +
+  facet_wrap(~scenario) +
+  labs(
+    x = "Trial",
+    y = "Prestazione e obiettivo",
+    caption = "Linea tratteggiata: prestazione; linea continua: stato dell'obiettivo."
+  )
+```
+
+Le simulazioni permettono di leggere i parametri attraverso le conseguenze che producono.
+
+- Con $\alpha$ basso, lo stato conserva maggiormente la memoria del passato.
+- Con $\alpha$ alto, l'obiettivo si avvicina rapidamente alla prestazione recente.
+- Un $\beta$ positivo può produrre una crescita anche quando la discrepanza è piccola.
+
+### Stabilità e comportamento di lungo periodo
+
+Se la prestazione rimane costante, $P_t=P$, e $\alpha>0$, il punto di equilibrio soddisfa:
+
+$$
+G^*=G^*+\alpha(P-G^*)+\beta.
+$$
+
+Da cui:
+
+$$
+G^*=P+\frac{\beta}{\alpha}.
+$$
+
+Il risultato rende evidente che $\alpha$ e $\beta$ interagiscono. Uno stesso valore di $\beta$ produce una deviazione di equilibrio più ampia quando $\alpha$ è piccolo.
+
+Nel seguito poniamo $0<\alpha<1$. Questo vincolo rende l'interpretazione particolarmente semplice: a ogni trial viene incorporata una frazione della discrepanza. Non è una legge psicologica universale; è una scelta di specificazione che dovrà essere riconsiderata se i dati richiedono inerzia negativa, sovracorrezione o oscillazioni.
+
+## Il caso di studio
+
+Il dataset contiene 60 partecipanti, ciascuno osservato in 10 trial. I partecipanti appartengono a due condizioni, *approach* e *avoidance*. In questo capitolo ignoriamo temporaneamente la condizione e assumiamo che l'intero campione condivida gli stessi parametri. L'eterogeneità sarà introdotta nel capitolo @sec-formal-models-developments.
+
+```{r}
+#| label: load-goal-data
+
+goal_data <- rio::import(here::here("data", "goal_data.csv")) |>
+  as_tibble() |>
+  mutate(
+    subject = as.integer(factor(subject)),
+    condition = factor(condition, levels = c("approach", "avoidance"))
+  ) |>
+  arrange(subject, trial) |>
+  mutate(row_id = row_number())
+
+trial_check <- goal_data |>
+  group_by(subject) |>
+  summarise(
+    sequence_ok = all(trial == seq_len(n())),
+    .groups = "drop"
+  )
+
+stopifnot(all(trial_check$sequence_ok))
+
+goal_data |>
+  summarise(
+    partecipanti = n_distinct(subject),
+    osservazioni = n(),
+    trial_minimi = min(trial),
+    trial_massimi = max(trial)
+  )
+```
+
+Prima di stimare il modello osserviamo alcune traiettorie.
+
+```{r}
+#| label: fig-observed-goal-trajectories
+#| fig-cap: "Obiettivi e prestazioni osservati per dodici partecipanti. Le traiettorie rendono visibile sia la dipendenza temporale sia la variabilità tra persone."
+#| fig-width: 10
+#| fig-height: 8
+#| echo: false
+
+selected_subjects <- c(1:6, 31:36)
+
+goal_data |>
+  filter(subject %in% selected_subjects) |>
+  select(subject, condition, trial, goal, performance) |>
+  pivot_longer(
+    cols = c(goal, performance),
+    names_to = "series",
+    values_to = "value"
+  ) |>
+  ggplot(aes(x = trial, y = value, linetype = series)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~subject, ncol = 4) +
+  labs(x = "Trial", y = "Punteggio", linetype = NULL)
+```
+
+La figura suggerisce che una dinamica comune può essere una prima approssimazione utile, ma non garantisce che tutti i partecipanti reagiscano nello stesso modo.
+
+## Dal processo alle osservazioni
+
+L'Equazione @eq-knight2023 definisce lo stato atteso. I dati osservati non coincidono necessariamente con tale stato. Introduciamo quindi un modello osservazionale:
+
+$$
+Y_{s,t}\sim
+\operatorname{Normal}(G_{s,t},\sigma),
+\qquad t>1,
+$$ {#eq-knight-stat}
+
+dove $Y_{s,t}$ è l'obiettivo dichiarato dal soggetto $s$ e $G_{s,t}$ è lo stato previsto dalla ricorsione.
+
+Il primo obiettivo di ciascun partecipante viene trattato come **condizione iniziale osservata**. Il modello descrive quindi le transizioni dal secondo trial in avanti; non propone una teoria della formazione del primo obiettivo.
+
+::: {.callout-important title="Processo e misura non sono la stessa cosa"}
+La deviazione standard $\sigma$ raccoglie tutte le differenze tra stato previsto e obiettivo osservato: variabilità decisionale, approssimazione della scala di risposta, errori di misura e componenti del processo non incluse nella regola.
+
+Per questa ragione $\sigma$ non deve essere interpretata come un unico meccanismo psicologico.
+:::
+
+## La quantità di interesse
+
+Il modello di questo capitolo stima tre quantità condivise:
+
+- $\alpha$: sensibilità media alla discrepanza sotto l'ipotesi di omogeneità;
+- $\beta$: deriva media per trial;
+- $\sigma$: dispersione delle osservazioni attorno alla traiettoria prevista.
+
+Queste quantità descrivono una dinamica comune all'intero campione. Non forniscono parametri individuali e non quantificano la variabilità tra persone.
+
+## Specificare i prior
+
+Per garantire $0<\alpha<1$, introduciamo un parametro non vincolato:
+
+$$
+\alpha=\operatorname{logit}^{-1}(\alpha_{\text{logit}}),
+\qquad
+\alpha_{\text{logit}}\sim\operatorname{Normal}(0,1).
+$$
+
+Questo prior assegna maggiore plausibilità a valori intermedi, senza escludere revisioni lente o rapide.
+
+Sulla scala originale dei dati usiamo inoltre:
+
+$$
+\beta\sim\operatorname{Normal}(0,0.25),
+$$
+
+$$
+\sigma\sim\operatorname{HalfNormal}(0,0.75).
+$$
+
+La scelta implica che derive superiori a circa mezzo punto per trial e deviazioni residue molto grandi siano possibili, ma non considerate ordinarie.
+
+## Controllo predittivo a priori
+
+Usiamo le prestazioni osservate di un partecipante come sequenza di input, ma generiamo i parametri dai prior.
+
+```{r}
+#| label: prior-predictive-goal-sample
+
+prior_draws_goal <- tibble(
+  draw = seq_len(200),
+  alpha = plogis(rnorm(200, 0, 1)),
+  beta = rnorm(200, 0, 0.25),
+  sigma = abs(rnorm(200, 0, 0.75))
+)
+
+reference_subject <- goal_data |>
+  filter(subject == 1)
+
+prior_paths_goal <- prior_draws_goal |>
+  slice_sample(n = 80) |>
+  mutate(
+    simulation = purrr::pmap(
+      list(alpha, beta, sigma),
+      ~ simulate_goal_path(
+        performance = reference_subject$performance,
+        initial_goal = reference_subject$goal[1],
+        alpha = ..1,
+        beta = ..2,
+        sigma = ..3
+      )
+    )
+  ) |>
+  select(draw, simulation) |>
+  tidyr::unnest(simulation)
+```
+
+```{r}
+#| label: fig-prior-predictive-goal-sample
+#| fig-cap: "Traiettorie simulate prima di usare i dati per l'inferenza. Il controllo serve a valutare se i prior permettono comportamenti plausibili sulla scala degli obiettivi."
+#| fig-width: 8
+#| fig-height: 5
+#| echo: false
+
+prior_paths_goal |>
+  ggplot(aes(x = trial, y = observed, group = draw)) +
+  geom_line(alpha = 0.18) +
+  geom_hline(yintercept = c(0, 10), linetype = "dashed") +
+  labs(x = "Trial", y = "Obiettivo simulato")
+```
+
+Le linee orizzontali non sono vincoli del modello: ricordano soltanto l'intervallo osservato nel compito. Se una quota eccessiva delle simulazioni producesse valori incompatibili con la scala, dovremmo restringere i prior o adottare un modello osservazionale che rispetti esplicitamente i limiti della risposta.
+
+## Implementazione in Stan
+
+Il programma seguente condiziona sul primo obiettivo di ogni partecipante e applica la stessa coppia di parametri a tutte le traiettorie.
+
+```{r}
+#| label: stan-code-goal-sample
+
+stan_code_goal_sample <- "
+data {
+  int<lower=1> Ntotal;
+  int<lower=1> Nsubj;
+  array[Ntotal] int<lower=1, upper=Nsubj> subject;
+  array[Ntotal] int<lower=1> trial;
+  vector[Ntotal] goal;
+  vector[Ntotal] performance;
+}
+
+parameters {
+  real alpha_logit;
+  real beta;
+  real<lower=0> sigma;
+}
+
+transformed parameters {
+  real<lower=0, upper=1> alpha = inv_logit(alpha_logit);
+  vector[Ntotal] mu;
+
+  for (i in 1:Ntotal) {
+    if (trial[i] == 1) {
+      mu[i] = goal[i];
+    } else {
+      mu[i] = mu[i - 1]
+              + alpha * (performance[i - 1] - mu[i - 1])
+              + beta;
+    }
+  }
+}
+
+model {
+  alpha_logit ~ normal(0, 1);
+  beta ~ normal(0, 0.25);
+  sigma ~ normal(0, 0.75);
+
+  for (i in 1:Ntotal) {
+    if (trial[i] > 1) {
+      goal[i] ~ normal(mu[i], sigma);
+    }
+  }
+}
+
+generated quantities {
+  vector[Ntotal] y_rep;
+  vector[Ntotal] log_lik;
+
+  for (i in 1:Ntotal) {
+    if (trial[i] == 1) {
+      y_rep[i] = goal[i];
+      log_lik[i] = 0;
+    } else {
+      y_rep[i] = normal_rng(mu[i], sigma);
+      log_lik[i] = normal_lpdf(goal[i] | mu[i], sigma);
+    }
+  }
+}
+"
+```
+
+Prepariamo i dati nel formato richiesto da Stan.
+
+```{r}
+#| label: stan-data-goal-sample
+
+stan_data_goal_sample <- list(
+  Ntotal = nrow(goal_data),
+  Nsubj = n_distinct(goal_data$subject),
+  subject = goal_data$subject,
+  trial = goal_data$trial,
+  goal = goal_data$goal,
+  performance = goal_data$performance
+)
+```
+
+```{r}
+#| label: fit-goal-sample
+#| output: false
+
+model_goal_sample <- cmdstan_model(
+  write_stan_file(stan_code_goal_sample)
+)
+
+fit_goal_sample <- model_goal_sample$sample(
+  data = stan_data_goal_sample,
+  seed = 4817,
+  chains = 4,
+  parallel_chains = 4,
+  iter_warmup = 1000,
+  iter_sampling = 2000,
+  refresh = 500
+)
+```
+
+## Diagnostica computazionale
+
+```{r}
+#| label: summary-goal-sample
+
+fit_goal_sample$summary(
+  variables = c("alpha", "beta", "sigma")
+) |>
+  select(variable, mean, median, sd, q5, q95, rhat, ess_bulk, ess_tail)
+```
+
+```{r}
+#| label: fig-trace-goal-sample
+#| fig-cap: "Trace plot dei parametri condivisi del modello dinamico."
+#| fig-width: 9
+#| fig-height: 6
+#| echo: false
+
+mcmc_trace(
+  fit_goal_sample$draws(c("alpha", "beta", "sigma"))
+)
+```
+
+Una buona diagnostica MCMC indica che il campionatore ha esplorato in modo affidabile la distribuzione a posteriori. Non dimostra che la regola psicologica o il modello osservazionale siano adeguati.
+
+## Interpretare la posterior
+
+```{r}
+#| label: posterior-goal-sample
+
+fit_goal_sample$draws(c("alpha", "beta", "sigma")) |>
+  posterior::summarise_draws(
+    mean,
+    median,
+    ~quantile(.x, probs = c(0.025, 0.975))
+  )
+```
+
+L'interpretazione deve restare condizionata alla specificazione:
+
+- la posterior di $\alpha$ descrive la frazione della discrepanza incorporata dalla dinamica comune;
+- la posterior di $\beta$ descrive la deriva media residua per trial;
+- la posterior di $\sigma$ descrive quanto le osservazioni si discostano dalla traiettoria prodotta dalla regola.
+
+Non possiamo ancora concludere che tutti i partecipanti condividano davvero questi valori. L'ipotesi di omogeneità è precisamente ciò che verrà rilassato nel capitolo successivo.
+
+## Traiettorie attese e osservate
+
+```{r}
+#| label: posterior-expected-trajectories-goal-sample
+
+mu_goal_summary <- fit_goal_sample |>
+  spread_draws(mu[row_id]) |>
+  median_qi(mu, .width = 0.90) |>
+  left_join(
+    goal_data |>
+      select(row_id, subject, trial, goal),
+    by = "row_id"
+  )
+```
+
+```{r}
+#| label: fig-posterior-trajectories-goal-sample
+#| fig-cap: "Traiettorie osservate e traiettorie attese dal modello con parametri condivisi per dodici partecipanti."
+#| fig-width: 10
+#| fig-height: 8
+#| echo: false
+
+mu_goal_summary |>
+  filter(subject %in% selected_subjects) |>
+  ggplot(aes(x = trial)) +
+  geom_ribbon(aes(ymin = .lower, ymax = .upper), alpha = 0.20) +
+  geom_line(aes(y = mu), linewidth = 0.9) +
+  geom_point(aes(y = goal)) +
+  facet_wrap(~subject, ncol = 4) +
+  labs(x = "Trial", y = "Obiettivo")
+```
+
+Discrepanze sistematiche per alcuni partecipanti suggeriscono che il modello comune potrebbe essere troppo rigido, anche quando la distribuzione aggregata viene riprodotta ragionevolmente.
+
+## Controlli predittivi a posteriori
+
+```{r}
+#| label: ppc-goal-sample-data
+
+transition_rows <- which(goal_data$trial > 1)
+y_rep_goal_sample <- fit_goal_sample$draws(
+  variables = "y_rep",
+  format = "matrix"
+)
+
+set.seed(4817)
+y_rep_goal_sample_small <- y_rep_goal_sample[
+  sample(seq_len(nrow(y_rep_goal_sample)), 100),
+  transition_rows,
+  drop = FALSE
+]
+```
+
+```{r}
+#| label: fig-ppc-density-goal-sample
+#| fig-cap: "Confronto tra la distribuzione degli obiettivi osservati, esclusi i valori iniziali condizionati, e repliche posteriori del modello."
+#| fig-width: 8
+#| fig-height: 5
+#| echo: false
+
+ppc_dens_overlay(
+  y = goal_data$goal[transition_rows],
+  yrep = y_rep_goal_sample_small
+)
+```
+
+Il controllo marginale è necessario ma non sufficiente. Poiché il modello è dinamico, dobbiamo anche verificare se riproduce traiettorie, autocorrelazione, ampiezza delle revisioni e differenze tra partecipanti.
+
+::: {.callout-warning title="Un buon controllo aggregato può nascondere fallimenti individuali"}
+Un modello con parametri comuni può riprodurre la distribuzione complessiva degli obiettivi e, nello stesso tempo, rappresentare male molte traiettorie individuali. Nei dati longitudinali i controlli devono rispettare la struttura temporale e il livello al quale verranno formulate le conclusioni.
+:::
+
+## Recuperare parametri noti
+
+Prima di interpretare parametri stimati su dati reali è utile verificare se, quando il modello è vero, la procedura riesca a recuperare valori conosciuti.
+
+Il codice seguente usa le sequenze di prestazione reali come input, genera obiettivi da parametri fissati e riadatta lo stesso modello.
+
+::: {.callout-tip collapse=true title="Esercizio computazionale: parameter recovery"}
+
+```{r}
+#| label: parameter-recovery-goal-sample
+#| eval: false
+
+simulate_goal_dataset <- function(data, alpha, beta, sigma) {
+  data |>
+    group_by(subject) |>
+    group_modify(
+      ~ {
+        simulation <- simulate_goal_path(
+          performance = .x$performance,
+          initial_goal = .x$goal[1],
+          alpha = alpha,
+          beta = beta,
+          sigma = sigma
+        )
+
+        mutate(.x, goal_simulated = simulation$observed)
+      }
+    ) |>
+    ungroup()
+}
+
+recovery_data <- simulate_goal_dataset(
+  goal_data,
+  alpha = 0.55,
+  beta = 0.15,
+  sigma = 0.60
+)
+
+stan_data_recovery <- stan_data_goal_sample
+stan_data_recovery$goal <- recovery_data$goal_simulated
+
+fit_goal_recovery <- model_goal_sample$sample(
+  data = stan_data_recovery,
+  seed = 911,
+  chains = 4,
+  parallel_chains = 4,
+  iter_warmup = 1000,
+  iter_sampling = 2000
+)
+
+fit_goal_recovery$summary(c("alpha", "beta", "sigma"))
+```
+
+Il recupero dei valori noti è una condizione necessaria, non sufficiente. Qui dati e modello generatore coincidono; nei dati reali il processo potrebbe seguire regole diverse.
+:::
+
+## Che cosa assume il modello
+
+La specificazione contiene almeno sei ipotesi sostantive.
+
+1. **Memoria di primo ordine.** L'aggiornamento usa soltanto lo stato e la prestazione immediatamente precedenti.
+2. **Sensibilità costante.** $\alpha$ non cambia tra trial, persone o tipo di feedback.
+3. **Deriva costante.** $\beta$ opera nello stesso modo per tutta la sequenza.
+4. **Prestazione trattata come input noto.** Non viene modellata la sua incertezza né la possibile influenza dell'obiettivo sulla prestazione futura.
+5. **Rumore normale e costante.** La variabilità osservazionale non dipende dal trial o dal livello dell'obiettivo.
+6. **Parametri comuni.** Tutti i partecipanti condividono la stessa dinamica.
+
+Inoltre, la scala osservata è limitata, mentre la distribuzione normale consente valori arbitrariamente bassi o alti. Se i controlli predittivi mostrassero un problema rilevante, sarebbe opportuno adottare una distribuzione o una trasformazione coerente con i limiti della risposta.
+
+## Errori frequenti
+
+- Stimare il modello prima di averne simulato il comportamento.
+- Chiamare $\alpha$ “apprendimento” o $\beta$ “motivazione” senza una validazione indipendente.
+- Includere il primo trial nella verosimiglianza dopo averlo usato per inizializzare lo stato.
+- Confondere la traiettoria latente $G_t$ con il valore osservato $Y_t$.
+- Interpretare una buona convergenza MCMC come prova della correttezza teorica.
+- Valutare il modello soltanto mediante la distribuzione marginale dei dati.
+- Dimenticare che le righe devono essere ordinate per soggetto e trial.
+- Generalizzare i parametri comuni ai singoli partecipanti.
+
+## Riflessioni conclusive
+
+Il modello di revisione degli obiettivi mostra come una teoria verbale possa diventare una teoria eseguibile. La formalizzazione obbliga a dichiarare quale stato conserva la memoria, quale informazione produce l'aggiornamento, come agiscono i parametri e in che modo il processo genera osservazioni.
+
+La simulazione ha preceduto la stima perché un parametro è interpretabile soltanto attraverso le conseguenze che produce nel modello. L'implementazione bayesiana ha poi trasformato il problema diretto — generare dati da parametri noti — nel problema inverso di inferire parametri plausibili da traiettorie osservate.
+
+La specificazione resta intenzionalmente semplice. Il suo limite principale è l'ipotesi che tutte le persone condividano $\alpha$ e $\beta$. Nel prossimo capitolo conserveremo la stessa regola di aggiornamento, ma modelleremo esplicitamente la distribuzione dei parametri tra individui e condizioni.
+
+## Concetti da ricordare
+
+1. Un modello dinamico contiene almeno uno stato che dipende dalla storia precedente.
+2. La regola di aggiornamento deve essere studiata mediante simulazione prima della stima.
+3. $\alpha$ controlla la quota di discrepanza incorporata; $\beta$ introduce una deriva per trial.
+4. Processo latente e osservazione sono componenti differenti.
+5. Il primo obiettivo è qui una condizione iniziale, non un dato spiegato dal modello.
+6. Un parametro con un nome psicologico non è automaticamente una misura valida del costrutto.
+7. I prior devono essere valutati attraverso le traiettorie che generano.
+8. Diagnostica MCMC e adeguatezza del modello rispondono a domande diverse.
+9. I controlli predittivi devono rispettare la struttura temporale.
+10. Il recupero dei parametri è necessario prima di attribuire loro significato individuale.
+
+::: {.callout-note title="Esercizi"}
+### 1. Cambiare la sensibilità
+
+Mantieni costanti prestazione e $\beta$, quindi simula $\alpha=0.05$, $0.50$ e $0.95$. Descrivi memoria, rapidità e variabilità delle tre traiettorie.
+
+### 2. Cambiare la deriva
+
+Simula $\beta=-0.25$, $0$ e $0.25$. Verifica come cambia il punto di equilibrio quando la prestazione è costante.
+
+### 3. Condizione iniziale
+
+Ripeti la simulazione usando tre obiettivi iniziali differenti. Dopo quanti trial le traiettorie diventano simili?
+
+### 4. Modello osservazionale
+
+Mantieni invariato lo stato latente e varia $\sigma$. Quali aspetti della traiettoria cambiano e quali restano identici?
+
+### 5. Prior predittivi
+
+Raddoppia la deviazione standard del prior di $\beta$. Valuta se le traiettorie generate restano plausibili sulla scala del compito.
+
+### 6. Memoria più lunga
+
+Proponi una modifica della regola nella quale l'aggiornamento dipenda dalla media delle ultime tre prestazioni.
+
+### 7. Recuperabilità
+
+Esegui il controllo di parameter recovery con $\alpha=0.15$ e $\alpha=0.90$. In quale scenario la stima di $\beta$ è più difficile?
+
+### 8. Critica del modello
+
+Indica almeno due pattern empirici che il modello con $\alpha$ e $\beta$ costanti non potrebbe riprodurre adeguatamente.
+
+::: {.callout-tip collapse=true title="Tracce di soluzione"}
+1. Valori bassi di $\alpha$ conservano più a lungo lo stato precedente; valori alti seguono rapidamente la prestazione.
+2. Con prestazione costante, $G^*=P+\beta/\alpha$ quando $\alpha>0$.
+3. La distanza tra condizioni iniziali si riduce più rapidamente quando $\alpha$ è alto.
+4. $\sigma$ modifica le osservazioni, non la traiettoria latente deterministica.
+5. Un prior più ampio su $\beta$ può produrre derive cumulative estreme.
+6. Occorre definire un input filtrato, per esempio la media mobile delle prestazioni recenti.
+7. La risposta dipende dalla sequenza di input e dal trade-off tra deriva e correzione; il confronto deve essere empirico.
+8. Esempi: sensibilità diversa ai successi e ai fallimenti, cambiamenti improvvisi di strategia, effetti di saturazione o differenze individuali persistenti.
+:::
+:::
+
+::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+```{r}
+sessionInfo()
+```
+:::
+
+## Bibliografia {.unnumbered .unlisted}

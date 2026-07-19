@@ -1,458 +1,1628 @@
-# Il modello di Rescorla–Wagner {#sec-dynamic-models-rescorla-wagner}
+# Rescorla--Wagner: dall'errore di previsione alla scelta {#sec-dynamic-models-rescorla-wagner}
 
-## Introduzione {.unnumbered .unlisted}
+::: {.callout-note appearance="minimal"}
+Il modello di Rescorla--Wagner costituisce un caso paradigmatico di modellazione processuale. Una teoria verbale dell'apprendimento viene tradotta in una regola di aggiornamento; gli stati latenti prodotti da tale regola vengono collegati alle scelte mediante un modello osservazionale; i parametri vengono quindi inferiti dal comportamento e sottoposti a controlli di recuperabilità e adeguatezza.
 
-Questo capitolo approfondisce la discussione del *modello di Rescorla–Wagner (RW)* con *regola di scelta Softmax* [@rescorla1972theory; cfr. capitolo 24 del manuale], come naturale estensione del modello di revisione degli obiettivi discusso nel capitolo precedente. Nel modello precedente l’aggiornamento era un *termine additivo* guidato da una discrepanza osservata; qui, invece, l’aggiornamento è esplicitamente *guidato dall’errore di predizione del rinforzo* (*reward prediction error*, RPE), ovvero la differenza tra il rinforzo ottenuto e quello attese. Questa formulazione è più *psicologicamente plausibile* e allineata all’evidenza in psicologia e nelle neuroscienze: *si impara proporzionalmente a quanto l’esito sorprende le aspettative*.
+Il valore didattico del modello non risiede soltanto nella sua semplicità. Esso rende visibile l'intero percorso che distingue una teoria formale da una regressione sulle risposte osservate:
 
-Accanto al livello di *apprendimento* (aggiornamento dei valori associativi $Q$), introduciamo il livello *decisionale*: le scelte non sono deterministiche, ma riflettono un compromesso tra *sfruttamento* dell’opzione migliore ed *esplorazione* di alternative. Con due opzioni, la Softmax si riduce a una *logistica della differenza* $Q_B-Q_A$, modulata dal parametro di *inverse temperature* $\tau$: valori alti di $\tau$ rendono le scelte più coerenti con $Q$, mentre valori bassi le rendono più esplorative.
+\[
+\text{feedback}
+\longrightarrow
+\text{errore di previsione}
+\longrightarrow
+\text{aggiornamento del valore}
+\longrightarrow
+\text{probabilità di scelta}
+\longrightarrow
+\text{comportamento}.
+\]
+:::
 
-Questa distinzione *apprendimento–decisione* è cruciale: consente di *separare* il meccanismo che aggiorna le aspettative (parametro $lr$) da quello che le traduce in probabilità di scelta (parametro $\tau$). Nei paragrafi successivi mostreremo come *simulare* dati (ad esempio, il  *probabilistic reversal learning*), *stimare* i parametri con *Stan* e *interpretare* i profili individuali e di gruppo. 
+::: {.callout-note title="Obiettivi del capitolo"}
+Al termine del capitolo dovresti essere in grado di:
+
+- distinguere la regola di apprendimento dal modello di scelta;
+- identificare stati latenti, input, errori di previsione e parametri;
+- simulare acquisizione, adattamento e reversal prima di stimare il modello;
+- comprendere come `alpha` e `tau` producano conseguenze comportamentali differenti;
+- specificare prior sulla scala psicologicamente interpretabile dei parametri;
+- stimare il modello con Stan e ricostruire le traiettorie latenti;
+- eseguire controlli predittivi mirati alla dinamica del compito;
+- verificare il recupero dei parametri da dati simulati;
+- riconoscere trade-off, problemi di scala e forme di equivalenza osservazionale;
+- criticare il modello mediante un'alternativa che include perseverazione;
+- formulare con cautela l'interpretazione psicologica e clinica dei parametri.
+:::
+
+::: {.callout-tip collapse=true title="Percorsi di lettura"}
+**Percorso concettuale.** Concentrati sulla distinzione tra apprendimento e scelta, sulle simulazioni e sulla critica del modello.
+
+**Percorso applicativo.** Esegui il simulatore, il prior predictive check, la stima e i posterior predictive checks.
+
+**Percorso computazionale.** Studia i programmi Stan, le quantità generate, il recupero dei parametri e il confronto con il modello che include perseverazione.
+:::
+
+::: {.callout-tip collapse=true title="Prerequisiti"}
+- Il capitolo @sec-bayes-stat-models, per il vocabolario dei modelli formali.
+- I capitoli @sec-dynamic-models-goal-updating e @sec-formal-models-developments, per regole ricorsive, modello osservazionale ed eterogeneità.
+- La parte **Calcolo**, per diagnostica MCMC e controlli predittivi.
+:::
 
 ::: {.callout-caution collapse=true title="Preparazione del Notebook"}
+
 ```{r}
-#| echo: false
-#| message: false
-#| warning: false
-# Setup comune del manuale
-here::here("code", "_common.R") |> source()
-library(cmdstanr)
+#| label: setup-rescorla-wagner
+#| include: false
+
+here::here("code", "_common.R") |>
+  source()
+
+suppressPackageStartupMessages({
+  library(cmdstanr)
+  library(bayesplot)
+  library(posterior)
+  library(tidybayes)
+  library(patchwork)
+})
+
+set.seed(6741)
 ```
 :::
 
-## Il modello di Rescorla–Wagner
+## Perché questo modello è paradigmatico
 
-Il modello di *Rescorla–Wagner (RW)* è uno dei modelli più influenti nello studio dell’apprendimento associativo. Esso descrive come gli individui aggiornino le proprie aspettative in base all’esperienza, introducendo un meccanismo semplice ma potente che spiega fenomeni quali l’acquisizione, l’estinzione e il blocking.
+Il modello di Rescorla--Wagner nasce come teoria dell'apprendimento associativo [@rescorla1972theory]. La sua idea centrale è che l'apprendimento non dipenda semplicemente dalla presenza congiunta di uno stimolo e di un esito, ma dalla discrepanza tra l'esito ottenuto e quello atteso.
 
-L’idea di fondo è che l’apprendimento si realizzi attraverso l’aggiornamento della *forza associativa* $Q_t(s)$ di uno stimolo $s$ al tempo $t$, in funzione della discrepanza tra ciò che ci si aspettava e ciò che è stato effettivamente osservato.
+La versione usata nei compiti di scelta ripetuta contiene due componenti distinte:
 
-### Aggiornamento delle aspettative
+1. un **modello di apprendimento**, che aggiorna il valore delle alternative;
+2. un **modello di scelta**, che trasforma le differenze di valore in probabilità di risposta.
 
-Dopo ogni prova, la stima del valore viene modificata secondo la regola:
+Questa separazione è essenziale. Due persone possono mostrare una percentuale simile di scelte corrette per ragioni differenti: una può aggiornare lentamente i valori ma seguirli con grande coerenza; un'altra può apprendere rapidamente ma scegliere in modo più variabile.
 
-$$
-Q_{t+1}(s) \;=\; Q_t(s) \;+\; \alpha \, \delta_t ,
-$$
-dove
+::: {.callout-important title="Una precisazione terminologica"}
+Il modello originale di Rescorla--Wagner descrive l'aggiornamento della forza associativa di uno o più indizi. Nei compiti a due opzioni si usa spesso una regola delta strettamente affine, applicata al valore dell'opzione scelta.
 
-$$
-\delta_t \;=\; R_t - Q_t(s)
-$$
-è l’*errore di previsione* (*prediction error*), cioè la differenza tra la ricompensa ottenuta $R_t$ e l’aspettativa precedente $Q_t(s)$.
-
-Quando l'errore di previsione $\delta_t$ assume valori positivi, indica una ricompensa superiore alle attese, determinando così un rafforzamento dell'associazione appresa. Al contrario, un valore negativo di $\delta_t$ segnala una ricompensa inferiore al previsto, con conseguente indebolimento dell'associazione. Nel caso in cui $\delta_t$ sia nullo, l'esito corrisponde esattamente all'aspettativa, e non si verifica quindi alcun aggiornamento delle credenze.
-
-Il parametro $ \alpha \in [0,1] $ rappresenta il tasso di apprendimento (qui lo indichiamo con `lr`). Con `lr` alto l’aggiornamento è rapido; con `lr` basso è lento e più “conservativo”.
-
-::: {.callout-note collapse=true title="Variante (facoltativa): tassi distinti per PE positivo/negativo"}
-In alcune applicazioni si usano due tassi distinti $\alpha^+$ e $\alpha^-$ per apprendere diversamente da buone e cattive notizie. Questa distinzione consente di modellare la diversa sensibilità di individui o gruppi alle ricompense inattese rispetto alle punizioni o ai premi. Nel contesto del presente tutorial, al fine di privilegiare la chiarezza espositiva, viene mantenuto un unico parametro `lr` che aggrega entrambe le componenti di apprendimento.
+Nel seguito useremo l'espressione *modello Rescorla--Wagner* nel senso ampio comune nella modellazione cognitiva, ma è utile ricordare che la versione trial-by-trial impiegata qui non coincide in ogni dettaglio con la formulazione originaria.
 :::
 
-### Dalla valutazione alla decisione
+## Il modello del processo
 
-La differenziazione nei valori attesi $Q_t(A)$ e $Q_t(B)$ non determina necessariamente un comportamento puramente deterministico. Gli individui mostrano infatti una caratteristica alternanza tra *sfruttamento* - selezione dell'opzione dal valore atteso più elevato - ed *esplorazione* - campionamento di alternative potenzialmente subottimali.
+### Stati latenti e feedback
 
-In uno scenario decisionale binario ($A$ vs. $B$), questa dinamica viene formalizzata attraverso una funzione logistica applicata alla differenza di valore:
+Indichiamo con \(Q_t(A)\) e \(Q_t(B)\) i valori attribuiti alle due alternative immediatamente prima del trial \(t\). Questi valori non sono osservati direttamente: costituiscono gli stati latenti del modello.
 
-$$
-P(\text{scegliere B}) = \text{inv\_logit}\!\big(\tau \,[Q_t(B)-Q_t(A)]\big).
-$$
+Dopo aver scelto l'alternativa \(a_t\) e osservato il rinforzo \(R_t\), il modello calcola l'errore di previsione:
 
-Il parametro $\tau$ (temperatura) regola il bilanciamento tra esplorazione e sfruttamento: valori elevati di $\tau$ producono scelte quasi deterministiche anche in presenza di minime differenze di valore, mentre valori bassi di $\tau$ generano comportamenti più esplorativi e stocastici.
+\[
+\delta_t = R_t-Q_t(a_t).
+\]
 
-In definitiva, il modello di Rescorla-Wagner fornisce una descrizione formale e compatta di come gli individui imparano in modo flessibile dalle proprie esperienze, adattando aspettative e decisioni in risposta ai cambiamenti dell'ambiente.
+Il valore dell'alternativa scelta viene quindi aggiornato secondo:
 
-::: {.callout-caution collapse=true title="Approfondimento: esplorazione vs. sfruttamento (logit a 2 opzioni)"}
-Con due opzioni, la *Softmax* si riduce a una *logistica* sulla differenza di valore. Useremo quindi $\Delta Q = Q_B - Q_A$ e modelleremo la probabilità di scegliere *B* come
+\[
+Q_{t+1}(a_t)
+=
+Q_t(a_t)+\alpha\delta_t,
+\]
 
-$$
-P(B) = \text{inv\_logit}\big(\tau \,\Delta Q\big),
-$$
-dove $\tau>0$ (*inverse temperature*) regola il compromesso esplorazione–sfruttamento:
+mentre il valore dell'alternativa non scelta rimane invariato.
 
-* *$\tau$ basso* → comportamento *esplorativo*: anche differenze modeste non portano scelte deterministiche.
-* *$\tau$ alto* → comportamento di *sfruttamento*: piccole differenze in $\Delta Q$ bastano per preferenze quasi certe.
+Il parametro
 
-Nel grafico seguente mostriamo la relazione tra $\Delta Q$ e $P(B)$ per due valori di $\tau$.
+\[
+0<\alpha<1
+\]
 
-```{r}
-# Differenze di valore (coerenti con Q in [0,1] → ΔQ in [-1, 1])
-dq <- seq(-1, 1, length.out = 201)
+è il **tasso di apprendimento**.
 
-# Logit a 2 opzioni (equivalente alla Softmax con K=2)
-p_choose_B <- function(dq, tau) plogis(tau * dq)
+- Con \(\alpha\) vicino a zero, ciascun feedback modifica poco il valore e la storia passata conserva a lungo la propria influenza.
+- Con \(\alpha\) elevato, il valore risponde rapidamente agli esiti recenti.
+- Un valore elevato non è necessariamente “migliore”: in un ambiente rumoroso può produrre stime instabili.
+- Un valore basso non implica automaticamente un deficit: può essere appropriato quando le contingenze sono stabili e i singoli feedback sono poco affidabili.
 
-df <- data.frame(
-  dq = rep(dq, 2),
-  prob_B = c(p_choose_B(dq, tau = 0.5),
-             p_choose_B(dq, tau = 5)),
-  tau = factor(rep(c("τ = 0.5 (alta esplorazione)",
-                     "τ = 5 (alto sfruttamento)"),
-                   each = length(dq)))
-)
+::: {.callout-note collapse=true title="Tassi diversi per esiti positivi e negativi"}
+Un'estensione comune usa due parametri:
 
-ggplot(df, aes(x = dq, y = prob_B, color = tau)) +
-  geom_line(size = 1.2) +
-  labs(
-    x = expression(Delta*Q[B-A]),
-    y = "Probabilità di scegliere B"
-  )
-```
+\[
+\alpha^+
+\quad\text{e}\quad
+\alpha^-,
+\]
 
-**Lettura del grafico**
+applicati rispettivamente quando \(\delta_t\geq 0\) e quando \(\delta_t<0\).
 
-* Se $\Delta Q = 0.5$:
-
-  * con $\tau = 0.5$, $P(B) \approx \text{inv\_logit}(0.25) \approx 0.56$ → decisione ancora esplorativa;
-  * con $\tau = 5$, $P(B) \approx \text{inv\_logit}(2.5) \approx 0.92$ → prevale lo sfruttamento.
-
-* Se $\Delta Q = 1$:
-
-  * con $\tau = 0.5$, $P(B) \approx \text{inv\_logit}(0.5) \approx 0.62$;
-  * con $\tau = 5$, $P(B) \approx \text{inv\_logit}(5) \approx 0.993$, scelta quasi deterministica.
-
-Questo esempio mostra come $\tau$ controlli la transizione tra esplorazione e sfruttamento nel *caso binario* (logit), coerente con il modello Stan usato nel tutorial.
+Questa estensione è sostantiva soltanto se il disegno contiene abbastanza errori di previsione di entrambi i segni da distinguere i due parametri. Aggiungere parametri senza informazione sufficiente può aumentare l'incertezza e creare nuove compensazioni.
 :::
 
-### Identificabilità e scaling
+## Il modello osservazionale
 
-Nella funzione Softmax conta solo la *differenza* tra i valori di $Q$. Se aggiungiamo la stessa costante $c$ a entrambi, le  probabilità di scelta rimangono invariate. Per questo motivo, il livello assoluto dei valori $Q$ non è identificabile: solo le differenze relative influenzano le scelte.
+Gli stati \(Q_t(A)\) e \(Q_t(B)\) non sono scelte. Per collegare il processo latente al comportamento osservato occorre una regola probabilistica.
 
-Per evitare ambiguità si adottano convenzioni di *scaling*, come inizializzare i valori di $Q$ in modo simmetrico (ad esempio $Q_0(A) = Q_0(B) = 0.5$), mantenere i rinforzi nell'intervallo ${0,1}$ o fissare un valore di riferimento o un vincolo su $\beta$. Queste scelte non modificano il comportamento del modello, ma lo rendono ben definito dal punto di vista matematico.
+Con due alternative, la funzione Softmax si riduce a una regressione logistica sulla differenza di valore:
 
-Nel presente tutorial il rinforzo è codificato come $R_t \in {0,1}$, pertanto i valori $Q$ convergono naturalmente verso stime di probabilità di ricompensa comprese tra 0 e 1. Se invece i rinforzi fossero codificati come ${-1,+1}$, i valori $Q$ si collocherebbero nell’intervallo $[-1,+1]$, e l'interpretazione dovrebbe essere adeguata di conseguenza.
+\[
+\Pr(Y_t=B)
+=
+\operatorname{logit}^{-1}
+\left[
+\tau\left\{Q_t(B)-Q_t(A)\right\}
+\right],
+\]
 
-## Simulazione
+dove \(\tau>0\) è l'**inverse temperature**.
 
-Simuliamo i dati di un compito di "Probabilistic Reversal Learning" (PRL), in cui il partecipante deve scegliere ripetutamente tra due stimoli. Uno degli stimoli, detto "ricco", fornisce una ricompensa con probabilità $p = 0.7$, mentre l'altro, detto "povero", ha una probabilità di ricompensa di $1 - p = 0.3$.
+- Con \(\tau\) basso, anche una grande differenza tra i valori produce una preferenza moderata.
+- Con \(\tau\) alto, piccole differenze possono generare scelte quasi deterministiche.
 
-A metà dell'esperimento, le probabilità si invertono (*reversal*): lo stimolo inizialmente ricco diventa povero e quello povero diventa ricco. Il compito del partecipante è riconoscere questo cambiamento e adattare le proprie scelte per ottenere il maggior numero possibile di ricompense.
+La verosimiglianza delle scelte è quindi:
+
+\[
+Y_t
+\sim
+\operatorname{Bernoulli}(p_t),
+\qquad
+p_t
+=
+\operatorname{logit}^{-1}
+\left[
+\tau\left\{Q_t(B)-Q_t(A)\right\}
+\right].
+\]
+
+::: {.callout-important title="Apprendimento e scelta non sono la stessa cosa"}
+Il parametro \(\alpha\) governa il cambiamento degli stati latenti dopo il feedback. Il parametro \(\tau\) governa la relazione tra stati latenti e risposta.
+
+Una scelta apparentemente casuale può dipendere da valori poco differenziati, da un \(\tau\) basso, da una tendenza a perseverare, da distrazione o da una regola di scelta inadeguata. Per questo motivo non è corretto interpretare direttamente la percentuale di risposte ottimali come misura pura dell'apprendimento.
+:::
+
+## Scala, condizioni iniziali e identificabilità
+
+La scala dei valori \(Q\), la codifica del rinforzo e il parametro \(\tau\) sono collegati.
+
+Se tutti i valori e i rinforzi vengono moltiplicati per una costante \(c\), la stessa probabilità di scelta può essere ottenuta dividendo \(\tau\) per \(c\). L'inverse temperature non possiede quindi un significato assoluto indipendente dalla scala del compito.
+
+Nel seguito adottiamo convenzioni esplicite:
+
+- rinforzi codificati come \(0\) e \(1\);
+- valori iniziali \(Q_1(A)=Q_1(B)=0.5\);
+- un solo tasso di apprendimento;
+- aggiornamento della sola opzione scelta;
+- \(\tau\) definito come inverse temperature.
+
+Fissare i valori iniziali evita di chiedere ai dati di distinguere simultaneamente condizioni iniziali, tasso di apprendimento e sensibilità di scelta. In altri contesti \(Q_0\) può essere stimato, ma ciò richiede una motivazione e dati iniziali sufficientemente informativi.
+
+## Simulare prima di stimare
+
+### Un compito di probabilistic reversal learning
+
+Consideriamo un compito con due alternative. Nella prima fase, \(A\) produce una ricompensa con probabilità \(0.7\) e \(B\) con probabilità \(0.3\). Dopo il trial 80 le contingenze si invertono.
+
+Definiamo un simulatore che separa:
+
+- ambiente;
+- processo di apprendimento;
+- modello di scelta.
+
+Il parametro opzionale `kappa` rappresenta una tendenza a ripetere la scelta precedente indipendentemente dai valori. Per ora lo manterremo uguale a zero; lo useremo in seguito per criticare il modello di base.
 
 ```{r}
-# Simulatore PRL (RW + logit) allineato al modello Stan (choice in 0/1)
-simulate_prl_rw_binary <- function(
-  n_trials        = 160,
-  p_reward_rich   = 0.7,
-  reversal_trial  = 80,            # se NULL, nessun reversal
-  lr              = 0.15,          # learning rate unico
-  tau             = 2,             # inverse temperature (decision noise)
-  Q0              = c(A = 0.0, B = 0.0),
-  seed            = 1234
-){
-  stopifnot(length(Q0) == 2, all(c("A","B") %in% names(Q0)))
-  set.seed(seed)
-  Q <- Q0
+#| label: simulate-prl-function
 
-  choice   <- integer(n_trials)   # 0 = A, 1 = B
-  reward   <- integer(n_trials)   # 0/1
-  rich_is_A <- rep.int(1L, n_trials) # 1 = A ricco, 0 = B ricco (inizio A ricco)
-  if (!is.null(reversal_trial)) {
+simulate_prl_rw <- function(
+    n_trials = 160,
+    p_reward_rich = 0.70,
+    reversal_trial = 80,
+    alpha = 0.20,
+    tau = 3,
+    kappa = 0,
+    q0 = 0.50,
+    seed = NULL
+) {
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
+
+  rich_is_A <- rep(1L, n_trials)
+  if (!is.null(reversal_trial) && reversal_trial < n_trials) {
     rich_is_A[(reversal_trial + 1):n_trials] <- 0L
   }
 
-  Q_A <- Q_B <- pB_seq <- pe_seq <- numeric(n_trials)
+  q <- c(A = q0, B = q0)
+  previous_choice <- NA_integer_
+
+  output <- vector("list", n_trials)
 
   for (t in seq_len(n_trials)) {
-    # probabilità di scegliere B (softmax logit a due opzioni)
-    pB <- plogis(tau * (Q["B"] - Q["A"]))
-    choice[t] <- rbinom(1, 1, pB)   # 1=B, 0=A
+    q_pre <- q
 
-    a_idx <- if (choice[t] == 1L) 2L else 1L
+    previous_signed <- if (is.na(previous_choice)) {
+      0
+    } else {
+      2 * previous_choice - 1
+    }
 
-    # probabilità di ricompensa per l’opzione scelta
-    chosen_is_rich <- (choice[t] == 0L && rich_is_A[t] == 1L) ||  
-                      (choice[t] == 1L && rich_is_A[t] == 0L)
-    pr <- if (chosen_is_rich) p_reward_rich else (1 - p_reward_rich)
+    eta <- tau * (q["B"] - q["A"]) +
+      kappa * previous_signed
 
-    reward[t] <- rbinom(1, 1, pr)
+    p_choose_B <- plogis(eta)
+    choice <- rbinom(1, size = 1, prob = p_choose_B)
 
-    # prediction error e aggiornamento RW
-    pe <- reward[t] - Q[a_idx]
-    Q[a_idx] <- Q[a_idx] + lr * pe
+    chosen_is_rich <-
+      (choice == 0L && rich_is_A[t] == 1L) ||
+      (choice == 1L && rich_is_A[t] == 0L)
 
-    Q_A[t]   <- Q["A"]
-    Q_B[t]   <- Q["B"]
-    pB_seq[t] <- pB
-    pe_seq[t] <- pe
+    reward_probability <- if (chosen_is_rich) {
+      p_reward_rich
+    } else {
+      1 - p_reward_rich
+    }
+
+    reward <- rbinom(1, size = 1, prob = reward_probability)
+
+    chosen_index <- choice + 1L
+    prediction_error <- reward - q[chosen_index]
+    q[chosen_index] <- q[chosen_index] +
+      alpha * prediction_error
+
+    optimal_choice <- ifelse(rich_is_A[t] == 1L, 0L, 1L)
+
+    output[[t]] <- tibble(
+      trial = t,
+      rich_is_A = rich_is_A[t],
+      optimal_choice = optimal_choice,
+      choice = choice,
+      reward = reward,
+      reward_probability = reward_probability,
+      q_A_pre = q_pre["A"],
+      q_B_pre = q_pre["B"],
+      q_A_post = q["A"],
+      q_B_post = q["B"],
+      p_choose_B = p_choose_B,
+      prediction_error = prediction_error
+    )
+
+    previous_choice <- choice
   }
 
-  tibble::tibble(
-    trial     = seq_len(n_trials),
-    choice    = choice,    # 0=A, 1=B
-    reward    = reward,    # 0/1
-    rich_is_A = rich_is_A, # 0/1
-    Q_A = Q_A, Q_B = Q_B, pB = pB_seq, pe = pe_seq
-  )
+  bind_rows(output)
 }
-
-sim <- simulate_prl_rw_binary()
 ```
 
-Visualizziamo l’evoluzione dei valori associativi $Q$:
+### Che cosa fanno i parametri?
 
-```{r echo=FALSE}
-sim_long <- sim |>
-  select(trial, Q_A, Q_B) |>
-  pivot_longer(
-    cols = c(Q_A, Q_B),
-    names_to = "stimolo",
-    values_to = "Q"
-  )
-
-ggplot(sim_long, aes(x = trial, y = Q, color = stimolo)) +
-  geom_line(linewidth = 1) +
-  geom_vline(xintercept = 80, linetype = 2, color = "#5d5349") +
-  scale_color_manual(
-    values = c(Q_A = "#4682B4", Q_B = "#6B8E23"),
-    labels = c(Q_A = "Q[A]", Q_B = "Q[B]")
-  ) +
-  labs(
-    x = "Trial", y = "Valore Q",
-    color = NULL
-  ) +
-  theme(plot.title = element_text(hjust = 0.5))
-```
-
-### Interpretazione del grafico
-
-Nella prima parte dell'esperimento (trial 1-80), lo stimolo "ricco", rappresentato dalla linea blu, riceve ricompense più frequenti e accumula progressivamente un valore $Q$ più alto rispetto allo stimolo "povero", rappresentato dalla linea verde.
-
-Quando si verifica il *reversal* (linea verticale tratteggiata), le probabilità di rinforzo si invertono: lo stimolo blu smette di essere vantaggioso e il suo valore $Q$ diminuisce, mentre quello verde aumenta man mano che diventa la scelta più remunerativa.
-
-Questo andamento illustra il principio fondamentale del modello di Rescorla–Wagner, secondo cui i valori associativi $Q$ vengono aggiornati prova per prova in base all’errore di previsione (*prediction error*, PE):
-
-$$
-Q_{\text{nuovo}} = Q_{\text{vecchio}} + lr \times (reward - Q_{\text{vecchio}}).
-$$
-
-Il termine $(reward - Q_{\text{vecchio}})$ rappresenta la differenza tra il risultato ottenuto e quello atteso.
-Quando il feedback è migliore del previsto (PE > 0), il valore $Q$ aumenta; quando è peggiore (PE < 0), diminuisce. L'entità dell'aggiornamento dipende dal parametro di apprendimento "learning rate" (`lr`): un valore alto porta a un adattamento rapido ma instabile, mentre un valore basso produce aggiustamenti graduali e stabili.
-
-Il parametro `tau` controlla invece la sensibilità delle scelte alle differenze tra i valori $Q$. Con un valore di tau grande, le scelte diventano più deterministiche (si tende a preferire quasi sempre lo stimolo con il valore più alto), mentre con un valore di `tau` piccolo, prevale un comportamento più esplorativo o rumoroso.
-
-## Stima bayesiana con Stan
-
-Nella simulazione conoscevamo i parametri generativi (`lr = 0.15`, `tau = 2`). Nella pratica, invece, disponiamo soltanto dei *dati osservati*: per ogni trial sappiamo quale scelta è stata effettuata (`choice = 0` per A, `choice = 1` per B) e se il feedback ricevuto è stato positivo o negativo (`reward = 1` oppure `0`).
-
-I valori interni del modello — i $Q$ associati agli stimoli e i parametri che li governano — non sono direttamente osservabili: devono essere *inferiti* a partire dal comportamento.
-
-L’ipotesi di base è che le scelte derivino da un processo di tipo *Rescorla–Wagner* combinato con una regola di scelta logistica (*softmax*). L’obiettivo dell’analisi è stimare, usando i soli dati comportamentali, due parametri fondamentali:
-
-* il *learning rate* `lr`, che determina la rapidità con cui i valori $Q$ si aggiornano dopo ciascun feedback;
-* l’*inverse temperature* `tau`, che quantifica quanto le scelte seguono i valori $Q$ in modo coerente (valori alti implicano scelte più deterministiche, valori bassi scelte più esplorative).
-
-### Codice Stan
+Simuliamo quattro combinazioni di \(\alpha\) e \(\tau\).
 
 ```{r}
-stancode_rw <- "
-data {
-  int<lower=1> nTrials;                   // numero di prove
-  array[nTrials] int<lower=0,upper=1> choice; // scelte osservate (0=A, 1=B)
-  array[nTrials] real<lower=0,upper=1> reward; // ricompense osservate (0/1)
+#| label: simulate-rw-parameter-grid
+
+rw_scenarios <- tribble(
+  ~scenario, ~alpha, ~tau,
+  "Apprendimento lento, scelta variabile", 0.08, 1.0,
+  "Apprendimento lento, scelta coerente", 0.08, 5.0,
+  "Apprendimento rapido, scelta variabile", 0.55, 1.0,
+  "Apprendimento rapido, scelta coerente", 0.55, 5.0
+)
+
+rw_scenario_data <- rw_scenarios |>
+  mutate(
+    simulation_seed = 900 + row_number(),
+    simulation = purrr::pmap(
+      list(alpha, tau, simulation_seed),
+      ~ simulate_prl_rw(
+        alpha = ..1,
+        tau = ..2,
+        seed = ..3
+      )
+    )
+  ) |>
+  select(scenario, simulation) |>
+  tidyr::unnest(simulation) |>
+  group_by(scenario) |>
+  mutate(
+    rolling_optimal = slider::slide_dbl(
+      choice == optimal_choice,
+      mean,
+      .before = 9,
+      .complete = FALSE
+    )
+  ) |>
+  ungroup()
+```
+
+```{r}
+#| label: fig-rw-parameter-grid
+#| fig-cap: "Proporzione mobile di scelte dell'alternativa attualmente più ricca, generata da quattro combinazioni di tasso di apprendimento e inverse temperature."
+#| fig-width: 10
+#| fig-height: 6
+#| echo: false
+
+rw_scenario_data |>
+  ggplot(aes(x = trial, y = rolling_optimal)) +
+  geom_hline(yintercept = 0.5, linetype = "dotted") +
+  geom_vline(xintercept = 80.5, linetype = "dashed") +
+  geom_line(linewidth = 0.8) +
+  facet_wrap(~scenario, ncol = 2) +
+  coord_cartesian(ylim = c(0, 1)) +
+  labs(
+    x = "Trial",
+    y = "Proporzione mobile di scelte ottimali"
+  )
+```
+
+Le quattro traiettorie non si ordinano lungo una sola dimensione di “prestazione”.
+
+- Un \(\alpha\) elevato facilita l'adattamento dopo il reversal, ma può amplificare la reazione a ricompense casuali.
+- Un \(\tau\) elevato rende il comportamento coerente con i valori correnti, anche quando tali valori sono ancora errati.
+- Un \(\tau\) basso produce maggiore variabilità nelle scelte e può rallentare la manifestazione comportamentale di ciò che è stato appreso.
+- La stessa accuratezza media può nascondere combinazioni di parametri differenti.
+
+### Una traiettoria di riferimento
+
+Generiamo ora dati da un partecipante simulato con:
+
+\[
+\alpha=0.20,
+\qquad
+\tau=3.
+\]
+
+```{r}
+#| label: simulate-rw-reference-data
+
+sim_rw <- simulate_prl_rw(
+  alpha = 0.20,
+  tau = 3,
+  kappa = 0,
+  seed = 2026
+)
+```
+
+```{r}
+#| label: fig-rw-reference-values
+#| fig-cap: "Valori latenti prima della scelta e scelte osservate nel dataset simulato. La linea verticale indica il reversal."
+#| fig-width: 10
+#| fig-height: 5.5
+#| echo: false
+
+sim_rw |>
+  select(trial, q_A_pre, q_B_pre) |>
+  pivot_longer(
+    cols = starts_with("q_"),
+    names_to = "option",
+    values_to = "Q"
+  ) |>
+  ggplot(aes(x = trial, y = Q, linetype = option)) +
+  geom_vline(xintercept = 80.5, linetype = "dotted") +
+  geom_line(linewidth = 0.9) +
+  labs(
+    x = "Trial",
+    y = "Valore latente prima della scelta",
+    linetype = NULL
+  )
+```
+
+L'ambiente genera il feedback, il feedback modifica i valori e i valori influenzano le scelte. Questa è una specificazione generativa completa del compito.
+
+## Dalla simulazione all'inferenza inversa
+
+Nella simulazione conosciamo \(\alpha\), \(\tau\) e l'intera sequenza degli stati. Nei dati reali osserviamo soltanto scelte e feedback.
+
+L'inferenza procede quindi nella direzione opposta:
+
+\[
+\text{scelte e feedback}
+\longrightarrow
+\text{posterior di }\alpha,\tau
+\longrightarrow
+\text{posterior degli stati }Q_t.
+\]
+
+Questa operazione è possibile soltanto perché abbiamo specificato sia la dinamica dell'apprendimento sia il modello osservazionale.
+
+## Prior e controllo predittivo a priori
+
+### Prior sui parametri trasformati
+
+Per evitare limiti rigidi durante il campionamento, lavoriamo con parametri non vincolati:
+
+\[
+\alpha=\operatorname{logit}^{-1}(\alpha_{\mathrm{raw}}),
+\qquad
+\tau=\exp(\log\tau).
+\]
+
+Usiamo:
+
+\[
+\alpha_{\mathrm{raw}}
+\sim
+\operatorname{Normal}
+\left(
+\operatorname{logit}(0.20),1
+\right),
+\]
+
+\[
+\log\tau
+\sim
+\operatorname{Normal}
+\left(
+\log 2,0.6
+\right).
+\]
+
+Questi prior sono propri e relativamente ampi. Non dichiarano che valori specifici siano “tipici” in assoluto: la plausibilità di \(\tau\) dipende dalla scala dei valori e dal compito.
+
+### Controllare le implicazioni del prior
+
+Un prior sui parametri deve essere valutato attraverso il comportamento che genera.
+
+```{r}
+#| label: rw-prior-predictive
+
+n_prior_draws <- 250
+
+rw_prior_draws <- tibble(
+  draw = seq_len(n_prior_draws),
+  alpha = plogis(
+    rnorm(
+      n_prior_draws,
+      mean = qlogis(0.20),
+      sd = 1
+    )
+  ),
+  tau = rlnorm(
+    n_prior_draws,
+    meanlog = log(2),
+    sdlog = 0.6
+  )
+)
+
+behavioral_statistics <- function(
+    choice,
+    reward,
+    rich_is_A,
+    reversal_trial = 80
+) {
+  optimal_choice <- ifelse(rich_is_A == 1L, 0L, 1L)
+  stay <- choice[-1] == choice[-length(choice)]
+  previous_reward <- reward[-length(reward)]
+
+  early_reversal <- seq.int(
+    reversal_trial + 1,
+    min(reversal_trial + 20, length(choice))
+  )
+
+  tibble(
+    optimal_rate = mean(choice == optimal_choice),
+    early_reversal_optimal = mean(
+      choice[early_reversal] == optimal_choice[early_reversal]
+    ),
+    switch_rate = mean(!stay),
+    stay_after_reward = mean(stay[previous_reward == 1]),
+    stay_after_no_reward = mean(stay[previous_reward == 0])
+  )
 }
 
-transformed data {
-  vector[2] initV = rep_vector(0.0, 2);   // valori Q iniziali
+rw_prior_stats <- rw_prior_draws |>
+  mutate(
+    simulation = purrr::pmap(
+      list(alpha, tau, draw),
+      ~ simulate_prl_rw(
+        alpha = ..1,
+        tau = ..2,
+        seed = 5000 + ..3
+      )
+    ),
+    statistics = purrr::map(
+      simulation,
+      ~ behavioral_statistics(
+        choice = .x$choice,
+        reward = .x$reward,
+        rich_is_A = .x$rich_is_A
+      )
+    )
+  ) |>
+  select(draw, alpha, tau, statistics) |>
+  tidyr::unnest(statistics)
+```
+
+```{r}
+#| label: fig-rw-prior-predictive
+#| fig-cap: "Distribuzioni predittive a priori di tre statistiche comportamentali. Il controllo valuta le conseguenze congiunte dei prior e del compito."
+#| fig-width: 10
+#| fig-height: 4.8
+#| echo: false
+
+rw_prior_stats |>
+  select(
+    optimal_rate,
+    early_reversal_optimal,
+    switch_rate
+  ) |>
+  pivot_longer(
+    everything(),
+    names_to = "statistic",
+    values_to = "value"
+  ) |>
+  ggplot(aes(x = value)) +
+  geom_histogram(bins = 30) +
+  facet_wrap(
+    ~statistic,
+    scales = "free",
+    labeller = label_both
+  ) +
+  labs(
+    x = "Valore simulato",
+    y = "Frequenza"
+  )
+```
+
+Il controllo predittivo a priori consente di chiedere:
+
+- il modello genera quasi sempre scelte casuali?
+- produce comportamenti quasi deterministici?
+- contempla adattamenti rapidi e lenti al reversal?
+- attribuisce massa a sequenze psicologicamente o sperimentalmente implausibili?
+
+Se la risposta è insoddisfacente, i prior devono essere rivisti prima di osservare la posterior.
+
+## Implementazione in Stan
+
+Il programma seguente:
+
+- calcola la probabilità della scelta usando i valori prima del feedback;
+- aggiorna soltanto l'opzione scelta;
+- ricostruisce gli stati latenti;
+- calcola la log-verosimiglianza condizionata delle scelte;
+- genera nuove sequenze complete di scelte e ricompense nello stesso ambiente.
+
+```{r}
+#| label: rw-stan-code
+
+stancode_rw <- "
+data {
+  int<lower=1> T;
+  array[T] int<lower=0, upper=1> choice;
+  array[T] int<lower=0, upper=1> reward;
+  array[T] int<lower=0, upper=1> rich_is_A;
+  real<lower=0.5, upper=1> p_reward_rich;
 }
 
 parameters {
-  real<lower=0,upper=1> lr;   // learning rate
-  real<lower=0,upper=3> tau;  // inverse temperature (softmax / decision noise)
+  real alpha_raw;
+  real log_tau;
+}
+
+transformed parameters {
+  real<lower=0, upper=1> alpha = inv_logit(alpha_raw);
+  real<lower=0> tau = exp(log_tau);
 }
 
 model {
-  vector[2] v = initV;        // valori Q correnti
-  real pe;                    // prediction error
-  real p;                     // probabilità di scelta =1 (stimolo B)
+  vector[2] q = rep_vector(0.5, 2);
 
-  // Priors deboli ma informative
-  lr ~ beta(2, 10);           // learning rate vicino a valori piccoli
-  tau ~ lognormal(log(2), 0.5); // inverse temperature positiva
+  alpha_raw ~ normal(logit(0.20), 1);
+  log_tau ~ normal(log(2), 0.6);
 
-  for (t in 1:nTrials) {
-    // Probabilità di scegliere B: logit della differenza Q_B - Q_A
-    p = inv_logit(tau * (v[2] - v[1]));
-    choice[t] ~ bernoulli(p);
+  for (t in 1:T) {
+    int a = choice[t] + 1;
+    real eta = tau * (q[2] - q[1]);
 
-    // Prediction error e aggiornamento
-    int a = choice[t] + 1;     // 0→1 (A), 1→2 (B)
-    pe = reward[t] - v[a];
-    v[a] += lr * pe;
+    choice[t] ~ bernoulli_logit(eta);
+    q[a] += alpha * (reward[t] - q[a]);
+  }
+}
+
+generated quantities {
+  array[T] int choice_rep;
+  array[T] int reward_rep;
+  vector[T] log_lik;
+  vector[T] q_A_obs;
+  vector[T] q_B_obs;
+  vector[T] prediction_error_obs;
+
+  {
+    vector[2] q_obs = rep_vector(0.5, 2);
+    vector[2] q_rep = rep_vector(0.5, 2);
+
+    for (t in 1:T) {
+      int a_obs;
+      int a_rep;
+      int chosen_is_rich;
+      real eta_obs;
+      real eta_rep;
+      real reward_probability;
+
+      q_A_obs[t] = q_obs[1];
+      q_B_obs[t] = q_obs[2];
+
+      eta_obs = tau * (q_obs[2] - q_obs[1]);
+      log_lik[t] = bernoulli_logit_lpmf(
+        choice[t] | eta_obs
+      );
+
+      a_obs = choice[t] + 1;
+      prediction_error_obs[t] =
+        reward[t] - q_obs[a_obs];
+      q_obs[a_obs] +=
+        alpha * prediction_error_obs[t];
+
+      eta_rep = tau * (q_rep[2] - q_rep[1]);
+      choice_rep[t] =
+        bernoulli_logit_rng(eta_rep);
+      a_rep = choice_rep[t] + 1;
+
+      chosen_is_rich =
+        (
+          (choice_rep[t] == 0 &&
+           rich_is_A[t] == 1) ||
+          (choice_rep[t] == 1 &&
+           rich_is_A[t] == 0)
+        ) ? 1 : 0;
+
+      reward_probability =
+        chosen_is_rich == 1
+        ? p_reward_rich
+        : 1 - p_reward_rich;
+
+      reward_rep[t] =
+        bernoulli_rng(reward_probability);
+
+      q_rep[a_rep] += alpha *
+        (reward_rep[t] - q_rep[a_rep]);
+    }
   }
 }
 "
 ```
 
-I prior scelti sono debolmente informativi ma coerenti con compiti PRL tipici (apprendimento moderato e scelte non eccessivamente rumorose). Possono essere resi più o meno conservativi in base al compito.
+::: {.callout-note collapse=true title="Che cosa viene trattato come casuale?"}
+Nella verosimiglianza stimiamo il modello delle **scelte condizionate ai feedback osservati**. La distribuzione dell'ambiente non contribuisce alla posterior di \(\alpha\) e \(\tau\).
 
-### Commento al codice Stan
-
-All’inizio dell’esecuzione, i due valori $Q[1]$ e $Q[2]$ (associati agli stimoli A e B) sono fissati a zero: rappresentano l’aspettativa iniziale del partecipante, cioè una condizione di indifferenza tra le due opzioni.
-
-Al trial $t$, il modello calcola la probabilità di scegliere B confrontando i due valori di $Q$:
-
-$$
-p(B) = \text{inv\_logit}\big(\tau \cdot (Q_B - Q_A)\big).
-$$
-
-Quando $Q_B$ supera $Q_A$, la probabilità di scegliere B aumenta. Il parametro `tau` controlla quanto questa differenza incide sulle scelte: con valori elevati, anche piccole differenze tra i due Q portano a decisioni quasi certe; con valori bassi, le scelte restano più esplorative e meno determinate.
-
-La riga `choice[t] ~ bernoulli(p)` specifica la *verosimiglianza*: confronta la scelta osservata con la probabilità prevista dal modello. Se la scelta è coerente con le aspettative derivanti dai $Q$, la probabilità (e quindi il “credito” del modello) aumenta; se è incoerente, diminuisce.
-
-Dopo la scelta, si osserva il feedback e si calcola l'errore di previsione (*prediction error*, PE):
-
-$$
-PE = reward[t] - Q[\text{scelta}],
-$$
-
-ovvero, la differenza tra il risultato ottenuto e quello atteso.
-
-Infine, solo il valore $Q$ corrispondente all’opzione scelta viene aggiornato secondo la regola di apprendimento di Rescorla–Wagner:
-
-$$
-Q_{\text{nuovo}} = Q_{\text{vecchio}} + lr \cdot PE.
-$$
-
-Se il feedback è migliore del previsto (PE > 0), il valore aumenta; se è peggiore (PE < 0), diminuisce. L’entità dell’aggiornamento dipende dal *learning rate* `lr`: un valore alto produce cambiamenti rapidi, uno basso genera un apprendimento più graduale.
-
-::: {.callout-note collapse=true title="Esempio intuitivo"}
-Supponiamo che in un certo momento i valori stimati siano $Q_A = 0.6$ e $Q_B = 0.3$, con `tau = 2`. La differenza tra i due è $Q_B - Q_A = -0.3$, quindi l’argomento della funzione logit è $-0.6$. Ne consegue:
-
-$$
-p(B) = \text{inv_logit}(-0.6) \approx 0.35.
-$$
-Il modello prevede dunque che il partecipante scelga lo stimolo $A$ con una probabilità di circa il 65%.
-
-Se il partecipante sceglie effettivamente $A$, l’osservazione è coerente con le aspettative del modello e la verosimiglianza risulta elevata. Se invece sceglie $B$, l’evento è meno probabile ma comunque possibile: in tal caso, dopo aver osservato il feedback, il modello aggiorna i valori interni $Q$ per ridurre la discrepanza tra previsione e risultato.
+Nelle quantità generate simuliamo invece anche i feedback, usando le probabilità note del compito. Questo produce repliche complete del comportamento nello stesso ambiente e permette controlli predittivi su adattamento, switching e ricompense.
 :::
 
-In questo tutorial useremo i dati simulati in precedenza:
+### Compilazione e campionamento
 
 ```{r}
-stan_data <- list(
-  nTrials = nrow(sim),
-  choice  = as.integer(sim$choice),
-  reward  = as.numeric(sim$reward)   # 0/1 come real per coerenza con <lower=0,upper=1>
-)
-glimpse(stan_data)
-```
-
-Compiliamo il modello e eseguiamo il campionamento:
-
-```{r}
+#| label: fit-rw-model
+#| cache: true
 #| output: false
-mod_rw <- cmdstanr::cmdstan_model(write_stan_file(stancode_rw))
-fit_rw <- mod_rw$sample(
-  data = stan_data,
-  seed = 42,
+
+rw_stan_data <- list(
+  T = nrow(sim_rw),
+  choice = as.integer(sim_rw$choice),
+  reward = as.integer(sim_rw$reward),
+  rich_is_A = as.integer(sim_rw$rich_is_A),
+  p_reward_rich = 0.70
+)
+
+rw_model_file <- write_stan_file(stancode_rw)
+rw_model <- cmdstan_model(rw_model_file)
+
+fit_rw <- rw_model$sample(
+  data = rw_stan_data,
+  seed = 8127,
   chains = 4,
   parallel_chains = 4,
   iter_warmup = 1000,
-  iter_sampling = 4000,
-  refresh = 200
+  iter_sampling = 1500,
+  refresh = 0
 )
 ```
 
-Calcoliamo le diagnostiche di campionamento:
+## Diagnostica del calcolo
 
 ```{r}
-fit_rw$cmdstan_diagnose()  # controlli rapidi cmdstan
+#| label: rw-computational-diagnostics
+
+fit_rw$cmdstan_diagnose()
+
+fit_rw$summary(
+  variables = c("alpha", "tau"),
+  mean,
+  sd,
+  ~quantile(.x, probs = c(0.05, 0.50, 0.95))
+)
 ```
 
-Esaminiamo la distribuzione a posteriori dei parametri:
-
 ```{r}
-fit_rw$summary(c("lr","tau"))
+#| label: fig-rw-rank-plots
+#| fig-cap: "Rank plot delle catene per il tasso di apprendimento e l'inverse temperature."
+#| fig-width: 9
+#| fig-height: 4
+#| echo: false
+
+fit_rw$draws(c("alpha", "tau")) |>
+  bayesplot::mcmc_rank_overlay()
 ```
 
-## Interpretazione dei risultati
+Questi controlli rispondono alla domanda: *il campionatore ha esplorato adeguatamente la posterior specificata?* Non dimostrano che il modello cognitivo sia corretto.
 
-Le distribuzioni a posteriori mostrano quanto bene il modello è riuscito a recuperare i parametri generativi utilizzati nella simulazione (`lr = 0.15`, `tau = 2`).
-
-Il parametro `lr` (*learning rate*) determina la velocità con cui il soggetto aggiorna le proprie aspettative dopo ogni feedback. Valori elevati indicano un apprendimento rapido: anche un singolo esito può modificare sensibilmente la stima del valore di uno stimolo. Valori bassi, invece, producono un apprendimento più lento e conservativo: le esperienze passate continuano a influenzare a lungo le scelte, rendendo l’adattamento ai cambiamenti più graduale.
-
-Il parametro `tau` (*inverse temperature*) controlla invece quanto le scelte seguono in modo coerente i valori stimati $Q$. Con un valore alto di `tau`, il comportamento è quasi deterministico: basta una piccola differenza tra $Q_A$ e $Q_B$ per generare una preferenza netta. Con un valore basso di `tau`, le scelte appaiono più esplorative o rumorose: anche stimoli con un valore inferiore vengono scelti occasionalmente.
+## Posterior dei parametri
 
 ```{r}
-draws_df <- fit_rw$draws(c("lr","tau")) |>
+#| label: rw-posterior-draws
+
+rw_draws <- fit_rw$draws(
+  variables = c("alpha", "tau")
+) |>
   as_draws_df() |>
-  tibble::as_tibble()
+  as_tibble()
+```
 
-cols <- c(lr = "#5d5349", tau = "#4682B4")
+```{r}
+#| label: fig-rw-parameter-posteriors
+#| fig-cap: "Distribuzioni a posteriori dei parametri. Le linee tratteggiate indicano i valori usati per generare i dati."
+#| fig-width: 9
+#| fig-height: 4.5
+#| echo: false
 
-plot_post <- function(draws, param, col) {
-  ggplot(draws, aes(x = .data[[param]])) +
-    geom_histogram(aes(y = after_stat(density)), bins = 40,
-                   fill = col, color = "black", alpha = 0.6) +
-    geom_density(color = col, linewidth = 1) +
-    labs(x = param, y = "Densità", title = paste("Posterior di", param))
+p_alpha <- rw_draws |>
+  ggplot(aes(x = alpha)) +
+  geom_histogram(
+    aes(y = after_stat(density)),
+    bins = 40
+  ) +
+  geom_density(linewidth = 0.8) +
+  geom_vline(
+    xintercept = 0.20,
+    linetype = "dashed"
+  ) +
+  labs(x = expression(alpha), y = "Densità")
+
+p_tau <- rw_draws |>
+  ggplot(aes(x = tau)) +
+  geom_histogram(
+    aes(y = after_stat(density)),
+    bins = 40
+  ) +
+  geom_density(linewidth = 0.8) +
+  geom_vline(
+    xintercept = 3,
+    linetype = "dashed"
+  ) +
+  labs(x = expression(tau), y = "Densità")
+
+p_alpha + p_tau
+```
+
+La vicinanza tra posterior e valori generativi è utile, ma una singola simulazione non dimostra la recuperabilità generale. Occorre valutare il comportamento del metodo su molti dataset e su più combinazioni dei parametri.
+
+### Dipendenza posteriore
+
+```{r}
+#| label: fig-rw-posterior-dependence
+#| fig-cap: "Distribuzione congiunta dei parametri. Una dipendenza posteriore indica che combinazioni diverse possono produrre sequenze di scelta simili."
+#| fig-width: 6
+#| fig-height: 5
+#| echo: false
+
+rw_draws |>
+  ggplot(aes(x = alpha, y = tau)) +
+  geom_point(alpha = 0.12, size = 0.7) +
+  geom_density_2d() +
+  labs(
+    x = expression(alpha),
+    y = expression(tau)
+  )
+```
+
+Una dipendenza tra i parametri non è un errore del campionatore. Può riflettere una compensazione reale: un tasso di apprendimento diverso può essere parzialmente controbilanciato da una diversa sensibilità della scelta.
+
+## Ricostruire gli stati latenti
+
+Le quantità generate contengono, per ogni draw, i valori \(Q_t(A)\) e \(Q_t(B)\) coerenti con scelte e feedback osservati.
+
+```{r}
+#| label: summarize-rw-latent-trajectories
+
+summarize_stan_array <- function(fit, variable) {
+  draws_matrix <- fit$draws(
+    variable,
+    format = "draws_matrix"
+  ) |>
+    as.matrix()
+
+  tibble(
+    trial = seq_len(ncol(draws_matrix)),
+    median = apply(draws_matrix, 2, median),
+    lower = apply(
+      draws_matrix,
+      2,
+      quantile,
+      probs = 0.05
+    ),
+    upper = apply(
+      draws_matrix,
+      2,
+      quantile,
+      probs = 0.95
+    )
+  )
 }
 
-p_lr  <- plot_post(draws_df, "lr",  cols["lr"])
-p_tau <- plot_post(draws_df, "tau", cols["tau"])
+q_A_posterior <- summarize_stan_array(
+  fit_rw,
+  "q_A_obs"
+) |>
+  mutate(option = "A")
+
+q_B_posterior <- summarize_stan_array(
+  fit_rw,
+  "q_B_obs"
+) |>
+  mutate(option = "B")
+
+q_posterior <- bind_rows(
+  q_A_posterior,
+  q_B_posterior
+)
 ```
 
 ```{r}
-true_vals <- c(lr = 0.15, tau = 2)
-p_lr  + geom_vline(xintercept = true_vals["lr"],  linetype = 2)
-p_tau + geom_vline(xintercept = true_vals["tau"], linetype = 2)
+#| label: fig-rw-latent-trajectories
+#| fig-cap: "Traiettorie posteriori dei valori latenti prima della scelta. Le bande rappresentano intervalli posteriori al 90%."
+#| fig-width: 10
+#| fig-height: 5
+#| echo: false
+
+q_posterior |>
+  ggplot(
+    aes(
+      x = trial,
+      y = median,
+      ymin = lower,
+      ymax = upper,
+      group = option,
+      linetype = option
+    )
+  ) +
+  geom_vline(
+    xintercept = 80.5,
+    linetype = "dotted"
+  ) +
+  geom_ribbon(alpha = 0.15) +
+  geom_line(linewidth = 0.8) +
+  labs(
+    x = "Trial",
+    y = "Valore latente",
+    linetype = NULL
+  )
 ```
 
-Nei grafici delle distribuzioni posteriori, le linee tratteggiate rappresentano i valori reali utilizzati nella simulazione, mentre le distribuzioni colorate riflettono l'incertezza del modello riguardo alle possibili stime dei parametri. Quando una distribuzione è centrata sulla linea tratteggiata e risulta concentrata, significa che il modello ha recuperato il parametro in modo accurato. Distribuzioni più ampie o spostate indicano invece una maggiore incertezza o relazioni di compensazione tra i parametri: ad esempio, un `lr` leggermente diverso può essere controbilanciato da un `tau` più alto o più basso, producendo previsioni simili.
+Le traiettorie ricostruite non sono misure dirette dell'aspettativa del partecipante. Sono stati latenti inferiti sotto le assunzioni del modello.
 
-Questo fenomeno di *trade-off* è comune nei dataset brevi o con bassa variabilità nelle scelte, in cui più combinazioni di parametri possono descrivere in modo equivalente i dati osservati. È quindi importante verificare la qualità del campionamento (ad esempio, tramite le statistiche R-hat e ESS) e valutare l'adattamento del modello con analisi predittive posteriori (*posterior predictive checks*).
+## Controlli predittivi a posteriori
 
-## Dal parametro allo stile cognitivo
+Un buon controllo deve concentrarsi su caratteristiche che il modello intende spiegare.
 
-I parametri del modello non rappresentano solo grandezze numeriche, ma descrivono diverse modalità di apprendimento e di presa di decisioni.
+```{r}
+#| label: rw-posterior-replication-statistics
 
-Il learning rate (`lr`) riflette la rapidità con cui una persona aggiorna le proprie aspettative in base ai risultati ricevuti. Un individuo con un valore di learning rate alto è molto sensibile ai singoli feedback: reagisce prontamente agli esiti e può adattarsi rapidamente a un cambiamento delle contingenze (*reversal*). Per esempio, bastano pochi esiti negativi perché abbandoni lo stimolo che in precedenza sembrava più vantaggioso. Al contrario, un valore basso di `lr` indica un apprendimento più cauto e conservativo: l'individuo integra lentamente le nuove informazioni e tende a mantenere le proprie scelte abituali anche di fronte a segnali contrari, modificando il proprio comportamento solo dopo un'evidenza più consistente.
+replicated_statistics <- function(
+    fit,
+    rich_is_A,
+    n_replications = 300
+) {
+  choice_matrix <- fit$draws(
+    "choice_rep",
+    format = "draws_matrix"
+  ) |>
+    as.matrix()
 
-L'*inverse temperature* (`tau`) descrive invece quanto le scelte siano coerenti con i valori stimati $Q$. Con un valore di `tau` alto, il comportamento diventa quasi deterministico: lo stimolo con il valore più alto viene scelto quasi sempre. Questo profilo corrisponde a uno stile orientato allo sfruttamento, volto a massimizzare subito i guadagni. Con un valore di `tau` basso, invece, le scelte appaiono più esplorative o rumorose: anche quando una delle due opzioni è chiaramente migliore, il soggetto talvolta opta per l'altra. Questo stile, apparentemente "incoerente", può però rivelarsi vantaggioso in ambienti incerti o mutevoli, in quanto favorisce l'esplorazione di alternative potenzialmente più redditizie.
+  reward_matrix <- fit$draws(
+    "reward_rep",
+    format = "draws_matrix"
+  ) |>
+    as.matrix()
 
-### Messaggio chiave
+  selected <- sample(
+    seq_len(nrow(choice_matrix)),
+    size = min(n_replications, nrow(choice_matrix))
+  )
 
-L’approccio bayesiano consente di stimare, per ciascun individuo, un profilo che integra due dimensioni fondamentali: *apprendimento*, cioè la velocità con cui aggiorna le proprie aspettative, e *decisione*, ovvero quanto coerentemente agisce in base a tali aspettative.
+  purrr::map_dfr(
+    selected,
+    ~ behavioral_statistics(
+      choice = as.integer(choice_matrix[.x, ]),
+      reward = as.integer(reward_matrix[.x, ]),
+      rich_is_A = rich_is_A
+    ),
+    .id = "replication"
+  )
+}
 
-Differenze sistematiche nei parametri tra gruppi sperimentali (ad esempio, tra stimoli emotivi e stimoli neutri) o tra popolazioni cliniche e di controllo possono rivelare *stili cognitivi distinti*. Un *learning rate* basso (`lr`) può indicare difficoltà nell’adattarsi a nuovi feedback, mentre valori estremi di *inverse temperature* (`tau`) possono riflettere scelte eccessivamente rigide o, al contrario, troppo esplorative.
+rw_rep_stats <- replicated_statistics(
+  fit = fit_rw,
+  rich_is_A = sim_rw$rich_is_A
+)
 
-In questa prospettiva, anche un modello computazionale essenziale come quello di *Rescorla–Wagner* con regola di scelta logistica non si limita a descrivere il comportamento osservato, ma offre una *chiave di lettura psicologica* per comprendere i meccanismi cognitivi che lo generano.
+rw_observed_stats <- behavioral_statistics(
+  choice = sim_rw$choice,
+  reward = sim_rw$reward,
+  rich_is_A = sim_rw$rich_is_A
+)
+```
 
-## Contextual bandits 
+```{r}
+#| label: fig-rw-posterior-predictive-statistics
+#| fig-cap: "Distribuzioni posteriori predittive di statistiche dinamiche. Le linee tratteggiate indicano i valori osservati."
+#| fig-width: 10
+#| fig-height: 5.5
+#| echo: false
 
-Nel modello di *Rescorla–Wagner* con regola logistica, come visto nel tutorial, i parametri principali, ovvero il learning rate (`lr`), che regola la velocità con cui i valori $Q$ vengono aggiornati, e l’inverse temperature (`tau`), che governa la coerenza delle scelte rispetto a tali valori, sono assunti come stabili per tutto il compito.
+rw_rep_long <- rw_rep_stats |>
+  select(
+    optimal_rate,
+    early_reversal_optimal,
+    switch_rate,
+    stay_after_reward,
+    stay_after_no_reward
+  ) |>
+  pivot_longer(
+    everything(),
+    names_to = "statistic",
+    values_to = "value"
+  )
 
-La famiglia dei *banditi contestuali* (*contextual bandits*) estende questo schema introducendo la possibilità che i parametri varino in funzione del *contesto sperimentale*. Lo stesso meccanismo di apprendimento e decisione (RW + logit) viene quindi applicato separatamente a condizioni diverse, come nel caso di stimoli *food* e *neutral* in un campione di pazienti con anoressia, oppure a gruppi differenti, come pazienti clinici e controlli.
+rw_observed_long <- rw_observed_stats |>
+  pivot_longer(
+    everything(),
+    names_to = "statistic",
+    values_to = "observed"
+  )
 
-Questa estensione si è rivelata particolarmente utile nello studio dei disturbi alimentari. Analisi recenti hanno mostrato che i *deficit di apprendimento in anoressia nervosa non sono generalizzati*, ma *specifici del contesto alimentare*: nelle prove con stimoli legati al cibo, le persone con anoressia tendono a mostrare un *learning rate* più basso, cioè aggiornano più lentamente le proprie aspettative; negli stessi compiti con stimoli neutri, invece, i parametri risultano simili a quelli dei controlli [@colpizzi2025food].
+rw_rep_long |>
+  left_join(
+    rw_observed_long,
+    by = "statistic"
+  ) |>
+  ggplot(aes(x = value)) +
+  geom_histogram(bins = 30) +
+  geom_vline(
+    aes(xintercept = observed),
+    linetype = "dashed"
+  ) +
+  facet_wrap(
+    ~statistic,
+    scales = "free",
+    labeller = label_both
+  ) +
+  labs(
+    x = "Statistica replicata",
+    y = "Frequenza"
+  )
+```
 
-Questi risultati indicano che la vulnerabilità non riguarda un deficit globale nei meccanismi di apprendimento, ma un'alterazione selettiva e dipendente dal contesto che contribuisce al mantenimento del disturbo.
+Questi controlli chiedono se il modello riproduce:
 
-Formalmente, per ciascun contesto $c \in {\text{food}, \text{neutral}}$, il modello è espresso come:
+- la scelta dell'alternativa attualmente più vantaggiosa;
+- l'adattamento immediatamente successivo al reversal;
+- la frequenza dei cambi di risposta;
+- la tendenza a restare dopo un esito positivo;
+- la tendenza a restare dopo un esito negativo.
 
-$$
-P_c(B_t)=\text{inv\_logit}!\big(\tau_c [Q_{c,t}(B)-Q_{c,t}(A)]\big),
-$$
+Un istogramma marginale delle scelte non sarebbe sufficiente a controllare una teoria dinamica.
 
-$$
-Q_{c,t+1}(s)=Q_{c,t}(s)+lr_c ,[R_{c,t}-Q_{c,t}(s)].
-$$
-Il confronto tra $lr_{\text{food}}$ e $lr_{\text{neutral}}$ (e, analogamente, tra $\tau_{\text{food}}$ e $\tau_{\text{neutral}}$) consente di quantificare con precisione le differenze legate al contesto.
+## Recuperabilità dei parametri
 
-## Riflessioni conclusive {.unlisted .unnumbered}
+La simulazione precedente costituisce un primo esercizio di recupero: il modello viene applicato a dati generati da se stesso e la posterior viene confrontata con i valori noti.
 
-Il modello di Rescorla-Wagner con regola logistica separa chiaramente l'apprendimento dalla decisione: il parametro `lr` governa la velocità con cui le aspettative si aggiornano in base all'errore di previsione, mentre il parametro `tau` controlla quanto le scelte seguono in modo coerente i valori appresi. Questa distinzione permette di spiegare lo stesso comportamento con meccanismi diversi (apprendimento rapido ma scelte esplorative, oppure apprendimento lento ma scelte deterministiche), evitando letture unidimensionali della "prestazione".
+Una valutazione più informativa ripete l'operazione su una griglia di parametri e su molti dataset.
 
-La scomposizione fornisce anche informazioni utili dal punto di vista clinico. Nel caso dell'anoressia nervosa, ad esempio, i deficit non sono globali, ma dipendono dal contesto: di fronte a stimoli "food" si osserva un `lr` ridotto, mentre con stimoli "neutral" i parametri sono allineati ai controlli [@colpizzi2025food]. In altre parole, il problema non è quanto si impara in generale, ma da cosa e quando le scelte sfruttano ciò che si è appreso.
+::: {.callout-note collapse=true title="Schema per un esperimento di parameter recovery"}
 
-Operativamente, il modello RW permette di: (i) quantificare le differenze nei meccanismi di apprendimento (`lr`) tra condizioni o gruppi; (ii) valutare le eventuali variazioni nello stile decisionale (`tau`); (iii) collegare queste differenze a ipotesi psicologiche e cliniche mirate (es. sensibilità al feedback, equilibrio esplorazione-sfruttamento). L'inferenza bayesiana rende questi confronti espliciti e trasferibili da uno studio all'altro, tramite stime a posteriori, incertezze e *posterior predictive checks*.
+```{r}
+#| eval: false
 
-In sintesi, il modello RW non si limita a descrivere matematicamente le curve di apprendimento, ma propone una *teoria verificabile* sui processi cognitivi che le generano. Esso funge da ponte esplicativo tra il comportamento osservato e i meccanismi mentali ipotizzati, consentendo di individuare alterazioni contestuali specifiche. Questa formalizzazione è ciò che trasforma un pattern comportamentale in un'ipotesi precisa e falsificabile su *come* si apprende e *come* si decide, gettando le basi per interventi che distinguono sistematicamente tra le due componenti.
+recovery_grid <- tidyr::crossing(
+  alpha_true = c(0.08, 0.20, 0.50),
+  tau_true = c(0.8, 2, 5),
+  replication = seq_len(20)
+)
+
+# Per ciascuna riga:
+# 1. simulare un dataset;
+# 2. adattare il modello;
+# 3. salvare mediana e intervallo posteriori;
+# 4. confrontare stima e valore generativo;
+# 5. esaminare bias, RMSE e copertura.
+```
+
+:::
+
+::: {.callout-important title="Fit e recuperabilità sono domande differenti"}
+Un modello può adattarsi bene alle scelte e tuttavia non distinguere accuratamente \(\alpha\) da \(\tau\). In tal caso le previsioni aggregate possono essere adeguate, mentre le interpretazioni individuali dei parametri rimangono fragili.
+:::
+
+## Quando il modello di base fallisce
+
+Il modello RW con scelta logistica assume che la scelta corrente dipenda dai valori appresi, ma non dalla risposta precedente una volta condizionato sui valori.
+
+Molti partecipanti possono invece mostrare:
+
+- perseverazione, cioè tendenza a ripetere;
+- alternanza sistematica;
+- lapse occasionali;
+- apprendimento differente da esiti positivi e negativi;
+- decadimento dei valori delle opzioni non scelte.
+
+Per mostrare il ciclo di revisione, generiamo un secondo dataset nel quale esiste una perseverazione positiva:
+
+\[
+\kappa=0.9.
+\]
+
+```{r}
+#| label: simulate-rw-perseveration-data
+
+sim_rw_perseveration <- simulate_prl_rw(
+  alpha = 0.20,
+  tau = 3,
+  kappa = 0.90,
+  seed = 989
+)
+
+rw_perseveration_data <- list(
+  T = nrow(sim_rw_perseveration),
+  choice = as.integer(
+    sim_rw_perseveration$choice
+  ),
+  reward = as.integer(
+    sim_rw_perseveration$reward
+  ),
+  rich_is_A = as.integer(
+    sim_rw_perseveration$rich_is_A
+  ),
+  p_reward_rich = 0.70
+)
+```
+
+Adattiamo dapprima il modello di base, che non contiene \(\kappa\).
+
+```{r}
+#| label: fit-rw-base-to-perseveration
+#| cache: true
+#| output: false
+
+fit_rw_misspecified <- rw_model$sample(
+  data = rw_perseveration_data,
+  seed = 615,
+  chains = 4,
+  parallel_chains = 4,
+  iter_warmup = 1000,
+  iter_sampling = 1500,
+  refresh = 0
+)
+```
+
+Il modello può compensare in parte la perseverazione modificando \(\alpha\) e \(\tau\), ma tale compensazione non garantisce che riproduca le dipendenze seriali rilevanti.
+
+### Un modello rivale con perseverazione
+
+Introduciamo:
+
+\[
+\Pr(Y_t=B)
+=
+\operatorname{logit}^{-1}
+\left[
+\tau\{Q_t(B)-Q_t(A)\}
++
+\kappa S_{t-1}
+\right],
+\]
+
+dove:
+
+\[
+S_{t-1}
+=
+\begin{cases}
++1, & \text{se la scelta precedente è }B,\\
+-1, & \text{se la scelta precedente è }A,\\
+0, & \text{al primo trial.}
+\end{cases}
+\]
+
+Con \(\kappa>0\), la risposta precedente tende a essere ripetuta; con \(\kappa<0\), il modello favorisce l'alternanza.
+
+```{r}
+#| label: rw-perseveration-stan-code
+
+stancode_rw_perseveration <- "
+data {
+  int<lower=1> T;
+  array[T] int<lower=0, upper=1> choice;
+  array[T] int<lower=0, upper=1> reward;
+  array[T] int<lower=0, upper=1> rich_is_A;
+  real<lower=0.5, upper=1> p_reward_rich;
+}
+
+parameters {
+  real alpha_raw;
+  real log_tau;
+  real kappa;
+}
+
+transformed parameters {
+  real<lower=0, upper=1> alpha = inv_logit(alpha_raw);
+  real<lower=0> tau = exp(log_tau);
+}
+
+model {
+  vector[2] q = rep_vector(0.5, 2);
+
+  alpha_raw ~ normal(logit(0.20), 1);
+  log_tau ~ normal(log(2), 0.6);
+  kappa ~ normal(0, 1);
+
+  for (t in 1:T) {
+    int a = choice[t] + 1;
+    real previous_signed =
+      t == 1 ? 0 : 2 * choice[t - 1] - 1;
+    real eta =
+      tau * (q[2] - q[1]) +
+      kappa * previous_signed;
+
+    choice[t] ~ bernoulli_logit(eta);
+    q[a] += alpha * (reward[t] - q[a]);
+  }
+}
+
+generated quantities {
+  array[T] int choice_rep;
+  array[T] int reward_rep;
+  vector[T] log_lik;
+
+  {
+    vector[2] q_obs = rep_vector(0.5, 2);
+    vector[2] q_rep = rep_vector(0.5, 2);
+    int previous_rep_signed = 0;
+
+    for (t in 1:T) {
+      int a_obs;
+      int a_rep;
+      int chosen_is_rich;
+      real previous_obs_signed;
+      real eta_obs;
+      real eta_rep;
+      real reward_probability;
+
+      previous_obs_signed =
+        t == 1 ? 0 : 2 * choice[t - 1] - 1;
+
+      eta_obs =
+        tau * (q_obs[2] - q_obs[1]) +
+        kappa * previous_obs_signed;
+
+      log_lik[t] = bernoulli_logit_lpmf(
+        choice[t] | eta_obs
+      );
+
+      a_obs = choice[t] + 1;
+      q_obs[a_obs] += alpha *
+        (reward[t] - q_obs[a_obs]);
+
+      eta_rep =
+        tau * (q_rep[2] - q_rep[1]) +
+        kappa * previous_rep_signed;
+
+      choice_rep[t] =
+        bernoulli_logit_rng(eta_rep);
+      a_rep = choice_rep[t] + 1;
+
+      chosen_is_rich =
+        (
+          (choice_rep[t] == 0 &&
+           rich_is_A[t] == 1) ||
+          (choice_rep[t] == 1 &&
+           rich_is_A[t] == 0)
+        ) ? 1 : 0;
+
+      reward_probability =
+        chosen_is_rich == 1
+        ? p_reward_rich
+        : 1 - p_reward_rich;
+
+      reward_rep[t] =
+        bernoulli_rng(reward_probability);
+
+      q_rep[a_rep] += alpha *
+        (reward_rep[t] - q_rep[a_rep]);
+
+      previous_rep_signed =
+        2 * choice_rep[t] - 1;
+    }
+  }
+}
+"
+```
+
+```{r}
+#| label: fit-rw-perseveration-model
+#| cache: true
+#| output: false
+
+rw_perseveration_file <- write_stan_file(
+  stancode_rw_perseveration
+)
+
+rw_perseveration_model <- cmdstan_model(
+  rw_perseveration_file
+)
+
+fit_rw_perseveration <- rw_perseveration_model$sample(
+  data = rw_perseveration_data,
+  seed = 771,
+  chains = 4,
+  parallel_chains = 4,
+  iter_warmup = 1000,
+  iter_sampling = 1500,
+  refresh = 0
+)
+```
+
+### Confrontare i modelli attraverso le discrepanze
+
+```{r}
+#| label: rw-model-comparison-ppc
+
+base_rep_stats <- replicated_statistics(
+  fit = fit_rw_misspecified,
+  rich_is_A = sim_rw_perseveration$rich_is_A
+) |>
+  mutate(model = "RW di base")
+
+perseveration_rep_stats <- replicated_statistics(
+  fit = fit_rw_perseveration,
+  rich_is_A = sim_rw_perseveration$rich_is_A
+) |>
+  mutate(model = "RW + perseverazione")
+
+observed_perseveration_stats <- behavioral_statistics(
+  choice = sim_rw_perseveration$choice,
+  reward = sim_rw_perseveration$reward,
+  rich_is_A = sim_rw_perseveration$rich_is_A
+)
+```
+
+```{r}
+#| label: fig-rw-model-comparison-ppc
+#| fig-cap: "Confronto predittivo tra il modello RW di base e l'estensione con perseverazione. Le linee tratteggiate indicano i dati osservati."
+#| fig-width: 10
+#| fig-height: 5
+#| echo: false
+
+bind_rows(
+  base_rep_stats,
+  perseveration_rep_stats
+) |>
+  select(
+    model,
+    stay_after_reward,
+    stay_after_no_reward,
+    switch_rate
+  ) |>
+  pivot_longer(
+    cols = -model,
+    names_to = "statistic",
+    values_to = "value"
+  ) |>
+  left_join(
+    observed_perseveration_stats |>
+      select(
+        stay_after_reward,
+        stay_after_no_reward,
+        switch_rate
+      ) |>
+      pivot_longer(
+        everything(),
+        names_to = "statistic",
+        values_to = "observed"
+      ),
+    by = "statistic"
+  ) |>
+  ggplot(aes(x = value)) +
+  geom_histogram(bins = 25) +
+  geom_vline(
+    aes(xintercept = observed),
+    linetype = "dashed"
+  ) +
+  facet_grid(
+    model ~ statistic,
+    scales = "free"
+  ) +
+  labs(
+    x = "Statistica replicata",
+    y = "Frequenza"
+  )
+```
+
+```{r}
+#| label: rw-perseveration-posterior
+
+fit_rw_perseveration$summary(
+  variables = c("alpha", "tau", "kappa"),
+  mean,
+  sd,
+  ~quantile(.x, probs = c(0.05, 0.50, 0.95))
+)
+```
+
+Se il modello esteso riproduce meglio le statistiche seriali e recupera un \(\kappa\) positivo, abbiamo evidenza che la perseverazione è una componente utile della specificazione per questi dati simulati.
+
+Non abbiamo però dimostrato che la perseverazione sia il vero meccanismo psicologico. Altri modelli potrebbero produrre pattern simili.
+
+::: {.callout-warning title="Non usare automaticamente la LOO trial per trial"}
+La log-verosimiglianza di ciascun trial dipende dagli stati costruiti usando i trial precedenti. Lasciare fuori un singolo trial come se le osservazioni fossero scambiabili può quindi non rappresentare la domanda predittiva di interesse.
+
+Per processi temporali sono spesso più appropriate:
+
+- validazione prequenziale;
+- separazione tra blocchi iniziali e successivi;
+- previsione di un nuovo reversal;
+- leave-one-subject-out nei modelli gerarchici;
+- validazione in un nuovo compito o contesto.
+
+L'unità lasciata fuori deve corrispondere alla generalizzazione scientifica desiderata.
+:::
+
+## Estensioni teoricamente motivate
+
+### Apprendimento asimmetrico
+
+Si possono distinguere \(\alpha^+\) e \(\alpha^-\) per errori di previsione positivi e negativi.
+
+### Decadimento dei valori
+
+I valori delle alternative non scelte possono avvicinarsi gradualmente a un valore di riferimento.
+
+### Lapse
+
+Una piccola probabilità di scelta casuale può essere separata dalla sensibilità ai valori.
+
+### Più alternative
+
+Con \(K>2\), la regola di scelta diventa:
+
+\[
+\Pr(Y_t=k)
+=
+\frac{
+\exp\{\tau Q_t(k)\}
+}{
+\sum_{j=1}^{K}
+\exp\{\tau Q_t(j)\}
+}.
+\]
+
+### Parametri dipendenti dal contesto
+
+Un'estensione contestuale permette che:
+
+\[
+\alpha_c,
+\qquad
+\tau_c,
+\qquad
+\kappa_c
+\]
+
+varino tra condizioni o categorie di stimoli.
+
+Un'applicazione discussa da @colpizzi2025food usa questa logica per esaminare se i parametri di apprendimento differiscano tra contesti alimentari e neutrali. Il valore di tale estensione non consiste soltanto nel trovare una differenza, ma nel formulare e controllare l'ipotesi che la dinamica del processo cambi selettivamente con il contesto.
+
+::: {.callout-important title="Un effetto contestuale richiede un modello gerarchico"}
+Quando persone e condizioni si ripetono, stimare separatamente ogni parametro produce stime rumorose e confronti instabili. L'estensione naturale è un modello gerarchico che descrive:
+
+- distribuzioni di popolazione;
+- deviazioni individuali;
+- differenze tra contesti;
+- correlazioni tra i parametri;
+- incertezza sulle quantità individuali e di gruppo.
+:::
+
+## Rescorla--Wagner è un modello bayesiano?
+
+La regola:
+
+\[
+Q_{t+1}
+=
+Q_t+\alpha(R_t-Q_t)
+\]
+
+ha la forma di un aggiornamento guidato da un errore di previsione. Questa somiglianza permette un utile collegamento intuitivo con l'apprendimento bayesiano.
+
+L'identità, tuttavia, non è completa.
+
+Il modello RW standard:
+
+- mantiene un valore puntuale, non una distribuzione di incertezza;
+- usa spesso un tasso \(\alpha\) costante;
+- non deriva automaticamente \(\alpha\) dalla precisione relativa di prior e dati;
+- non rappresenta esplicitamente l'incertezza sull'ambiente.
+
+Modelli come il filtro di Kalman o altri modelli di apprendimento bayesiano aggiornano invece sia la stima sia la sua incertezza e possono modificare dinamicamente il peso attribuito ai nuovi esiti.
+
+È quindi più accurato descrivere RW come una regola delta che condivide con l'aggiornamento bayesiano la logica della correzione tramite errore di previsione, non come un'inferenza bayesiana completa.
+
+## Interpretare e comunicare i parametri
+
+Una formulazione prudente potrebbe essere:
+
+> Nel modello specificato, la posterior del tasso di apprendimento descrive quanto rapidamente i valori latenti vengono aggiornati dopo i feedback, mentre la posterior dell'inverse temperature descrive quanto fortemente le scelte dipendono dalle differenze tra tali valori. I controlli predittivi indicano se questa scomposizione riproduce le dinamiche comportamentali considerate. L'interpretazione dei parametri come caratteristiche psicologiche richiede ulteriori evidenze di recuperabilità, stabilità e validità esterna.
+
+È preferibile evitare formulazioni come:
+
+- “il partecipante ha un deficit di apprendimento”;
+- “\(\tau\) misura direttamente l'esplorazione”;
+- “il parametro dimostra il meccanismo neurale”;
+- “il modello ha scoperto lo stile cognitivo della persona”.
+
+Le alternative corrette specificano sempre:
+
+1. il modello adottato;
+2. la scala e il compito;
+3. l'incertezza;
+4. i controlli eseguiti;
+5. le interpretazioni concorrenti.
+
+## Errori frequenti
+
+### Interpretare la percentuale di risposte corrette come apprendimento puro
+
+La prestazione dipende congiuntamente da aggiornamento, scelta, ambiente e specificazione del modello.
+
+### Chiamare \(\tau\) “temperatura” e interpretarlo come inverse temperature
+
+Le due convenzioni hanno direzioni opposte. Il testo, le formule e il codice devono usare la stessa convenzione.
+
+### Ignorare la scala dei rinforzi
+
+Cambiare la scala di \(Q\) modifica l'interpretazione di \(\tau\).
+
+### Stimare troppi parametri da poche prove
+
+Un buon fit non garantisce che learning rate, sensibilità, perseverazione e lapse siano separatamente recuperabili.
+
+### Controllare soltanto le distribuzioni marginali
+
+Un modello dinamico deve riprodurre adattamento, dipendenze seriali e risposta ai cambiamenti delle contingenze.
+
+### Usare un solo modello
+
+Un parametro interpretabile all'interno di un modello può assorbire un meccanismo omesso.
+
+### Trattare gli stati latenti come misure osservate
+
+Le traiettorie \(Q_t\) sono inferenze condizionate alla specificazione.
+
+### Usare la LOO trial per trial senza definire la generalizzazione
+
+La dipendenza temporale rende inadeguata l'assunzione di osservazioni scambiabili.
+
+### Trasformare un parametro in un tratto stabile
+
+La stabilità tra sessioni, compiti e contesti deve essere dimostrata.
+
+### Chiamare meccanicistico qualsiasi modello ricorsivo
+
+La plausibilità meccanicistica richiede collegamenti teorici e controlli indipendenti.
+
+## Riflessioni conclusive {.unnumbered .unlisted}
+
+Il modello Rescorla--Wagner mostra in forma compatta che cosa aggiunge una teoria processuale.
+
+La regola di aggiornamento specifica come il feedback modifica uno stato latente. Il modello di scelta specifica come tale stato produce comportamento osservabile. L'inferenza bayesiana permette di procedere all'indietro, dalle scelte ai parametri e alle traiettorie latenti, mantenendo esplicita l'incertezza.
+
+Questo passaggio non rende però automatica l'interpretazione psicologica. Learning rate e inverse temperature sono parametri di una specificazione. Possono essere confusi tra loro, possono assorbire perseverazione o lapse omessi e possono dipendere dal compito, dalla scala e dal contesto.
+
+Per questo motivo il workflow completo comprende:
+
+\[
+\text{teoria}
+\rightarrow
+\text{simulazione}
+\rightarrow
+\text{modello osservazionale}
+\rightarrow
+\text{prior}
+\rightarrow
+\text{stima}
+\rightarrow
+\text{recovery}
+\rightarrow
+\text{controllo predittivo}
+\rightarrow
+\text{modello rivale}
+\rightarrow
+\text{revisione}.
+\]
+
+Il risultato più importante non è una singola stima di \(\alpha\) o \(\tau\), ma una teoria sufficientemente precisa da produrre dati, fallire controlli mirati ed essere modificata quando le sue predizioni non sono adeguate.
+
+## Concetti da ricordare
+
+1. Il modello contiene una componente di apprendimento e una componente di scelta.
+2. I valori \(Q_t\) sono stati latenti, non osservazioni.
+3. L'errore di previsione è la differenza tra esito e valore atteso.
+4. \(\alpha\) regola la rapidità dell'aggiornamento.
+5. \(\tau\) regola la sensibilità delle scelte alle differenze di valore.
+6. La scala dei rinforzi determina la scala dei valori e influenza l'interpretazione di \(\tau\).
+7. Simulare prima della stima chiarisce le conseguenze dei parametri.
+8. Un buon fit non garantisce recuperabilità.
+9. I controlli predittivi devono esaminare statistiche dinamiche.
+10. Un modello rivale può rivelare che un parametro assorbiva un meccanismo omesso.
+11. La validazione temporale deve rispettare la dipendenza tra trial.
+12. Un parametro processuale non diventa automaticamente un costrutto psicologico validato.
+
+## Esercizi
+
+### 1. Velocità di adattamento
+
+Simula il compito con \(\alpha=0.05\), \(0.20\) e \(0.80\), mantenendo fisso \(\tau=3\). Confronta il numero di trial necessario per preferire la nuova opzione ricca dopo il reversal.
+
+### 2. Sensibilità della scelta
+
+Mantieni \(\alpha=0.20\) e varia \(\tau\). Confronta accuratezza, frequenza di switching e ricompensa totale.
+
+### 3. Condizioni iniziali
+
+Ripeti la simulazione con \(Q_0=0\), \(0.5\) e \(1\). In quale parte del compito le differenze sono più visibili?
+
+### 4. Prior predictive check
+
+Sostituisci il prior di \(\log\tau\) con una distribuzione molto più ampia. Quali comportamenti estremi compaiono?
+
+### 5. Recupero dei parametri
+
+Costruisci un piccolo esperimento di recovery per tre valori di \(\alpha\) e tre valori di \(\tau\). In quali regioni i parametri sono più difficili da distinguere?
+
+### 6. Perseverazione omessa
+
+Genera dati con \(\kappa>0\), adatta il modello di base e descrivi come cambiano le posterior di \(\alpha\) e \(\tau\).
+
+### 7. Apprendimento asimmetrico
+
+Modifica il simulatore introducendo \(\alpha^+\) e \(\alpha^-\). Quale disegno rende i due parametri informativi?
+
+### 8. Modello senza apprendimento
+
+Costruisci un modello rivale con probabilità di scelta costante. Quali statistiche predittive lo distinguono dal modello RW?
+
+### 9. Validazione
+
+Progetta una procedura che adatti il modello alla prima fase e valuti la previsione dopo il reversal. Quale informazione può essere usata durante l'aggiornamento nella fase di test?
+
+### 10. Interpretazione
+
+Scrivi un paragrafo di risultati che descriva un \(\alpha\) più basso in un gruppo clinico senza trasformarlo automaticamente in prova di un deficit generale di apprendimento.
+
+::: {.callout-note collapse=true title="Tracce di soluzione"}
+
+1. \(\alpha\) elevato tende a ridurre il ritardo dopo il reversal, ma aumenta la sensibilità a feedback casuali.
+2. \(\tau\) elevato riduce le scelte dell'opzione momentaneamente inferiore; può però rendere più persistenti scelte sbagliate se i valori sono ancora inaccurati.
+3. Le differenze di \(Q_0\) sono soprattutto iniziali; con un numero sufficiente di feedback l'influenza tende a ridursi.
+4. Un prior molto ampio su \(\tau\) può generare sia scelte quasi casuali sia sequenze quasi deterministiche.
+5. La recuperabilità può essere peggiore quando le scelte sono quasi casuali, quasi deterministiche o il numero di trial è ridotto.
+6. Il modello di base può compensare la perseverazione alterando la sensibilità o la velocità di aggiornamento.
+7. Servono abbastanza errori di previsione positivi e negativi in diverse fasi e alternative.
+8. La dinamica dopo feedback e reversal è più informativa della sola percentuale complessiva di scelte.
+9. Occorre distinguere previsione completamente generativa e previsione sequenziale condizionata sui feedback o sulle scelte osservate.
+10. Il risultato deve essere riferito al modello, al compito e alle alternative considerate, includendo incertezza e controlli.
+:::
 
 ::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+
 ```{r}
 sessionInfo()
 ```
+
 :::
 
 ## Bibliografia {.unnumbered .unlisted}
-
