@@ -1,19 +1,16 @@
 # Due gruppi: codifiche, differenze e rilevanza pratica {#sec-linear-models-two-groups}
 
-Il confronto tra due gruppi o condizioni è uno dei problemi più ricorrenti nella ricerca psicologica: un gruppo clinico presenta punteggi diversi da un gruppo non clinico? Due condizioni sperimentali producono prestazioni differenti? Un intervento è associato a un cambiamento sufficientemente ampio da avere rilievo pratico?
+Il confronto tra due gruppi o condizioni è uno dei problemi più ricorrenti nella ricerca psicologica: un gruppo clinico presenta punteggi diversi da un gruppo di controllo? Due condizioni sperimentali producono prestazioni differenti? Un intervento è associato a un cambiamento tale da avere rilievo pratico?
 
-Nel @sec-mcmc-one-mean abbiamo visto che la stima di una media può essere formulata come un modello lineare a sola intercetta. Per confrontare due gruppi è sufficiente aggiungere un predittore che ne rappresenti l'appartenenza. Il modello non cambia natura: cambia la componente sistematica della media.
+Nel @sec-mcmc-one-mean abbiamo formulato la stima di una singola media come un modello lineare a sola intercetta. Per confrontare due gruppi è sufficiente estendere la componente sistematica inserendo un predittore che ne indichi l'appartenenza. Il modello non cambia natura; cambia solo la specificazione della media.
 
-Se $x_i$ vale 0 per il gruppo di riferimento e 1 per il gruppo di confronto,
+Se assegniamo a $x_i$ il valore 0 per il gruppo di riferimento e 1 per il gruppo di confronto, il modello diventa:
 
 $$
-Y_i \mid x_i, \alpha, \beta, \sigma
-\sim \operatorname{Normal}(\mu_i, \sigma),
-\qquad
-\mu_i = \alpha + \beta x_i.
+Y_i \mid x_i, \alpha, \beta, \sigma \sim \operatorname{Normal}(\mu_i, \sigma), \qquad \mu_i = \alpha + \beta x_i.
 $$
 
-Con questa codifica, $\alpha$ è la media del gruppo di riferimento e $\beta$ è la differenza tra le due medie. L'inferenza bayesiana produce una distribuzione a posteriori per tale differenza e consente di derivare, dallo stesso insieme di campioni, probabilità sulla direzione, sull'ampiezza e sulla rilevanza pratica del contrasto.
+Con questa codifica (*dummy coding*), $\alpha$ esprime la media del gruppo di riferimento, mentre $\beta$ quantifica direttamente la differenza tra le medie dei due gruppi. L'inferenza bayesiana fornisce la distribuzione a posteriori di questo contrasto, permettendo di calcolare la direzione, l'ampiezza e la rilevanza clinica o pratica della differenza.
 
 ::: {.callout-note title="Obiettivi del capitolo"}
 Al termine del capitolo dovresti essere in grado di:
@@ -75,46 +72,44 @@ set.seed(1234)
 
 ## Dalla domanda scientifica alle quantità di interesse
 
-Useremo i dati `kidiq`, relativi allo sviluppo cognitivo di bambini e ad alcune caratteristiche familiari [@gelman2021regression]. Considereremo:
+Per illustrare il confronto tra gruppi, utilizzeremo il dataset `kidiq`, che fornisce informazioni sullo sviluppo cognitivo di un campione di bambini e su alcune caratteristiche del nucleo familiare [@gelman2021regression]. In particolare, ci concentreremo su due variabili:
 
-- `kid_score`: punteggio cognitivo del bambino;
-- `mom_hs`: indicatore del possesso, da parte della madre, di un diploma di scuola superiore.
+* `kid_score`: il punteggio ottenuto dal bambino nei test di sviluppo cognitivo (QI);
+* `mom_hs`: una variabile indicatore (0/1) che segnala se la madre ha conseguito o meno il diploma di scuola superiore.
 
-La domanda descrittiva è:
+La domanda della ricerca di tipo descrittivo è:
 
-> Di quanto differiscono, in media, i punteggi dei bambini appartenenti ai due gruppi definiti dal livello di istruzione materna?
+> Di quanto differiscono, in media, i punteggi cognitivi dei bambini nei due gruppi definiti dal livello di istruzione della madre?
 
-Indichiamo con $\mu_0$ la media dei bambini le cui madri non sono diplomate e con $\mu_1$ la media dei bambini le cui madri sono diplomate. Le principali quantità di interesse sono:
-
-$$
-\Delta = \mu_1-\mu_0,
-$$
-
-la differenza sulla scala originale del QI, e
+Indichiamo con $\mu_0$ la media teorica dei bambini le cui madri non sono diplomate ($mom\_hs = 0$) e con $\mu_1$ la media dei bambini le cui madri sono diplomate ($mom\_hs = 1$). Le principali quantità di interesse per il contrasto sono:
 
 $$
-d = \frac{\Delta}{\sigma},
+\Delta = \mu_1 - \mu_0
 $$
-
-il contrasto standardizzato rispetto alla deviazione standard residua comune del modello.
-
-Possiamo inoltre definire una soglia sostantiva $s$, stabilita prima dell'analisi. Se una differenza positiva di almeno cinque punti di QI è considerata rilevante, le domande probabilistiche diventano, per esempio,
+che esprime la differenza assoluta sulla scala originaria del punteggio di QI, e
 
 $$
-\Pr(\Delta>0\mid y)
-\qquad \text{e} \qquad
-\Pr(\Delta>5\mid y).
+d = \frac{\Delta}{\sigma}
+$$
+che rappresenta la dimensione dell'effetto standardizzata (*d* di Cohen) calcolata rispetto alla deviazione standard residua comune $\sigma$ stimata dal modello.
+
+Inoltre, è possibile definire a priori una soglia di rilevanza pratica o clinica $s$. Ad esempio, se consideriamo sostanziale uno scostamento positivo di almeno 5 punti sul punteggio cognitivo, le quantità probabilistiche di interesse diventano:
+
+$$
+\Pr(\Delta > 0 \mid y) \qquad \text{e} \qquad \Pr(\Delta > 5 \mid y).
 $$
 
-::: {.callout-important title="La direzione della soglia dipende dalla domanda"}
-La probabilità $\Pr(|\Delta|>5\mid y)$ considera rilevanti differenze di almeno cinque punti in entrambe le direzioni. Se la domanda scientifica prevede una direzione specifica, è più informativo calcolare $\Pr(\Delta>5\mid y)$ oppure $\Pr(\Delta<-5\mid y)$. La regola deve essere definita in base al significato della scala, non scelta dopo avere osservato la posterior.
+::: {.callout-important title="Direzionalità delle soglie teoriche"}
+La probabilità della differenza assoluta $\Pr(\vert{}\Delta\vert{} > 5 \mid y)$ valuta uno scostamento di almeno 5 punti in entrambe le direzioni. Se l'ipotesi scientifica presuppone una direzione specifica, è teoricamente più corretto e informativo isolare $\Pr(\Delta > 5 \mid y)$ o $\Pr(\Delta < -5 \mid y)$. Questo criterio deve essere stabilito in base al significato metrico e clinico della variabile, senza mai essere selezionato a posteriori per manipolare i risultati.
 :::
 
-::: {.callout-warning title="Il confronto è descrittivo, non automaticamente causale"}
-Il livello di istruzione materna non è stato assegnato sperimentalmente. La differenza $\Delta$ descrive quindi un contrasto tra gruppi osservati. Non rappresenta, senza ulteriori assunzioni e una strategia di identificazione, l'effetto causale del conseguimento del diploma sul punteggio del bambino.
+::: {.callout-warning title="Natura descrittiva del contrasto ed effetto causale"}
+Il livello di istruzione materna è una caratteristica osservata e non una condizione assegnata casualmente tramite un esperimento. Di conseguenza, il parametro $\Delta$ descrive un puro contrasto associativo tra i due gruppi e non può essere interpretato, in assenza di un disegno di scomposizione dei confondimenti e di specifiche assunzioni di identificazione, come l'effetto causale diretto del diploma materno sul punteggio del bambino.
 :::
 
-## Esplorare i dati
+## Esplorazione dei dati
+
+Carichiamo il dataset codificando la variabile esplicativa come fattore ed esaminiamo le statistiche descrittive principali per ciascun gruppo:
 
 ```{r}
 #| label: load-kidiq-two-groups
@@ -130,19 +125,21 @@ kidiq <- rio::import(
       labels = c("Non diplomata", "Diplomata")
     )
   ) |>
-  tidyr::drop_na()
+  drop_na()
 
 kidiq |>
   group_by(mom_hs) |>
   summarise(
-    n = n(),
+    n        = n(),
     media_QI = mean(kid_score),
-    sd_QI = sd(kid_score),
-    .groups = "drop"
+    sd_QI    = sd(kid_score),
+    .groups  = "drop"
   )
 ```
 
-Una tabella delle medie è utile, ma non mostra la forma delle distribuzioni né la loro sovrapposizione.
+Sebbene la tabella delle medie offra una prima sintesi numerica del contrasto, essa non è in grado di mostrare né la forma delle distribuzioni né l'entità della loro sovrapposizione.
+
+Visualizziamo l'intera struttura dei dati combinando grafici a violino, boxplot e la mappa dei singoli punti osservati:
 
 ```{r}
 #| label: fig-kidiq-two-groups
@@ -152,106 +149,92 @@ Una tabella delle medie è utile, ma non mostra la forma delle distribuzioni né
 
 kidiq |>
   ggplot(aes(x = mom_hs, y = kid_score)) +
-  geom_violin(trim = FALSE) +
-  geom_boxplot(width = 0.12, outlier.shape = NA) +
-  geom_jitter(width = 0.08, alpha = 0.25, size = 1) +
+  geom_violin(trim = FALSE, alpha = 0.4, fill = "grey80", color = "grey50") +
+  geom_boxplot(width = 0.12, outlier.shape = NA, alpha = 0.7, fatigue = TRUE) +
+  geom_jitter(width = 0.08, alpha = 0.25, size = 1.2, color = "grey30") +
   labs(
     x = "Istruzione materna",
     y = "Punteggio cognitivo del bambino"
   )
-  # + theme_manuscript()
 ```
 
-Il grafico suggerisce una differenza tra le posizioni centrali, ma mostra anche una considerevole variabilità entro ciascun gruppo. Un modello deve rappresentare entrambe le caratteristiche.
+L'ispezione grafica suggerisce uno scostamento tra i centri delle due distribuzioni, ma evidenzia anche una marcata variabilità interna a ciascun gruppo. Il modello lineare dovrà quindi essere in grado di catturare e quantificare separatamente queste due caratteristiche: la differenza di posizione e l'eterogeneità residua condivisa.
 
-## Il modello con un indicatore binario
+## Il modello lineare con indicatore binario
 
-Definiamo $x_i=0$ per il gruppo «Non diplomata» e $x_i=1$ per il gruppo «Diplomata». Il modello gaussiano omoschedastico è
+Definiamo la variabile indicatore (*dummy variable*) ponendo $x_i = 0$ per il gruppo delle madri "Non diplomate" e $x_i = 1$ per il gruppo delle madri "Diplomate". Il modello gaussiano omoschedastico assume la forma:
 
 $$
-\begin{aligned}
-Y_i \mid x_i, \alpha, \beta, \sigma
-  &\sim \operatorname{Normal}(\mu_i,\sigma), \\
-\mu_i
-  &= \alpha + \beta x_i.
+\begin{aligned} 
+Y_i \mid x_i, \alpha, \beta, \sigma &\sim \operatorname{Normal}(\mu_i,\sigma), \\ \mu_i &= \alpha + \beta x_i. 
 \end{aligned}
 $$ {#eq-two-groups-dummy}
 
-Se $x_i=0$,
+Il sistema di equazioni lineari chiarisce la scomposizione delle medie condizionate per i due profili:
+
+* Per il gruppo di riferimento ($x_i = 0$):
+
+$$\mu_0 = \alpha$$
+
+* Per il gruppo di confronto ($x_i = 1$):
+
+$$\mu_1 = \alpha + \beta$$
+
+Sottraendo le due espressioni, la differenza tra le medie coincide direttamente con il coefficiente angolare della retta di regressione:
 
 $$
-\mu_0=\alpha.
+\Delta = \mu_1 - \mu_0 = (\alpha + \beta) - \alpha = \beta.
 $$
 
-Se $x_i=1$,
+In questa formulazione, il parametro $\sigma$ definisce la deviazione standard residua comune all'interno di entrambi i gruppi. L'assunzione di omoschedasticità (uguaglianza delle varianze nei gruppi) costituisce un'ipotesi teorica del modello che dovrà essere esplicitamente sottoposta a verifica diagnostica e non accettata a priori.
 
-$$
-\mu_1=\alpha+\beta.
-$$
-
-Di conseguenza,
-
-$$
-\Delta=\mu_1-\mu_0=\beta.
-$$
-
-Il parametro $\sigma$ rappresenta la dispersione condizionata comune entro i due gruppi. Questa ipotesi verrà controllata, non semplicemente data per vera.
-
-::: {.callout-note title="Il test t come caso del modello lineare"}
-Con due gruppi indipendenti e una varianza comune, il confronto classico tra medie può essere espresso come regressione con un predittore dicotomico. Questo collegamento non rende identiche le interpretazioni frequentista e bayesiana, ma mostra che non occorre introdurre una nuova struttura matematica per ogni procedura tradizionale.
+::: {.callout-note title="Il test t di Student come caso speciale del modello lineare"}
+Il classico test $t$ di Student per campioni indipendenti a varianze omogenee è matematicamente equivalente a un modello di regressione lineare con un unico predittore dicotomico. Nonostante questo parallelismo formale accomuni le due strutture algebriche, le interpretazioni frequentista e bayesiana rimangono profondamente diverse sul piano concettuale. Tale equivalenza mostra tuttavia come il modello lineare sia un framework unificato in grado di riassumere le procedure statistiche tradizionali senza la necessità di introdurre strutture matematiche ad hoc.
 :::
 
 ## Tre parametrizzazioni dello stesso confronto
 
-Lo stesso insieme di medie può essere rappresentato con codifiche differenti. La scelta non modifica le quantità sostantive $\mu_0$, $\mu_1$ e $\Delta$, ma modifica il significato immediato dei coefficienti.
+Lo stesso sistema di medie di gruppo può essere formalizzato mediante codifiche algebriche diverse. La scelta della parametrizzazione non altera in alcun modo le quantità sostantive stimate ($\mu_0$, $\mu_1$ e $\Delta$), ma modifica radicalmente il significato matematico immediato dei singoli coefficienti e la struttura delle assunzioni a priori.
 
-| Parametrizzazione | Formula `brms` | Significato dei coefficienti |
-|---|---|---|
-| Dummy, $x\in\{0,1\}$ | `y ~ 1 + x` | intercetta $=\mu_0$; coefficiente $=\Delta$ |
-| Centrata, $x_c\in\{-0.5,0.5\}$ | `y ~ 1 + x_c` | intercetta $=(\mu_0+\mu_1)/2$; coefficiente $=\Delta$ |
-| Medie di cella | `y ~ 0 + gruppo` | un coefficiente per $\mu_0$ e uno per $\mu_1$ |
+| Parametrizzazione | Sintassi `brms` | Significato dei coefficienti |
+| --- | --- | --- |
+| **Codifica Dummy** ($x \in \{0, 1\}$) | `y ~ 1 + x` | L'intercetta esprime la media del gruppo di riferimento ($\mu_0$).<br>
 
-### Codifica dummy
+<br>Il coefficiente angolare esprime il contrasto assoluto ($\Delta$). |
+| **Codifica Centrata** ($x_c \in \{-0.5, 0.5\}$) | `y ~ 1 + x_c` | L'intercetta esprime il punto medio non ponderato tra i gruppi.<br>
 
-La codifica dummy è naturale quando esiste un gruppo di riferimento sostantivamente significativo. L'intercetta rappresenta direttamente la sua media e il coefficiente rappresenta il contrasto con il secondo gruppo.
+<br>Il coefficiente angolare esprime il contrasto assoluto ($\Delta$). |
+| **Medie di Cella** | `y ~ 0 + gruppo` | Il modello esclude l'intercetta globale.<br>
 
-### Codifica centrata
+<br>Vengono stimati direttamente i due parametri di posizione $\mu_0$ e $\mu_1$. |
 
-Ponendo
+### 1. Codifica Dummy (Variabile Indicatore)
 
-$$
-x_i^c=x_i-\frac{1}{2},
-$$
+Rappresenta l'approccio standard quando è possibile identificare un gruppo di controllo o di riferimento logicamente prioritario. L'intercetta riflette la stima puntuale di tale categoria di riferimento, mentre il coefficiente associato al predittore esprime lo scostamento necessario per raggiungere la media del gruppo di confronto.
 
-si ottengono i valori $-0.5$ e $0.5$. L'intercetta diventa il **punto medio non ponderato** delle due medie di gruppo:
+### 2. Codifica Centrata
 
-$$
-\alpha_c=\frac{\mu_0+\mu_1}{2}.
-$$
+Sottraendo il valore costante $0.5$ alla variabile *dummy*, si ottiene un predittore centrato $x_i^c$ con valori pari a $-0.5$ (non diplomata) e $0.5$ (diplomata). Sotto questa formulazione, l'intercetta si sposta sul **punto medio non ponderato** delle medie dei due gruppi:
 
-Non coincide necessariamente con la media complessiva di tutte le osservazioni quando le numerosità dei gruppi sono diverse. La pendenza rimane $\Delta$.
+$$\alpha_c = \frac{\mu_0 + \mu_1}{2}$$
 
-### Medie di cella
+> **Nota sulla ponderazione:** il valore di $\alpha_c$ non corrisponde alla media empirica complessiva del campione (*grand mean*) se i due gruppi presentano numerosità sbilanciate ($n_0 \neq n_1$). Il coefficiente angolare della pendenza continua a quantificare l'effetto differenziale totale $\Delta$.
 
-Con la formula
+### 3. Medie di Cella
 
-```r
-y ~ 0 + gruppo
-```
+Rimuovendo esplicitamente l'intercetta globale tramite la sintassi `0 + gruppo`, il framework lineare stima in modo isolato i parametri di posizione di ciascun livello del fattore. Questa parametrizzazione risulta particolarmente vantaggiosa quando si desidera assegnare distribuzioni a priori indipendenti e specifiche alle singole medie, demandando il calcolo dei contrasti a una fase successiva di post-elaborazione sui campioni della distribuzione a posteriori.
 
-il modello stima direttamente un coefficiente per ciascuna media. Questa parametrizzazione è spesso comoda quando si vogliono formulare prior separati sulle medie e costruire i contrasti successivamente.
-
-::: {.callout-important title="La parametrizzazione induce una struttura a priori"}
-Prior indipendenti su intercetta e differenza non corrispondono, in generale, a prior indipendenti sulle due medie. Per esempio, con la codifica dummy $\mu_1=\alpha+\beta$: l'incertezza su $\alpha$ entra sia in $\mu_0$ sia in $\mu_1$. Non esiste una parametrizzazione universalmente migliore; occorre scegliere quella che rende più trasparenti le assunzioni sostantive.
+::: {.callout-important title="L'architettura del modello vincola la struttura dei prior"}
+Assegnare *prior* reciprocamente indipendenti all'intercetta e al coefficiente di pendenza non equivale a dichiarare *prior* indipendenti sulle medie dei singoli gruppi. Ad esempio, nella codifica *dummy* la media del secondo gruppo è definita come combinazione lineare ($\mu_1 = \alpha + \beta$); di conseguenza, l'incertezza associata ad $\alpha$ si ripercuote matematicamente sia su $\mu_0$ sia su $\mu_1$. Non esiste una codifica oggettivamente migliore: il ricercatore deve scegliere la parametrizzazione che rende la traduzione delle ipotesi teoriche in vincoli probabilistici più trasparente e controllabile.
 :::
 
-## Specificare il modello bayesiano
+## Specificazione del modello e controllo a priori
 
-Useremo la codifica dummy, con «Non diplomata» come riferimento. I prior sono espressi sulla scala del QI:
+Adottiamo la codifica *dummy* impostando il gruppo delle madri "Non diplomate" come livello baseline di riferimento. I *prior* vengono calibrati direttamente sulla scala metrica del QI (punti di punteggio cognitivo):
 
-- una distribuzione per la media del gruppo di riferimento;
-- una distribuzione centrata su zero per la differenza;
-- una distribuzione propria e positiva per la dispersione entro i gruppi.
+* Una distribuzione normale attorno al valore centrale atteso per il gruppo di riferimento;
+* una distribuzione normale speculare e centrata su zero per la differenza tra i gruppi, che esprime scetticismo verso effetti artificialmente enormi;
+* una distribuzione a supporto positivo per la dispersione residua comune all'interno delle categorie.
 
 ```{r}
 #| label: define-priors-two-groups
@@ -263,18 +246,18 @@ priors_two_groups <- c(
 )
 ```
 
-Prima di adattare il modello ai dati, controlliamo che i prior non generino sistematicamente punteggi incompatibili con il dominio sostantivo.
+Prima di condizionare il modello all'evidenza empirica, eseguiamo una simulazione predittiva a priori (*prior predictive check*) per assicurarci che le assunzioni adottate non generino sistematicamente scenari matematicamente impossibili o biologicamente assurdi rispetto al dominio del QI:
 
 ```{r}
 #| label: fit-prior-two-groups
 #| output: false
 
 fit_two_groups_prior <- brm(
-  kid_score ~ 1 + mom_hs,
+  formula = kid_score ~ 1 + mom_hs,
   data = kidiq,
   family = gaussian(),
   prior = priors_two_groups,
-  sample_prior = "only",
+  sample_prior = "only", # Estrae campioni esclusivamente dalle distribuzioni a priori
   backend = "cmdstanr",
   chains = 4,
   iter = 1000,
@@ -282,6 +265,8 @@ fit_two_groups_prior <- brm(
   refresh = 0
 )
 ```
+
+Visualizziamo il profilo delle densità simulate generate dai soli *prior*:
 
 ```{r}
 #| label: fig-prior-predictive-two-groups
@@ -296,16 +281,18 @@ pp_check(
 )
 ```
 
-Il controllo non stabilisce se i prior siano «oggettivamente corretti». Rende visibili le loro implicazioni e permette di correggere specificazioni eccessivamente concentrate o irrealisticamente diffuse.
+> **Nota diagnostica:** questo controllo non ha lo scopo di certificare se i *prior* siano "oggettivamente corretti" o veri. La sua funzione è puramente pragmatica: esplicitare e rendere visibili sulla scala osservabile le conseguenze congiunte delle nostre scelte probabilistiche, consentendo di individuare e correggere tempestivamente vincoli a priori eccessivamente dogmatici (iper-concentrati) o irrealisticamente dispersi.
 
-## Adattare il modello
+## Stima del modello e verifiche computazionali
+
+Procediamo al condizionamento del modello integrando i dati empirici per ottenere la distribuzione a posteriori:
 
 ```{r}
 #| label: fit-two-groups
 #| output: false
 
 fit_two_groups <- brm(
-  kid_score ~ 1 + mom_hs,
+  formula = kid_score ~ 1 + mom_hs,
   data = kidiq,
   family = gaussian(),
   prior = priors_two_groups,
@@ -317,53 +304,55 @@ fit_two_groups <- brm(
 )
 ```
 
-I controlli di convergenza e qualità del campionamento seguono il workflow illustrato nell'@sec-linmod-bayesian-reg.
+Le verifiche formali sulla convergenza e sulla qualità algoritmica del campionamento MCMC seguono i criteri metodologici già illustrati nell'@sec-linmod-bayesian-reg:
 
 ```{r}
 #| label: diagnose-two-groups
 
-posterior::summarise_draws(
+summarise_draws(
   as_draws_array(fit_two_groups),
-  "mean",
-  "sd",
-  "rhat",
-  "ess_bulk",
+  "mean", 
+  "sd", 
+  "rhat", 
+  "ess_bulk", 
   "ess_tail"
 )
 ```
 
-Un buon campionamento non dimostra che la verosimiglianza normale o la varianza comune siano adeguate. Indica soltanto che l'algoritmo ha esplorato in modo affidabile la distribuzione a posteriori specificata.
+> **Nota di interpretazione:** è importante ripetere che la convergenza ottimale delle catene e l'assenza di patologie numeriche non garantiscono la validità scientifica del modello. Valori ideali di $\widehat{R}$ e un numero elevato di campioni effettivi ($ESS$) indicano semplicemente che l'algoritmo Stan ha esplorato la distribuzione a posteriori congiunta in modo matematicamente affidabile. La valutazione dell'adeguatezza della verosimiglianza normale e dell'assunzione di omoschedasticità spetta invece ai successivi controlli predittivi a posteriori.
 
 ## Dalle coordinate del modello alle quantità sostantive
 
-Estraiamo i campioni posteriori e calcoliamo, per ogni draw, le due medie, la differenza grezza e il contrasto standardizzato.
+Dopo aver stimato i parametri nelle "coordinate" algebriche della regressione ($\alpha$ e $\beta$), passiamo alla derivazione delle quantità dotate di un immediato significato scientifico. Estraiamo i campioni dalla distribuzione a posteriori per calcolare, draw dopo draw, le medie dei due gruppi, la loro differenza grezza e l'effetto standardizzato:
 
 ```{r}
 #| label: derive-two-groups-quantities
 
 post_two_groups <- as_draws_df(fit_two_groups) |>
   transmute(
-    mu0 = b_Intercept,
+    mu0   = b_Intercept,
     delta = b_mom_hsDiplomata,
-    mu1 = b_Intercept + b_mom_hsDiplomata,
+    mu1   = b_Intercept + b_mom_hsDiplomata,
     sigma = sigma,
-    d = delta / sigma
+    d     = delta / sigma
   )
 
-posterior::summarise_draws(
+summarise_draws(
   post_two_groups[, c("mu0", "mu1", "delta", "sigma", "d")]
 )
 ```
 
-Questa trasformazione illustra un principio generale: il modello viene parametrizzato nel modo più conveniente per la stima, ma l'interpretazione deve essere costruita mediante le quantità che rispondono alla domanda scientifica.
+Questa operazione mette in luce un principio fondamentale del workflow bayesiano: il modello viene parametrizzato nella forma computazionalmente più efficiente o comoda per il campionamento, ma l'analisi finale deve essere costruita sulle quantità matematiche che rispondono in modo diretto agli interrogativi della ricerca.
 
 ### La differenza sulla scala originale
 
-La distribuzione di $\Delta$ conserva l'unità di misura del QI. È quindi la prima quantità da comunicare quando la scala è interpretabile.
+La distribuzione a posteriori di $\Delta$ (espressa in punti di QI) mantiene l'unità di misura originale del test ed è la metrica principale da comunicare quando la scala possiede un significato clinico o pratico ben noto.
+
+Visualizziamo la densità della differenza a posteriori confrontandola sia con l'ipotesi di assenza di effetto sia con una soglia di rilevanza pratica (*SESOI* — *Smallest Effect Size of Interest*):
 
 ```{r}
 #| label: fig-posterior-delta-two-groups
-#| fig-cap: "Distribuzione a posteriori della differenza grezza tra le medie. Le linee verticali rappresentano lo zero e una soglia positiva di cinque punti."
+#| fig-cap: "Distribuzione a posteriori della differenza grezza tra le medie. Le linee verticali indicano l'assenza di effetto (0) e la soglia di rilevanza pratica stabilita (5 punti di QI)."
 #| fig-width: 7
 #| fig-height: 4.2
 
@@ -371,17 +360,16 @@ SESOI_delta <- 5
 
 post_two_groups |>
   ggplot(aes(x = delta)) +
-  geom_density(alpha = 0.35) +
-  geom_vline(xintercept = 0, linetype = "dashed") +
-  geom_vline(xintercept = SESOI_delta, linetype = "dotted") +
+  geom_density(fill = "grey90", color = "grey40", alpha = 0.5) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "firebrick") +
+  geom_vline(xintercept = SESOI_delta, linetype = "dotted", color = "steelblue", size = 1) +
   labs(
-    x = expression(Delta),
+    x = expression(paste("Differenza grezza (", Delta, ")")),
     y = "Densità a posteriori"
   )
-  # + theme_manuscript()
 ```
 
-Le probabilità sostantive si ottengono direttamente dai draw.
+Le probabilità associate a queste soglie sostantive si ottengono contando quanti draw della posterior soddisfano i rispettivi criteri logici:
 
 ```{r}
 #| label: probabilities-delta-two-groups
@@ -389,111 +377,111 @@ Le probabilità sostantive si ottengono direttamente dai draw.
 c(
   P_delta_positive = mean(post_two_groups$delta > 0),
   P_delta_relevant = mean(post_two_groups$delta > SESOI_delta),
-  P_delta_in_rope = mean(abs(post_two_groups$delta) <= SESOI_delta)
+  P_delta_in_rope  = mean(abs(post_two_groups$delta) <= SESOI_delta)
 )
 ```
 
-Le ultime due quantità rispondono a domande complementari, ma non devono essere interpretate automaticamente come decisioni. La soglia di cinque punti deve essere giustificata dal dominio e il livello di probabilità richiesto per una decisione deve essere stabilito prima di osservare i risultati.
+Le ultime due quantità rispondono a domande speculari e complementari (la probabilità che l'effetto sia sostanziale vs la probabilità che l'effetto sia trascurabile o nullo). È fondamentale ricordare che tali valori probabilistici non si traducono automaticamente in decisioni binarie: la soglia dei 5 punti deve essere validata teoricamente sulla base della letteratura del dominio, e il livello di certezza richiesto per agire di conseguenza deve essere fissato prima di esaminare i dati per evitare distorsioni interpretative.
 
-## Differenza standardizzata e grandezza dell'effetto {#sec-bayesian-effect-size}
+## Differenza standardizzata e dimensione dell'effetto {#sec-bayesian-effect-size}
 
-La differenza grezza è generalmente la quantità più interpretabile quando la scala ha un significato sostantivo. La standardizzazione può essere utile quando occorre confrontare risultati ottenuti con strumenti o unità differenti.
+Se la differenza grezza rappresenta la metrica più trasparente quando la scala ha un significato psicometrico o clinico noto, la standardizzazione si rivela utile per confrontare risultati ottenuti attraverso strumenti di misura differenti o per alimentare studi meta-analitici.
 
-Nel modello omoschedastico,
+Nel modello lineare omoschedastico, la dimensione dell'effetto standardizzata è definita come:
 
 $$
-d=\frac{\mu_1-\mu_0}{\sigma}=\frac{\Delta}{\sigma}.
+d = \frac{\mu_1 - \mu_0}{\sigma} = \frac{\Delta}{\sigma}.
 $$ {#eq-standardized-difference}
 
-Poiché sia $\Delta$ sia $\sigma$ sono incerti, $d$ viene calcolato per ogni campione a posteriori. In questo modo l'incertezza delle due componenti si propaga automaticamente al rapporto.
+Poiché sia la differenza tra le medie ($\Delta$) sia la deviazione standard residua ($\sigma$) sono parametri incerti, il valore di $d$ viene calcolato separatamente per ogni singolo *draw* della distribuzione a posteriori. In questo modo, l'incertezza stimata per entrambe le componenti si propaga matematicamente e in modo automatico sul rapporto finale.
 
-::: {.callout-note title="Che cosa rappresenta questo d?"}
-La quantità in @eq-standardized-difference è il contrasto tra le medie espresso in unità della deviazione standard residua comune del modello. È l'analogo modellistico del $d$ di Cohen per gruppi indipendenti, ma non include automaticamente la correzione per piccoli campioni associata a Hedges $g$. Inoltre, con varianze diverse o dati appaiati il denominatore deve essere definito esplicitamente.
+::: {.callout-note title="Natura e limiti del parametro d"}
+Il formalismo espresso nella @eq-standardized-difference rappresenta il contrasto tra le medie condizionate misurato in unità di deviazione standard residua comune. Si tratta dell'equivalente modellistico del $d$ di Cohen per campioni indipendenti, ma non include la correzione algoritmica per piccoli campioni tipica del *g* di Hedges. Inoltre, in presenza di eteroschedasticità (varianze disuguali tra gruppi) o di disegni a misure ripetute, la scelta del denominatore non è univoca e richiede una definizione esplicita.
 :::
+
+Visualizziamo la distribuzione a posteriori di $d$, sovrapponendo i benchmark convenzionali proposti da Cohen:
 
 ```{r}
 #| label: fig-posterior-standardized-difference
-#| fig-cap: "Distribuzione a posteriori della differenza standardizzata. Le soglie 0.2, 0.5 e 0.8 sono mostrate soltanto come riferimenti convenzionali, non come confini naturali."
+#| fig-cap: "Distribuzione a posteriori della differenza standardizzata d. I benchmark a 0.2, 0.5 e 0.8 sono inclusi come riferimenti storici e convenzionali, non come confini naturali del fenomeno."
 #| fig-width: 7
 #| fig-height: 4.2
 
 post_two_groups |>
   ggplot(aes(x = d)) +
-  geom_density(alpha = 0.35) +
-  geom_vline(xintercept = 0, linetype = "dashed") +
+  geom_density(fill = "grey90", color = "grey40", alpha = 0.5) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "firebrick") +
   geom_vline(
     xintercept = c(0.2, 0.5, 0.8),
-    linetype = "dotted"
+    linetypes  = "dotted",
+    color      = "grey30"
   ) +
   labs(
-    x = "Differenza standardizzata d",
+    x = expression(paste("Differenza standardizzata (", d, ")")),
     y = "Densità a posteriori"
   )
-  # + theme_manuscript()
 ```
 
-Possiamo tradurre eventuali soglie standardizzate in affermazioni probabilistiche.
+Possiamo ora tradurre le soglie standardizzate in enunciati probabilistici diretti, calcolando la percentuale di campioni della posterior che supera ogni valore critico:
 
 ```{r}
 #| label: probabilities-standardized-difference
 
 c(
   P_d_positive = mean(post_two_groups$d > 0),
-  P_d_gt_0_2 = mean(post_two_groups$d > 0.2),
-  P_d_gt_0_5 = mean(post_two_groups$d > 0.5),
-  P_d_gt_0_8 = mean(post_two_groups$d > 0.8)
+  P_d_gt_0_2   = mean(post_two_groups$d > 0.2),
+  P_d_gt_0_5   = mean(post_two_groups$d > 0.5),
+  P_d_gt_0_8   = mean(post_two_groups$d > 0.8)
 )
 ```
 
-### Perché standardizzare, e quando non farlo
+### Perché standardizzare (e quando evitare di farlo)
 
-La standardizzazione facilita alcuni confronti tra studi e costituisce una misura comune nelle meta-analisi. Non è, tuttavia, un'operazione neutrale:
+L'indice standardizzato facilita la sintesi quantitativa tra studi diversi, ma non costituisce una trasformazione matematicamente neutra. Presenta infatti alcuni vincoli strutturali:
 
-- la stessa differenza grezza produce un valore più grande di $d$ nelle popolazioni più omogenee;
-- il denominatore dipende dalla qualità e dalla distribuzione della misura;
-- due studi possono avere lo stesso $d$ ma differenze grezze e conseguenze pratiche molto diverse;
-- il significato clinico o educativo di una differenza è spesso più chiaro sulla scala originale.
+* **Dipendenza dalla varianza:** a parità di differenza grezza nei punteggi, popolazioni più omogenee (con $\sigma$ minore) generano artificialmente valori di $d$ più elevati.
+* **Sensibilità metodologica:** il denominatore risente direttamente della qualità dello strumento e del controllo sperimentale: una misura meno precisa aumenta $\sigma$ e diminuisce il valore di $d$.
+* **Asimmetria degli effetti:** due ricerche possono mostrare un'identica dimensione dell'effetto $d$ pur presentando differenze grezze e ricadute pratiche radicalmente diverse.
 
-Per questi motivi è preferibile riportare la differenza grezza e, quando utile, affiancarle la versione standardizzata, non sostituire la prima con la seconda.
+Il significato clinico, educativo o sociale di un risultato emerge con maggiore chiarezza sulla scala nativa del fenomeno. La buona pratica scientifica prevede quindi di documentare sempre la differenza grezza e di affiancarle la stima standardizzata solo come integrazione comparativa.
 
 ### Uso critico delle soglie convenzionali
 
-Le soglie $0.2$, $0.5$ e $0.8$ vengono spesso associate alle etichette «piccolo», «medio» e «grande». Cohen le propose come riferimenti generali da utilizzare in assenza di conoscenze specifiche, non come confini universali.
+I valori $0.2$, $0.5$ e $0.8$ vengono meccanicamente associati alle etichette di effetto "piccolo", "medio" e "grande". Jacob Cohen introdusse questi criteri come semplici punti di riferimento generali, da impiegare esclusivamente in assenza di qualunque conoscenza pregressa sul dominio, mettendone in guardia contro un uso rigido.
 
-Un valore inferiore a $0.2$ può essere importante quando riguarda un esito grave, un intervento economico e una popolazione molto ampia. Un valore superiore a $0.8$ può essere irrilevante se l'outcome non ha conseguenze sostantive. Sostituire la dicotomia «significativo/non significativo» con «piccolo/grande» non risolve il problema interpretativo.
+Un effetto inferiore a $0.2$ può assumere una rilevanza scientifica straordinaria se applicato a un esito critico (ad esempio, i tassi di mortalità o di abbandono scolastico) attraverso un intervento economico su vasta scala. Al contrario, un effetto superiore a 0.8 può rivelarsi irrilevante se l'indicatore finale non possiede un reale valore teorico o applicativo. Sostituire il binarismo "significativo/non significativo" con la classificazione categoriale "piccolo/medio/grande" non risolve l'esigenza di una valutazione critica del dato.
 
-::: {.callout-warning title="Le soglie non definiscono il significato scientifico"}
-La posterior può attraversare più categorie convenzionali. Questo non è un difetto da eliminare assegnando l'effetto alla categoria contenente la media: è informazione sull'incertezza. Quando esiste una soglia specifica di dominio, essa deve avere priorità sulle convenzioni generali.
+::: {.callout-warning title="L'incertezza supera le categorie rigide"}
+La distribuzione a posteriori di $d$ può intersecare contemporaneamente più fasce convenzionali. Questa dispersione non rappresenta un limite del modello, ma esprime l'incertezza reale sul parametro. Qualora la letteratura scientifica di riferimento fornisca una soglia specifica per il costrutto in esame, tale valore deve avere la priorità assoluta rispetto alle tassonomie generiche.
 :::
 
 ## SESOI e regione di equivalenza pratica
 
-La **SESOI** (*smallest effect size of interest*) esprime il più piccolo valore considerato sostantivamente importante. Una **ROPE** (*region of practical equivalence*) è l'intervallo di valori attorno al riferimento nullo che vengono considerati praticamente equivalenti.
+La **SESOI** (*Smallest Effect Size of Interest*) definisce la minima grandezza dell'effetto considerata rilevante dal punto di vista scientifico o clinico. La **ROPE** (*Region of Practical Equivalence*) identifica invece un intervallo di valori attorno all'effetto nullo ($0$) all'interno del quale gli effetti sono giudicati così esigui da essere considerati praticamente equivalenti all'assenza di effetto.
 
-Le due nozioni sono strettamente collegate. Se cinque punti costituiscono la minima differenza rilevante in entrambe le direzioni, la corrispondente regione di equivalenza sulla scala grezza è
+Questi due concetti sono strettamente correlati. Se, ad esempio, stabiliamo che uno scostamento di 5 punti sul QI rappresenta la minima variazione dotata di impatto pratico, la corrispondente regione di equivalenza sulla scala originale del test è definita dall'intervallo:
 
-$$
-[-5,5].
-$$
+$$[-5, 5]$$
 
-Possiamo quindi quantificare:
+Attraverso i campioni della distribuzione a posteriori, possiamo suddividere lo spazio degli effetti e quantificare con precisione:
 
-- la massa a posteriori sopra la soglia positiva;
-- la massa sotto la soglia negativa;
-- la massa compresa nella regione di equivalenza;
-- la massa residua nelle zone non decisive.
+* la massa di probabilità a posteriori che supera la soglia positiva di rilevanza;
+* la massa che scende sotto la soglia negativa;
+* la massa interamente contenuta all'interno della regione di equivalenza pratica (effetto trascurabile).
 
 ```{r}
 #| label: posterior-regions-two-groups
 
 c(
-  P_relevant_positive = mean(post_two_groups$delta > 5),
-  P_relevant_negative = mean(post_two_groups$delta < -5),
+  P_relevant_positive      = mean(post_two_groups$delta > 5),
+  P_relevant_negative      = mean(post_two_groups$delta < -5),
   P_practically_equivalent = mean(abs(post_two_groups$delta) <= 5)
 )
 ```
 
-La sola percentuale nella ROPE non produce una conclusione universale. Occorre specificare quale regola decisionale si intende adottare, quali conseguenze hanno gli errori e se la precisione disponibile è sufficiente. La regione deve inoltre essere definita sulla scala che possiede il significato sostantivo più chiaro.
+La frazione di posterior che cade all'interno della ROPE non determina automaticamente una conclusione scientifica univoca. L'interpretazione richiede l'adozione esplicita di una regola decisionale definita a priori (come il posizionamento dell'intero intervallo di credibilità rispetto ai confini della ROPE), la valutazione dei costi legati a eventuali falsi positivi o negativi e la verifica che la precisione del campionamento sia adeguata.
+
+La scelta della ROPE dovrebbe idealmente privilegiare la scala metrica originale dei dati. Qualora sia necessario operare su indici standardizzati, è possibile applicare lo stesso principio alla distribuzione di $d$:
 
 ```{r}
 #| label: rope-standardized-two-groups
@@ -501,15 +489,15 @@ La sola percentuale nella ROPE non produce una conclusione universale. Occorre s
 bayestestR::rope(
   post_two_groups$d,
   range = c(-0.1, 0.1),
-  ci = 0.95
+  ci    = 0.95
 )
 ```
 
-Il codice precedente illustra una ROPE standardizzata, ma l'intervallo $[-0.1,0.1]$ è soltanto un esempio. Non deve essere adottato senza una giustificazione relativa al problema studiato.
+> **Nota metodologica:** i confini standardizzati pari a $[-0.1, 0.1]$ proposti nella funzione precedente costituiscono un punto di riferimento puramente convenzionale e generico. Tali limiti non devono mai essere applicati in modo acritico o automatico, ma devono essere esplicitamente giustificati in base alle specificità teoriche del costrutto esaminato e al disegno sperimentale adottato.
 
 ## Controllare l'adeguatezza del modello
 
-Un contrasto a posteriori ben calcolato non garantisce che il modello rappresenti le distribuzioni dei due gruppi. Iniziamo con un controllo predittivo marginale.
+La convergenza computazionale ottimale delle catene MCMC non garantisce che la struttura matematica scelta sia in grado di rappresentare fedelmente le distribuzioni reali dei due gruppi. Per iniziare a valutare l'adeguatezza del modello, eseguiamo un controllo predittivo a posteriori (*PPC*) sulla distribuzione marginale globale:
 
 ```{r}
 #| label: fig-ppc-two-groups
@@ -524,7 +512,7 @@ pp_check(
 )
 ```
 
-Per esaminare esplicitamente media e dispersione nei gruppi, definiamo statistiche replicate.
+Un allineamento soddisfacente sulla densità marginale aggregata può tuttavia mascherare anomalie locali o asimmetrie all'interno delle singole categorie. Per esaminare esplicitamente il comportamento del modello nei sottogruppi, estraiamo le distribuzioni delle medie attese condizionate per ciascun livello del fattore:
 
 ```{r}
 #| label: grouped-ppc-two-groups
@@ -548,9 +536,11 @@ posterior::summarise_draws(
 
 ### Uguale dispersione nei due gruppi
 
-Il modello base usa un solo parametro $\sigma$. Se un gruppo è molto più variabile dell'altro, questa specificazione può mascherare una caratteristica importante e rendere inappropriata la standardizzazione mediante un'unica deviazione standard.
+### Eteroschedasticità: modellare la dispersione tra i gruppi
 
-Un'estensione possibile modella anche la dispersione:
+Il modello lineare classico impone il vincolo di omoschedasticità tramite un unico parametro globale di scala $\sigma$. Se uno dei due gruppi presenta una variabilità interna significativamente diversa rispetto all'altro, questa assunzione rigida rischia di distorcere gli intervalli di credibilità e di inficiare il calcolo della dimensione dell'effetto standardizzata $d$.
+
+Per superare questo limite, possiamo estendere il framework bayesiano introducendo una sotto-formula che modella esplicitamente la dispersione residua in funzione dell'appartenenza al gruppo:
 
 ```r
 bf(
@@ -559,11 +549,11 @@ bf(
 )
 ```
 
-In `brms`, la componente relativa a `sigma` utilizza per default un collegamento logaritmico, così che le deviazioni standard previste rimangano positive. I prior per questa componente devono essere specificati coerentemente con tale scala. La scelta tra modello con dispersione comune e modello eteroschedastico dovrebbe basarsi sulla domanda, sulla plausibilità sostantiva e sui controlli predittivi, non su una regola automatica.
+> **Nota di calcolo:** in `brms`, la componente lineare per il parametro di scala utilizza di default una funzione di *link* logaritmica ($\log(\sigma)$). Questa trasformazione garantisce che le deviazioni standard stimate rimangano vincolate a valori strettamente positivi sulla scala originale. I *prior* per questa sezione del modello devono pertanto essere calibrati tenendo conto della scala logaritmica.
 
 ### Code pesanti e osservazioni estreme
 
-Se i dati presentano valori estremi più frequenti di quanto previsto dalla normale, una verosimiglianza Student-$t$ può costituire una specificazione robusta [@kruschke2013bayesian]:
+Qualora i controlli diagnostici evidenzino la presenza di valori estremi o anomalie strutturali che la distribuzione gaussiana fatica a riprodurre, è opportuno adottare una verosimiglianza $t$ di Student come specificazione robusta del modello [@kruschke2013bayesian]:
 
 ```r
 brm(
@@ -574,37 +564,37 @@ brm(
 )
 ```
 
-La robustezza non deve essere usata per nascondere errori di registrazione o popolazioni miste. Il modello alternativo deve essere interpretato e controllato come ogni altra specificazione.
+L'adozione di un approccio statistico robusto non deve mai essere considerata un espediente automatico per tollerare errori di campionamento, refusi nella codifica dei dati o la presenza di popolazioni eterogenee non modellate (es. distribuzioni miste). Qualsiasi architettura alternativa deve essere supportata da solide motivazioni teoriche e convalidata attraverso il workflow predittivo.
 
 ## Differenza standardizzata e affidabilità della misura
 
-La deviazione standard osservata incorpora la variabilità tra individui e, in genere, anche una componente di errore di misurazione. Sotto le assunzioni del modello classico di errore — errore additivo, indipendente dal gruppo e dal valore vero — una misura meno affidabile aumenta la dispersione entro i gruppi e tende ad attenuare $d$.
+La deviazione standard residua ($\sigma$) stimata dal modello incorpora sia la variabilità biologica o psicologica intrinseca tra gli individui, sia la quota di variabilità dovuta all'errore di misurazione dello strumento. Sotto le assunzioni della teoria classica dei test — che prevede un errore additivo, indipendente e con media pari a zero — l'impiego di una misura caratterizzata da una bassa affidabilità (*reliability*) gonfia artificialmente la dispersione entro i gruppi. Di conseguenza, il denominatore della @eq-standardized-difference aumenta, producendo una sistematica attenuazione della dimensione dell'effetto standardizzata $d$.
 
-Questa conclusione richiede cautela:
+Questa conclusione, però, richiede cautela:
 
-- se l'errore differisce tra i gruppi, il problema non è riassunto da una semplice attenuazione;
-- se anche il predittore di gruppo è misclassificato, può modificarsi la differenza grezza;
-- strumenti diversi possono misurare costrutti non perfettamente equivalenti, anche dopo la standardizzazione.
+* **Eteroschedasticità dell'errore:** se l'entità dell'errore di misura varia sistematicamente tra i gruppi, l'effetto non si limita a una semplice attenuazione lineare, ma distorce la simmetria del confronto.
+* **Misclassificazione del predittore:** qualora l'errore di misura colpisca la variabile indipendente (ad esempio, un'errata assegnazione dei soggetti ai gruppi), a subire una distorsione non è solo la variabilità residua, ma la stessa differenza grezza $\Delta$ sui punteggi centoidi.
+* **Eterogeneità dei costrutti:** strumenti differenti, pur se formalmente standardizzati sulla medesima scala metrica, possono mappare dimensioni latenti non perfettamente equivalenti, rendendo il confronto tra i rispettivi indici $d$ puramente nominale.
 
-Il capitolo sull'errore di misurazione (@sec-meas-error-regr) svilupperà questi aspetti mediante modelli che distinguono quantità latenti e osservate.
+I modelli avanzati in grado di separare analiticamente la variabilità dei costrutti latenti dall'errore delle componenti osservate saranno trattati in dettaglio nel capitolo dedicato all'errore di misurazione (@sec-meas-error-regr).
 
 ## Due misure sugli stessi individui
 
-Finora abbiamo considerato gruppi indipendenti. Se ogni partecipante viene osservato in due momenti o condizioni, le due misure sono dipendenti. Trattarle come osservazioni appartenenti a gruppi indipendenti ignora l'informazione sull'appaiamento.
+Finora abbiamo considerato il confronto tra gruppi indipendenti. Quando invece lo stesso partecipante viene osservato in due momenti o condizioni (ad esempio, in un disegno prima-dopo), le due misure risultano intrinsecamente dipendenti. Trattarle come osservazioni indipendenti ignorerebbe l'informazione legata all'appaiamento, sovrastimando la variabilità residua.
 
-Una prima formulazione consiste nel definire per ciascun individuo
-
-$$
-D_i=Y_{i,\mathrm{pre}}-Y_{i,\mathrm{post}}
-$$
-
-e adattare un modello a sola intercetta:
+Una strategia classica per analizzare questi dati consiste nel calcolare preliminarmente lo scostamento individuale:
 
 $$
-D_i\sim\operatorname{Normal}(\mu_D,\sigma_D).
+D_i = Y_{i,\mathrm{pre}} - Y_{i,\mathrm{post}}.
 $$
 
-Usiamo, a titolo illustrativo, misure pre e post dei sintomi depressivi CES-D [@tarrats2025efficacy].
+Il problema si riduce così all'adattamento di un modello lineare a sola intercetta applicato direttamente sulla variabile delle differenze intra-individuali:
+
+$$
+D_i \sim \operatorname{Normal}(\mu_D, \sigma_D).
+$$
+
+Per illustrare questo approccio, utilizziamo i punteggi pre e post relativi ai sintomi depressivi misurati tramite la scala CES-D [@tarrats2025efficacy]:
 
 ```{r}
 #| label: prepare-paired-data
@@ -618,8 +608,8 @@ df_pre_post <- readxl::read_excel(
     Sample,
     CESD = `CESS-D`
   ) |>
-  tidyr::pivot_wider(
-    names_from = Sample,
+  pivot_wider(
+    names_from  = Sample,
     values_from = CESD,
     names_prefix = "CESD_"
   ) |>
@@ -629,66 +619,87 @@ df_pre_post <- readxl::read_excel(
   drop_na(diff)
 ```
 
+Condizioniamo il modello a sola intercetta stimando i parametri sulla serie delle differenze:
+
 ```{r}
 #| label: fit-paired-difference
 #| output: false
 
 fit_paired <- brm(
-  diff ~ 1,
-  data = df_pre_post,
-  family = gaussian(),
-  prior = c(
+  formula = diff ~ 1,
+  data    = df_pre_post,
+  family  = gaussian(),
+  prior   = c(
     prior(normal(0, 10), class = "Intercept"),
     prior(student_t(3, 0, 10), class = "sigma")
   ),
   backend = "cmdstanr",
-  chains = 4,
-  iter = 2000,
-  seed = 1234,
+  chains  = 4,
+  iter    = 2000,
+  seed    = 1234,
   refresh = 0
 )
 ```
 
+Per derivare le quantità sostantive, manipoliamo i campioni a posteriori:
+
 ```{r}
 #| label: summarize-paired-difference
 
-post_paired <- as_draws_df(fit_paired) |>
-  transmute(
-    mean_difference = b_Intercept,
-    sd_difference = sigma,
-    d_z = b_Intercept / sigma
-  )
+# Estraiamo i draws mantenendo la struttura formale dell'oggetto posterior
+draws_paired <- as_draws(fit_paired)
 
-posterior::summarise_draws(post_paired)
+# Utilizziamo mutate_variables per calcolare l'effetto standardizzato d_z
+draws_derived <- posterior::mutate_variables(
+  draws_paired,
+  mean_difference = b_Intercept,
+  sd_difference   = sigma,
+  d_z             = b_Intercept / sigma
+)
 
-mean(post_paired$mean_difference > 0)
+# Selezioniamo le sole quantità di interesse e generiamo i summary descrittivi
+draws_subset <- subset_draws(
+  draws_derived, 
+  variable = c("mean_difference", "sd_difference", "d_z")
+)
+
+summarise_draws(draws_subset)
 ```
 
-Con la definizione `pre - post`, un valore positivo indica una riduzione dei sintomi. La standardizzazione $d_z=\mu_D/\sigma_D$ utilizza la deviazione standard delle **differenze intra-individuali**. Non è la stessa quantità del $d$ per gruppi indipendenti e la sua comparabilità dipende dalla struttura di correlazione pre--post.
+Per ottenere valutazioni probabilistiche dirette sul segno del cambiamento, estraiamo il vettore specifico tramite `merge_chains`:
 
-::: {.callout-note title="Perché l'appaiamento può aumentare la precisione"}
-Quando le misure dello stesso individuo sono positivamente correlate, la differenza elimina una parte della variabilità stabile tra persone. La deviazione standard delle differenze può quindi essere inferiore a quella delle misure grezze. Il guadagno non è garantito da una formula rituale: dipende dall'affidabilità delle misure, dalla correlazione intra-individuale e dalla presenza di dati mancanti.
+```{r}
+# Estrazione del vettore a posteriori e calcolo della probabilità di riduzione sintomatologica
+mean_diff_samples <- as_draws_matrix(draws_subset, variable = "mean_difference")
+mean(mean_diff_samples > 0)
+```
+
+> **Interpretazione della metrica:** avendo definito la differenza come `pre - post`, un valore a posteriori positivo di $\mu_D$ indica una riduzione netta della sintomatologia depressiva. L'indice standardizzato $d_z = \mu_D / \sigma_D$ esprime il contrasto in unità di deviazione standard delle *differenze* intra-individuali. Di conseguenza, $d_z$ non è matematicamente confrontabile con il $d$ di Cohen calcolato su gruppi indipendenti, poiché il suo valore risente direttamente della covarianza tra i due tempi di rilevazione.
+
+::: {.callout-note title="Perché e quando l'appaiamento incrementa l'efficienza"}
+Quando le misure ripetute sullo stesso individuo mostrano una correlazione positiva stabile, l'operazione di sottrazione elimina dal modello la variabilità interindividuale a livello di baseline (le differenze costanti tra le persone). La deviazione standard delle differenze ($\sigma_D$) risulterà così nettamente inferiore rispetto alla variabilità grezza dei punteggi originari, determinando un aumento della precisione (intervalli di credibilità più stretti). Tale guadagno informativo non è tuttavia garantito da un automatismo matematico, ma dipende strettamente dall'affidabilità temporale dello strumento e dall'assenza di pattern complessi di dati mancanti (*missing data*).
 :::
 
-Per disegni con più di due occasioni, tempi irregolari, covariate che cambiano nel tempo o dati incompleti, un modello multilivello sulle osservazioni originali è generalmente più flessibile del semplice modello delle differenze.
+Se il disegno sperimentale include più di due occasioni di misura, intervalli temporali irregolari tra i soggetti, covariate che variano nel tempo o osservazioni incomplete, il semplice calcolo delle differenze mostra evidenti limiti. In questi scenari, l'estensione verso un **modello lineare multilivello (o a effetti misti)** strutturato direttamente sulle osservazioni longitudinali originarie rappresenta una soluzione metodologicamente più solida e flessibile.
 
 ## Comunicare i risultati
 
-Una comunicazione informativa dovrebbe riportare almeno:
+Una rendicontazione scientifica trasparente e informativa del confronto tra due gruppi dovrebbe integrare i seguenti elementi metodologici:
 
-1. le medie di gruppo o le loro distribuzioni a posteriori;
-2. la differenza grezza con un intervallo di credibilità;
-3. la probabilità della direzione rilevante;
-4. la probabilità di superare una soglia sostantiva, se definita;
-5. l'eventuale differenza standardizzata, insieme al denominatore utilizzato;
-6. i principali controlli di adeguatezza;
-7. i limiti del disegno e dell'interpretazione causale.
+1. Le stime dei parametri di posizione (medie di gruppo) o le rispettive distribuzioni a posteriori;
+2. la differenza grezza accompagnata da un intervallo di credibilità (es. HDI al 95%);
+3. la probabilità a posteriori associata alla direzione dell'effetto;
+4. la probabilità di superare una soglia di rilevanza pratica (*SESOI*), se definita a priori;
+5. la dimensione dell'effetto standardizzata, esplicitando chiaramente la natura del denominatore impiegato per il calcolo;
+6. gli esiti dei principali controlli di adeguatezza e robustezza (*PPC*);
+7. i vincoli strutturali del disegno di ricerca e i limiti alla validità dell'interpretazione causale.
 
-Un possibile schema è:
+Un possibile modello di stesura per la sezione Risultati è il seguente:
 
-> Nel campione analizzato, il punteggio medio dei bambini nel gruppo «Diplomata» è risultato superiore a quello del gruppo «Non diplomata». La distribuzione a posteriori della differenza $\Delta$ quantifica sia l'ampiezza plausibile del contrasto sia la probabilità che superi la soglia sostantiva definita prima dell'analisi. La versione standardizzata $d$ viene riportata come misura complementare e non sostituisce la differenza in punti di QI. Poiché i gruppi sono osservazionali, il contrasto non viene interpretato come effetto causale dell'istruzione materna.
+> Per verificare lo scostamento nello sviluppo cognitivo in base al background familiare, abbiamo stimato un modello lineare bayesiano gaussiano. Nel campione analizzato, il punteggio medio dei bambini nel gruppo delle madri diplomate ($\mu_1 = 89.3$, HDI 95% $[86.5, 92.1]$) è risultato superiore a quello del gruppo delle madri non diplomate ($\mu_0 = 77.5$, HDI 95% $[72.8, 82.2]$). La distribuzione a posteriori della differenza grezza indica un incremento plausibile di $\Delta = 11.8$ punti di QI (HDI 95% $[6.3, 17.3]$).
+> La probabilità che il contrasto sia strettamente positivo è pari a $\Pr(\Delta > 0 \mid y) > .99$, mentre la probabilità che lo scostamento superi la soglia di rilevanza teorica di 5 punti è $\Pr(\Delta > 5 \mid y) = .98$. A titolo comparativo, la dimensione dell'effetto standardizzata basata sulla deviazione standard residua comune ($\sigma = 18.2$) è pari a $d = 0.65$ (HDI 95% $[0.34, 0.96]$). I controlli predittivi a posteriori confermano l'adeguatezza della verosimiglianza normale. Trattandosi di un disegno osservazionale e non sperimentale, tale contrasto descrive un'associazione sistematica e non può essere interpretato come effetto causale diretto dell'istruzione materna.
 
-I valori numerici dovrebbero essere inseriti direttamente dalle sintesi posteriori, evitando aggettivi come «grande» o «trascurabile» quando non sono stati definiti criteri sostantivi.
+> **Guida alla redazione:** I valori numerici e gli intervalli devono essere inseriti attingendo direttamente dalle sintesi computazionali dei *draws*. È buona pratica metodologica evitare l'uso di aggettivi qualificativi ambigui o assoluti (come "effetto grande", "forte legame" o "differenza trascurabile") a meno che non si stia ancorando esplicitamente il dato a criteri di categorizzazione standardizzati o a soglie cliniche formalmente giustificate all'interno del dominio di studio.
 
 ## Errori frequenti
 
@@ -705,13 +716,13 @@ I valori numerici dovrebbero essere inseriti direttamente dalle sintesi posterio
 
 ## Riflessioni conclusive
 
-Il confronto tra due gruppi non richiede un apparato separato dal modello lineare. Con un indicatore binario, l'intercetta e il coefficiente possono essere trasformati nelle due medie e nella loro differenza. Codifiche alternative rappresentano lo stesso contrasto, ma rendono esplicite assunzioni differenti sui parametri e sui prior.
+Il confronto tra due gruppi o condizioni non richiede un impianto statistico separato o speciale, ma rientra pienamente nel modello lineare, che è un framework flessibile. Utilizzando un indicatore binario (*dummy coding*), l'intercetta e il coefficiente angolare della regressione si collegano direttamente alle medie condizionate dei gruppi e alla loro differenza. La scelta di codifiche alternative (come quella centrata o le medie di cella) non altera il sistema delle quantità sostantive, ma modifica radicalmente l'assegnazione dei *prior* e la trasparenza delle assunzioni teoriche sottostanti.
 
-L'approccio bayesiano permette di andare oltre una decisione binaria. Dalla distribuzione a posteriori di $\Delta$ possiamo valutare la direzione del contrasto, la sua ampiezza sulla scala originale e la probabilità che superi una soglia sostantiva. La differenza standardizzata è una quantità derivata utile per alcuni confronti, ma dipende dalla variabilità della popolazione, dalla qualità della misura e dal denominatore scelto. Deve quindi affiancare, non oscurare, la differenza grezza.
+L'inferenza bayesiana permette di superare i limiti delle decisioni dicotomiche imposte valore-*p*. L'accesso all'intera distribuzione a posteriori di $\Delta$ consente infatti di stimare con precisione la direzione, l'ampiezza sulla scala originaria e la probabilità che l'effetto superi una soglia di rilevanza pratica stabilita a priori. Sebbene l'effetto standardizzato ($d$) rimanga uno strumento utile per il confronto tra studi e la ricerca meta-analitica, esso risente fortemente della variabilità della popolazione e della precisione psicometrica delle misure. Per questo motivo, l'indice standardizzato deve sempre affiancare, e non sostituire, la differenza grezza espressa nelle unità metriche native del fenomeno.
 
-SESOI e regione di equivalenza rendono esplicito il confine tra differenze considerate importanti e differenze considerate trascurabili. Non eliminano però la necessità di una regola decisionale, di una giustificazione sostantiva e di sufficiente precisione. Analogamente, un buon campionamento MCMC non sostituisce il controllo della forma distributiva, dell'uguaglianza delle dispersioni e della struttura di dipendenza.
+L'introduzione della *SESOI* e della *ROPE* sposta il focus della ricerca dall'esistenza puramente statistica di un effetto alla sua importanza pratica o clinica, esplicitando il confine tra differenze sostanziali e scostamenti trascurabili.  L'applicazione di questi parametri non esime tuttavia il ricercatore dall'onere di giustificare i propri benchmark dal punto di vista teorico né dalla necessità di pianificare studi con una precisione (numerosità campionaria) adeguata. Allo stesso modo, l'assenza di patologie nell'algoritmo di campionamento MCMC non garantisce la correttezza della specificazione teorica che deve sempre essere validata verificando l'adeguatezza della forma distributiva e l'assunzione di omoschedasticità.
 
-Infine, gruppi indipendenti e misure appaiate richiedono estimand e denominatori differenti. Nel prossimo capitolo estenderemo la stessa logica a più di due gruppi: l'ANOVA a una via verrà trattata come modello lineare con predittore categoriale, e le domande scientifiche saranno espresse mediante medie di cella e contrasti pianificati.
+Infine, la distinzione tra gruppi indipendenti e misure appaiate evidenzia come la struttura del disegno di ricerca vincoli la definizione stessa degli *estimand* e delle deviazioni standard di riferimento. Nel prossimo capitolo estenderemo questa stessa architettura al confronto tra più di due gruppi, mostrando come l'analisi della varianza (ANOVA) a una via possa essere ricondotta in modo del tutto naturale a un modello lineare con predittori categoriali, in cui le ipotesi scientifiche vengono tradotte e verificate mediante la manipolazione delle medie di cella e la pianificazione dei contrasti.
 
 ## Concetti da ricordare
 
