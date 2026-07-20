@@ -4,14 +4,23 @@ Nei capitoli precedenti abbiamo introdotto il modello lineare come distribuzione
 
 L'inferenza bayesiana risolve questo problema integrando sistematicamente tre elementi fondamentali: *il modello generativo*, ovvero la formalizzazione matematica che specifica il processo teorico attraverso cui i dati vengono prodotti; *le distribuzioni a priori*, ovvero l'espressione formale che descrive la plausibilità dei parametri prima di considerare l'evidenza empirica attuale; e *la verosimiglianza*, ovvero la funzione che permette di aggiornare lo stato di conoscenza iniziale alla luce delle osservazioni raccolte. L'esito dell'inferenza non consiste nella stima di un'unica retta ottimale, ma produce una distribuzione congiunta a posteriori di rette e livelli di dispersione, tutti compatibili con il modello adottato, i prior definiti e i dati effettivamente osservati. Questo capitolo illustra l'applicazione pratica di tali concetti, applicando in modo completo l'intero flusso di lavoro bayesiano: una sequenza operativa e concettuale che verrà riutilizzata sistematicamente come standard metodologico nel resto del Companion.
 
-::: {.callout-note appearance="minimal" .chapter-status}
-**Da sapere.** Il workflow collega domanda, estimand, modello generativo, prior, verosimiglianza, posterior e distribuzioni predittive; l'incertezza sulla media condizionata è diversa dalla variabilità di una nuova osservazione.
+::: {.callout-note title="Obiettivi del capitolo"}
+Al termine del capitolo dovresti essere in grado di:
 
-**Da saper fare.** Specificare e adattare una regressione con `brms`, calibrare i prior, controllare il campionamento, interpretare la posterior ed eseguire prior e posterior predictive checks.
+- formulare una regressione lineare bayesiana a partire da una domanda e da una quantità di interesse;
+- distinguere prior, verosimiglianza, posterior e distribuzioni predittive;
+- scegliere prior coerenti con la scala delle variabili;
+- calibrare i prior mediante un *prior predictive check*;
+- adattare il modello con `brms` e interpretarne i parametri;
+- controllare la qualità del campionamento MCMC;
+- formulare affermazioni probabilistiche a partire dai campioni posteriori;
+- distinguere l'incertezza sulla media condizionata dalla variabilità di una nuova osservazione;
+- valutare aspetti specifici dell'adeguatezza del modello mediante controlli predittivi a posteriori;
+- verificare la sensibilità delle conclusioni a specificazioni a priori alternative.
+:::
 
-**Approfondimento facoltativo.** Replicare per intero l'analisi di sensibilità, approfondire le diagnostiche grafiche e sviluppare quantità posteriori ulteriori rispetto a quelle richieste dalla domanda.
-
-[Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
+::: {.callout-tip collapse=true title="Percorsi di lettura"}
+Il capitolo appartiene al **percorso essenziale** e costituisce il riferimento operativo per i capitoli successivi. Chi segue il **percorso concettuale** può concentrarsi sulla definizione dell'estimand, sulla scelta dei prior, sulle distribuzioni posteriori e sui controlli predittivi. Il **percorso computazionale avanzato** comprende anche la diagnostica MCMC e prepara il passaggio dalla formula di `brms` al programma Stan.
 :::
 
 ::: {.callout-tip collapse=true title="Prerequisiti e approfondimenti"}
@@ -116,6 +125,7 @@ sleep_anxiety <- tibble(
 )
 
 head(sleep_anxiety)
+
 ```
 
 Prima di procedere all'adattamento formale del modello lineare, è buona pratica metodologica condurre un'analisi esplorativa visiva per esaminare la forma della relazione empirica tra le variabili.
@@ -134,6 +144,7 @@ sleep_anxiety |>
     x = "Ore di sonno",
     y = "Punteggio di ansia"
   )
+
 ```
 
 L'ispezione visiva del grafico a dispersione (*scattersplot*) suggerisce chiaramente la presenza di un'associazione lineare negativa tra la durata del sonno e i livelli di ansia. Tuttavia, l'evidenza grafica da sola non è sufficiente per l'inferenza scientifica: non consente di quantificare l'incertezza campionaria che grava sui parametri del modello ($\alpha$, $\beta$ e $\sigma$), né di distinguere concettualmente l'incertezza legata alla posizione della retta media dalla variabilità intrinseca che caratterizzerebbe la previsione di una singola nuova osservazione. Per risolvere questi problemi è necessario formalizzare il modello in un quadro probabilistico.

@@ -21,14 +21,24 @@ $$
 
 L'obiettivo di questo approfondimento non è suggerire di sostituire sistematicamente le funzioni di `brms` con il codice Stan, operazione che risulterebbe inefficiente nella pratica quotidiana. Lo scopo è piuttosto quello di rendere esplicito e trasparente il contenuto semantico della formula, decodificando ciò che il software costruisce automaticamente dietro le quinte. Solo acquisendo questa consapevolezza, il ricercatore può comprendere appieno quali decisioni computazionali vengono delegate all'algoritmo e quali scelte metodologiche rimangono, in ultima istanza, sotto la sua diretta responsabilità scientifica.
 
-::: {.callout-note appearance="minimal" .chapter-status}
-**Da sapere.** Formula R, matrice del disegno e programma Stan sono rappresentazioni a diversi livelli di astrazione dello stesso modello; i coefficienti multipli sono associazioni condizionate agli altri termini inclusi.
+::: {.callout-note title="Obiettivi del capitolo"}
+Al termine del capitolo dovresti essere in grado di:
 
-**Da saper fare.** Leggere una formula, ispezionare `model.matrix()`, adattare il modello con `brms` e riconoscere nel codice generato i blocchi che esprimono dati, parametri, prior e verosimiglianza.
+- leggere una formula R secondo la sintassi di Wilkinson;
+- riconoscere il ruolo dell'intercetta e dei diversi termini della formula;
+- costruire e interpretare una matrice del disegno;
+- esprimere una regressione multipla in notazione scalare e matriciale;
+- interpretare un coefficiente come associazione condizionata agli altri predittori inclusi;
+- distinguere ciò che la formula specifica da ciò che deve essere indicato mediante famiglia e prior;
+- ispezionare il codice Stan generato da `brms`;
+- scrivere in Stan lo stesso modello lineare gaussiano;
+- scegliere consapevolmente tra l'interfaccia di alto livello di `brms` e una specificazione diretta in Stan.
+:::
 
-**Approfondimento facoltativo.** Scrivere, compilare e confrontare una versione Stan nativa del modello lineare.
+::: {.callout-tip collapse=true title="Percorsi di lettura"}
+Le sezioni sulle formule R, sulla matrice del disegno e sull'interpretazione dei coefficienti appartengono al **percorso essenziale**. La traduzione completa in Stan appartiene soprattutto al **percorso computazionale avanzato**.
 
-[Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
+Chi segue il percorso concettuale può concentrarsi sulla corrispondenza tra domanda, equazione e matrice del disegno, leggendo la parte su Stan come approfondimento.
 :::
 
 ::: {.callout-caution collapse=true title="Preparazione del Notebook"}
@@ -442,17 +452,13 @@ cat("```stan\n", stancode_multiple, "\n```", sep = "")
 
 Il codice prodotto è più articolato di quanto strettamente necessario per questo esempio. Questa complessità deriva dal fatto che `brms` adotta un'architettura software universale e generalizzata, progettata per scalare in modo efficiente ed estendersi a centinaia di famiglie di modelli differenti, complesse strutture di interazione, trasformazioni non lineari e calcoli automatici di quantità derivate. Questa complessità non implica che il modello statistico sia diverso: l'elemento centrale rimane il predittore lineare  mappato nella matrice del disegno.
 
-::: {.callout-note title="L'astrazione come risorsa: il concetto di zucchero sintattico"}
+::: {.callout-note title="L'astrazione come risorsa: il concetto di "zucchero sintattico""}
 Nel dominio dell'informatica e della programmazione, l'espressione *zucchero sintattico* (*syntactic sugar*) identifica una convenzione o una notazione formale introdotta per rendere la stesura del codice più agile, leggibile e intuitiva per l'operatore umano, senza per questo modificarne minimamente il funzionamento logico di basso livello.
 
 Nell'ecosistema R, l'interfaccia di `brms` si comporta esattamente come una forma di zucchero sintattico: essa non sostituisce né bypassa il motore di calcolo probabilistico Stan, ma si assume l'onere di scriverne e compilarne il codice sorgente in modo automatico e matematicamente ottimizzato a partire dagli input forniti dal ricercatore (formula, famiglia, prior e data frame).
 :::
 
-## Scrivere lo stesso modello direttamente in Stan {#sec-formula-stan-direct}
-
-::: {.callout-tip appearance="minimal" .optional-section}
-**Approfondimento facoltativo.** Se lavori solo con `brms`, puoi saltare la scrittura, la compilazione e il confronto numerico del programma nativo e riprendere da [Che cosa guadagniamo e che cosa perdiamo](#sec-formula-tradeoffs). Resta invece richiesto saper leggere la traduzione prodotta da `make_stancode()` nella sezione precedente.
-:::
+## Scrivere lo stesso modello direttamente in Stan
 
 Per meglio comprendere la struttura del modello depurata dalle sovrastrutture di `brms`, possiamo programmare l'algoritmo direttamente in codice Stan. Per fare questo, isoliamo i due predittori all'interno di una matrice del disegno sprovvista del vettore costante dei valori $1$: in questo modo, l'intercetta non sarà codificata come colonna di $\mathbf{X}$ ma verrà gestita come un parametro scalare esplicito e separato.
 
@@ -654,7 +660,7 @@ bind_rows(brms_draws, stan_draws) |>
 
 Il confronto serve solo come controllo della traduzione, non come competizione tra software. `brms` utilizza Stan come motore computazionale; la differenza riguarda soprattutto il livello al quale viene espressa la specificazione.
 
-## Che cosa guadagniamo e che cosa perdiamo {#sec-formula-tradeoffs}
+## Che cosa guadagniamo e che cosa perdiamo
 
 ### Usare `brms`
 
