@@ -1,0 +1,615 @@
+# Errore di misurazione e varianza di metodo {#sec-measurement-error-method-appendix}
+
+Questa appendice approfondisce un tema introdotto nel @sec-model-misspecification. Le variabili osservate non coincidono necessariamente con i costrutti che intendiamo studiare. In psicologia, punteggi di test, risposte a questionari e prestazioni nei compiti sono il risultato congiunto del costrutto, delle caratteristiche dello strumento, del contesto di rilevazione e di una componente di errore. Ignorare questo processo può attenuare una relazione, gonfiarla oppure renderne ambigua l'interpretazione [@cole2014manifest].
+
+L'obiettivo dell'appendice è mostrare come ampliare il modello generativo quando la misurazione non può essere trattata come perfetta. La prima parte riguarda l'errore classico nel predittore e la conseguente attenuazione della pendenza. La seconda esamina una situazione differente, nella quale più indicatori condividono una componente di metodo che può aumentare artificialmente la covarianza. I modelli proposti hanno finalità didattiche: rendono esplicite le assunzioni, ma non sostituiscono un disegno di misura adeguato.
+
+::: {.callout-tip collapse=true title="Prerequisiti"}
+Sono utili la regressione bayesiana (@sec-linmod-bayesian-reg), la traduzione tra equazioni e Stan (@sec-multiple-regression), la discussione sulla grandezza dell'effetto (@sec-bayesian-effect-size) e il capitolo sul controllo e la revisione del modello (@sec-model-misspecification).
+:::
+
+::: {.callout-caution collapse=true title="Preparazione del Notebook"}
+
+```{r}
+#| label: setup-measurement-appendix
+#| include: false
+
+here::here("code", "_common.R") |>
+  source()
+
+if (!requireNamespace("pacman", quietly = TRUE)) {
+  install.packages("pacman")
+}
+
+pacman::p_load(
+  bayesplot,
+  broom,
+  cmdstanr,
+  dplyr,
+  ggplot2,
+  posterior,
+  tibble,
+  tidyr
+)
+
+set.seed(20250912)
+```
+:::
+
+## Errore di misurazione e attenuazione {#sec-linear-models-measurement-error}
+
+In psicologia, costrutti come ansia, intelligenza o motivazione non sono direttamente osservabili, ma vengono rilevati mediante punteggi di questionari, test o compiti che incorporano inevitabilmente una componente di errore e una variabilità specifica dello strumento. Considerare una misura come una rappresentazione perfetta del costrutto significa assumere che non vi sia errore di misurazione: si tratta di una scelta di modellazione, non di un dato di fatto.
+
+Quando un predittore è affetto da errore di misurazione classico, ovvero casuale e indipendente dal costrutto, e viene utilizzato come se fosse osservato senza errore, il coefficiente di regressione tende verso zero. Questo fenomeno, noto come *attenuazione delle correlazioni* e delle *differenze standardizzate*, è stato introdotto nel @sec-bayesian-effect-size.
+
+### Derivazione dell'attenuazione
+
+Si consideri la relazione strutturale
+
+$$
+y = \alpha + \beta x + \varepsilon,
+$$
+con $\mathbb{E}(\varepsilon)=0$ e $\operatorname{Cov}(x,\varepsilon)=0$. Il costrutto $x$ non è osservato direttamente; disponiamo invece della misura
+
+$$
+x^* = x + \delta,
+$$
+dove $\delta$ ha media nulla ed è indipendente da $x$ e da $\varepsilon$. Queste sono le ipotesi dell'**errore classico additivo**. Se si regredisce $y$ su $x^*$, si ottiene:
+
+$$
+\begin{aligned}
+\mathbb{E}(\hat\beta_{\text{naive}})
+&= \frac{\operatorname{Cov}(x^*,y)}{\operatorname{Var}(x^*)} \\
+&= \beta\frac{\sigma_x^2}{\sigma_x^2+\sigma_\delta^2} \\
+&= \beta\lambda,
+\end{aligned}
+$$
+dove
+
+$$
+\lambda=\frac{\sigma_x^2}{\sigma_x^2+\sigma_\delta^2}
+$$
+è l'affidabilità, definita come la proporzione di varianza osservata attribuibile al costrutto. Poiché in presenza di errore $0 < \lambda < 1$, la pendenza ingenua risulta più vicina a zero rispetto alla pendenza strutturale [@caudek2001statistica].
+
+L’attenuazione verso zero è una conseguenza specifica del modello di errore classico nel predittore. Errori differenziali, errori correlati con l’outcome, distorsioni da selezione, arrotondamenti o errori sistematici possono produrre effetti di segno e ampiezza diversi. La formula non va quindi generalizzata a ogni forma di misurazione imperfetta. Inoltre, la standardizzazione non elimina il problema: nella regressione bivariata, la pendenza standardizzata coincide con la correlazione osservata, anch’essa attenuata sotto le stesse ipotesi.
+
+### Un esperimento didattico
+
+Per illustrare numericamente l’effetto di attenuazione, simuliamo dati con parametri noti, introducendo un errore di misurazione nel predittore e confrontando la stima ottenuta dall’analisi ingenua con il valore previsto dalla formula $\beta\lambda$. Il costrutto latente $x_{\text{vero}}$ è generato da una distribuzione normale con media $0$ e deviazione standard $1.5$; l’esito $y$ dipende da $x_{\text{vero}}$ secondo la relazione lineare $\alpha + \beta x_{\text{vero}} + \varepsilon$, con $\beta = 2$ e $\sigma_y = 1$; infine, la misura osservata $x^*$ si ottiene aggiungendo un errore casuale con deviazione standard $\sigma_{\text{mis}} = 1$.
+
+```{r}
+#| label: simulate-measurement-error
+
+set.seed(20250912)
+
+N <- 300
+alpha_true <- 1.0
+beta_true <- 2.0
+sigma_y_true <- 1.0
+mu_x_true <- 0.0
+sigma_x_true <- 1.5
+sigma_meas_true <- 1.0
+
+x_true <- rnorm(N, mu_x_true, sigma_x_true)
+y <- alpha_true + beta_true * x_true + rnorm(N, 0, sigma_y_true)
+x_star <- x_true + rnorm(N, 0, sigma_meas_true)
+
+measurement_data <- tibble(x_true, x_star, y)
+
+lambda_theory <- sigma_x_true^2 /
+  (sigma_x_true^2 + sigma_meas_true^2)
+```
+
+L’analisi ingenua, che utilizza $x^*$ al posto del costrutto latente, produce una stima che, entro l’errore campionario, coincide con il valore atteso $\beta\lambda$, come indicato di seguito:
+
+```{r}
+#| label: naive-measurement-model
+
+fit_naive_meas <- lm(y ~ x_star, data = measurement_data)
+
+broom::tidy(fit_naive_meas, conf.int = TRUE) |>
+  filter(term == "x_star") |>
+  mutate(
+    beta_vero = beta_true,
+    beta_attenuato_atteso = beta_true * lambda_theory
+  )
+```
+
+La distorsione non è quindi un’eventualità accidentale, ma una conseguenza strutturale del modello di errore classico.
+
+### Ampliare il modello generativo
+
+Una soluzione consiste nel distinguere tre componenti: la distribuzione del costrutto, la relazione strutturale e il processo di misurazione. Possiamo formalizzare il modello come:
+
+$$
+\begin{aligned}
+x_i &\sim \operatorname{Normal}(\mu_x,\sigma_x), \\
+y_i\mid x_i &\sim \operatorname{Normal}(\alpha+\beta x_i,\sigma_y), \\
+x_i^*\mid x_i &\sim \operatorname{Normal}(x_i,\sigma_{\text{meas}}).
+\end{aligned}
+$$ {#eq-measurement-error-model}
+
+La prima equazione descrive la variabilità del costrutto nella popolazione; la seconda esprime la relazione strutturale che intendiamo stimare; la terza specifica come la misura osservata si discosti dal costrutto a causa dell’errore di misurazione. La pendenza $\beta$ è definita rispetto al costrutto latente $x$, non rispetto al punteggio osservato.
+
+In questo esempio, si assume che $\sigma_{\text{mis}}$ sia nota, ad esempio in base a studi di calibrazione o a informazioni esterne sull’errore standard di misurazione. Tale assunzione è necessaria perché, disponendo di una sola misura per individuo, i dati contengono poca informazione per separare la variabilità del costrutto da quella dell’errore. Se l’affidabilità è incerta, è possibile assegnarle una distribuzione a priori o utilizzare dati di validazione, repliche o indicatori multipli, come discusso nel contesto della Teoria Classica dei Test.
+
+Il seguente codice Stan implementa questo modello generativo, utilizzando $\sigma_{\text{mis}}$ come dato noto per recuperare la pendenza strutturale $\beta$. Oltre alla stima puntuale, il modello restituisce una distribuzione a posteriori completa, che riflette l’incertezza residua sul costrutto latente e sui parametri strutturali.
+
+::: {.callout-note collapse=true title="Programma Stan per il modello con errore di misurazione"}
+
+```{r}
+#| label: stan-measurement-error-code
+
+stancode_meas <- "
+data {
+  int<lower=1> N;
+  vector[N] y;
+  vector[N] x_star;
+  real<lower=0> sigma_meas;
+}
+parameters {
+  real alpha;
+  real beta;
+  real mu_x;
+  real<lower=0> sigma_y;
+  real<lower=0> sigma_x;
+  vector[N] x;
+}
+model {
+  alpha   ~ normal(0, 5);
+  beta    ~ student_t(3, 0, 5);
+  mu_x    ~ normal(0, 5);
+  sigma_y ~ lognormal(0, 0.7);
+  sigma_x ~ lognormal(0, 0.7);
+
+  x      ~ normal(mu_x, sigma_x);
+  y      ~ normal(alpha + beta * x, sigma_y);
+  x_star ~ normal(x, sigma_meas);
+}
+generated quantities {
+  vector[N] y_rep;
+  real beta_naive_rep;
+  for (n in 1:N) {
+    y_rep[n] = normal_rng(alpha + beta * x[n], sigma_y);
+  }
+  {
+    real mx = mean(x_star);
+    real my = mean(y_rep);
+    real sxx = 0;
+    real sxy = 0;
+    for (n in 1:N) {
+      sxx += square(x_star[n] - mx);
+      sxy += (x_star[n] - mx) * (y_rep[n] - my);
+    }
+    beta_naive_rep = sxy / sxx;
+  }
+}
+"
+```
+
+```{r}
+#| label: fit-measurement-error-stan
+#| output: false
+
+mod_meas <- cmdstan_model(
+  write_stan_file(stancode_meas),
+  compile = TRUE
+)
+
+fit_meas <- mod_meas$sample(
+  data = list(
+    N = N,
+    y = y,
+    x_star = x_star,
+    sigma_meas = sigma_meas_true
+  ),
+  seed = 20250917,
+  chains = 4,
+  parallel_chains = 4,
+  iter_warmup = 1000,
+  iter_sampling = 1000,
+  adapt_delta = 0.95,
+  max_treedepth = 12,
+  refresh = 0
+)
+```
+:::
+
+In questo modo, la correzione non è una trasformazione applicata ad hoc, ma parte integrante del processo generativo: l’incertezza sulla misura si propaga coerentemente fino alle stime dei parametri strutturali, restituendo una distribuzione per $\beta$ che rispecchia l’informazione effettivamente disponibile.
+
+### Controllare il modello revisionato
+
+Dopo la stima del modello, è necessario verificare che i parametri recuperati siano coerenti con le attese e che il modello riproduca le conseguenze osservabili della struttura di misura. La distribuzione a posteriori dei parametri principali consente di valutare il recupero dei valori generativi:
+
+```{r}
+#| label: summarize-measurement-error
+
+meas_draws <- as_draws_df(
+  fit_meas$draws(
+    c("alpha", "beta", "mu_x", "sigma_y", "sigma_x")
+  )
+)
+
+summarise_draws(
+  meas_draws,
+  mean,
+  sd,
+  ~quantile(.x, probs = c(0.025, 0.975)),
+  rhat = rhat,
+  ess_bulk = ess_bulk
+)
+```
+
+Nel caso simulato, il modello recupera la pendenza strutturale $\beta$, a differenza dell’analisi ingenua che restituiva la versione attenuata. Tuttavia, la capacità di recuperare il parametro non è sufficiente a convalidare il modello. Occorre anche verificare che esso riproduca le proprietà osservabili dei dati, inclusa la distorsione che ci si aspetta dalla regressione ingenua. A questo scopo, il blocco `generated quantities` del programma Stan calcola, per ogni campione a posteriori, la pendenza che si osserverebbe regredendo una replica di $Y$ sulla misura imperfetta $x^*$. La distribuzione di queste repliche può essere confrontata con il valore osservato dell’analisi ingenua:
+
+```{r}
+#| label: ppc-measurement-attenuation
+
+beta_naive_rep <- as_draws_df(
+  fit_meas$draws("beta_naive_rep")
+) |>
+  dplyr::pull(beta_naive_rep)
+
+observed_naive_beta <- unname(coef(fit_naive_meas)[["x_star"]])
+
+tibble(beta_naive_rep) |>
+  ggplot(aes(beta_naive_rep)) +
+  geom_histogram(bins = 40, alpha = 0.75) +
+  geom_vline(
+    xintercept = observed_naive_beta,
+    linetype = 2,
+    linewidth = 0.9
+  ) +
+  labs(
+    x = "Pendenza ingenua nelle repliche",
+    y = "Frequenza"
+  )
+```
+
+Se il modello di misura è ben specificato, la pendenza osservata dall’analisi ingenua dovrebbe cadere nella regione centrale della distribuzione replicata. Questo controllo verifica che l’attenuazione prevista sia coerente con quella effettivamente osservata. Per una validazione più completa, è opportuno estendere il controllo anche alla distribuzione di $Y$, alla distribuzione della misura $x^*$ e alla loro relazione congiunta.
+
+### Sensibilità all'errore assunto
+
+Se $\sigma_{\text{meas}}$ non è noto, la stima di $\beta$ dipende dall'informazione disponibile per separare la variabilità del costrutto da quella dell'errore. In assenza di dati esterni o di misure replicate, la stima può risultare poco identificata e le conclusioni fragili. È opportuno procedere adottando una delle seguenti pratiche: utilizzare dati di validazione o misure replicate per informare direttamente l'entità dell'errore; propagare esplicitamente l'incertezza sull'affidabilità, anziché trattarla come nota; verificare la sensibilità delle stime sotto valori alternativi plausibili di $\sigma_{\text{meas}}$; e, infine, dichiarare in modo trasparente quanto le conclusioni sostanziali dipendano da tali valori.
+
+Un modello più articolato non crea informazione assente dal disegno di ricerca; esso rende esplicita l'informazione necessaria per identificare i parametri di interesse e consente di valutare la dipendenza delle conclusioni dalle assunzioni sulla misurazione. La sua utilità non risiede nella capacità di generare stime precise in assenza di dati, ma nella trasparenza con cui mostra i punti in cui l'interpretazione è sostenuta dall'evidenza e quelli in cui è invece condizionata da scelte non osservabili.
+
+## Varianza di metodo e correlazioni latenti {#sec-method-variance}
+
+L’errore classico indipendente produce un’attenuazione sistematica delle relazioni osservate. In altre circostanze, tuttavia, le misure possono veicolare in modo sistematico una componente di covarianza aggiuntiva, che tende a gonfiare l’associazione stimata. Questionari somministrati alla stessa persona, nella medesima sessione e con identico formato possono, ad esempio, condividere fonti di variabilità riconducibili all’acquiescenza, alla desiderabilità sociale, a stili di risposta individuali o a effetti legati al contesto [@podsakoff2003common]. Quando ciò accade, la correlazione osservata riflette non soltanto il legame tra i costrutti latenti, ma anche l’influenza congiunta di queste componenti estranee, compromettendo la validità delle inferenze sui rapporti strutturali di interesse. 
+
+### La correzione per disattenuazione
+
+Nella Teoria Classica dei Test, il punteggio osservato $X^*$ e $Y^*$ viene scomposto nella somma di un punteggio vero e di un errore casuale:
+
+\[
+X^* = X + \varepsilon_x, \qquad Y^* = Y + \varepsilon_y.
+\]
+
+Se gli errori $\varepsilon_x$ ed $\varepsilon_y$ sono indipendenti tra loro e indipendenti dai rispettivi tratti latenti, la correlazione tra i costrutti $X$ e $Y$ può essere stimata a partire dalla correlazione osservata e dalle affidabilità delle due misure:
+
+\[
+\rho_{XY} = \frac{r_{X^*Y^*}}{\sqrt{r_{xx} r_{yy}}}.
+\]
+
+Questa espressione è nota come **correzione per disattenuazione** ed è stata derivata da Spearman per recuperare la correlazione strutturale quando le misure sono affette da errore casuale [@spearman1904proof]. Tuttavia, la formula è valida soltanto a condizione che la covarianza osservata tra $X^*$ e $Y^*$ rifletta esclusivamente la covarianza tra i tratti latenti $X$ e $Y$. Se le due misure condividono una componente estranea comune — ad esempio una varianza di metodo — la correlazione osservata risulta già gonfiata, e la correzione di Spearman non solo non elimina la distorsione, ma può amplificarla, portando a una sovrastima del legame strutturale [@lord2008statistical].
+
+### Quando il metodo è condiviso
+
+Per rappresentare la varianza di metodo condivisa, si introduce un fattore comune $M$ che contribuisce a entrambe le misure osservate:
+
+\[
+X^* = X + M + \varepsilon_x, \qquad Y^* = Y + M + \varepsilon_y.
+\]
+
+Assumendo che $M$ sia indipendente dai tratti latenti $X$ e $Y$ e dagli errori specifici $\varepsilon_x$ ed $\varepsilon_y$, la covarianza tra i punteggi osservati si scompone come:
+
+\[
+\operatorname{Cov}(X^*, Y^*)
+= \operatorname{Cov}(X, Y)
++ \operatorname{Var}(M)
++ \operatorname{Cov}(\varepsilon_x, \varepsilon_y).
+\]
+
+La covarianza osservata include quindi non solo il legame tra i tratti, ma anche un contributo dovuto alla variabilità del metodo condiviso e, eventualmente, alla correlazione degli errori. Se si definiscono le affidabilità rispetto ai soli tratti, la correzione per disattenuazione produce:
+
+\[
+\frac{r_{X^*Y^*}}{\sqrt{r_{xx} r_{yy}}}
+= \rho_{XY}
++ \frac{\operatorname{Var}(M) + \operatorname{Cov}(\varepsilon_x, \varepsilon_y)}
+{\sqrt{\operatorname{Var}(X) \operatorname{Var}(Y)}}.
+\]
+
+La formula non separa quindi la covarianza strutturale da quella prodotta dal metodo. In presenza di una componente condivisa positiva, la correzione tende a sovrastimare la correlazione latente e può perfino produrre valori superiori a 1. Inoltre, gli indici di coerenza interna come l'alfa di Cronbach o l'omega di McDonald possono incorporare porzioni della varianza di metodo, perché non distinguono automaticamente tra tratto e artefatto metodologico [@mcdonald2013test]. La direzione e l'entità della distorsione non sono deducibili dal solo valore dell'affidabilità, ma dipendono dalla struttura effettiva di tratto, metodo ed errore, che deve essere esplicitamente modellata per ottenere stime corrette delle relazioni latenti.
+
+### Una simulazione
+
+Per illustrare l’effetto della varianza di metodo condivisa, si simula un disegno in cui due tratti latenti $T_x$ e $T_y$ presentano una correlazione vera $\rho = 0.60$. Ciascun costrutto viene misurato da due indicatori, ai quali si aggiunge un fattore di metodo $M$ comune a tutti gli indicatori, con deviazione standard $\sigma_M = 0.90$. Questa struttura genera una covarianza osservata che riflette sia il legame tra i tratti sia il contributo del metodo condiviso.
+
+```{r}
+#| label: simulate-trait-method-revision
+
+set.seed(20250918)
+
+N_tm <- 1200
+rho_true <- 0.60
+sigma_method_true <- 0.90
+
+trait_x <- rnorm(N_tm)
+trait_y <- rho_true * trait_x +
+  sqrt(1 - rho_true^2) * rnorm(N_tm)
+method <- rnorm(N_tm, 0, sigma_method_true)
+
+X1 <- trait_x + method + rnorm(N_tm, 0, 0.60)
+X2 <- trait_x + method + rnorm(N_tm, 0, 0.60)
+Y1 <- trait_y + method + rnorm(N_tm, 0, 0.50)
+Y2 <- trait_y + method + rnorm(N_tm, 0, 0.50)
+
+Xbar <- (X1 + X2) / 2
+Ybar <- (Y1 + Y2) / 2
+
+alpha_two_items <- function(u, v) {
+  r12 <- cor(u, v)
+  2 * r12 / (1 + r12)
+}
+
+r_observed <- cor(Xbar, Ybar)
+alpha_x <- alpha_two_items(X1, X2)
+alpha_y <- alpha_two_items(Y1, Y2)
+r_disattenuated <- r_observed / sqrt(alpha_x * alpha_y)
+
+tibble(
+  correlazione_osservata = r_observed,
+  alpha_x = alpha_x,
+  alpha_y = alpha_y,
+  correlazione_corretta = r_disattenuated,
+  correlazione_latente_vera = rho_true
+)
+```
+
+Nella simulazione, la correlazione osservata tra i compositi risulta già gonfiata dalla componente di metodo, e le stime di affidabilità riflettono non solo il tratto, ma anche la varianza comune del metodo. Di conseguenza, la correzione per disattenuazione — che presuppone l’indipendenza degli errori — non recupera il valore vero $\rho = 0.60$, ma produce una sovrastima. Questo esempio mostra come l’applicazione meccanica della formula possa indurre in errore quando la struttura dei dati si discosta dalle assunzioni del modello classico di errore.
+
+### Un modello tratto–metodo
+
+Per separare la varianza attribuibile al costrutto da quella dovuta al metodo, si specifica un modello generativo in cui ciascun indicatore osservato è espresso come somma di tre componenti: il tratto latente $T$, il fattore di metodo comune $M$ e un errore specifico $e$:
+
+\[
+\begin{aligned}
+X_1 &= T_x + M + e_{x1}, & X_2 &= T_x + M + e_{x2}, \\
+Y_1 &= T_y + M + e_{y1}, & Y_2 &= T_y + M + e_{y2}.
+\end{aligned}
+\]
+
+La quantità di interesse è $\rho = \operatorname{Cor}(T_x, T_y)$, ovvero la correlazione tra i tratti latenti, depurata dall’influenza del metodo e dall’errore di misurazione.
+
+Per identificare il modello, nel caso didattico si fissano a 1 le varianze dei tratti e i caricamenti di tratto e metodo sugli indicatori. Si tratta di vincoli forti, che presuppongono un'equivalenza di scala tra gli indicatori; con soli due indicatori per costrutto, la separazione tra tratto e metodo risulta fragile. L’identificazione diventa più solida con più indicatori per costrutto, con l’uso di metodi di misura diversi, con misure ripetute o con l’introduzione di prior informativi.
+
+Il programma Stan seguente implementa il modello e restituisce, oltre alla stima di $\rho$, una quantità predittiva $r_{\text{composite\_rep}}$ che consente di verificare se il modello riproduce la correlazione osservata tra i compositi.
+
+::: {.callout-note collapse=true title="Programma Stan per il modello tratto–metodo"}
+```{r}
+#| label: stan-trait-method-revision
+stancode_tm <- "
+data {
+  int<lower=1> N;
+  vector[N] X1;
+  vector[N] X2;
+  vector[N] Y1;
+  vector[N] Y2;
+}
+parameters {
+  real<lower=-1, upper=1> rho;
+  vector[N] Tx;
+  vector[N] Ty;
+  vector[N] M;
+
+  real<lower=0> sigma_M;
+  real<lower=0> sigma_x1;
+  real<lower=0> sigma_x2;
+  real<lower=0> sigma_y1;
+  real<lower=0> sigma_y2;
+}
+model {
+  {
+    vector[2] mu = [0, 0]';
+    matrix[2, 2] Sigma;
+    Sigma[1, 1] = 1;
+    Sigma[1, 2] = rho;
+    Sigma[2, 1] = rho;
+    Sigma[2, 2] = 1;
+
+    for (n in 1:N) {
+      vector[2] traits;
+      traits[1] = Tx[n];
+      traits[2] = Ty[n];
+      traits ~ multi_normal(mu, Sigma);
+    }
+  }
+
+  M ~ normal(0, sigma_M);
+
+  rho      ~ normal(0, 0.5);
+  sigma_M  ~ lognormal(-0.2, 0.6);
+  sigma_x1 ~ lognormal(-0.2, 0.6);
+  sigma_x2 ~ lognormal(-0.2, 0.6);
+  sigma_y1 ~ lognormal(-0.2, 0.6);
+  sigma_y2 ~ lognormal(-0.2, 0.6);
+
+  X1 ~ normal(Tx + M, sigma_x1);
+  X2 ~ normal(Tx + M, sigma_x2);
+  Y1 ~ normal(Ty + M, sigma_y1);
+  Y2 ~ normal(Ty + M, sigma_y2);
+}
+generated quantities {
+  real r_composite_rep;
+  vector[N] Xbar_rep;
+  vector[N] Ybar_rep;
+
+  for (n in 1:N) {
+    Xbar_rep[n] = 0.5 * (
+      normal_rng(Tx[n] + M[n], sigma_x1) +
+      normal_rng(Tx[n] + M[n], sigma_x2)
+    );
+    Ybar_rep[n] = 0.5 * (
+      normal_rng(Ty[n] + M[n], sigma_y1) +
+      normal_rng(Ty[n] + M[n], sigma_y2)
+    );
+  }
+
+  {
+    real mx = mean(Xbar_rep);
+    real my = mean(Ybar_rep);
+    real sxx = 0;
+    real syy = 0;
+    real sxy = 0;
+
+    for (n in 1:N) {
+      real dx = Xbar_rep[n] - mx;
+      real dy = Ybar_rep[n] - my;
+      sxx += dx * dx;
+      syy += dy * dy;
+      sxy += dx * dy;
+    }
+    r_composite_rep = sxy / sqrt(sxx * syy);
+  }
+}
+"
+```
+
+```{r}
+#| label: fit-trait-method-revision
+#| output: false
+mod_tm <- cmdstan_model(
+  write_stan_file(stancode_tm),
+  compile = TRUE
+)
+
+fit_tm <- mod_tm$sample(
+  data = list(
+    N = N_tm,
+    X1 = X1,
+    X2 = X2,
+    Y1 = Y1,
+    Y2 = Y2
+  ),
+  seed = 20250919,
+  chains = 4,
+  parallel_chains = 4,
+  iter_warmup = 1000,
+  iter_sampling = 1000,
+  adapt_delta = 0.95,
+  max_treedepth = 12,
+  refresh = 0
+)
+```
+:::
+
+Il blocco `generated quantities` calcola, per ogni campione a posteriori, la correlazione tra compositi replicati generati dal modello. Questo controllo predittivo consente di verificare se il modello tratto–metodo sia in grado di riprodurre la correlazione osservata, includendo in modo coerente il contributo del metodo condiviso. Quando il modello è ben specificato, la distribuzione di `r_composite_rep` copre il valore osservato, indicando che la scomposizione proposta è compatibile con i dati. In caso contrario, la discrepanza segnala che la struttura di tratto, metodo ed errore richiede ulteriori revisioni.
+
+### Parametri e controllo predittivo
+
+Dopo la stima, la distribuzione a posteriori del parametro $\rho$ — la correlazione tra i tratti latenti — e di $\sigma_M$, la deviazione standard del fattore metodo, fornisce una sintesi della struttura attribuita al modello. Gli intervalli di credibilità e gli indicatori di convergenza permettono di valutare la stabilità delle stime, mentre $\sigma_M^2$ quantifica la porzione di varianza osservata riconducibile al metodo condiviso:
+
+```{r}
+#| label: summarize-trait-method-revision
+
+tm_draws <- as_draws_df(
+  fit_tm$draws(c("rho", "sigma_M"))
+)
+
+summarise_draws(
+  tm_draws,
+  mean,
+  sd,
+  ~quantile(.x, probs = c(0.025, 0.975)),
+  rhat = rhat,
+  ess_bulk = ess_bulk
+)
+```
+
+La sola stima dei parametri non basta, però, a convalidare la scomposizione proposta. Per verificare se il modello tratto–metodo riproduce una conseguenza osservabile della struttura di misura, si confronta la distribuzione predittiva della correlazione tra compositi replicati con quella effettivamente osservata nei dati:
+
+```{r}
+#| label: fig-trait-method-ppc-revision
+#| fig-cap: "Controllo predittivo sulla correlazione tra compositi. La linea tratteggiata rappresenta la correlazione osservata."
+
+r_composite_rep <- as_draws_df(
+  fit_tm$draws("r_composite_rep")
+) |>
+  dplyr::pull(r_composite_rep)
+
+tibble(r_composite_rep) |>
+  ggplot(aes(r_composite_rep)) +
+  geom_histogram(bins = 40, alpha = 0.75) +
+  geom_vline(
+    xintercept = r_observed,
+    linetype = 2,
+    linewidth = 0.9
+  ) +
+  labs(
+    x = "Correlazione tra compositi nelle repliche",
+    y = "Frequenza"
+  )
+```
+
+Se il valore osservato cade in una regione centrale della distribuzione predittiva, il modello è compatibile con questa specifica proprietà dei dati. Un controllo positivo su una singola statistica non convalida l’intero modello; è necessario estendere l’analisi ad altre caratteristiche rilevanti, come le varianze e le covarianze tra indicatori, le distribuzioni marginali e le relazioni condizionate.
+
+È importante infine ricordare che il fattore $M$, anche quando ben identificato, non costituisce di per sé una prova dell’esistenza di uno specifico meccanismo psicologico — ad esempio acquiescenza o desiderabilità sociale. L’etichetta «metodo» descrive una componente comune attribuita dal modello; la sua interpretazione sostantiva richiede informazioni aggiuntive, come la manipolazione delle condizioni di somministrazione, l’uso di metodi di misura differenti o la presenza di validatori esterni.
+
+
+
+## Identificazione e analisi di sensibilità
+
+I modelli di misura rendono esplicite assunzioni che una regressione ingenua lascia implicite, ma non eliminano il problema dell'informazione disponibile. Con una sola misura per persona, la variabilità del costrutto e quella dell'errore possono essere difficili da separare. Con pochi indicatori, tratto e metodo possono produrre conseguenze osservabili molto simili. L'identificazione dipende quindi dal disegno: misure replicate, indicatori multipli, metodi differenti, dati di calibrazione e vincoli sostantivi sono spesso più importanti dell'algoritmo utilizzato.
+
+Quando una componente, come la deviazione standard dell'errore di misura, proviene da uno studio esterno, non dovrebbe essere trattata automaticamente come nota senza incertezza. Una strategia semplice consiste nel ripetere l'analisi per valori plausibili oppure nell'assegnare un prior informato da dati di calibrazione. Se la conclusione cambia sostanzialmente entro un intervallo realistico, questa dipendenza deve diventare parte del risultato.
+
+Anche i prior svolgono un ruolo più forte nei modelli debolmente identificati. La loro influenza va esaminata con simulazioni predittive a priori, recupero dei parametri e analisi di sensibilità. Un posterior stretto non è rassicurante se la precisione deriva principalmente da vincoli arbitrari.
+
+## Errori frequenti
+
+- Interpretare l'affidabilità come una proprietà nota e priva di incertezza.
+- Generalizzare l'attenuazione verso zero a ogni forma di errore di misura.
+- Correggere una correlazione senza verificare l'indipendenza degli errori.
+- Considerare alfa o omega come misure pure del tratto quando gli item condividono il metodo.
+- Aggiungere fattori latenti senza un disegno che consenta di distinguerli.
+- Attribuire un significato psicologico al fattore metodo soltanto in base al nome assegnato.
+
+## Esercizi
+
+### 1. Intensità dell'attenuazione
+
+Ripeti la simulazione dell'errore di misurazione usando tre valori di `sigma_meas`. Confronta l'affidabilità teorica, la pendenza ingenua e la pendenza strutturale recuperata dal modello latente.
+
+### 2. Incertezza sull'errore assunto
+
+Adatta il modello del predittore latente usando tre valori plausibili di `sigma_meas`. Rappresenta come cambia la distribuzione a posteriori di `beta`.
+
+### 3. Errore nell'outcome
+
+Simula un errore classico indipendente nell'outcome e confrontane le conseguenze con quelle prodotte dall'errore nel predittore. Spiega perché aumenta la dispersione senza generare la stessa attenuazione sistematica.
+
+### 4. Metodo condiviso
+
+Ripeti la simulazione tratto-metodo riducendo progressivamente la deviazione standard del metodo. Confronta la correlazione osservata, la correzione di Spearman e la correlazione latente vera.
+
+### 5. Identificazione
+
+Modifica il modello tratto-metodo liberando uno o più loadings. Valuta il comportamento della diagnostica e la sensibilità ai prior. Discuti quali dati aggiuntivi renderebbero il modello più informativo.
+
+## Riflessioni conclusive {.unnumbered .unlisted}
+
+L'errore di misurazione e la varianza di metodo mostrano perché l'affidabilità non può essere trattata come una correzione puramente tecnica. Sotto il modello classico, l'errore indipendente nel predittore attenua la relazione osservata; quando gli indicatori condividono un metodo, la covarianza può invece aumentare. La direzione della distorsione dipende quindi dal processo generativo della misura.
+
+L'approccio bayesiano consente di rappresentare separatamente costrutto, relazione strutturale e processo di osservazione, propagando l'incertezza tra i diversi livelli. Questo vantaggio non elimina tuttavia i limiti del disegno. La possibilità di distinguere tratto, metodo ed errore richiede indicatori, repliche o informazioni esterne sufficienti. In loro assenza, l'analisi di sensibilità e una conclusione prudente sono preferibili a una scomposizione apparentemente precisa ma sostenuta soprattutto dai vincoli del modello.
+
+Il messaggio generale coincide con quello del @sec-model-misspecification. La revisione non consiste nell'applicare una formula correttiva dopo l'analisi, ma nel rendere più esplicita la storia generativa che collega il costrutto al dato osservato.
+
+::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+
+```{r}
+sessionInfo()
+```
+:::
+
+## Bibliografia {.unnumbered .unlisted}

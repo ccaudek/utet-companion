@@ -1,8 +1,8 @@
 # Più gruppi: medie di cella, contrasti e ANOVA {#sec-anova1via}
 
-Il confronto tra due gruppi può essere esteso in modo del tutto naturale a disegni sperimentali o osservazionali che prevedono tre o più condizioni, come nel caso della valutazione di trattamenti multipli, di fasce d'età differenti, di contesti scolastici eterogenei o di diversi livelli di esposizione a un fattore. Nella statistica classica, l'analisi di questi scenari viene tradizionalmente affidata alla procedura dell'analisi della varianza (ANOVA) a una via.
+Il confronto tra due gruppi può essere esteso in modo naturale a disegni sperimentali o osservazionali che prevedono tre o più condizioni, come nel caso della valutazione di trattamenti multipli, di fasce d'età differenti, di contesti scolastici eterogenei o di diversi livelli di esposizione a un fattore. Nella statistica classica, l'analisi di questi scenari viene tradizionalmente affidata alla procedura dell'analisi della varianza (ANOVA) a una via.
 
-Dal punto di vista della modellistica statistica, questo passaggio non introduce una nuova classe di tecniche: formalmente, cambia solo il numero di livelli che compongono il predittore categoriale (o *fattore*). Il framework del modello lineare ci permette quindi di superare l'approccio restrittivo dei test dell'ipotesi nulla e di formulare domande di ricerca più ricche e informative rispetto alla generica domanda omnibus della statistica classica, ovvero: "Le medie dei gruppi sono tutte uguali tra loro?".
+Dal punto di vista della modellistica statistica, questo passaggio non introduce una nuova classe di tecniche: formalmente, cambia solo il numero di livelli che compongono il predittore categoriale (o *fattore*). Il modello lineare consente inoltre di formulare domande di ricerca più informative rispetto alla generica domanda omnibus della statistica classica: "Le medie dei gruppi sono tutte uguali tra loro?".
 
 In questo capitolo applicheremo l’inferenza bayesiana al caso di predittori politomici, ovvero con più di due livelli, concentrandoci sulle quantità di effettivo interesse scientifico: la stima della distribuzione a posteriori dei parametri di posizione per ciascun gruppo e la valutazione della loro plausibilità; la specificazione e la verifica di contrasti pianificati, definiti sulla base di ipotesi teoriche e non di esplorazioni post-hoc; la quantificazione dell’ampiezza delle differenze, sia nella scala metrica originale sia in forma standardizzata; la propagazione esplicita e coerente dell’incertezza associata a ciascun confronto; e, infine, la valutazione probabilistica della plausibilità che i contrasti superino una soglia di rilevanza pratica stabilita a priori.
 
@@ -56,17 +56,17 @@ set.seed(123)
 
 ## Dalla domanda scientifica alle quantità di interesse
 
-Per introdurre la formalizzazione dei contrasti pianificati, consideriamo un disegno sperimentale simulato in cui si confrontano tre condizioni indipendenti: un gruppo di controllo e due protocolli di psicoterapia (Terapia 1 e Terapia 2). La variabile dipendente è un punteggio continuo di depressione, con valori più elevati che indicano maggiore sintomatologia. Supponiamo che gli interrogativi clinici di interesse si riducano a due domande precise:
+Per introdurre la formalizzazione dei contrasti pianificati, consideriamo un disegno sperimentale simulato in cui si confrontano tre condizioni indipendenti: un gruppo di controllo e due protocolli di psicoterapia (Terapia 1 e Terapia 2). La variabile dipendente è un punteggio continuo di depressione, con valori più elevati che indicano una maggiore sintomatologia. Supponiamo che gli interrogativi clinici di interesse si riducano a due domande:
 
 > **Quesito 1:** In media, i due trattamenti determinano una riduzione dei sintomi depressivi rispetto al gruppo di controllo?
 
 > **Quesito 2:** I due protocolli differiscono tra loro in termini clinicamente rilevanti?
 
-Queste domande definiscono una struttura di *contrasti pianificati*, ovvero confronti specificati prima dell'analisi sulla base di ipotesi teoriche. Specificare in anticipo i confronti di interesse consente di evitare un'analisi esplorativa di tutte le possibili differenze a coppie, riducendo il rischio di falsi positivi e concentrando l'inferenza sulle sole domande rilevanti.
+Queste domande definiscono due *contrasti pianificati*, ovvero confronti specificati prima di aver visto i dati. Specificare in anticipo i confronti di interesse consente di evitare un'analisi esplorativa di tutte le possibili differenze a coppie, riducendo il rischio di falsi positivi e concentrando l'inferenza sulle sole domande rilevanti.
 
 Siano $\mu_C$, $\mu_{P1}$ e $\mu_{P2}$ le medie condizionate dell’esito nei tre gruppi — controllo, Terapia 1 e Terapia 2 rispettivamente. I due interrogativi clinici si traducono nelle seguenti quantità sostantive di interesse, o *estimands*.
 
-Il primo contrasto confronta il gruppo di controllo con la media dei due trattamenti attivi:
+Il primo contrasto confronta il gruppo di controllo con la media dei due trattamenti:
 
 $$
 \Delta_{C:T} = \mu_C - \frac{\mu_{P1} + \mu_{P2}}{2}
@@ -82,13 +82,9 @@ $$ {#eq-anova-therapy-contrast}
 
 Un valore positivo di $\Delta_{P1:P2}$ segnala che il secondo protocollo è associato a un punteggio medio di depressione più basso — e quindi a una maggiore efficacia — rispetto al primo.
 
-::: {.callout-important title="L'estimand precede la codifica algebrica"}
-La scelta della categoria di riferimento all'interno del software modifica la designazione dei coefficienti nel tabellato dell'output, ma non modifica matematicamente le medie di cella e i valori dei contrasti definiti nelle equazioni (@eq-anova-control-therapies) e (@eq-anova-therapy-contrast). La definizione rigorosa delle quantità scientifiche di interesse deve sempre precedere la scelta della parametrizzazione algebrica più efficiente per il calcolo.
-:::
-
 ## Simulazione di un disegno sperimentale a tre vie
 
-Per esaminare il comportamento del modello, generiamo un dataset sintetico bilanciato che prevede trenta osservazioni per ciascun braccio sperimentale. I parametri generativi (*true values*) sono impostati in modo da riflettere un gradiente clinico progressivo di attenuazione sintomatologica dal controllo verso la seconda linea di terapia, preservando una cospicua quota di sovrapposizione stocastica tra i punteggi dei singoli soggetti:
+Per esaminare il comportamento del modello, generiamo un dataset simulato bilanciato con trenta osservazioni per ciascuna condizione sperimentale. I valori veri sono scelti in modo da produrre una riduzione graduale dei sintomi dal gruppo di controllo alla seconda terapia, ma mantenendo una variabilità sufficiente perché i punteggi dei singoli partecipanti si sovrappongano tra i gruppi. In questo modo, l'effetto medio è distinguibile, ma l'incertezza rimane una componente rilevante del problema.
 
 ```{r}
 #| label: simulate-anova-data
@@ -144,60 +140,62 @@ anova_data |>
   )
 ```
 
-> **Valutazione metodologica:** sebbene l'evidenza descrittiva delinei visivamente una progressione discendente nei punteggi mediani di depressione, l'analisi puramente esplorativa dei dati campionari non consente di trarre conclusioni inferenziali stabili. Tale analisi non quantifica l'incertezza associata alle stime campionarie e non fornisce elementi di natura probabilistica per stabilire se le discrepanze osservate abbiano una magnitudo tale da giustificare una reale rilevanza in termini di efficacia clinica.
+> **Valutazione metodologica:** i grafici suggeriscono una riduzione dei punteggi di depressione dal controllo verso la seconda terapia. Tuttavia, questa evidenza descrittiva non è sufficiente per trarre conclusioni inferenziali: non quantifica l'incertezza delle stime campionarie e non fornisce una misura probabilistica della rilevanza clinica delle differenze osservate. Per stabilire se le variazioni siano sostanziali e non solo visibili, occorre un'analisi che espliciti l'incertezza e valuti l'ampiezza degli effetti rispetto a una soglia di interesse pratico.
 
 ## Un unico modello, diverse parametrizzazioni algebriche
 
-La presenza di un predittore politomico — ovvero una variabile categoriale con più di due livelli — richiede di tradurre l’informazione qualitativa in una forma numerica compatibile con la struttura algebrica del modello lineare. Questa operazione può essere realizzata mediante diverse strategie di codifica, tra loro matematicamente equivalenti ma diverse per interpretazione dei coefficienti e per la loro immediatezza rispetto alle domande di ricerca.
+Un predittore categoriale a più di due livelli, o politomico, non può essere inserito direttamente in un modello lineare così com'è: occorre tradurre i suoi livelli in una rappresentazione numerica. Questa traduzione si realizza attraverso strategie di codifica diverse, matematicamente equivalenti ma non identiche nell'interpretazione dei coefficienti. La scelta della codifica influisce sulla forma delle quantità prodotte in output, ma non sul valore delle medie di gruppo né sulla possibilità di formulare contrasti sostantivi.
 
 ### 1. Codifica Dummy con Categoria di Riferimento (*Treatment Coding*)
 
-Una delle codifiche più diffuse è il trattamento a categoria di riferimento (*treatment coding* o *dummy coding*). In presenza di un fattore a tre livelli, la parametrizzazione standard con intercetta introduce due variabili indicatrici binarie. Se si assume come livello di riferimento il gruppo di controllo, il modello assume la forma:
+Una codifica molto diffusa è il **trattamento a categoria di riferimento** (*treatment coding*, o *dummy coding*): i livelli di un fattore vengono rappresentati da variabili binarie, con un livello scelto come riferimento. Con un fattore a tre livelli e ponendo il controllo come riferimento, si generano due variabili indicatrici, e il modello lineare si scrive come:
 
 $$
-\begin{aligned} 
-y_i &\sim \operatorname{Normal}(\mu_i, \sigma) \\ \mu_i &= \alpha + \gamma_1 D_{i,\text{P1}} + \gamma_2 D_{i,\text{P2}} 
+\begin{aligned}
+y_i &\sim \operatorname{Normal}(\mu_i, \sigma) \\
+\mu_i &= \alpha + \gamma_1 D_{i,\text{P1}} + \gamma_2 D_{i,\text{P2}}
 \end{aligned}
-$$ {#eq-anova-treatment-coding}
-dove $D_{i,\text{P1}}$ e $D_{i,\text{P2}}$ valgono 1 se l’osservazione appartiene rispettivamente alla Terapia 1 o alla Terapia 2, e 0 altrimenti. La matrice del disegno che ne deriva ha la seguente struttura:
+$$
+
+dove $D_{i,\text{P1}}$ e $D_{i,\text{P2}}$ assumono valore 1 se l’osservazione $i$ appartiene rispettivamente alla Terapia 1 o alla Terapia 2, e 0 altrimenti.
+
+La matrice disegno che ne deriva ha le seguenti righe uniche, che mostrano chiaramente la struttura di codifica:
 
 ```{r}
 #| label: anova-treatment-design-matrix
-
 model.matrix(~ condizione, data = anova_data) |>
   as.data.frame() |>
   distinct()
 ```
 
-In questa parametrizzazione, i coefficienti sono direttamente riconducibili alle medie condizionate dei gruppi: l’intercetta $\alpha$ coincide con la media del gruppo di controllo ($\mu_C$), mentre i coefficienti $\gamma_1$ e $\gamma_2$ rappresentano rispettivamente gli scostamenti medi della Terapia 1 e della Terapia 2 rispetto al controllo:
+In questa parametrizzazione, l’intercetta $\alpha$ coincide con la media del gruppo di controllo ($\mu_C$); i coefficienti $\gamma_1$ e $\gamma_2$ rappresentano rispettivamente la differenza tra la Terapia 1 e il controllo, e tra la Terapia 2 e il controllo:
 
 $$
 \alpha = \mu_C, \qquad \gamma_1 = \mu_{P1} - \mu_C, \qquad \gamma_2 = \mu_{P2} - \mu_C.
 $$
 
-Questa codifica è particolarmente utile quando l’interesse è confrontare ciascun trattamento con il controllo. Tuttavia, non fornisce in forma esplicita il contrasto tra i due trattamenti attivi ($\Delta_{P1:P2} = \mu_{P1} - \mu_{P2}$), che deve essere ottenuto mediante una combinazione lineare dei coefficienti stimati. 
+Questa codifica è particolarmente utile quando l’interesse è confrontare ciascun trattamento con il controllo. Tuttavia, non fornisce in modo esplicito il contrasto tra i due trattamenti attivi ($\Delta_{P1:P2} = \mu_{P1} - \mu_{P2}$); per ottenerlo è necessario combinare linearmente i coefficienti stimati.
 
 ### 2. Parametrizzazione a Medie di Cella (*Cell-Means Coding*)
 
-Per ovviare alla dipendenza da una categoria di riferimento, è possibile adottare la parametrizzazione a **medie di cella** (*cell-means coding*), rimuovendo esplicitamente l'intercetta globale mediante l'operatore `0` nella formula. In questo modo, R genera una variabile indicatrice separata per ciascun livello del fattore:
+Un'alternativa alla codifica con categoria di riferimento è rappresentata dalla parametrizzazione a **medie di cella** (*cell-means coding*). Per ottenerla, si rimuove l'intercetta globale mediante l'operatore `0` nella formula; in questo modo R genera una variabile indicatrice separata per ciascun livello del fattore:
 
 ```{r}
 #| label: anova-cell-means-design-matrix
-
 model.matrix(~ 0 + condizione, data = anova_data) |>
   as.data.frame() |>
   distinct()
 ```
 
-Il predittore lineare viene quindi espresso come combinazione lineare delle singole medie di gruppo:
+Il predittore lineare è quindi espresso come combinazione lineare delle medie di gruppo:
 
 $$
 \mu_i = \mu_C \, I_{i,C} + \mu_{P1} \, I_{i,P1} + \mu_{P2} \, I_{i,P2}.
 $$
 
-In questa parametrizzazione, i coefficienti stimati coincidono direttamente con le medie condizionate attese per ciascuna condizione: non si tratta più di scostamenti da un livello di riferimento, ma di stime puntuali dei parametri di posizione di ogni cella del disegno. Questo rende la lettura dei coefficienti più immediata e svincolata dalla scelta di una categoria baseline, facilitando la costruzione di contrasti arbitrari.
+I coefficienti stimati coincidono direttamente con le medie condizionate di ciascuna condizione: non esprimono più scostamenti da un livello di riferimento, ma rappresentano i valori attesi dell’outcome in ogni cella del disegno. Ne consegue una lettura più immediata dei coefficienti, svincolata dalla scelta di una categoria baseline e più flessibile per la costruzione di contrasti arbitrari.
 
-Come osservato in precedenza, le due parametrizzazioni — quella con intercetta e dummy, e quella a medie di cella — sono algebricamente equivalenti: esse generano lo stesso sottospazio lineare, producono identici valori adattati e conducono alla medesima distribuzione predittiva, a condizione che le distribuzioni a priori siano coerenti con la diversa parametrizzazione. La differenza è quindi puramente geometrica: il sistema di coordinate impiegato per descrivere lo spazio dei parametri cambia, ma la struttura sottostante del modello rimane invariata. La scelta tra le due codifiche va pertanto orientata in base alla chiarezza interpretativa e alla facilità con cui è possibile derivare le quantità sostantive di interesse.
+Le due parametrizzazioni — con intercetta e dummy, e a medie di cella — sono algebricamente equivalenti: generano lo stesso sottospazio lineare, producono identici valori adattati e portano alla stessa distribuzione predittiva, purché le distribuzioni a priori siano coerenti con la parametrizzazione adottata. La differenza è quindi solo geometrica: cambia il sistema di coordinate, non la struttura del modello. La scelta tra le due codifiche va orientata in base alla chiarezza interpretativa e alla facilità con cui è possibile derivare le quantità sostantive di interesse.
 
 ## Specificare il modello bayesiano
 
@@ -239,7 +237,7 @@ anova_priors <- c(
 )
 ```
 
-Eseguiamo quindi una simulazione predittiva a priori (*prior predictive check*) estraendo campioni esclusivamente dalle distribuzioni probabilistiche definite, senza considerarei dati osservati:
+Eseguiamo quindi una simulazione predittiva a priori (*prior predictive check*) estraendo campioni esclusivamente dalle distribuzioni probabilistiche definite, senza considerare i dati osservati:
 
 ```{r}
 #| label: fit-anova-prior-only
@@ -259,7 +257,7 @@ anova_prior_fit <- brm(
 )
 ```
 
-Visualizziamo il profilo delle densità simulate generate dal modello a priori per valutarne le implicazioni sulla scala osservabile:
+Il grafico seguente mostra le densità simulate dal modello a priori, sovrapposte alla distribuzione osservata dei dati:
 
 ```{r}
 #| label: fig-anova-prior-predictive
@@ -274,11 +272,11 @@ pp_check(
 )
 ```
 
-> **Valutazione diagnostica:** è importante ricordare che questo controllo non ha l'obiettivo di anticipare o riprodurre fedelmente la morfologia esatta dei dati empirici. La sua funzione è puramente regolativa: dimostrare che l'architettura probabilistica del modello sia in grado di generare punteggi compatibili con il dominio sostantivo dello strumento clinico, escludendo la generazione sistematica di valori biologicamente impossibili (ad esempio, punteggi di depressione negativi o oltre i limiti teorici del test) o caratterizzati da una dispersione palesemente irrealistica.
+> **Valutazione diagnostica:** questo controllo non ha lo scopo di riprodurre fedelmente i dati osservati. La sua funzione è diagnostica: verificare che le distribuzioni a priori siano in grado di generare valori plausibili per il fenomeno in esame — ad esempio, punteggi di depressione compresi nell'intervallo teoricamente possibile e con una variabilità non manifestamente irrealistica. Se così non fosse, occorrerebbe rivedere i prior prima di procedere con l'inferenza.
 
 ## Stima del modello e verifiche computazionali
 
-Procediamo al condizionamento del modello incorporando l'evidenza empirica racchiusa nei dati simulati. Configurando il parametro `sample_prior = "yes"`, il campionatore Stan conserverà anche i campioni relativi alle distribuzioni a priori, consentendoci eventuali confronti diretti tra le distribuzioni *prior* e *posterior*:
+Per procedere all'inferenza, adattiamo il modello ai dati simulati, includendo l'opzione `sample_prior = "yes"` in modo che Stan conservi anche i campioni tratti dalle distribuzioni a priori. Ciò consentirà, se necessario, di confrontare le distribuzioni *prior* e *posterior* per valutare l'impatto dei dati sulle stime.
 
 ```{r}
 #| label: fit-anova-cell-means
@@ -298,7 +296,7 @@ anova_fit <- brm(
 )
 ```
 
-Estraiamo le stime marginali e gli indici di sintesi della distribuzione a posteriori:
+Estraiamo ora le stime marginali e gli indici di sintesi della distribuzione a posteriori:
 
 ```{r}
 #| label: summarize-anova-fit
@@ -306,11 +304,11 @@ Estraiamo le stime marginali e gli indici di sintesi della distribuzione a poste
 summary(anova_fit)
 ```
 
-Sotto questa specifica configurazione a medie di cella, i coefficienti geometrici `condizionecontrollo`, `condizionepsicoterapia1` e `condizionepsicoterapia2` stimano in modo diretto e indipendente i tre parametri di posizione $\mu_C$, $\mu_{P1}$ e $\mu_{P2}$. Il parametro globale di scala `sigma` ($\sigma$) quantifica invece la variabilità residua inter-individuale, assunta come omogenea e comune a tutte e tre le condizioni sperimentali.
+Nella parametrizzazione a medie di cella qui adottata, i coefficienti `condizionecontrollo`, `condizionepsicoterapia1` e `condizionepsicoterapia2` corrispondono direttamente alle medie condizionate dei tre gruppi, $\mu_C$, $\mu_{P1}$ e $\mu_{P2}$. Il parametro `sigma` rappresenta invece la deviazione standard residua, assunta costante tra le condizioni e comune a tutti i gruppi.
 
 ### Diagnostica algoritmica del campionamento
 
-Per convalidare la stabilità numerica del campionamento MCMC (*Markov Chain Monte Carlo*), visualizziamo l'andamento temporale delle catene stocate (*trace plots*) per tutti i parametri liberi del modello:
+Per verificare la stabilità numerica del campionamento MCMC, esaminiamo i *trace plot* delle catene per tutti i parametri liberi del modello:
 
 ```{r}
 #| label: fig-anova-trace
@@ -329,17 +327,17 @@ mcmc_trace(
 )
 ```
 
-Oltre alla valutazione puramente visiva delle traiettorie, la rigorosa verifica dell'affidabilità computazionale impone il controllo sistematico degli indici quantitativi del campionatore:
+L'ispezione visiva va integrata con il controllo sistematico degli indicatori quantitativi di convergenza:
 
-* Il fattore di riduzione della varianza $\widehat{R}$, che deve presentare valori strettamente inferiori a $1.01$ per ogni parametro;
-* la dimensione campionaria effettiva (*Effective Sample Size*, sia *bulk* che *tail*), per garantire un numero di draws indipendenti sufficiente a stabilizzare le code della distribuzione;
-* l'assenza assoluta di transizioni divergenti o di messaggi di allerta legati al superamento della massima profondità dell'albero di esplorazione (*max_treedepth*).
+- il fattore $\widehat{R}$, che deve risultare inferiore a $1.01$ per tutti i parametri;
+- la dimensione campionaria effettiva (*Effective Sample Size*), sia *bulk* che *tail*, per garantire un numero di draw sostanzialmente indipendenti;
+- l'assenza di transizioni divergenti e di superamenti della massima profondità dell'albero (*max_treedepth*).
 
-> **Nota metodologica:** il superamento di queste verifiche attesta esclusivamente che l'algoritmo basato sulle equazioni di Stan ha esplorato la geometria della distribuzione a posteriori in modo matematicamente accurato e privo di patologie numeriche. Tali diagnostiche non certificano in alcun modo la validità scientifica del modello, né l'adeguatezza biologica della verosimiglianza normale rispetto al fenomeno clinico osservato.
+Il superamento di queste verifiche attesta che l'algoritmo ha esplorato in modo affidabile la distribuzione a posteriori, ma non costituisce di per sé una certificazione della validità scientifica del modello, né dell'adeguatezza della verosimiglianza normale per il fenomeno in esame.
 
 ## Controllare l'adeguatezza predittiva
 
-Per verificare se la struttura a tre medie di cella catturi fedelmente la morfologia dei dati reali, eseguiamo un controllo predittivo a posteriori (*PPC*) globale sulla distribuzione marginale:
+Per valutare se il modello a tre medie di cella riproduca adeguatamente la struttura dei dati osservati, si esegue un controllo predittivo a posteriori (*PPC*) sulla distribuzione marginale complessiva:
 
 ```{r}
 #| label: fig-anova-posterior-predictive
@@ -350,7 +348,7 @@ Per verificare se la struttura a tre medie di cella catturi fedelmente la morfol
 pp_check(anova_fit, type = "dens_overlay", ndraws = 50)
 ```
 
-Un allineamento soddisfacente sull'intera densità aggregata può tuttavia mascherare anomalie locali o asimmetrie sistematiche all'interno dei singoli bracci sperimentali. È quindi utile disaggregare il controllo predittivo, confrontando le statistiche campionarie reali con quelle generate dalle distribuzioni replicate ($y^{\text{rep}}$) separatamente per ciascuna condizione:
+Tuttavia, un buon allineamento sulla distribuzione aggregata può occultare discrepanze locali o asimmetrie sistematiche all'interno dei singoli gruppi. Per questo motivo, è utile disaggregare il controllo predittivo, confrontando le statistiche campionarie osservate con quelle generate dalle repliche predittive ($y^{\text{rep}}$) separatamente per ciascuna condizione:
 
 ```{r}
 #| label: anova-groupwise-ppc
@@ -391,7 +389,7 @@ replicated_group_stats <- bind_rows(lapply(
 observed_group_stats
 ```
 
-Visualizziamo la distribuzione delle medie replicate per ciascun braccio del disegno, ponendole a confronto diretto con il rispettivo valore puntuale osservato nel campione:
+Il grafico seguente mostra, per ciascun gruppo, la distribuzione delle medie replicate, con la media osservata indicata da una linea verticale:
 
 ```{r}
 #| label: fig-anova-groupwise-mean-ppc
@@ -416,11 +414,11 @@ replicated_group_stats |>
   )
 ```
 
-> **Diagnostica sui sottogruppi:** l'analisi disaggregata permette di validare la capacità predittiva del modello nei singoli nodi del disegno sperimentale. Se la media osservata (linea tratteggiata) si colloca stabilmente entro le zone a elevata densità della rispettiva distribuzione replicata, l'architettura lineare si dimostra accurata nel calibrare i parametri di posizione. Resta tuttavia inteso che la corretta sintonizzazione delle medie non garantisce automaticamente la validità dell'assunzione di omoschedasticità: un'ispezione analoga effettuata sulla variabilità replicata (`sd_rep`) è raccomandata per confermare la plausibilità di un parametro $\sigma$ globale e comune.
+Questo controllo disaggregato consente di valutare se il modello sia in grado di riprodurre le medie osservate in ciascuna condizione. Se le medie osservate cadono stabilmente nelle regioni ad alta densità delle distribuzioni replicate, la specificazione del predittore lineare risulta compatibile con i dati. La corretta riproduzione delle medie non implica tuttavia che l'assunzione di omoschedasticità — ovvero una varianza residua comune a tutti i gruppi — sia automaticamente valida. Per una verifica più completa, è opportuno estendere il controllo predittivo anche alla variabilità replicata.
 
 ## Dalle medie ai contrasti pianificati
 
-Una volta ottenuta la distribuzione congiunta a posteriori dei parametri del modello, il calcolo dei contrasti di interesse non richiede l'adozione di formule correttive o test aggiuntivi: è sufficiente manipolare i campioni *draw-by-draw*. Per preservare la struttura formale dell'oggetto ed evitare la coercizione in array nativi grezzi, utilizziamo le funzioni specializzate del pacchetto `posterior`:
+Se la parametrizzazione è scelta in modo che i coefficienti del modello corrispondano già ai contrasti di interesse, la stima di questi ultimi è immediata. L’inferenza si fonda sulla distribuzione a posteriori, che quantifica l’incertezza sulle differenze tra le medie e consente di rispondere direttamente ai quesiti scientifici, ad esempio calcolando la probabilità che un contrasto superi una certa soglia. Il codice seguente mostra come derivare i due contrasti pianificati a partire dalle medie di cella:
 
 ```{r}
 #| label: derive-anova-contrasts
@@ -447,21 +445,20 @@ subset_contrasts <- subset_draws(
 summarise_draws(subset_contrasts)
 ```
 
-Ogni contrasto così calcolato si configura come una distribuzione a posteriori completa. La dispersione e gli intervalli di credibilità associati a queste combinazioni lineari incorporano in modo matematicamente rigoroso sia l'incertezza stimata per le singole medie coinvolte, sia le loro correlazioni all'interno della distribuzione congiunta.
+Ogni contrasto è una distribuzione a posteriori completa, che riflette l’incertezza congiunta delle quantità coinvolte. Per un’interfaccia più dichiarativa si può usare il pacchetto `emmeans`; per maggiore flessibilità e trasparenza, il controllo diretto sui *draw* rimane lo strumento più generale.
 
 ### Specificazione dei contrasti tramite il pacchetto `emmeans`
 
-L'algebra sui *draws* manuali descritta in precedenza può essere formalizzata in modo elegante attraverso l'integrazione con l'ecosistema `emmeans` (*Estimated Marginal Means*). Questa soluzione si rivela particolarmente vantaggiosa in contesti modellistici complessi, caratterizzati da più predittori simultanei o da strutture di interazione di ordine superiore:
+Il pacchetto `emmeans` (*estimated marginal means*) offre un'interfaccia dichiarativa per formalizzare i contrasti definiti manualmente. Questo approccio risulta particolarmente utile in modelli complessi, con più predittori o interazioni, dove il calcolo diretto sui draw diventa meno immediato. Il codice seguente mostra come calcolare le medie marginali attese per il fattore `condizione`:
 
 ```{r}
 #| label: anova-emmeans
 
-# Calcolo delle medie marginali attese per il fattore specificato
 anova_emmeans <- emmeans(anova_fit, specs = "condizione")
 anova_emmeans
 ```
 
-Definiamo ora la matrice dei pesi associata ai vettori di contrasto, traducendo esattamente i coefficienti formali definiti in precedenza nelle equazioni (@eq-anova-control-therapies) e (@eq-anova-therapy-contrast):
+Per riprodurre i contrasti pianificati definiti in precedenza, si specifica una lista di vettori di pesi:
 
 ```{r}
 #| label: anova-planned-contrasts-emmeans
@@ -479,31 +476,26 @@ planned_contrasts <- list(
   )
 )
 
-# Estrazione dei contrasti bayesiani pianificati
 contrast(anova_emmeans, method = planned_contrasts)
 ```
 
-La somma algebrica dei pesi (*weights*) assegnati a ciascun vettore è rigorosamente pari a zero ($\sum c_j = 0$). Questa proprietà strutturale garantisce che il contrasto risulti del tutto invariante rispetto al livello generale medio dello strumento, isolando esclusivamente lo scostamento differenziale tra i blocchi di celle considerati.
-
-::: {.callout-note title="Priorità dei contrasti pianificati sui confronti esaustivi"}
-La funzione `pairs(anova_emmeans)` consente di estrarre in modo del tutto automatico tutti i possibili confronti a coppie (*pairwise comparisons*). La disponibilità computazionale di un comando non costituisce tuttavia una licenza metodologica. Quando i quesiti della ricerca sono ancorati a precise ipotesi di partenza, i contrasti pianificati riflettono in modo speculare la domanda scientifica originale ed evitano fenomeni di *data dredging* (esplorazione a posteriori mirata alla sola selezione degli effetti statisticamente più marcati).
-:::
+In ciascun vettore, la somma dei pesi è pari a zero: ciò garantisce che il contrasto isoli esclusivamente la differenza tra i gruppi considerati, senza essere influenzato dal livello medio generale. I confronti esaustivi a coppie sono disponibili tramite `pairs(anova_emmeans)`, ma vanno utilizzati solo quando l'esplorazione sistematica è giustificata; in presenza di ipotesi specifiche, i contrasti pianificati rappresentano la strategia più coerente con la domanda di ricerca.
 
 ## Probabilità sostantive e rilevanza clinica dei contrasti
 
-Per superare la logica dicotomica dei test classici, integriamo l'analisi con una soglia di rilevanza pratica. Supponiamo che nel dominio d'indagine della scala CES-D una variazione inferiore a tre punti sia giudicata priva di impatto reale sul benessere del paziente. Definiamo pertanto la nostra *SESOI* (*Smallest Effect Size of Interest*) come:
+Per superare la logica binaria dei test di significatività, introduciamo una soglia di rilevanza pratica. Supponiamo che, nel dominio della scala CES-D, una variazione inferiore a tre punti sia considerata clinicamente irrilevante. Definiamo quindi la *SESOI* (*Smallest Effect Size of Interest*):
 
-$$\delta_{\min} = 3$$
+$$
+\delta_{\min} = 3
+$$
 
-Per effettuare i calcoli in conformità con le buone pratiche bayesiane ed evitare la coercizione in array nativi grezzi, estraiamo le matrici dei *draws* dalle distribuzioni dei contrasti precedentemente derivate nell'oggetto `subset_contrasts` tramite la funzione dedicata `as.matrix`:
+Per calcolare le probabilità di interesse, estraiamo i draw dei contrasti dall'oggetto `subset_contrasts` sotto forma di matrice:
 
 ```{r}
 #| label: summarize-anova-substantive-probabilities
 
-# Convertiamo l'oggetto draws in una matrice con nomi di colonna
 mat_contrasts <- as_draws_matrix(subset_contrasts)
 
-# Estraiamo i vettori delle variabili di interesse
 ctrl_vs_terapie_d <- mat_contrasts[, "ctrl_vs_terapie"]
 p1_vs_p2_d        <- mat_contrasts[, "p1_vs_p2"]
 
@@ -527,90 +519,44 @@ anova_probabilities <- tibble(
 anova_probabilities
 ```
 
-Questi quattro indici probabilistici rispondono a interrogativi scientifici profondamente distinti. Una combinazione lineare può mostrare una probabilità a posteriori estremamente elevata di essere strettamente superiore a zero, eppure presentare una probabilità trascurabile di superare la soglia di rilevanza pratica $\delta_{\min}$. Analogamente, due protocolli attivi possono evidenziare uno scostamento numerico ben definito senza che la magnitudo di tale distanza risulti sufficientemente ampia e solida da giustificare un cambiamento nelle linee guida della decisione clinica.
+I quattro indici così ottenuti rispondono a domande distinte. Un contrasto può avere un'elevata probabilità di essere positivo, ma una probabilità modesta di superare la soglia di rilevanza pratica; viceversa, due trattamenti possono differire in modo stimabile, ma non in misura sufficiente da orientare una decisione clinica.
 
-::: {.callout-warning title="Indipendenza logica della soglia rispetto alla posterior"}
-La determinazione della *SESOI* deve poggiare esclusivamente su solide considerazioni teoriche, evidenze della letteratura clinica o valutazioni di utilità decisionale definite *a priori*. Stabilire o calibrare l'entità di tale soglia dopo aver preso visione delle distribuzioni a posteriori invaliderebbe il processo inferenziale, trasformando un criterio scientifico oggettivo in un espediente ad hoc modellato sul risultato campionario.
-:::
+La soglia SESOI deve essere definita prima di osservare i dati, sulla base di considerazioni teoriche, evidenze cliniche o valutazioni decisionali. Modificarla dopo aver visto la distribuzione a posteriori comprometterebbe la validità inferenziale, trasformando un criterio sostantivo in un accomodamento ai risultati osservati.
 
 ## Il ruolo della valutazione omnibus nel framework bayesiano
 
-L'interrogativo fondamentale posto dall'ANOVA classica — ovvero l'ipotesi nulla omnibus *"Tutte le medie di gruppo sono identiche"* — funge spesso da indicatore descrittivo estremamente generico, ma si rivela metodologicamente limitato e poco informativo per orientare l'interpretazione clinica o teorica. Nel framework bayesiano, l'esigenza di una sintesi globale può essere soddisfatta definendo metriche dirette sulla distribuzione congiunta. Un esempio efficace è rappresentato dall'ampiezza massima dello scostamento tra i parametri di posizione ($R_\mu$), definito come l'intervallo netto tra la media attesa più elevata e quella più bassa:
+L'ipotesi nulla omnibus dell'ANOVA classica — "tutte le medie di gruppo sono uguali" — fornisce un'informazione molto generica e, nella maggior parte dei contesti applicativi, scarsamente utile per orientare l'interpretazione clinica o teorica. Nell'approccio bayesiano, tuttavia, non siamo vincolati a questo interrogativo. Possiamo definire indicatori sintetici che, sebbene più informativi del test F, restano meno utili dei contrasti pianificati.
 
-$$R_\mu = \max_g(\mu_g) - \min_g(\mu_g)$$
-
-Per derivare questa quantità globale preservando il corretto flusso di lavoro sui campioni a posteriori ed evitando la coercizione in array nativi, applichiamo le funzioni dell'ecosistema `posterior` sull'oggetto `draws_contrasts` precedentemente calcolato:
-
-```r
-#| label: derive-anova-global-range
-library(posterior)
-
-# Estraiamo i draws della posterior per calcolare il range a posteriori
-draws_range <- mutate_draws(
-  draws_contrasts,
-  range_mu = pmax(b_condizionecontrollo, b_condizionepsicoterapia1, b_condizionepsicoterapia2) -
-             pmin(b_condizionecontrollo, b_condizionepsicoterapia1, b_condizionepsicoterapia2)
-)
-
-# Selezioniamo la variabile d'interesse per l'estrazione della matrice
-matrix_range <- as.matrix(draws_range, variable = "range_mu")
-
-# Calcolo degli indici di sintesi omnibus basati sulla posterior e sulla SESOI
-c(
-  P_qualsiasi_differenza_rilevante = mean(matrix_range > SESOI),
-  mediana_intervallo_medie         = median(matrix_range)
-)
-
-```
-
-La metrica $R_\mu$ non isola le specifiche traiettorie di scostamento tra i singoli bracci sperimentali, ma formalizza in termini probabilistici rigorosi il concetto di eterogeneità globale. Essa esprime la massima divergenza sistematica generata dal fattore categoriale sulla scala originaria dell'outcome. Sotto il profilo epistemologico, tuttavia, qualora l'impianto teorico dello studio poggi su precise ipotesi direzionali, la pianificazione e l'analisi dei contrasti specifici rimangono intrinsecamente più informative ed efficienti rispetto a qualsiasi sintesi omnibus.
+Laddove si desideri una sintesi globale, si può calcolare, ad esempio, l'ampiezza massima tra le medie di gruppo ($R_\mu = \max(\mu) - \min(\mu)$) e valutarne la distribuzione a posteriori. Pur fornendo un quadro d'insieme, questa metrica non sostituisce l'analisi dei contrasti specifici, che rimane lo strumento più informativo ed efficiente quando le ipotesi di ricerca sono direzionali e definite a priori.
 
 ## Molteplicità: che cosa cambia e che cosa non cambia
 
-All'aumentare del numero di livelli di un fattore categoriale, il numero dei confronti a coppie potenziali cresce in modo combinatorio. Nell'approccio frequentista tradizionale, questo fenomeno viene inquadrato come un problema di inflazione del tasso di errore di primo tipo della famiglia di test (*Family-Wise Error Rate* o *False Discovery Rate*), a cui si fa fronte tramite procedure di correzione algoritmica dei *p*-value (come gli aggiustamenti di Bonferroni o Tukey).
+All’aumentare del numero di livelli di un fattore categoriale, il numero di confronti a coppie potenziali cresce in modo combinatorio. Nella statistica frequentista, questo problema viene affrontato con correzioni del valore-*p* (Bonferroni, Tukey) per controllare il tasso di errore di primo tipo.
 
-Nel workflow bayesiano non si procede alla dicotomizzazione dei singoli contrasti in decisioni rigide di "accettazione o rifiuto", rendendo superflue le correzioni rituali dei *p*-value. Ciò non significa, tuttavia, che i rischi associati alla molteplicità dei confronti svaniscano automaticamente.
+Nell’approccio bayesiano, non si procede a una dicotomizzazione dei contrasti in termini di significatività, e quindi le correzioni multiple non sono necessarie. Tuttavia, ciò non significa che il problema della molteplicità scompaia. Se il ricercatore esamina molti contrasti e riporta solo quelli più estremi, introduce una **distorsione da selezione** (*selection bias*). Inoltre, con campioni piccoli, i gruppi che per caso risultano più estremi tendono a produrre stime sovrastimate.
 
-Se un ricercatore esamina un numero elevato di combinazioni lineari a posteriori e sceglie di isolare o commentare nel report scientifico esclusivamente i contrasti che mostrano le distribuzioni più estreme o distanti dallo zero, introduce una **distorsione da selezione** (*selection bias*). Inoltre, in presenza di campioni ridotti per cella, le stime puntuali associate ai gruppi che per fluttuazione campionaria si collocano agli estremi tendono a essere sistematicamente sovrastimate.
+Per garantire l’integrità dell’analisi in disegni complessi, è opportuno:
 
-Per garantire l'integrità metodologica dell'analisi in disegni complessi o politomici, rimangono fondamentali tre strategie:
-
-1. **Pre-registrazione e pianificazione:** Definire e vincolare rigidamente a priori i contrasti principali, ancorandoli a precise ipotesi derivanti dalla letteratura o dalla teoria clinica;
-2. **Trasparenza euristica:** Tracciare una linea di demarcazione netta all'interno del report di ricerca tra le analisi *confermative* (i contrasti pianificati in anticipo) e le analisi *esplorative* (i confronti emersi da un'ispezione successiva dei dati);
-3. **Regolarizzazione gerarchica:** Modellare simultaneamente i gruppi mediante una struttura multilivello, qualora le diverse condizioni possano essere teoricamente concepite come unità scambiabili provenienti da un universo comune.
-
-Quest'ultimo approccio introduce il principio del **partial pooling** (condivisione parziale dell'informazione): anziché stimare i parametri di posizione di ciascun gruppo in completo isolamento metrico, un modello gerarchico apprende simultaneamente le caratteristiche della distribuzione da cui i gruppi stessi sono estratti. Questo processo esercita una contrazione (*shrinkage*) delle stime più estreme verso la media globale, riducendo drasticamente il tasso di falsi allarmi e stabilizzando l'inferenza.
-
-::: {.callout-important title="Assenza di parzializzazione delle stime nel modello a medie di cella"}
-È cruciale evidenziare che l'architettura a medie di cella finora implementata in questo capitolo non applica alcuna forma di *partial pooling*. Ciascun braccio sperimentale è associato a un parametro $\mu_g$ distinto, regolato da un *prior* indipendente. Sebbene l'inferenza avvenga in modo simultaneo all'interno dello stesso blocco computazionale, le medie non subiscono alcuna attrazione probabilistica verso una distribuzione comune. L'attivazione dello *shrinkage* gerarchico richiede l'estensione del framework verso un modello formale multilivello, che sarà trattato in dettaglio nei capitoli successivi.
-:::
+1. **Pianificare i contrasti** in anticipo, sulla base di ipotesi teoriche;
+2. **Distinguere** nel report le analisi confermative da quelle esplorative;
+3. **Utilizzare modelli gerarchici** quando i gruppi possono essere considerati come provenienti da una popolazione comune. Questa strategia introduce il *partial pooling* (trattato nel prossimo capitolo), che contrae le stime più estreme verso la media globale, riducendo i falsi allarmi e stabilizzando l’inferenza.
 
 ## Assunzioni del modello ed estensioni metodologiche
 
-L'architettura lineare classica a medie di cella finora esaminata poggia su un nucleo preciso di assunzioni stocastiche:
+Il modello lineare classico a medie di cella poggia su quattro assunzioni stocastiche fondamentali: l’indipendenza condizionale delle osservazioni, la normalità degli errori entro ciascun gruppo, l’omoschedasticità (ovvero una deviazione standard residua $\sigma$ comune a tutte le condizioni) e l’assenza di variabili latenti o covariate omesse in grado di spiegare variazioni sistematiche dell’outcome. Ciascuna di queste assunzioni va verificata attraverso i controlli predittivi a posteriori e, più in generale, alla luce del disegno di ricerca.
 
-* L'indipendenza condizionale delle singole osservazioni dato il predittore lineare;
-* la distribuzione normale dell'errore (o verosimiglianza gaussiana) all'interno di ciascun braccio sperimentale;
-* l'omoschedasticità, ovvero la presenza di una deviazione standard residua ($\sigma$) comune e uniforme per tutte le condizioni;
-* l'assenza di variabili latenti o di covariate omesse in grado di spiegare variazioni sistematiche nell'outcome.
+Quando queste assunzioni risultano eccessivamente restrittive, il framework bayesiano offre estensioni naturali: l’adozione di una verosimiglianza Student-$t$ per distribuzioni con code pesanti o valori estremi; modelli con varianza eterogenea tra gruppi; l’inclusione di covariate e interazioni per controllare variabili di disturbo; e strutture gerarchiche per dati clusterizzati o misure ripetute.
 
-Ciascuna di queste proprietà deve essere attentamente convalidata sia alla luce del disegno di ricerca sia mediante l'uso rigoroso dei controlli predittivi a posteriori. Laddove tali assunzioni risultino eccessivamente restrittive o inadeguate a descrivere il fenomeno, il framework bayesiano consente di estendere il modello originario attraverso diverse soluzioni strutturali:
+A titolo di esempio, nel pacchetto `brms` è possibile rilassare l’assunzione di omoschedasticità modellando esplicitamente il parametro di scala in funzione del fattore categoriale:
 
-* **Verosimiglianza Student-$t$:** Ideale per gestire distribuzioni empiriche caratterizzate da code pesanti o dalla presenza di valori estremi (*outliers*), attenuando la sensibilità delle stime di posizione;
-* **Modelli a eterogeneità di varianza:** Indicati quando i diversi trattamenti o gruppi generano dispersioni sistematicamente differenti nell'outcome;
-* **Inclusione di covariate e interazioni:** Utile per controllare l'effetto di variabili di disturbo continue o categoriali, o per verificare l'esistenza di effetti di moderazione;
-* **Strutture gerarchiche o multilivello:** Necessarie in presenza di cluster naturali (es. pazienti raggruppati in centri clinici) o in disegni a misure ripetute nello stesso soggetto.
-
-Nel pacchetto `brms`, ad esempio, la flessibilità della sintassi consente di superare l'assunzione di omoschedasticità modellando esplicitamente il parametro di scala in funzione del fattore categoriale tramite la funzione `bf()` (*Bayesian Formula*):
-
-```{r}
+```r
 #| label: anova-heteroscedastic-example
 #| eval: false
 
 heteroscedastic_fit <- brm(
   formula = bf(
-    punteggio ~ 0 + condizione, # Modello per la media condizionata
-    sigma     ~ 0 + condizione  # Modello eteroschedastico per la dispersione
+    punteggio ~ 0 + condizione,
+    sigma     ~ 0 + condizione
   ),
   data    = anova_data,
   family  = gaussian(),
@@ -618,33 +564,13 @@ heteroscedastic_fit <- brm(
 )
 ```
 
-Sotto questa specifica formulazione, il software stima un parametro $\sigma$ distinto per ogni braccio sperimentale (sfruttando tipicamente una funzione di legame logaritmica per garantire la positività della scala). È fondamentale sottolineare che questa parametrizzazione non va implementata in modo automatico o rituale: la sua adozione deve essere giustificata da solide ipotesi teoriche o da evidenze diagnostiche emerse dai controlli predittivi disaggregati, al fine di non sovraccaricare il modello con parametri superflui.
+Questa specificazione stima un parametro $\sigma$ distinto per ciascun gruppo (attraverso una funzione di legame logaritmica che garantisce la positività), ma deve essere giustificata da ipotesi teoriche o da evidenze diagnostiche, per evitare un inutile sovraccarico di parametri. Le estensioni qui descritte verranno riprese e approfondite nei capitoli dedicati alla verifica e all’espansione del modello.
 
 ## Conclusioni ed epistemologia del disegno di ricerca
 
-Nel caso studio simulato, l'approccio modellistico basato sul framework bayesiano permette di mappare analiticamente le discrepanze sistemiche tra le tre condizioni sperimentali, propagando in modo rigoroso l'incertezza associata a ciascuna stima. È tuttavia fondamentale ribadire un principio metodologico centrale: l'adozione di un formalismo statistico avanzato non conferisce, da sola, una validità causale alle stime ottenute.
+In questo studio simulato, il modello bayesiano ha consentito di stimare le differenze tra le tre condizioni sperimentali e di quantificarne l’incertezza in modo coerente. Tuttavia, è importante ricordare che la qualità delle inferenze non dipende dalla complessità del modello, ma dal disegno di ricerca che ha generato i dati. Un’analisi statistica, per quanto raffinata, non può trasformare un’associazione osservazionale in un effetto causale.
 
-La transizione da una descrizione puramente associativa a un'interpretazione causale degli *estimand* dipende esclusivamente dall'architettura metodologica del disegno di ricerca e dal controllo delle minacce alla validità interna:
-
-* L'effettiva esecuzione di una procedura di assegnazione rigorosamente randomizzata dei soggetti alle condizioni;
-* il monitoraggio della fedeltà al trattamento (*treatment fidelity*) e dell'aderenza al protocollo clinico;
-* la gestione controllata dei dati mancanti (*missing data*) e dei tassi di abbandono (*attrition*);
-* l'assenza di fenomeni di contaminazione o di cross-over tra i bracci dello studio.
-
-Qualora i dati analizzati derivassero da un disegno osservazionale (e non da un trial clinico controllato randomizzato), le differenze emerse a posteriori tra le medie di cella non potrebbero essere imputate all'azione terapeutica dei protocolli. Esse rifletterebbero, con ogni probabilità, la presenza di distorsioni da selezione (*selection bias*), differenze sistematiche nella gravità sintomatologica iniziale (*baseline severity*) o l'azione di variabili di confondimento associate sia alla scelta del percorso terapeutico sia all'esito clinico finale.
-
-## Conclusioni ed epistemologia del disegno di ricerca
-
-Nel caso studio simulato, l'approccio modellistico basato sul framework bayesiano permette di mappare analiticamente le discrepanze sistemiche tra le tre condizioni sperimentali, propagando in modo rigoroso l'incertezza associata a ciascuna stima. È tuttavia fondamentale ribadire un principio metodologico centrale: l'adozione di un formalismo statistico avanzato non conferisce, da sola, una validità causale alle stime ottenute.
-
-La transizione da una descrizione puramente associativa a un'interpretazione causale degli *estimand* dipende esclusivamente dall'architettura metodologica del disegno di ricerca e dal controllo delle minacce alla validità interna:
-
-* L'effettiva esecuzione di una procedura di assegnazione rigorosamente randomizzata dei soggetti alle condizioni;
-* il monitoraggio della fedeltà al trattamento (*treatment fidelity*) e dell'aderenza al protocollo clinico;
-* la gestione controllata dei dati mancanti (*missing data*) e dei tassi di abbandono (*attrition*);
-* l'assenza di fenomeni di contaminazione o di cross-over tra i bracci dello studio.
-
-Qualora i dati analizzati derivassero da un disegno osservazionale (e non da un trial clinico controllato randomizzato), le differenze emerse a posteriori tra le medie di cella non potrebbero essere imputate all'azione terapeutica dei protocolli. Esse rifletterebbero, con ogni probabilità, la presenza di distorsioni da selezione (*selection bias*), differenze sistematiche nella gravità sintomatologica iniziale (*baseline severity*) o l'azione di variabili di confondimento associate sia alla scelta del percorso terapeutico sia all'esito clinico finale.
+Per attribuire un significato causale ai contrasti stimati, occorre che il disegno sperimentale controlli le principali minacce alla validità interna: randomizzazione, fedeltà al trattamento, gestione delle perdite e assenza di contaminazione tra i bracci dello studio. In assenza di queste condizioni — come avviene tipicamente nei disegni osservazionali — le differenze osservate tra i gruppi potrebbero riflettere distorsioni da selezione, differenze iniziali di gravità o altri fattori confondenti, e non possono essere interpretate come effetti dei trattamenti.
 
 ## Linee guida per la comunicazione dei risultati
 
@@ -654,8 +580,6 @@ Un possibile modello di stesura per la sezione dei Risultati è il seguente:
 
 > Per esaminare il gradiente di efficacia clinica tra le condizioni, abbiamo specificato un modello lineare bayesiano normale a medie di cella. Il modello ha stimato per ciascun braccio sperimentale la distribuzione a posteriori del punteggio medio di depressione. Il primo contrasto pianificato, volto a confrontare il gruppo di controllo con il punto medio dei due protocolli attivi, ha evidenziato una riduzione sintomatologica pari a $\Delta_{C:T} = 8.1$ punti di CES-D (HDI 95% $[5.4, 10.8]$). La probabilità a posteriori che tale decremento superi la soglia di rilevanza clinica minima di 3 punti è pari a $\Pr(\Delta_{C:T} > 3 \mid y) > .99$.
 > Il secondo contrasto pianificato, mirato al confronto diretto tra i due interventi psicoterapeutici, ha mostrato uno scostamento a favore del secondo protocollo pari a $\Delta_{P1:P2} = 4.8$ punti (HDI 95% $[2.1, 7.5]$); la probabilità che questa differenza metrica risulti clinicamente rilevante in valore assoluto è pari a $\Pr(\vert{}\Delta_{P1:P2}\vert{} > 3 \mid y) = .87$. Le conclusioni inferenziali qui presentate rimangono strettamente vincolate alla struttura dei contrasti specificati a priori e dipendono sia dall'adeguatezza della verosimiglianza gaussiana sia dalla tenuta del disegno di campionamento.
-
-> **Nota di redazione:** i valori numerici e gli intervalli di credibilità inseriti nel modello di stesura esemplificano l'integrazione diretta delle sintesi posteriori tratte dai *draws* del software. È raccomandato esprimere l'incertezza e la magnitudo degli effetti predetti utilizzando la scala metrica originale dell'outcome, in quanto direttamente interpretabile sul piano clinico. Le dimensioni dell'effetto standardizzate possono essere incorporate nel report con funzione puramente complementare, attenendosi ai criteri metodologici discussi in dettaglio in @sec-bayesian-effect-size.
 
 ## Errori frequenti
 
@@ -685,11 +609,11 @@ $\widehat R$, effective sample size e assenza di divergenze riguardano il calcol
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-L'analisi della varianza (ANOVA) a una via non introduce una classe di modelli a sé stante né un paradigma statistico separato. Essa rientra pienamente nel framework unificato del modello lineare, all'interno del quale un predittore categoriale politomico (a più livelli) viene mappato in vettori numerici all'interno della matrice del disegno. La codifica con categoria di riferimento (*treatment coding*) quantifica in modo diretto gli scostamenti differenziali rispetto alla baseline; la parametrizzazione a medie di cella (*cell-means coding*) esplicita invece i parametri di posizione di ciascun braccio sperimentale. Entrambe le formulazioni descrivono il medesimo spazio geometrico e generano i medesimi valori adattati, a condizione che la specificazione dei *prior* sia calibrata in modo coerente.
+L’analisi della varianza a una via non introduce un nuovo paradigma statistico, ma si inserisce  nel quadro del modello lineare: un predittore categoriale con più di due livelli viene tradotto in vettori numerici all’interno della matrice disegno. La codifica con categoria di riferimento rende immediata la lettura degli scostamenti rispetto al gruppo baseline; la parametrizzazione a medie di cella esplicita invece direttamente i parametri di posizione di ciascuna condizione. Le due formulazioni descrivono il medesimo sottospazio lineare e producono identici valori adattati, purché le distribuzioni a priori siano specificate in modo coerente con la parametrizzazione adottata.
 
-Il vero salto di qualità metodologico risiede nella traduzione rigorosa delle ipotesi scientifiche in strutture di **contrasti pianificati**. Invece di limitarsi alla generica e poco informativa conclusione del test omnibus classico — secondo cui almeno due medie campionarie differiscono tra loro per una quota stocastica — l'inferenza bayesiana consente di derivare l'intera distribuzione a posteriori di combinazioni lineari definite *a priori*. Questo approccio permette di quantificare la magnitudo degli effetti sulla scala nativa dell'outcome, calcolare probabilità direzionali esatte e valutare la plausibilità che tali scostamenti superino una soglia di rilevanza clinica o pratica (*SESOI*) stabilita in anticipo.
+Il contributo più rilevante dell’approccio bayesiano risiede nella possibilità di tradurre le ipotesi scientifiche in **contrasti pianificati**. A differenza del test omnibus classico, che si limita a segnalare l’esistenza di almeno una differenza tra le medie, l’inferenza bayesiana restituisce l’intera distribuzione a posteriori di qualsiasi combinazione lineare delle medie definita *a priori*. Ciò consente di valutare l’ampiezza degli effetti sulla scala originaria, calcolare probabilità direzionali e verificare se le differenze superino una soglia di rilevanza pratica stabilita indipendentemente dai dati.
 
-Infine, la gestione di predittori con molteplici livelli pone in luce una criticità metodologica fondamentale, che costituirà il nucleo dei capitoli successivi. Quando le condizioni o le unità poste a confronto diventano numerose e risultano concettualmente collegate all'interno del disegno di ricerca — come nel caso di campionamenti effettuati su molteplici scuole, cliniche, stimoli o studi — stimare ogni parametro in completo isolamento metrico rischia di generare stime instabili e sovra-adattate ai dati. I modelli gerarchici o multilivello risolveranno questa vulnerabilità introducendo una distribuzione di probabilità comune di secondo livello, in grado di modellare simultaneamente sia la variabilità inter-gruppo sia le caratteristiche condivise dell'intera popolazione.
+Infine, la presenza di molteplici livelli solleva una questione metodologica cruciale, che sarà al centro dei prossimi capitoli. Quando le condizioni o le unità da confrontare sono numerose e tra loro collegate — come avviene con dati provenienti da scuole, centri clinici, stimoli o studi diversi — stimare ciascun parametro in isolamento rischia di produrre stime instabili e scarsamente generalizzabili. I modelli gerarchici rispondono a questa vulnerabilità introducendo una distribuzione comune di secondo livello, in grado di rappresentare simultaneamente la variabilità tra i gruppi e le regolarità condivise dell’intera popolazione.
 
 ::: {.callout-note title="Concetti da ricordare"}
 1. L'ANOVA a una via è un modello lineare con un predittore categoriale.
