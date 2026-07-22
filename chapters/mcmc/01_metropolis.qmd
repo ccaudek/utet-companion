@@ -1,0 +1,424 @@
+# Campionare invece di risolvere: l'algoritmo di Metropolis {#sec-mcmc-metropolis}
+
+::: {.callout-note appearance="minimal"}
+
+Nella parte *Svolta* abbiamo ottenuto distribuzioni a posteriori in due modi: esattamente, sfruttando la coniugazione, e per approssimazione, valutando la densità su una griglia di valori. Entrambe le strade hanno un raggio d'azione ristretto. La coniugazione vale solo per poche combinazioni di *prior* e verosimiglianza; la griglia diventa impraticabile già con tre o quattro parametri, perché il numero di punti da valutare cresce esponenzialmente.
+
+A questo punto l'inferenza bayesiana compie un cambio di strategia tanto semplice quanto radicale: invece di *calcolare* la distribuzione a posteriori, impara a *estrarne campioni*. Si rinuncia alla formula e in cambio si ottiene qualcosa di molto più generale, ovvero un modo per studiare quasi qualunque distribuzione a posteriori, per quanto complessa.
+
+Questo capitolo costruisce a mano il più semplice degli algoritmi che realizzano questa idea. Non lo faremo perché sia necessario — nei capitoli successivi lasceremo il compito a Stan — ma perché è l'unico modo per capire che cosa Stan faccia davvero, che cosa significhino gli avvisi diagnostici che riceveremo e perché un campionatore possa fallire senza dirlo apertamente.
+:::
+
+**Da sapere.** Perché l'inferenza passa dal calcolo al campionamento; che cos'è una catena di Markov e perché la costante di normalizzazione non serve; che cosa sono burn-in, tasso di accettazione, autocorrelazione e convergenza.
+
+**Da saper fare.** Leggere un *trace plot* e riconoscere una catena non convergente; interpretare tasso di accettazione, $\hat{R}$ ed ESS quando compaiono nell'output di `brms` o Stan.
+
+**Approfondimento facoltativo.** Implementare il campionatore, calibrare la distribuzione di proposta e replicare gli esperimenti sulle sezioni @sec-calibrazione-proposta e @sec-catene-multiple.
+
+[Che cosa significano queste etichette?](../../guida-al-manuale.html#sec-percorsi-lettura)
+
+## Panoramica del capitolo {.unnumbered .unlisted}
+
+* Dal calcolo al campionamento: perché il rapporto tra densità elimina l'integrale intrattabile.
+* L'algoritmo di Metropolis in cinque passi e la ragione per cui accetta anche mosse peggiorative.
+* Implementazione su un caso a soluzione nota, così da poterne verificare la correttezza.
+* Gli strumenti diagnostici: burn-in, tasso di accettazione, autocorrelazione, ESS, catene multiple e $\hat{R}$.
+* I limiti di Metropolis e il passaggio agli algoritmi moderni.
+
+::: {.callout-tip collapse=true}
+## Prerequisiti
+
+- L'aggiornamento bayesiano e il modello Beta-Binomiale (parte *Svolta*).
+- L'approssimazione su griglia, di cui questo capitolo costituisce il superamento.
+- Nozioni elementari di simulazione in R (`rnorm()`, `runif()`, cicli `for`).
+:::
+
+::: {.callout-caution collapse=true title="Preparazione del Notebook"}
+
+```{r}
+#| output: false
+here::here("code", "_common.R") |> 
+  source()
+
+# Load packages
+if (!requireNamespace("pacman")) install.packages("pacman")
+pacman::p_load(posterior)
+```
+:::
+
+## Dal calcolo al campionamento
+
+Il teorema di Bayes, nella forma continua, è
+
+$$
+p(\theta \mid y)=\frac{p(y \mid \theta)\,p(\theta)}{p(y)},
+\qquad
+p(y)=\int p(y \mid \theta)\,p(\theta)\,\mathrm{d}\theta .
+$$
+
+Il numeratore è sempre calcolabile: basta moltiplicare due funzioni che conosciamo. Il denominatore, invece, richiede un integrale che nella maggior parte dei modelli realistici non ha soluzione analitica e che, con molti parametri, è numericamente proibitivo. È questo il collo di bottiglia che ha tenuto l'inferenza bayesiana ai margini della pratica statistica per quasi due secoli.
+
+L'osservazione decisiva è che, per **confrontare** due valori del parametro, il denominatore non serve:
+
+$$
+\frac{p(\theta^{*} \mid y)}{p(\theta_t \mid y)}
+=\frac{p(y \mid \theta^{*})\,p(\theta^{*})\,/\,p(y)}
+       {p(y \mid \theta_t)\,p(\theta_t)\,/\,p(y)}
+=\frac{p(y \mid \theta^{*})\,p(\theta^{*})}
+       {p(y \mid \theta_t)\,p(\theta_t)} .
+$$
+
+La costante $p(y)$ compare a numeratore e denominatore e si semplifica. Se riusciamo a costruire una procedura che decide dove muoversi basandosi **solo su rapporti** di densità a posteriori, l'integrale intrattabile scompare dal problema. È esattamente ciò che fa l'algoritmo di Metropolis.
+
+Il prezzo da pagare riguarda la natura dei campioni ottenuti. Nei metodi visti finora, ogni valore era generato indipendentemente dagli altri. Qui, invece, ciascun campione dipende dal precedente: la sequenza forma una *catena di Markov*, in cui lo stato successivo è determinato probabilisticamente dal solo stato corrente, senza memoria dell'intera storia passata. Questa dipendenza introduce correlazione tra campioni vicini e, come vedremo, riduce la quantità di informazione che una catena di $N$ valori porta con sé rispetto a $N$ estrazioni indipendenti.
+
+## L'algoritmo in cinque passi
+
+Conviene farsi prima un'idea intuitiva. Immaginiamo la distribuzione a posteriori come un paesaggio in cui l'altezza di ogni punto rappresenta la plausibilità del corrispondente valore del parametro: le zone elevate corrispondono ai valori più credibili, quelle basse ai meno credibili. L'algoritmo è un esploratore che si muove in questo paesaggio. Dalla posizione in cui si trova propone un passo in una direzione casuale: se il nuovo punto è più alto vi si sposta senz'altro; se è più basso vi si sposta comunque, ma solo a volte, con probabilità tanto maggiore quanto meno il punto è in discesa. Procedendo così per molti passi, l'esploratore trascorre in ciascuna regione un tempo proporzionale alla sua altezza, e i punti che visita disegnano, passo dopo passo, l'intera forma del paesaggio.
+
+In termini operativi:
+
+1. **Inizializzazione.** Si sceglie un valore di partenza $\theta_0$, anche arbitrario.
+2. **Proposta.** Dallo stato corrente $\theta_t$ si genera un candidato con una distribuzione simmetrica, tipicamente $\theta^{*}\sim\mathcal{N}(\theta_t,\tau^2)$.
+3. **Rapporto.** Si calcola
+$$
+\alpha=\min\!\left(1,\;\frac{p(y \mid \theta^{*})\,p(\theta^{*})}{p(y \mid \theta_t)\,p(\theta_t)}\right).
+$$
+4. **Decisione.** Si estrae $u\sim\text{Uniforme}(0,1)$ e si pone $\theta_{t+1}=\theta^{*}$ se $u<\alpha$, altrimenti $\theta_{t+1}=\theta_t$.
+5. **Registrazione.** Si registra lo stato corrente — che il candidato sia stato accettato o rifiutato — e si torna al passo 2.
+
+::: {.callout-important title="Perché accettare anche mosse peggiorative"}
+Il punto meno intuitivo dell'algoritmo è il passo 4: perché mai spostarsi verso un valore *meno* plausibile?
+
+La regola tiene insieme due esigenze in tensione. Da un lato l'esploratore deve sostare a lungo dove la densità è alta, perché è lì che si concentra l'informazione. Dall'altro non deve restarvi intrappolato: accettare *sempre e solo* passi in salita lo bloccherebbe sul primo rilievo incontrato, producendo una stima concentrata su un massimo locale e una drastica sottostima della variabilità.
+
+È proprio la disponibilità ad accettare, ogni tanto, un passo peggiorativo a garantire che la catena, se lasciata evolvere abbastanza a lungo, visiti **tutte** le regioni rilevanti nelle giuste proporzioni. Senza questa apertura non otterremmo un campione dalla distribuzione a posteriori, ma solo una descrizione del suo picco.
+:::
+
+## Un caso a soluzione nota: gli artisti del MoMA
+
+Per verificare che un algoritmo funzioni, conviene applicarlo a un problema di cui conosciamo già la risposta. Usiamo quindi l'esempio del manuale, tratto da @Johnson2022bayesrules: in un campione di 100 artisti esposti al Museum of Modern Art di New York, 14 appartengono alla generazione X o a una generazione successiva. Vogliamo stimare la proporzione $\theta$ di artisti di quelle generazioni nell'intera collezione.
+
+Il modello è
+
+$$
+\begin{aligned}
+Y &\sim \text{Binomiale}(n=100,\ \theta) \\
+\theta &\sim \text{Beta}(4,6) .
+\end{aligned}
+$$
+
+Trattandosi di un modello coniugato, la distribuzione a posteriori è disponibile in forma chiusa:
+
+$$
+\theta \mid (Y=14) \;\sim\; \text{Beta}(4+14,\ 6+100-14)=\text{Beta}(18,92),
+$$
+
+con media $18/110\approx 0.164$. Questo valore sarà il nostro metro di paragone.
+
+```{r}
+#| label: fig-prior-posterior
+#| fig-cap: "Distribuzione a priori Beta(4,6) e distribuzione a posteriori esatta Beta(18,92). L'evidenza empirica sposta la plausibilità verso valori più bassi di quelli attesi inizialmente e ne restringe l'intervallo."
+theta_grid <- seq(0, 1, length.out = 1000)
+
+tibble(
+  theta = rep(theta_grid, 2),
+  densita = c(dbeta(theta_grid, 4, 6), dbeta(theta_grid, 18, 92)),
+  distribuzione = rep(c("Prior: Beta(4, 6)", "Posterior: Beta(18, 92)"),
+                      each = length(theta_grid))
+) |>
+  ggplot(aes(x = theta, y = densita, linetype = distribuzione)) +
+  geom_line(linewidth = 0.9) +
+  labs(x = expression(theta), y = "Densità", linetype = NULL)
+```
+
+::: {.callout-warning title="Perché usare Metropolis dove non serve"}
+In questo caso l'algoritmo è del tutto superfluo: la risposta esatta la conosciamo già. Ed è precisamente questa la ragione per cui lo usiamo. Un campionatore che sbaglia non lo dichiara: restituisce comunque dei numeri, e quei numeri hanno l'aspetto di risultati. L'unico modo per imparare a riconoscere un campionamento riuscito è confrontarlo, almeno una volta, con una verità nota.
+:::
+
+## Implementazione
+
+Definiamo separatamente le componenti del modello, così che la struttura logica resti leggibile.
+
+```{r}
+#| label: componenti
+# Distribuzione a priori
+prior <- function(theta) {
+  dbeta(theta, shape1 = 4, shape2 = 6)
+}
+
+# Verosimiglianza binomiale: 14 successi su 100 prove
+likelihood <- function(theta) {
+  dbinom(14, size = 100, prob = theta)
+}
+
+# Distribuzione a posteriori NON normalizzata
+posterior_nn <- function(theta) {
+  likelihood(theta) * prior(theta)
+}
+
+# Distribuzione di proposta: normale centrata sullo stato corrente
+proposal <- function(current, proposal_sd) {
+  rnorm(1, mean = current, sd = proposal_sd)
+}
+```
+
+Si noti il nome `posterior_nn`: la funzione restituisce il *prodotto* tra verosimiglianza e *prior*, non la distribuzione a posteriori normalizzata. Non conosciamo la costante $p(y)$ e non ci serve: nel rapporto del passo 3 si semplifica.
+
+Il campionatore traduce i cinque passi in codice. Rispetto a un'implementazione minimale, teniamo traccia anche del numero di proposte accettate, che sarà il nostro primo indicatore diagnostico.
+
+```{r}
+#| label: sampler
+metropolis_sampler <- function(n_iter, start, proposal_sd) {
+  chain <- numeric(n_iter)
+  current <- start
+  accepted <- 0
+
+  for (i in seq_len(n_iter)) {
+    # 1. Proposta di un candidato
+    candidate <- proposal(current, proposal_sd)
+
+    # 2. Il candidato deve essere una proporzione ammissibile
+    if (candidate >= 0 && candidate <= 1) {
+      alpha <- posterior_nn(candidate) / posterior_nn(current)
+
+      # 3. Decisione probabilistica
+      if (runif(1) < alpha) {
+        current <- candidate
+        accepted <- accepted + 1
+      }
+    }
+
+    # 4. Si registra lo stato corrente, accettato o meno
+    chain[i] <- current
+  }
+
+  list(chain = chain, acceptance_rate = accepted / n_iter)
+}
+```
+
+Due dettagli meritano attenzione. Il controllo `candidate >= 0 && candidate <= 1` gestisce il fatto che $\theta$ è una proporzione, mentre la proposta normale può generare valori fuori dall'intervallo ammissibile: tali candidati vengono automaticamente rifiutati. E il passo 4 registra lo stato **a ogni iterazione**, anche quando la proposta è rifiutata; è per questo che le catene di Metropolis contengono valori ripetuti.
+
+## Esecuzione e burn-in
+
+```{r}
+#| label: run
+set.seed(20260722)
+n_iter <- 10000
+
+risultato <- metropolis_sampler(n_iter, start = 0.9, proposal_sd = 0.1)
+risultato$acceptance_rate
+```
+
+Abbiamo deliberatamente fatto partire la catena da $\theta_0=0.9$, un valore molto lontano dalla regione plausibile. Osserviamo che cosa accade nelle prime iterazioni.
+
+```{r}
+#| label: fig-burnin
+#| fig-cap: "Le prime 300 iterazioni. La catena parte da un valore implausibile e in poche decine di passi raggiunge la regione ad alta densità, dove poi fluttua in modo stazionario."
+tibble(
+  iterazione = 1:300,
+  theta = risultato$chain[1:300]
+) |>
+  ggplot(aes(x = iterazione, y = theta)) +
+  geom_line() +
+  labs(x = "Iterazione", y = expression(theta))
+```
+
+La figura mostra la *fase transiente*: la catena "scende" rapidamente dal punto di partenza arbitrario verso la regione plausibile e poi si stabilizza. I valori prodotti durante questa fase non provengono dalla distribuzione target — riflettono ancora la scelta iniziale — e vanno scartati. Questa porzione iniziale si chiama **burn-in**.
+
+```{r}
+#| label: burnin
+burnin <- floor(n_iter / 2)
+post_burnin <- risultato$chain[(burnin + 1):n_iter]
+```
+
+Scartare metà della catena è una scelta prudenziale comune. Non esiste una regola universale: la quantità da eliminare va decisa guardando il *trace plot*, non applicando una percentuale fissa.
+
+::: {.callout-note title="Una differenza epistemologica"}
+Qui emerge una distinzione che vale la pena rendere esplicita. Una formula chiusa, una volta ricavata, è semplicemente vera. Un campione MCMC, invece, è affidabile *solo se* la catena ha effettivamente raggiunto la distribuzione a posteriori — cosa di cui non possiamo essere certi in anticipo. Per questo le verifiche di convergenza non sono un tecnicismo accessorio: fanno parte integrante del ragionamento inferenziale. Una catena interrotta troppo presto può restituire risposte tanto sicure quanto false.
+:::
+
+## Calibrare la distribuzione di proposta {#sec-calibrazione-proposta}
+
+Il parametro $\tau$ (`proposal_sd`) controlla l'ampiezza media dei passi ed è l'unica manopola dell'algoritmo. La teoria dice che passi troppo piccoli producono un'esplorazione lenta e passi troppo grandi un tasso di rifiuto elevato. Invece di crederci sulla parola, guardiamo.
+
+```{r}
+#| label: fig-calibrazione
+#| fig-cap: "Effetto dell'ampiezza della proposta. Con passi troppo piccoli la catena deriva lentamente e resta correlata; con passi troppo grandi rimane bloccata a lungo sullo stesso valore; il valore intermedio esplora in modo efficiente."
+set.seed(4)
+valori_sd <- c(0.005, 0.1, 0.8)
+
+esperimento <- lapply(valori_sd, function(s) {
+  out <- metropolis_sampler(n_iter = 2000, start = 0.5, proposal_sd = s)
+  tibble(
+    iterazione = 1:2000,
+    theta = out$chain,
+    etichetta = sprintf("tau = %.3f  (accettazione = %.2f)",
+                        s, out$acceptance_rate)
+  )
+}) |>
+  bind_rows()
+
+ggplot(esperimento, aes(x = iterazione, y = theta)) +
+  geom_line(linewidth = 0.3) +
+  facet_wrap(~ etichetta, ncol = 1, scales = "free_y") +
+  labs(x = "Iterazione", y = expression(theta))
+```
+
+I tre pannelli mostrano tre patologie diverse dello stesso algoritmo.
+
+Con $\tau=0.005$ quasi ogni proposta viene accettata — il tasso di accettazione è altissimo — ma la catena si sposta di pochissimo a ogni passo: il grafico somiglia a una passeggiata lenta e ondulata, e in 2000 iterazioni la distribuzione target non viene esplorata per intero. **Un tasso di accettazione elevato non è di per sé un buon segno.**
+
+Con $\tau=0.8$ accade l'opposto: molte proposte cadono fuori dall'intervallo $[0,1]$ o in regioni implausibili, vengono rifiutate, e la catena resta ferma sullo stesso valore per decine di iterazioni. Il *trace plot* assume il caratteristico aspetto "a gradini".
+
+Con $\tau=0.1$ il compromesso è ragionevole: passi abbastanza ampi da attraversare la distribuzione, abbastanza contenuti da essere accettati con frequenza. Per un singolo parametro con proposta normale simmetrica, un tasso di accettazione intorno a 0.4–0.5 è un riferimento diagnostico orientativo — non una regola, ma un indizio utile.
+
+## Quanti campioni valgono davvero
+
+La correlazione tra valori successivi ha una conseguenza pratica: $N$ campioni MCMC contengono meno informazione di $N$ campioni indipendenti. Possiamo vederlo con la funzione di autocorrelazione.
+
+```{r}
+#| label: fig-acf
+#| fig-cap: "Autocorrelazione della catena post-burn-in. La dipendenza tra valori successivi si attenua progressivamente ma non è trascurabile nei primi ritardi."
+acf_out <- acf(post_burnin, lag.max = 40, plot = FALSE)
+
+tibble(lag = as.numeric(acf_out$lag), acf = as.numeric(acf_out$acf)) |>
+  ggplot(aes(x = lag, y = acf)) +
+  geom_hline(yintercept = 0) +
+  geom_segment(aes(xend = lag, yend = 0)) +
+  labs(x = "Ritardo", y = "Autocorrelazione")
+```
+
+La quantità che sintetizza questa perdita di informazione è la **dimensione campionaria effettiva** (*Effective Sample Size*, ESS): il numero di campioni indipendenti che porterebbero la stessa informazione della sequenza correlata.
+
+```{r}
+#| label: ess
+c(
+  campioni_nominali = length(post_burnin),
+  ESS = posterior::ess_basic(post_burnin)
+)
+```
+
+Il confronto è istruttivo: a fronte di 5000 valori registrati, l'informazione effettivamente disponibile equivale a un numero sensibilmente inferiore di estrazioni indipendenti. È questa la ragione per cui, negli output di `brms` e di Stan che incontreremo nei prossimi capitoli, accanto alle stime compaiono sempre `Bulk_ESS` e `Tail_ESS`: non misurano l'incertezza sui dati, ma la qualità del campionamento.
+
+## Catene multiple e convergenza {#sec-catene-multiple}
+
+Una singola catena può sembrare stazionaria e avere comunque esplorato solo una porzione dello spazio. La verifica più efficace consiste nell'eseguire più catene partendo da punti diversi e controllare che finiscano per descrivere la stessa distribuzione.
+
+```{r}
+#| label: catene-multiple
+set.seed(20260722)
+punti_partenza <- c(0.05, 0.30, 0.60, 0.90)
+
+catene <- sapply(punti_partenza, function(s) {
+  metropolis_sampler(n_iter = 10000, start = s, proposal_sd = 0.1)$chain
+})
+
+catene_post <- catene[(burnin + 1):n_iter, , drop = FALSE]
+
+draws <- posterior::as_draws_array(
+  array(
+    catene_post,
+    dim = c(nrow(catene_post), ncol(catene_post), 1),
+    dimnames = list(NULL, NULL, "theta")
+  )
+)
+
+posterior::summarise_draws(draws)
+```
+
+```{r}
+#| label: fig-catene
+#| fig-cap: "Quattro catene indipendenti dopo il burn-in, inizializzate in punti distanti dello spazio parametrico. La sovrapposizione delle traiettorie è l'evidenza visiva della convergenza."
+as_tibble(catene_post, .name_repair = ~ paste0("catena_", seq_along(.x))) |>
+  mutate(iterazione = row_number()) |>
+  pivot_longer(-iterazione, names_to = "catena", values_to = "theta") |>
+  filter(iterazione <= 1000) |>
+  ggplot(aes(x = iterazione, y = theta, group = catena)) +
+  geom_line(linewidth = 0.25, alpha = 0.8) +
+  labs(x = "Iterazione", y = expression(theta))
+```
+
+Nella tabella prodotta da `summarise_draws()` compare la statistica $\hat{R}$ (`rhat`), che confronta la variabilità *tra* catene con quella *interna* a ciascuna catena. Se le catene hanno raggiunto la stessa distribuzione, le due quantità coincidono e $\hat{R}$ vale circa 1. Valori superiori a 1.01 segnalano che le catene stanno ancora descrivendo distribuzioni diverse, cioè che la convergenza non è stata raggiunta. È lo stesso indicatore che `brms` riporta in ogni sommario: qui possiamo vedere da dove viene.
+
+## Validazione: il confronto con la soluzione esatta
+
+Ora la verifica che giustifica l'intero esercizio. Confrontiamo la distribuzione empirica dei campioni con la Beta(18,92) analitica.
+
+```{r}
+#| label: fig-validazione
+#| fig-cap: "Istogramma dei campioni post-burn-in e densità Beta(18,92) esatta. La sovrapposizione fornisce la validazione visiva del campionatore."
+tibble(theta = as.vector(catene_post)) |>
+  ggplot(aes(x = theta)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 40,
+                 color = "white", alpha = 0.7) +
+  stat_function(fun = dbeta, args = list(shape1 = 18, shape2 = 92),
+                linewidth = 1) +
+  labs(x = expression(theta), y = "Densità")
+```
+
+E il confronto numerico, che include anche l'intervallo di credibilità:
+
+```{r}
+#| label: confronto
+campioni <- as.vector(catene_post)
+
+tibble(
+  metodo = c("Metropolis (MCMC)", "Analitico"),
+  media = c(mean(campioni), 18 / (18 + 92)),
+  sd = c(sd(campioni), sqrt((18 * 92) / ((18 + 92)^2 * (18 + 92 + 1)))),
+  q_inf = c(quantile(campioni, 0.03), qbeta(0.03, 18, 92)),
+  q_sup = c(quantile(campioni, 0.97), qbeta(0.97, 18, 92))
+) |>
+  mutate(across(where(is.numeric), \(x) round(x, 4)))
+```
+
+I valori ottenuti per simulazione non coincidono esattamente con quelli esatti — non potrebbero, trattandosi di campioni casuali — ma la corrispondenza è stretta su tutte le quantità considerate: media, dispersione ed estremi dell'intervallo. Il campionatore sta esplorando correttamente la distribuzione a posteriori.
+
+## I limiti di Metropolis, e perché servono strumenti migliori
+
+L'algoritmo appena costruito ha una qualità notevole: la generalità. Funziona per qualunque modello di cui sappiamo valutare il prodotto tra verosimiglianza e *prior*, senza richiedere né coniugazione né integrali risolvibili. Questa generalità ha però un costo che diventa proibitivo nei problemi reali.
+
+Il primo limite riguarda la dimensionalità. Con un solo parametro la proposta casuale ha buone probabilità di cadere in una regione plausibile; con decine o centinaia di parametri — la norma nei modelli multilivello — un passo casuale in una direzione arbitraria finisce quasi sempre in una zona a densità trascurabile, e viene rifiutato. Il tasso di accettazione crolla e la catena si paralizza.
+
+Il secondo riguarda la geometria. Quando i parametri sono fortemente correlati, la distribuzione a posteriori assume forme allungate o curve, e una proposta sferica come la nostra è inadatta: passi abbastanza piccoli da essere accettati sono troppo piccoli per percorrere la struttura nella sua lunghezza.
+
+Il terzo è pratico: abbiamo calibrato $\tau$ a mano, su un solo parametro. Con molti parametri la calibrazione manuale non è più un'opzione.
+
+Gli algoritmi moderni rispondono a questi problemi conservando lo stesso principio — proporre, valutare un rapporto, accettare o rifiutare — ma scegliendo le proposte in modo molto più informato. Il *Gibbs sampling* [@geman_geman_1984] sfrutta le distribuzioni condizionate quando sono note; l'*Hamiltonian Monte Carlo* [@duane1987hybrid] utilizza il gradiente della densità per proporre movimenti che seguono la geometria della distribuzione; il *No-U-Turn Sampler* [@hoffman2014no] automatizza le scelte dell'HMC ed è l'algoritmo che Stan impiega per impostazione predefinita.
+
+Il capitolo successivo introduce i linguaggi di programmazione probabilistica, che rendono disponibili questi algoritmi senza doverli implementare. Ciò che resterà utile di questo capitolo non è il codice, ma il vocabolario: quando Stan segnalerà un $\hat{R}$ elevato, un ESS insufficiente o un numero anomalo di transizioni divergenti, sapremo di che cosa sta parlando.
+
+## Riflessioni conclusive {.unnumbered .unlisted}
+
+L'algoritmo di Metropolis realizza un'idea semplice: per studiare una distribuzione che non sappiamo calcolare, costruiamo un processo che la visita con la frequenza giusta. La rinuncia alla forma analitica è compensata da una generalità quasi illimitata, ed è questa sostituzione — il calcolo con la simulazione — ad aver reso l'inferenza bayesiana praticabile nella ricerca applicata.
+
+Il capitolo ha però mostrato anche il rovescio della medaglia. Un campionatore restituisce numeri in ogni caso, anche quando non ha funzionato. Le diagnostiche introdotte qui — l'ispezione del *trace plot*, il tasso di accettazione, l'autocorrelazione e l'ESS, le catene multiple e $\hat{R}$ — non sono adempimenti formali: sono l'unico modo per distinguere una stima affidabile da una che ha soltanto l'aspetto di esserlo. Nei capitoli successivi lasceremo il campionamento a Stan, ma continueremo a leggere gli stessi indicatori.
+
+## Esercizi {.unnumbered}
+
+::: {.callout-tip collapse="true" title="Esercizio 1 — Comprendere"}
+Spiega con parole tue perché l'algoritmo non ha bisogno di conoscere la costante di normalizzazione $p(y)$, e perché invece un metodo basato sull'approssimazione su griglia deve calcolarla (almeno implicitamente, normalizzando alla fine).
+:::
+
+::: {.callout-tip collapse="true" title="Esercizio 2 — Prevedere"}
+Prima di eseguire il codice: se facessi partire la catena da $\theta_0 = 0.001$ mantenendo `proposal_sd = 0.1`, la fase transiente sarebbe più lunga o più breve rispetto a quella osservata partendo da 0.9? E se usassi `proposal_sd = 0.01`? Formula entrambe le previsioni, poi verificale.
+
+**Suggerimento.** Ragiona su quanti passi, in media, servono per coprire la distanza tra il punto di partenza e la regione ad alta densità, dato che ogni passo ha ampiezza media dell'ordine di $\tau$.
+:::
+
+::: {.callout-tip collapse="true" title="Esercizio 3 — Modificare"}
+Modifica `metropolis_sampler()` in modo che registri, oltre alla catena, anche il numero di proposte rifiutate *perché fuori dall'intervallo* $[0,1]$, distinguendole da quelle rifiutate in base al rapporto $\alpha$. Esegui l'algoritmo con `proposal_sd` pari a 0.05, 0.3 e 1.0 e riporta le due percentuali. Quale delle due cause di rifiuto domina al crescere di $\tau$?
+:::
+
+::: {.callout-tip collapse="true" title="Esercizio 4 — Criticare"}
+Un collega ti mostra questo risultato: «Ho eseguito 50.000 iterazioni, il tasso di accettazione è 0.93 e il trace plot non mostra alcun trend: la catena ha convergito». Individua che cosa non torna in questo ragionamento e indica quali verifiche aggiuntive chiederesti prima di accettare la conclusione.
+:::
+
+::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+```{r}
+sessionInfo()
+```
+:::
+
+## Bibliografia {.unnumbered .unlisted}
