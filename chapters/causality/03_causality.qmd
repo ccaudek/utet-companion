@@ -1,16 +1,24 @@
 # Causalità dai dati osservazionali {#sec-eda-causality}
 
-::: {.callout-note appearance="minimal"}
 Nel @sec-causality-propedeutics abbiamo introdotto il framework controfattuale e dimostrato come la randomizzazione, ovvero l'assegnazione casuale del trattamento, permetta di interpretare le differenze osservate tra i gruppi come effetti causali diretti. Tuttavia, nella realtà della ricerca psicologica, questo ideale sperimentale è difficile da raggiungere: non è possibile assegnare casualmente traumi infantili, tratti di personalità o esperienze di vita stressanti.
 
 In questo capitolo, ci si chiede: "Come possiamo procedere verso un'inferenza causale quando abbiamo solo dati osservazionali?" La risposta non risiede in formule statistiche automatiche, ma in una capacità di ragionamento esplicito sulle strutture causali sottostanti. A tale scopo, introduciamo i DAG (*Directed Acyclic Graphs*) come strumento fondamentale. Un DAG traduce visivamente le nostre ipotesi teoriche in un insieme strutturato di relazioni causali tra variabili, mappando percorsi diretti, confondenti e mediatori.
 
-Questo formalismo grafico non è un semplice diagramma, ma la chiave per prendere decisioni analitiche rigorose. Ci permette di determinare, attraverso il *criterio backdoor*, quali variabili includere in un modello per bloccare i percorsi di confondimento e isolare l'effetto di interesse e, altrettanto importante, quali variabili **escludere** per evitare di introdurre nuovi bias, come avviene nel controllo di una variabile *collider*.
+Questo formalismo grafico non è un semplice diagramma, ma la chiave per prendere decisioni analitiche rigorose. Ci permette di determinare, attraverso il *criterio backdoor*, quali variabili includere in un modello per bloccare i percorsi di confondimento e isolare l'effetto di interesse e, altrettanto importante, quali variabili *escludere* per evitare di introdurre nuovi bias, come avviene nel controllo di una variabile *collider*.
 
 In questo contesto, il modello di regressione standard assume una nuova funzione. Non è più solo uno strumento per descrivere associazioni, ma può diventare un mezzo per l'inferenza causale. Tale trasformazione, tuttavia, è subordinata a una premessa: la regressione deve essere guidata da un ragionamento causale esplicito. La scelta dei predittori da includere (e di quelli da escludere) non può quindi essere risolta con criteri puramente statistici, come la massimizzazione della bontà di adattamento del modello, ma richiede un'attenta riflessione teorica che renda esplicite e giustifichi le nostre ipotesi sul processo che ha generato i dati osservati.
+
+::: {.callout-important appearance="minimal" .chapter-status}
+**Da sapere.** Nei dati osservazionali, un’associazione può essere interpretata causalmente solo sulla base di ipotesi esplicite sul processo generativo. I DAG rappresentano tali ipotesi e permettono di distinguere percorsi causali, confondenti, mediatori, collider e discendenti. Il criterio *backdoor* indica quali variabili controllare per bloccare i percorsi di confondimento; controllare un collider o un suo discendente può invece introdurre nuove associazioni spurie.
+
+**Da saper fare.** Leggere e costruire semplici DAG; riconoscere catene, biforcazioni e collider; distinguere confondimento, mediazione e moderazione; individuare percorsi aperti e bloccati mediante la *d-separation*; scegliere un insieme di aggiustamento coerente con l’effetto causale di interesse; spiegare perché la selezione delle covariate non può basarsi soltanto sulla significatività statistica o sull’aumento di $R^2$.
+
+**Approfondimento facoltativo.** La verifica empirica delle indipendenze condizionali, il confronto dettagliato tra esperimenti, quasi-esperimenti e studi osservazionali, nonché le sezioni su *matching*, variabili strumentali e simulazioni numeriche del confondimento, possono essere rimandati in una prima lettura. Nel percorso essenziale è sufficiente comprendere il ruolo dei DAG e usare le configurazioni causali fondamentali per motivare quali variabili includere o escludere dal modello.
+
+[Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
 :::
 
-### Panoramica del capitolo {.unnumbered .unlisted}
+## Panoramica del capitolo {.unnumbered .unlisted}
 
 - Il problema della causalità in assenza di esperimenti.
 - I quattro confondenti fondamentali (catena, biforcazione, collider, discendente).
@@ -92,7 +100,7 @@ Queste rappresentazioni non sono semplici illustrazioni, ma **modelli operativi*
 1.  **chiarezza espositiva:** rendono immediatamente visibile la struttura causale assunta, esplicitando quali relazioni dirette sono ipotizzate e, altrettanto cruciale, quali sono assenti;
 2.  **potere deduttivo:** forniscono un calcolo per derivare le conseguenze verificabili del modello. Attraverso regole formali (come le *regole di d-separazione*), permettono di dedurre quali relazioni di indipendenza condizionale ci si aspetterebbe di osservare nei dati se il modello fosse corretto.
 
-In sintesi, i grafi sono strumenti per il **ragionamento**. Offrono criteri precisi per stabilire quando un'associazione osservata tra due variabili può essere interpretata come potenzialmente causale e quando, invece, è compatibile con la presenza di fattori confondenti o altri fenomeni.
+In sintesi, i grafi sono strumenti per il *ragionamento*. Offrono criteri precisi per stabilire quando un'associazione osservata tra due variabili può essere interpretata come potenzialmente causale e quando, invece, è compatibile con la presenza di fattori confondenti o altri fenomeni.
 
 ### Anatomia di un grafo causale
 
@@ -105,7 +113,7 @@ L'assenza di un arco diretto tra due nodi implica che non esiste un effetto caus
 
 ### Un esempio nel contesto psicologico
 
-Consideriamo uno studio sul legame tra **Stress percepito** e **Rendimento accademico**. Un'ipotesi plausibile può essere rappresentata dal seguente grafo:
+Consideriamo uno studio sul legame tra Stress percepito e Rendimento accademico. Un'ipotesi plausibile può essere rappresentata dal seguente grafo:
 
 `Stress Percepito` → `Qualità del Sonno` → `Rendimento Accademico`
 
@@ -127,7 +135,7 @@ Esplicitare visivamente le ipotesi consente di:
 
 ### Un chiaro avvertimento epistemologico
 
-Un grafo causale è un'**ipotesi strutturata**, non una verità rivelata. Non determina automaticamente la causalità, ma formalizza ciò che *riteniamo plausibile* in base alla teoria e alla conoscenza pregressa. Il suo valore risiede nella sua capacità di generare **predizioni verificabili** (sulle indipendenze condizionali) che i dati possono confermare o falsificare. In questo senso, il grafo rappresenta il punto di partenza per un dialogo rigoroso tra teoria ed evidenza empirica.
+Un grafo causale è un'*ipotesi strutturata*, non una verità rivelata. Non determina automaticamente la causalità, ma formalizza ciò che *riteniamo plausibile* in base alla teoria e alla conoscenza pregressa. Il suo valore risiede nella sua capacità di generare *predizioni verificabili* (sulle indipendenze condizionali) che i dati possono confermare o falsificare. In questo senso, il grafo rappresenta il punto di partenza per un dialogo rigoroso tra teoria ed evidenza empirica.
 
 ## Confondimento, mediazione e moderazione: i ruoli delle variabili nei modelli causali
 
@@ -137,30 +145,29 @@ Nei modelli causali, non tutte le variabili svolgono la stessa funzione. È fond
 
 Una **variabile di confondimento** è un fattore che influenza in modo causale sia la presunta causa che l'effetto. Se non viene misurata e controllata adeguatamente, crea un'associazione statistica tra le due variabili, anche in assenza di una relazione causale diretta tra di esse.
 
-**Esempio:** si osserva una correlazione tra l'uso intensivo dei social media e i sintomi depressivi in un campione di studenti. Un'interpretazione ingenua suggerirebbe che i social media causano la depressione.
+**Esempio.** In un campione di studenti si osserva una correlazione positiva tra l’uso intensivo dei social media e i sintomi depressivi. Un’interpretazione ingenua porterebbe a concludere che l’uso dei social media causi la depressione.
 
-Tuttavia, un potenziale **confonditore** è la **solitudine percepita**:
+Tuttavia, altre ipotesi sono possibili. Ad esempio, la *solitudine percepita* potrebbe fungere da variabile confondente:
 
-- gli studenti che si sentono più soli tendono a usare i social media più frequentemente (come tentativo di connessione);
-- la solitudine è essa stessa un fattore di rischio per sintomi depressivi.
+- gli studenti con livelli più elevati di solitudine tendono a un uso più frequente dei social media, spesso come tentativo di connessione sociale;
+- la solitudine è, di per sé, un fattore di rischio per i sintomi depressivi.
 
-In questo grafo: `Solitudine → Uso Social Media` e `Solitudine → Sintomi Depressivi`.
-Non c'è una freccia diretta dai social media alla depressione. Se non si controlla la variabile "solitudine", si osserva un'associazione spuria tra "social media" e "depressione" che può portare a conclusioni errate dal punto di vista causale.
+Il grafo causale corrispondente include i percorsi `Solitudine → Uso Social Media` e `Solitudine → Sintomi Depressivi`, ma nessun arco diretto da Uso Social Media a Sintomi Depressivi. Se questa ipotesi fosse corretta e la solitudine non venisse controllata, l’associazione tra uso dei social media e depressione risulterebbe spuria e condurrebbe a inferenze causali errate.
 
 ### Variabili mediatrici: il meccanismo della causalità
 
 Una **variabile mediatrice** trasmette l'effetto di una variabile indipendente su una variabile dipendente. Non è una fonte di distorsione, ma il **meccanismo** attraverso il quale opera la relazione causale.
 
-**Esempio**
-Stress → Qualità del sonno → Sintomi d'ansia.
+**Esempio.** Si consideri il percorso causale Stress → Qualità del sonno → Sintomi d'ansia.
 
 - Lo stress cronico compromette la regolarità e la profondità del sonno.
-- La privazione o la scarsa qualità del sonno alterano la regolazione emotiva e aumentano i sintomi ansiosi.
+- Una scarsa qualità del sonno altera la regolazione emotiva e incrementa i sintomi ansiosi.
 
-In questo caso, la qualità del sonno è il mediatore che spiega come lo stress porti all'ansia. L'effetto causale dello stress sui sintomi d'ansia può essere scomposto in:
-- **effetto indiretto** (tramite il Sonno);
-- **effetto diretto** (se esiste una freccia residua Stress → Ansia);
-- **effetto totale** (somma di diretto e indiretto).
+In questa struttura la qualità del sonno opera da variabile mediatrice, spiegando il meccanismo attraverso cui lo stress favorisce l’ansia. L’effetto causale totale dello stress sui sintomi d’ansia si scompone in tre componenti:
+
+- **effetto indiretto**, trasmesso tramite la qualità del sonno;
+- **effetto diretto**, che corrisponde all’eventuale percorso residuo non mediato (freccia Stress → Sintomi d’ansia);
+- **effetto totale**, somma dell’effetto diretto e di quello indiretto.
 
 ### Variabili moderatrici: il "dipende da..."
 

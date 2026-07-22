@@ -1,19 +1,23 @@
 # Regressione logistica: dal predittore lineare alla probabilità {#sec-reg-logistic-stan}
 
-::: {.callout-note appearance="minimal"}
-La regressione logistica estende il modello lineare agli esiti binari, come una risposta corretta o errata, la presenza o assenza di un sintomo e la scelta tra due alternative. L'estensione non consiste semplicemente nel sostituire una distribuzione con un'altra. Occorre specificare una distribuzione adatta all'outcome, scegliere il parametro da modellare e collegarlo al predittore lineare mediante una trasformazione appropriata.
+La regressione logistica è utile quando la variabile risposta può assumere soltanto due valori: per esempio risposta corretta o errata, presenza o assenza di un sintomo, scelta A o scelta B. In questi casi la domanda non riguarda una media su una scala continua, ma la *probabilità* che si verifichi uno dei due esiti.
 
-Questo capitolo introduce una volta per tutte l'architettura dei modelli lineari generalizzati. Il caso Bernoulli-logit sarà sviluppato attraverso l'intero workflow bayesiano: formulazione generativa, scelta dei prior, controllo predittivo a priori, stima, diagnostica, interpretazione e controllo predittivo a posteriori. Nei capitoli successivi la stessa struttura verrà riutilizzata per proporzioni e conteggi.
+Non è possibile applicare una regressione lineare senza apportare modifiche: una retta può produrre valori inferiori a 0 o superiori a 1, che non sono probabilità valide. La regressione logistica risolve il problema in tre passaggi: descrive l'esito con una distribuzione di Bernoulli, costruisce un predittore lineare e lo trasforma in una probabilità mediante il link logit.
+
+Questo capitolo introduce l'architettura dei modelli lineari generalizzati a partire da questa idea intuitiva. Il caso Bernoulli-logit verrà poi seguito attraverso l'intero flusso di lavoro bayesiano: formulazione generativa, scelta dei prior, controllo predittivo a priori, stima, diagnostica, interpretazione e controllo predittivo a posteriori. Nei capitoli successivi, la stessa struttura verrà riutilizzata per proporzioni e conteggi.
+
+::: {.callout-important appearance="minimal" .chapter-status}
+**Da sapere.** La regressione logistica descrive come cambia la probabilità di un esito binario. Il modello combina una distribuzione Bernoulli, un predittore lineare e il link logit. La linearità riguarda i log-odds, non direttamente le probabilità: per questo probabilità, odds e log-odds devono essere distinti con cura.
+
+**Da saper fare.** Interpretare l’intercetta come livello di base e la pendenza come variazione dei log-odds; trasformare una pendenza in odds ratio mediante $\exp(\beta)$; ricavare probabilità predette per valori sostantivamente significativi del predittore; spiegare perché lo stesso coefficiente non produce ovunque la stessa differenza di probabilità.
+
+**Approfondimento facoltativo.** La derivata della curva logistica, la specificazione e il controllo dei prior, l’esecuzione completa del modello con `brms`, le diagnostiche MCMC e i controlli predittivi possono essere rimandati in una prima lettura. Nel percorso essenziale è sufficiente comprendere l’architettura del modello e interpretarne correttamente i coefficienti sulle scale dei log-odds, degli odds e delle probabilità.
+
+[Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
 :::
 
-## Orientamento
-
-Nel modello lineare gaussiano la media dell'outcome può assumere qualunque valore reale e viene collegata direttamente al predittore lineare. Un outcome binario richiede invece una probabilità compresa tra 0 e 1. La regressione logistica risolve il problema modellando linearmente i *log-odds* e trasformandoli poi in probabilità.
-
-Al termine del capitolo il lettore dovrebbe saper riconoscere le tre componenti di un GLM, interpretare i coefficienti sulle scale dei log-odds, degli odds e delle probabilità, formulare prior coerenti con la scala del problema e distinguere l'incertezza sulla probabilità media dalla variabilità delle singole risposte.
-
 ::: {.callout-tip collapse="true" title="Prerequisiti"}
-Sono sufficienti la conoscenza del modello lineare bayesiano e del workflow sviluppato nella parte precedente. Per un trattamento più ampio della regressione e dei modelli lineari generalizzati si può consultare @fox2015applied.
+È utile conoscere l'idea di base del modello lineare — una quantità attesa descritta mediante intercetta e pendenza — ma i concetti specifici della regressione logistica vengono introdotti qui. Il workflow bayesiano riprende quello sviluppato nella parte precedente. Per un trattamento più ampio della regressione e dei modelli lineari generalizzati si può consultare @fox2015applied.
 :::
 
 ::: {.callout-caution collapse="true" title="Preparazione del notebook"}
@@ -43,7 +47,7 @@ set.seed(2026)
 
 ## Dal modello lineare al modello lineare generalizzato
 
-Il modello lineare gaussiano può essere scritto come
+Nel modello lineare gaussiano, una variabile continua viene descritta mediante una media che cambia linearmente con il predittore:
 
 $$
 Y_i \sim \operatorname{Normal}(\mu_i, \sigma),
@@ -51,23 +55,37 @@ Y_i \sim \operatorname{Normal}(\mu_i, \sigma),
 \mu_i = \alpha + \beta x_i.
 $$
 
-La distribuzione normale descrive un outcome continuo e il link identità collega direttamente la media al predittore lineare. Se l'esito assume soltanto i valori 0 e 1, la distribuzione normale non rappresenta adeguatamente né lo spazio dei valori possibili né la relazione tra media e varianza. In questo caso si usa una distribuzione Bernoulli:
+Qui $\alpha+\beta x_i$ può assumere qualsiasi valore reale, proprio come una media di altezza, tempo di risposta o punteggio. Con un esito binario, invece, ogni osservazione può assumere solo due valori: 0 oppure 1. In questo caso, la distribuzione adatta è la Bernoulli:
 
 $$
 Y_i \sim \operatorname{Bernoulli}(p_i),
 $$
 
-dove $p_i$ è la probabilità che $Y_i=1$. Poiché una probabilità deve rimanere nell'intervallo $[0,1]$, non possiamo porre semplicemente $p_i=\alpha+\beta x_i$. Il predittore lineare viene invece collegato alla probabilità mediante la funzione logit:
+che significa: l'osservazione $i$ vale 1 con probabilità $p_i$ e 0 con probabilità $1-p_i$. In una Bernoulli, $p_i$ è anche il valore medio atteso dell'esito.
+
+La difficoltà è che una probabilità deve rimanere compresa tra 0 e 1, mentre una retta non ha questi limiti. Per collegare i due oggetti trasformiamo la probabilità in una quantità che può assumere qualsiasi valore reale. Si parte dagli **odds**
+
+$$
+\operatorname{odds}(p)=\frac{p}{1-p},
+$$
+
+e se ne prende il logaritmo. Il risultato è il **logit**, o log-odds:
 
 $$
 \operatorname{logit}(p_i)
 =
-\log\!\left(\frac{p_i}{1-p_i}\right)
-=
-\alpha+\beta x_i.
+\log\!\left(\frac{p_i}{1-p_i}\right).
 $$
 
-La trasformazione inversa restituisce la probabilità:
+Tre valori possono aiutare a orientarsi: $p=0.5$ corrisponde a odds pari a 1 e log-odds pari a 0; $p=0.8$ corrisponde a odds pari a 4; $p=0.2$ corrisponde a odds pari a 0.25. Le probabilità superiori 0.5 hanno log-odds positivi, quelle inferiori a 0.5 hanno log-odds negativi.
+
+La regressione logistica pone quindi una relazione lineare sulla scala dei log-odds:
+
+$$
+\operatorname{logit}(p_i)=\alpha+\beta x_i.
+$$
+
+La trasformazione inversa riporta il risultato sulla scala più intuitiva delle probabilità:
 
 $$
 p_i
@@ -77,19 +95,19 @@ p_i
 \frac{1}{1+\exp[-(\alpha+\beta x_i)]}.
 $$
 
-Questa formulazione rende visibili le tre componenti del GLM. La componente osservazionale è la distribuzione Bernoulli; il predittore lineare è $\eta_i=\alpha+\beta x_i$; la funzione di collegamento è il logit. Nei capitoli successivi cambieranno la distribuzione o il link, ma questa architettura rimarrà invariata.
+Questa formulazione mostra le tre componenti di un modello lineare generalizzato: una distribuzione per i dati (Bernoulli), un predittore lineare ($\eta_i=\alpha+\beta x_i$) e una funzione di collegamento (logit). Il link non aggiunge un nuovo elemento ma rappresenta il ponte matematico che consente alla retta di descrivere probabilità valide.
 
 ## Un caso di studio simulato
 
-Consideriamo un compito nel quale ogni partecipante risponde correttamente o in modo errato a una prova. Supponiamo che $x_i$ rappresenti un indicatore standardizzato di preparazione. L'outcome è codificato come 1 per una risposta corretta e 0 per una risposta errata.
+Consideriamo un compito in cui ogni partecipante risponde correttamente o in modo errato a una prova. Supponiamo che $x_i$ rappresenti un indicatore standardizzato di preparazione: il valore 0 indica la preparazione media, 1 una deviazione standard sopra la media e $-1$ una deviazione standard sotto la media. L'esito è codificato come 1 per una risposta corretta e 0 per una risposta errata.
 
-La domanda scientifica è: **come varia la probabilità di risposta corretta al variare della preparazione?** La quantità centrale non è direttamente il coefficiente $\beta$, ma la funzione
+La domanda scientifica è: *Come varia la probabilità di risposta corretta al variare della preparazione?* La quantità centrale non è direttamente il coefficiente $\beta$, ma la funzione
 
 $$
 p(x)=\Pr(Y=1\mid x),
 $$
 
-e, quando serve un confronto specifico, la differenza tra due probabilità $p(x_b)-p(x_a)$.
+e, quando serve un confronto specifico, la differenza tra due probabilità è data da $p(x_b)-p(x_a)$.
 
 Generiamo i dati da un modello noto:
 
@@ -109,7 +127,7 @@ logistic_data <- tibble(
 glimpse(logistic_data)
 ```
 
-Una prima rappresentazione può raggruppare il predittore in intervalli e mostrare la proporzione osservata di risposte corrette. Questo grafico è descrittivo: serve a comprendere i dati, non sostituisce il modello probabilistico.
+Una prima rappresentazione può raggruppare il predittore in intervalli e mostrare la proporzione di risposte corrette osservate. Questo grafico è descrittivo e serve a comprendere i dati, ma non sostituisce il modello probabilistico.
 
 ```{r}
 observed_bins <- logistic_data |>
@@ -132,9 +150,17 @@ ggplot(observed_bins, aes(preparation, proportion_correct)) +
   )
 ```
 
-## Lo stesso coefficiente su scale diverse
+## Come interpretare i coefficienti
 
-Il coefficiente $\beta$ è lineare sulla scala del logit. Un incremento unitario di $x$ modifica i log-odds di $\beta$:
+L'intercetta $\alpha$ rappresenta i log-odds dell'esito quando $x=0$. Nel nostro esempio, poiché il predittore è standardizzato, esso descrive una persona con un livello di preparazione medio. La pendenza $\beta$ indica invece di quanto cambiano i log-odds per un incremento unitario di $x$, ovvero per una deviazione standard di preparazione.
+
+Questa è l'interpretazione più diretta del modello, ma non sempre la più intuitiva. È utile procedere per gradi:
+
+1. $\beta$ è una differenza di log-odds;
+2. $\exp(\beta)$ è un rapporto tra odds;
+3. le probabilità predette si ottengono trasformando $\alpha+\beta x$ con la funzione logistica.
+
+Il coefficiente $\beta$ è costante sulla scala del logit. Un incremento unitario di $x$ modifica i log-odds di $\beta$:
 
 $$
 \operatorname{logit}[p(x+1)]-
@@ -143,7 +169,7 @@ $$
 \beta.
 $$
 
-Esponenziando il coefficiente otteniamo l'odds ratio associato a un incremento unitario:
+Esponenziando il coefficiente, si ottiene l'odds ratio associato a un incremento unitario:
 
 $$
 \frac{\operatorname{odds}(x+1)}{\operatorname{odds}(x)}
@@ -153,7 +179,9 @@ $$
 \operatorname{odds}(x)=\frac{p(x)}{1-p(x)}.
 $$
 
-Nel modello logistico senza interazioni, l'odds ratio per un incremento fisso del predittore è costante. Non è invece costante il cambiamento della probabilità. La curva logistica è più ripida nella regione centrale e più piatta quando la probabilità è vicina a 0 o a 1:
+Nel modello logistico senza interazioni, l'odds ratio per un incremento fisso del predittore è costante. Il cambiamento della probabilità, invece, dipende dal punto di partenza. Passare da 0.10 a 0.20 e passare da 0.50 a 0.60 significa in entrambi i casi aumentare la probabilità di 0.10, ma non produce lo stesso cambiamento negli odds. Simmetricamente, lo stesso odds ratio può corrispondere a differenze di probabilità molto diverse.
+
+La curva logistica è infatti più ripida nella regione centrale e più piatta quando la probabilità si avvicina a 0 o a 1:
 
 $$
 \frac{dp(x)}{dx}
@@ -161,9 +189,9 @@ $$
 \beta\,p(x)[1-p(x)].
 $$
 
-La derivata raggiunge il valore massimo quando $p(x)=0.5$; in quel punto vale $\beta/4$. La cosiddetta regola del “dividere per quattro” è dunque un'approssimazione del **massimo cambiamento locale**, non un modo generale per trasformare un coefficiente logistico in una differenza di probabilità.
+La derivata raggiunge il valore massimo quando $p(x)=0.5$; in quel punto vale $\beta/4$. La cosiddetta regola del "dividere per quattro" è dunque un'approssimazione del *massimo cambiamento locale*, non un metodo generale per trasformare un coefficiente logistico in una differenza di probabilità.
 
-Per comunicare un risultato è spesso preferibile scegliere due valori sostantivamente interpretabili del predittore, calcolare le probabilità corrispondenti e derivare il contrasto d'interesse. Dati due valori $x_a$ e $x_b$, possiamo ottenere
+Per comunicare un risultato è spesso preferibile non fermarsi a $\beta$ o all'odds ratio. Si scelgono due valori sostantivamente interpretabili del predittore, si calcolano le probabilità corrispondenti e si costruisce il confronto di interesse. Dati due valori $x_a$ e $x_b$, possiamo ottenere
 
 $$
 \operatorname{RD}=p(x_b)-p(x_a),
@@ -181,17 +209,17 @@ $$
 \exp[\beta(x_b-x_a)].
 $$
 
-Queste quantità rispondono a domande diverse. La differenza di probabilità descrive un cambiamento assoluto; il risk ratio descrive un cambiamento relativo della probabilità; l'odds ratio descrive un cambiamento relativo degli odds. Nessuna delle tre è universalmente preferibile. La scelta dipende dal contesto e dal pubblico al quale il risultato deve essere comunicato.
+Queste quantità rispondono a domande diverse. La differenza di probabilità descrive un cambiamento assoluto; il risk ratio descrive un cambiamento relativo della probabilità; l'odds ratio descrive un cambiamento relativo degli odds. Nessuna delle tre è universalmente preferibile. La scelta dipende dal contesto e dal pubblico a cui il risultato deve essere comunicato.
 
 ## Specificazione dei prior
 
-Poiché il predittore è standardizzato, $\alpha$ rappresenta il logit della probabilità per una persona con preparazione media. Un prior come
+Poiché il predittore è standardizzato, $\alpha$ rappresenta il logit della probabilità per una persona con un livello di preparazione medio. Un prior come
 
 $$
 \alpha \sim \operatorname{Normal}(0,1.5)
 $$
 
-attribuisce maggiore plausibilità a probabilità di base non troppo prossime agli estremi, senza escluderle completamente. Per la pendenza possiamo usare
+attribuisce maggiore plausibilità alle probabilità di base non troppo prossime agli estremi, senza escluderle completamente. Per la pendenza possiamo usare
 
 $$
 \beta \sim \operatorname{Normal}(0,1),
@@ -228,7 +256,7 @@ Possiamo esaminare la distribuzione della proporzione complessiva di risposte co
 pp_check(fit_logistic_prior, type = "stat", stat = "mean", ndraws = 100)
 ```
 
-Questo controllo non deve produrre dati identici a quelli osservati. Deve piuttosto verificare che il prior generi scenari compatibili con ciò che riteniamo possibile prima di usare il campione corrente.
+Questo controllo non deve produrre dati identici a quelli osservati. Deve piuttosto verificare che il prior generi scenari compatibili con quanto riteniamo possibile prima di utilizzare il campione corrente.
 
 ## Stima con `brms`
 
@@ -283,7 +311,7 @@ Il modello computazionale sottostante è lo stesso: una verosimiglianza Bernoull
 
 ## Dalla posterior alle probabilità
 
-La posterior dei coefficienti può essere trasformata in qualunque quantità sostantiva. Consideriamo tre livelli del predittore: una deviazione standard sotto la media, la media e una deviazione standard sopra la media.
+Ogni campione della posterior contiene un possibile valore di $\alpha$ e $\beta$ compatibile con modello e dati. Trasformando ciascuna coppia di coefficienti otteniamo una distribuzione di probabilità predette, non una singola curva priva di incertezza. Consideriamo tre livelli del predittore: una deviazione standard sotto la media, la media e una deviazione standard sopra la media.
 
 ```{r}
 comparison_grid <- tibble(
@@ -331,11 +359,11 @@ summarise(
 )
 ```
 
-L'odds ratio per il passaggio da $-1$ a $1$ corrisponde a $\exp(2\beta)$, perché i due valori distano due unità. La differenza e il rapporto tra probabilità dipendono invece anche dall'intercetta, cioè dal livello di base della probabilità.
+L'odds ratio per il passaggio da $-1$ a $1$ corrisponde a $\exp(2\beta)$, perché i due valori distano due unità. La differenza e il rapporto tra probabilità dipendono invece anche dall'intercetta, ovvero dal livello di base della probabilità.
 
 ## Visualizzare la relazione stimata
 
-Per rappresentare l'incertezza sulla probabilità media costruiamo una griglia di valori del predittore e usiamo `posterior_epred()`. Questa funzione restituisce la probabilità attesa di successo. Non genera nuove risposte binarie.
+Per rappresentare l'incertezza sulla probabilità media costruiamo una griglia di valori del predittore e utilizziamo la funzione `posterior_epred()`. Questa funzione restituisce la probabilità attesa di successo. Non genera nuove risposte binarie.
 
 ```{r}
 prediction_grid <- tibble(
@@ -370,7 +398,7 @@ ggplot(prediction_summary, aes(preparation, estimate)) +
   )
 ```
 
-La fascia rappresenta l'incertezza sulla probabilità media condizionata. Per simulare nuove risposte individuali si usa invece `posterior_predict()`, che aggiunge la variabilità Bernoulli:
+La fascia rappresenta l'incertezza sulla probabilità media condizionata. Per simulare nuove risposte individuali, invece, si usa la funzione `posterior_predict()`, che aggiunge la variabilità Bernoulli:
 
 ```{r}
 y_rep <- posterior_predict(
@@ -389,7 +417,7 @@ Un primo controllo confronta la proporzione complessiva osservata con quella del
 pp_check(fit_logistic, type = "stat", stat = "mean", ndraws = 100)
 ```
 
-Questo controllo può però risultare soddisfacente anche se il modello rappresenta male la relazione con il predittore. Conviene quindi confrontare, per intervalli di preparazione, le proporzioni osservate con quelle previste.
+Tale controllo può però risultare soddisfacente anche se il modello non rappresenta bene la relazione con il predittore. Per questo motivo, è consigliabile confrontare, per intervalli di preparazione, le proporzioni osservate con quelle previste.
 
 ```{r}
 posterior_probabilities <- posterior_epred(fit_logistic)
@@ -442,7 +470,7 @@ ggplot(model_check, aes(preparation, predicted)) +
   )
 ```
 
-Il controllo non dimostra che il modello sia vero. Può invece rivelare curvature non rappresentate, sottogruppi differenti, dipendenze tra osservazioni o altre caratteristiche che richiedono una specificazione più ricca.
+Tuttavia, il controllo non dimostra che il modello sia vero. Può invece rivelare curvature non rappresentate, sottogruppi differenti, dipendenze tra le osservazioni o altre caratteristiche che richiedono una descrizione più dettagliata.
 
 ## Quando il predittore è categoriale
 
@@ -454,15 +482,17 @@ p_0=\operatorname{logit}^{-1}(\alpha),
 p_1=\operatorname{logit}^{-1}(\alpha+\beta).
 $$
 
-In questo caso $\exp(\beta)$ è l'odds ratio tra i due gruppi, mentre $p_1-p_0$ e $p_1/p_0$ sono rispettivamente la differenza e il rapporto tra probabilità. Il confronto tra due proporzioni non richiede quindi una tecnica nuova: è un caso particolare dello stesso GLM. Il capitolo successivo userà questa equivalenza per collegare il modello a sola intercetta, il confronto tra gruppi e le diverse scale di effetto.
+In questo caso $\exp(\beta)$ rappresenta l'odds ratio tra i due gruppi, mentre $p_1-p_0$ e $p_1/p_0$ indicano rispettivamente la differenza e il rapporto tra le probabilità. Il confronto tra due proporzioni non richiede quindi una tecnica nuova, ma è un caso particolare dello stesso GLM. Il capitolo successivo sfrutterà questa equivalenza per collegare il modello a sola intercetta, il confronto tra gruppi e le diverse scale di effetto.
 
 ## Assunzioni e limiti
 
-La regressione logistica non richiede errori gaussiani né varianza costante, ma non è priva di assunzioni. Il link logit impone una relazione lineare tra i predittori e i log-odds; le osservazioni sono considerate condizionalmente indipendenti; la codifica dell'outcome e dei predittori deve essere coerente; l'eventuale struttura gerarchica o temporale deve essere rappresentata esplicitamente. Con dati perfettamente o quasi perfettamente separati, prior regolarizzanti diventano particolarmente importanti.
+La regressione logistica non richiede errori gaussiani né varianza costante, ma non è priva di assunzioni. Il link logit impone una relazione lineare tra i predittori e i log-odds, considera le osservazioni come indipendenti condizionatamente, richiede una codifica coerente dell'esito e dei predittori e la rappresentazione esplicita di eventuali strutture gerarchiche o temporali.
 
-Anche l'interpretazione causale richiede cautela. Il coefficiente logistico descrive un'associazione condizionata al modello e alle variabili incluse. Randomizzazione, ipotesi di identificazione e disegno dello studio determinano se tale associazione possa essere interpretata come effetto causale.
+Un problema particolare è la *separazione*: può accadere che un predittore distingua quasi perfettamente gli 0 dagli 1. In quel caso i coefficienti possono diventare estremamente grandi e instabili; prior regolarizzanti aiutano a mantenere la stima in regioni plausibili.
 
-Infine, una regressione logistica resta un modello della distribuzione condizionata della risposta. Può descrivere e prevedere come cambia una probabilità, ma non specifica necessariamente il processo psicologico che produce le scelte o le risposte nel tempo. Questa distinzione diventerà centrale nel capitolo conclusivo della parte.
+Anche l'interpretazione causale richiede cautela. Il coefficiente logistico descrive un'associazione condizionata al modello e alle variabili incluse. La randomizzazione, l'ipotesi di identificazione e il disegno dello studio determinano se tale associazione possa essere interpretata come effetto causale.
+
+Infine, una regressione logistica rimane un modello della distribuzione condizionata della risposta. Può descrivere e prevedere come cambia una probabilità, ma non specifica necessariamente il processo psicologico che produce le scelte o le risposte nel tempo. Questa distinzione sarà centrale nel capitolo conclusivo della parte.
 
 ## Errori interpretativi ricorrenti
 
@@ -478,11 +508,11 @@ Infine, una regressione logistica resta un modello della distribuzione condizion
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-La regressione logistica conserva la struttura essenziale del modello lineare, ma la adatta a un outcome binario. La distribuzione Bernoulli descrive le risposte osservate, il predittore lineare sintetizza l'associazione con le covariate e il link logit trasforma una quantità non vincolata in una probabilità compresa tra 0 e 1.
+La regressione logistica mantiene la struttura essenziale del modello lineare, ma la adatta a un esito binario. La distribuzione di Bernoulli descrive le risposte osservate, il predittore lineare sintetizza l'associazione con le variabili indipendenti e il logit trasforma una quantità non vincolata in una probabilità compresa tra 0 e 1.
 
-La linearità del modello riguarda i log-odds, non la probabilità. Per questo l'interpretazione non dovrebbe fermarsi ai coefficienti. La posterior può essere trasformata in probabilità predette, differenze assolute, rapporti di probabilità e odds ratio, scegliendo la quantità più adatta alla domanda scientifica. Il workflow bayesiano rimane quello già sviluppato per il modello lineare: i prior devono essere controllati sulla scala osservabile, il calcolo deve essere diagnosticato e l'adeguatezza deve essere valutata mediante repliche posteriori mirate.
+La linearità del modello riguarda i log-odds e non la probabilità. Per questo motivo, l'interpretazione non dovrebbe limitarsi ai coefficienti. La distribuzione posteriore può essere trasformata in probabilità predette, differenze assolute, rapporti di probabilità e odds ratio, scegliendo la quantità più adatta alla domanda scientifica. Il flusso di lavoro bayesiano rimane lo stesso già sviluppato per il modello lineare: i prior devono essere controllati sulla scala osservabile, il calcolo deve essere diagnosticato e l'adeguatezza deve essere valutata mediante repliche posteriori mirate.
 
-Il capitolo fornisce la struttura di base dei GLM. Una proporzione corrisponde a una regressione logistica a sola intercetta e il confronto tra due proporzioni a una regressione con un predittore binario. Il modello di Poisson applicherà la stessa architettura ai conteggi. L'estensione della distribuzione osservazionale amplia le domande alle quali il modello può rispondere, ma non lo trasforma ancora in una teoria del processo che genera il comportamento.
+Il capitolo fornisce la struttura di base dei GLM. Una proporzione corrisponde a una regressione logistica con sola intercetta, mentre il confronto tra due proporzioni corrisponde a una regressione con un predittore binario. Il modello di Poisson applica la stessa architettura ai conteggi. L'estensione della distribuzione osservazionale amplia le domande a cui il modello può rispondere, ma non lo trasforma ancora in una teoria del processo che genera il comportamento.
 
 ::: {.callout-note collapse="true" title="Informazioni sull'ambiente di sviluppo"}
 ```{r}

@@ -1,31 +1,29 @@
 # Rescorla--Wagner: dall'errore di previsione alla scelta {#sec-dynamic-models-rescorla-wagner}
 
-::: {.callout-note appearance="minimal"}
 Il modello di Rescorla--Wagner costituisce un caso paradigmatico di modellazione processuale. Una teoria verbale dell'apprendimento viene tradotta in una regola di aggiornamento; gli stati latenti prodotti da tale regola vengono collegati alle scelte mediante un modello osservazionale; i parametri vengono quindi inferiti dal comportamento e sottoposti a controlli di recuperabilità e adeguatezza.
 
 Il valore didattico del modello non risiede soltanto nella sua semplicità. Esso rende visibile l'intero percorso che distingue una teoria formale da una regressione sulle risposte osservate:
 
-\[
-\text{feedback}
-\longrightarrow
-\text{errore di previsione}
-\longrightarrow
-\text{aggiornamento del valore}
-\longrightarrow
-\text{probabilità di scelta}
-\longrightarrow
-\text{comportamento}.
-\]
-:::
+$$
+\begin{array}{c}
+\text{feedback} \\
+\downarrow \\
+\text{errore di previsione} \\
+\downarrow \\
+\text{aggiornamento del valore} \\
+\downarrow \\
+\text{probabilità di scelta} \\
+\downarrow \\
+\text{comportamento}
+\end{array}
+$$
 
-::: {.callout-note appearance="minimal" .chapter-status}
-**Da sapere.** La regola di apprendimento, il modello di scelta e gli stati latenti svolgono ruoli distinti; `alpha` e `tau` possono produrre pattern comportamentali simili e devono essere valutati con simulazioni e controlli predittivi.
+::: {.callout-important appearance="minimal" .chapter-status}
+**Da sapere.** Il modello di Rescorla–Wagner separa tre componenti: una regola di apprendimento che aggiorna valori latenti attraverso l’errore di previsione, un modello osservazionale che trasforma le differenze di valore in probabilità di scelta e una distribuzione per le risposte osservate. Il parametro $\alpha$ regola la velocità di aggiornamento, mentre $\tau$ regola quanto coerentemente le scelte seguono i valori appresi. I due parametri possono compensarsi e dipendono dalla scala dei rinforzi: non devono quindi essere interpretati come misure psicologiche dirette senza simulazioni, controlli predittivi e verifiche di recuperabilità.
 
-**Da saper fare.** Simulare il processo, usare il programma Stan fornito, interpretare la posterior dei parametri e degli stati latenti, eseguire controlli predittivi e valutare la recuperabilità.
+**Da saper fare.** Simulare il processo e spiegare come $\alpha$ e $\tau$ modificano apprendimento e scelta; leggere il programma Stan fornito collegandone le istruzioni alla regola ricorsiva e al modello osservazionale; interpretare le distribuzioni a posteriori dei parametri e le traiettorie degli stati latenti; controllare diagnostica del campionamento, previsioni posteriori e recuperabilità dei parametri; riconoscere quando discrepanze sequenziali suggeriscono che il modello di base è incompleto.
 
-**Approfondimento facoltativo.** Scrivere Stan da zero, sviluppare il modello rivale con perseverazione e implementare le estensioni teoriche finali.
-
-**Soglia del capitolo.** Non esiste un percorso applicativo solo-`brms`: qui Stan è costitutivo del modello ricorsivo. È richiesto leggerne e usare in modo guidato il programma, non progettarlo autonomamente.
+**Approfondimento facoltativo.** La scrittura autonoma del programma Stan, l’implementazione completa del modello rivale con perseverazione, il confronto formale tra modelli e le estensioni con apprendimento asimmetrico, decadimento o *lapse* possono essere rimandati. In questo capitolo, tuttavia, Stan è costitutivo dell’analisi: non esiste un percorso applicativo equivalente basato soltanto su `brms`. Nel percorso essenziale è richiesto saper leggere e utilizzare in modo guidato il programma fornito, non scriverlo da zero.
 
 [Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
 :::
@@ -78,74 +76,74 @@ Nel seguito useremo l'espressione *modello Rescorla--Wagner* nel senso ampio com
 
 ### Stati latenti e feedback
 
-Indichiamo con \(Q_t(A)\) e \(Q_t(B)\) i valori attribuiti alle due alternative immediatamente prima del trial \(t\). Questi valori non sono osservati direttamente: costituiscono gli stati latenti del modello.
+Indichiamo con $Q_t(A)$ e $Q_t(B)$ i valori attribuiti alle due alternative immediatamente prima del trial $t$. Questi valori non sono osservati direttamente: costituiscono gli stati latenti del modello.
 
-Dopo aver scelto l'alternativa \(a_t\) e osservato il rinforzo \(R_t\), il modello calcola l'errore di previsione:
+Dopo aver scelto l'alternativa $a_t$ e osservato il rinforzo $R_t$, il modello calcola l'errore di previsione:
 
-\[
+$$
 \delta_t = R_t-Q_t(a_t).
-\]
+$$
 
 Il valore dell'alternativa scelta viene quindi aggiornato secondo:
 
-\[
+$$
 Q_{t+1}(a_t)
 =
 Q_t(a_t)+\alpha\delta_t,
-\]
+$$
 
 mentre il valore dell'alternativa non scelta rimane invariato.
 
 Il parametro
 
-\[
+$$
 0<\alpha<1
-\]
+$$
 
 è il **tasso di apprendimento**.
 
-- Con \(\alpha\) vicino a zero, ciascun feedback modifica poco il valore e la storia passata conserva a lungo la propria influenza.
-- Con \(\alpha\) elevato, il valore risponde rapidamente agli esiti recenti.
+- Con $\alpha$ vicino a zero, ciascun feedback modifica poco il valore e la storia passata conserva a lungo la propria influenza.
+- Con $\alpha$ elevato, il valore risponde rapidamente agli esiti recenti.
 - Un valore elevato non è necessariamente “migliore”: in un ambiente rumoroso può produrre stime instabili.
 - Un valore basso non implica automaticamente un deficit: può essere appropriato quando le contingenze sono stabili e i singoli feedback sono poco affidabili.
 
 ::: {.callout-note collapse=true title="Tassi diversi per esiti positivi e negativi"}
 Un'estensione comune usa due parametri:
 
-\[
+$$
 \alpha^+
 \quad\text{e}\quad
 \alpha^-,
-\]
+$$
 
-applicati rispettivamente quando \(\delta_t\geq 0\) e quando \(\delta_t<0\).
+applicati rispettivamente quando $\delta_t\geq 0$ e quando $\delta_t<0$.
 
 Questa estensione è sostantiva soltanto se il disegno contiene abbastanza errori di previsione di entrambi i segni da distinguere i due parametri. Aggiungere parametri senza informazione sufficiente può aumentare l'incertezza e creare nuove compensazioni.
 :::
 
 ## Il modello osservazionale
 
-Gli stati \(Q_t(A)\) e \(Q_t(B)\) non sono scelte. Per collegare il processo latente al comportamento osservato occorre una regola probabilistica.
+Gli stati $Q_t(A)$ e $Q_t(B)$ non sono scelte. Per collegare il processo latente al comportamento osservato occorre una regola probabilistica.
 
 Con due alternative, la funzione Softmax si riduce a una regressione logistica sulla differenza di valore:
 
-\[
+$$
 \Pr(Y_t=B)
 =
 \operatorname{logit}^{-1}
 \left[
 \tau\left\{Q_t(B)-Q_t(A)\right\}
 \right],
-\]
+$$
 
-dove \(\tau>0\) è l'**inverse temperature**.
+dove $\tau>0$ è l'**inverse temperature**.
 
-- Con \(\tau\) basso, anche una grande differenza tra i valori produce una preferenza moderata.
-- Con \(\tau\) alto, piccole differenze possono generare scelte quasi deterministiche.
+- Con $\tau$ basso, anche una grande differenza tra i valori produce una preferenza moderata.
+- Con $\tau$ alto, piccole differenze possono generare scelte quasi deterministiche.
 
 La verosimiglianza delle scelte è quindi:
 
-\[
+$$
 Y_t
 \sim
 \operatorname{Bernoulli}(p_t),
@@ -156,43 +154,31 @@ p_t
 \left[
 \tau\left\{Q_t(B)-Q_t(A)\right\}
 \right].
-\]
+$$
 
 ::: {.callout-important title="Apprendimento e scelta non sono la stessa cosa"}
-Il parametro \(\alpha\) governa il cambiamento degli stati latenti dopo il feedback. Il parametro \(\tau\) governa la relazione tra stati latenti e risposta.
+Il parametro $\alpha$ governa il cambiamento degli stati latenti dopo il feedback. Il parametro $\tau$ governa la relazione tra stati latenti e risposta.
 
-Una scelta apparentemente casuale può dipendere da valori poco differenziati, da un \(\tau\) basso, da una tendenza a perseverare, da distrazione o da una regola di scelta inadeguata. Per questo motivo non è corretto interpretare direttamente la percentuale di risposte ottimali come misura pura dell'apprendimento.
+Una scelta apparentemente casuale può dipendere da valori poco differenziati, da un $\tau$ basso, da una tendenza a perseverare, da distrazione o da una regola di scelta inadeguata. Per questo motivo non è corretto interpretare direttamente la percentuale di risposte ottimali come misura pura dell'apprendimento.
 :::
 
 ## Scala, condizioni iniziali e identificabilità
 
-La scala dei valori \(Q\), la codifica del rinforzo e il parametro \(\tau\) sono collegati.
+La scala dei valori $Q$, la codifica del rinforzo e il parametro $\tau$ sono collegati.
 
-Se tutti i valori e i rinforzi vengono moltiplicati per una costante \(c\), la stessa probabilità di scelta può essere ottenuta dividendo \(\tau\) per \(c\). L'inverse temperature non possiede quindi un significato assoluto indipendente dalla scala del compito.
+Se tutti i valori e i rinforzi vengono moltiplicati per una costante $c$, la stessa probabilità di scelta può essere ottenuta dividendo $\tau$ per $c$. L'inverse temperature non possiede quindi un significato assoluto indipendente dalla scala del compito.
 
-Nel seguito adottiamo convenzioni esplicite:
+Nel seguito ci atteniamo a convenzioni esplicite: i rinforzi sono codificati come $0$ e $1$, i valori iniziali delle due opzioni sono $Q_1(A)=Q_1(B)=0.5$, viene impiegato un unico tasso di apprendimento, l’aggiornamento riguarda esclusivamente l’opzione scelta e il parametro $\tau$ è definito come *temperatura inversa* (*inverse temperature*).
 
-- rinforzi codificati come \(0\) e \(1\);
-- valori iniziali \(Q_1(A)=Q_1(B)=0.5\);
-- un solo tasso di apprendimento;
-- aggiornamento della sola opzione scelta;
-- \(\tau\) definito come inverse temperature.
-
-Fissare i valori iniziali evita di chiedere ai dati di distinguere simultaneamente condizioni iniziali, tasso di apprendimento e sensibilità di scelta. In altri contesti \(Q_0\) può essere stimato, ma ciò richiede una motivazione e dati iniziali sufficientemente informativi.
+Fissare i valori iniziali evita di chiedere ai dati di distinguere simultaneamente condizioni iniziali, tasso di apprendimento e sensibilità di scelta. In altri contesti $Q_0$ può essere stimato, ma ciò richiede una motivazione e dati iniziali sufficientemente informativi.
 
 ## Simulare prima di stimare
 
 ### Un compito di probabilistic reversal learning
 
-Consideriamo un compito con due alternative. Nella prima fase, \(A\) produce una ricompensa con probabilità \(0.7\) e \(B\) con probabilità \(0.3\). Dopo il trial 80 le contingenze si invertono.
+Consideriamo un compito con due alternative. Nella prima fase, $A$ produce una ricompensa con probabilità $0.7$ e $B$ con probabilità $0.3$. Dopo il trial 80 le contingenze si invertono.
 
-Definiamo un simulatore che separa:
-
-- ambiente;
-- processo di apprendimento;
-- modello di scelta.
-
-Il parametro opzionale `kappa` rappresenta una tendenza a ripetere la scelta precedente indipendentemente dai valori. Per ora lo manterremo uguale a zero; lo useremo in seguito per criticare il modello di base.
+Definiamo un simulatore che separa ambiente, processo di apprendimento e modello di scelta. Il parametro opzionale `kappa` rappresenta una tendenza a ripetere la scelta precedente indipendentemente dai valori. Per ora lo manterremo uguale a zero; lo useremo in seguito per criticare il modello di base.
 
 ```{r}
 #| label: simulate-prl-function
@@ -279,7 +265,7 @@ simulate_prl_rw <- function(
 
 ### Che cosa fanno i parametri?
 
-Simuliamo quattro combinazioni di \(\alpha\) e \(\tau\).
+Simuliamo quattro combinazioni di $\alpha$ e $\tau$.
 
 ```{r}
 #| label: simulate-rw-parameter-grid
@@ -340,20 +326,20 @@ rw_scenario_data |>
 
 Le quattro traiettorie non si ordinano lungo una sola dimensione di “prestazione”.
 
-- Un \(\alpha\) elevato facilita l'adattamento dopo il reversal, ma può amplificare la reazione a ricompense casuali.
-- Un \(\tau\) elevato rende il comportamento coerente con i valori correnti, anche quando tali valori sono ancora errati.
-- Un \(\tau\) basso produce maggiore variabilità nelle scelte e può rallentare la manifestazione comportamentale di ciò che è stato appreso.
+- Un $\alpha$ elevato facilita l'adattamento dopo il reversal, ma può amplificare la reazione a ricompense casuali.
+- Un $\tau$ elevato rende il comportamento coerente con i valori correnti, anche quando tali valori sono ancora errati.
+- Un $\tau$ basso produce maggiore variabilità nelle scelte e può rallentare la manifestazione comportamentale di ciò che è stato appreso.
 - La stessa accuratezza media può nascondere combinazioni di parametri differenti.
 
 ### Una traiettoria di riferimento
 
 Generiamo ora dati da un partecipante simulato con:
 
-\[
+$$
 \alpha=0.20,
 \qquad
 \tau=3.
-\]
+$$
 
 ```{r}
 #| label: simulate-rw-reference-data
@@ -394,17 +380,17 @@ L'ambiente genera il feedback, il feedback modifica i valori e i valori influenz
 
 ## Dalla simulazione all'inferenza inversa
 
-Nella simulazione conosciamo \(\alpha\), \(\tau\) e l'intera sequenza degli stati. Nei dati reali osserviamo soltanto scelte e feedback.
+Nella simulazione conosciamo $\alpha$, $\tau$ e l'intera sequenza degli stati. Nei dati reali osserviamo soltanto scelte e feedback.
 
 L'inferenza procede quindi nella direzione opposta:
 
-\[
+$$
 \text{scelte e feedback}
 \longrightarrow
 \text{posterior di }\alpha,\tau
 \longrightarrow
 \text{posterior degli stati }Q_t.
-\]
+$$
 
 Questa operazione è possibile soltanto perché abbiamo specificato sia la dinamica dell'apprendimento sia il modello osservazionale.
 
@@ -414,33 +400,33 @@ Questa operazione è possibile soltanto perché abbiamo specificato sia la dinam
 
 Per evitare limiti rigidi durante il campionamento, lavoriamo con parametri non vincolati:
 
-\[
+$$
 \alpha=\operatorname{logit}^{-1}(\alpha_{\mathrm{raw}}),
 \qquad
 \tau=\exp(\log\tau).
-\]
+$$
 
 Usiamo:
 
-\[
+$$
 \alpha_{\mathrm{raw}}
 \sim
 \operatorname{Normal}
 \left(
 \operatorname{logit}(0.20),1
 \right),
-\]
+$$
 
-\[
+$$
 \log\tau
 \sim
 \operatorname{Normal}
 \left(
 \log 2,0.6
 \right).
-\]
+$$
 
-Questi prior sono propri e relativamente ampi. Non dichiarano che valori specifici siano “tipici” in assoluto: la plausibilità di \(\tau\) dipende dalla scala dei valori e dal compito.
+Questi prior sono propri e relativamente ampi. Non dichiarano che valori specifici siano “tipici” in assoluto: la plausibilità di $\tau$ dipende dalla scala dei valori e dal compito.
 
 ### Controllare le implicazioni del prior
 
@@ -671,7 +657,7 @@ generated quantities {
 ```
 
 ::: {.callout-note collapse=true title="Che cosa viene trattato come casuale?"}
-Nella verosimiglianza stimiamo il modello delle **scelte condizionate ai feedback osservati**. La distribuzione dell'ambiente non contribuisce alla posterior di \(\alpha\) e \(\tau\).
+Nella verosimiglianza stimiamo il modello delle **scelte condizionate ai feedback osservati**. La distribuzione dell'ambiente non contribuisce alla posterior di $\alpha$ e $\tau$.
 
 Nelle quantità generate simuliamo invece anche i feedback, usando le probabilità note del compito. Questo produce repliche complete del comportamento nello stesso ambiente e permette controlli predittivi su adattamento, switching e ricompense.
 :::
@@ -806,7 +792,7 @@ Una dipendenza tra i parametri non è un errore del campionatore. Può rifletter
 
 ## Ricostruire gli stati latenti
 
-Le quantità generate contengono, per ogni draw, i valori \(Q_t(A)\) e \(Q_t(B)\) coerenti con scelte e feedback osservati.
+Le quantità generate contengono, per ogni draw, i valori $Q_t(A)$ e $Q_t(B)$ coerenti con scelte e feedback osservati.
 
 ```{r}
 #| label: summarize-rw-latent-trajectories
@@ -1027,26 +1013,20 @@ recovery_grid <- tidyr::crossing(
 :::
 
 ::: {.callout-important title="Fit e recuperabilità sono domande differenti"}
-Un modello può adattarsi bene alle scelte e tuttavia non distinguere accuratamente \(\alpha\) da \(\tau\). In tal caso le previsioni aggregate possono essere adeguate, mentre le interpretazioni individuali dei parametri rimangono fragili.
+Un modello può adattarsi bene alle scelte e tuttavia non distinguere accuratamente $\alpha$ da $\tau$. In tal caso le previsioni aggregate possono essere adeguate, mentre le interpretazioni individuali dei parametri rimangono fragili.
 :::
 
 ## Quando il modello di base fallisce
 
-Il modello RW con scelta logistica assume che la scelta corrente dipenda dai valori appresi, ma non dalla risposta precedente una volta condizionato sui valori.
+Il modello RW con scelta logistica assume che, condizionatamente ai valori appresi, la scelta corrente non dipenda dalla risposta precedente.
 
-Molti partecipanti possono invece mostrare:
+Molti partecipanti potrebbero invece mostrare perseverazione (tendenza a ripetere la risposta), alternanza sistematica, lapse occasionali, apprendimento asimmetrico da rinforzi positivi e negativi, o decadimento dei valori delle opzioni non scelte.
 
-- perseverazione, cioè tendenza a ripetere;
-- alternanza sistematica;
-- lapse occasionali;
-- apprendimento differente da esiti positivi e negativi;
-- decadimento dei valori delle opzioni non scelte.
+Per illustrare il processo di raffinamento del modello, generiamo un secondo dataset in cui è presente un effetto di perseverazione positiva:
 
-Per mostrare il ciclo di revisione, generiamo un secondo dataset nel quale esiste una perseverazione positiva:
-
-\[
+$$
 \kappa=0.9.
-\]
+$$
 
 ```{r}
 #| label: simulate-rw-perseveration-data
@@ -1073,7 +1053,7 @@ rw_perseveration_data <- list(
 )
 ```
 
-Adattiamo dapprima il modello di base, che non contiene \(\kappa\).
+Adattiamo dapprima il modello di base, che non contiene $\kappa$.
 
 ```{r}
 #| label: fit-rw-base-to-perseveration
@@ -1091,13 +1071,13 @@ fit_rw_misspecified <- rw_model$sample(
 )
 ```
 
-Il modello può compensare in parte la perseverazione modificando \(\alpha\) e \(\tau\), ma tale compensazione non garantisce che riproduca le dipendenze seriali rilevanti.
+Il modello può compensare in parte la perseverazione modificando $\alpha$ e $\tau$, ma tale compensazione non garantisce che riproduca le dipendenze seriali rilevanti.
 
 ### Un modello rivale con perseverazione
 
 Introduciamo:
 
-\[
+$$
 \Pr(Y_t=B)
 =
 \operatorname{logit}^{-1}
@@ -1106,11 +1086,11 @@ Introduciamo:
 +
 \kappa S_{t-1}
 \right],
-\]
+$$
 
 dove:
 
-\[
+$$
 S_{t-1}
 =
 \begin{cases}
@@ -1118,9 +1098,9 @@ S_{t-1}
 -1, & \text{se la scelta precedente è }A,\\
 0, & \text{al primo trial.}
 \end{cases}
-\]
+$$
 
-Con \(\kappa>0\), la risposta precedente tende a essere ripetuta; con \(\kappa<0\), il modello favorisce l'alternanza.
+Con $\kappa>0$, la risposta precedente tende a essere ripetuta; con $\kappa<0$, il modello favorisce l'alternanza.
 
 ```{r}
 #| label: rw-perseveration-stan-code
@@ -1345,7 +1325,7 @@ fit_rw_perseveration$summary(
 )
 ```
 
-Se il modello esteso riproduce meglio le statistiche seriali e recupera un \(\kappa\) positivo, abbiamo evidenza che la perseverazione è una componente utile della specificazione per questi dati simulati.
+Se il modello esteso riproduce meglio le statistiche seriali e recupera un $\kappa$ positivo, abbiamo evidenza che la perseverazione è una componente utile della specificazione per questi dati simulati.
 
 Non abbiamo però dimostrato che la perseverazione sia il vero meccanismo psicologico. Altri modelli potrebbero produrre pattern simili.
 
@@ -1365,72 +1345,30 @@ L'unità lasciata fuori deve corrispondere alla generalizzazione scientifica des
 
 ## Estensioni teoricamente motivate {#sec-rw-extensions}
 
-::: {.callout-tip appearance="minimal" .optional-section}
-**Approfondimento facoltativo.** Le estensioni che seguono mostrano come ampliare il modello di base, ma non sono necessarie per comprenderne la struttura generativa, stimarne i parametri o valutarne l'adeguatezza.
-:::
+Le estensioni illustrate in questa sezione sono facoltative: non sono necessarie per comprendere la struttura generativa del modello di base, stimarne i parametri né valutarne l’adeguatezza. Chi legge può dunque limitarsi al modello Rescorla-Wagner e tornare a queste pagine in un secondo momento.
 
-### Apprendimento asimmetrico
+Tra le estensioni più comuni rientrano:
 
-Si possono distinguere \(\alpha^+\) e \(\alpha^-\) per errori di previsione positivi e negativi.
+- **apprendimento asimmetrico**, che distingue tassi di aggiornamento $\alpha^+$ e $\alpha^-$ per errori di previsione positivi e negativi;
+- **decadimento dei valori**, per cui i valori delle alternative non scelte convergono gradualmente verso un livello di riferimento;
+- **parametro di *lapse***, che separa una piccola probabilità di scelta casuale dalla sensibilità alle differenze di valore;
+- **generalizzazione a più di due alternative**: con $K>2$ la regola di scelta diventa
+  $$\Pr(Y_t=k) = \frac{\exp\{\tau\, Q_t(k)\}}{\sum_{j=1}^{K} \exp\{\tau\, Q_t(j)\}};$$
+- **parametri dipendenti dal contesto**, che consentono di far variare $\alpha_c$, $\tau_c$, $\kappa_c$ tra condizioni sperimentali o categorie di stimoli.
 
-### Decadimento dei valori
+Quest’ultima possibilità è stata impiegata, ad esempio, per verificare se i parametri di apprendimento differiscano tra contesti alimentari e neutri (@colpizzi2025food). Il valore dell’estensione non risiede soltanto nell’individuare una differenza, ma nel formulare e sottoporre a controllo l’ipotesi che la dinamica del processo cambi selettivamente con il contesto.
 
-I valori delle alternative non scelte possono avvicinarsi gradualmente a un valore di riferimento.
-
-### Lapse
-
-Una piccola probabilità di scelta casuale può essere separata dalla sensibilità ai valori.
-
-### Più alternative
-
-Con \(K>2\), la regola di scelta diventa:
-
-\[
-\Pr(Y_t=k)
-=
-\frac{
-\exp\{\tau Q_t(k)\}
-}{
-\sum_{j=1}^{K}
-\exp\{\tau Q_t(j)\}
-}.
-\]
-
-### Parametri dipendenti dal contesto
-
-Un'estensione contestuale permette che:
-
-\[
-\alpha_c,
-\qquad
-\tau_c,
-\qquad
-\kappa_c
-\]
-
-varino tra condizioni o categorie di stimoli.
-
-Un'applicazione discussa da @colpizzi2025food usa questa logica per esaminare se i parametri di apprendimento differiscano tra contesti alimentari e neutrali. Il valore di tale estensione non consiste soltanto nel trovare una differenza, ma nel formulare e controllare l'ipotesi che la dinamica del processo cambi selettivamente con il contesto.
-
-::: {.callout-important title="Un effetto contestuale richiede un modello gerarchico"}
-Quando persone e condizioni si ripetono, stimare separatamente ogni parametro produce stime rumorose e confronti instabili. L'estensione naturale è un modello gerarchico che descrive:
-
-- distribuzioni di popolazione;
-- deviazioni individuali;
-- differenze tra contesti;
-- correlazioni tra i parametri;
-- incertezza sulle quantità individuali e di gruppo.
-:::
+Quando persone e condizioni si ripetono, la stima separata di ogni parametro produce stime rumorose e confronti instabili. In tali situazioni è opportuno adottare un modello gerarchico che descriva: le distribuzioni nella popolazione, le deviazioni individuali, le differenze tra contesti, le correlazioni tra parametri e l’incertezza sulle quantità sia individuali sia di gruppo.
 
 ## Rescorla--Wagner è un modello bayesiano?
 
 La regola:
 
-\[
+$$
 Q_{t+1}
 =
 Q_t+\alpha(R_t-Q_t)
-\]
+$$
 
 ha la forma di un aggiornamento guidato da un errore di previsione. Questa somiglianza permette un utile collegamento intuitivo con l'apprendimento bayesiano.
 
@@ -1439,8 +1377,8 @@ L'identità, tuttavia, non è completa.
 Il modello RW standard:
 
 - mantiene un valore puntuale, non una distribuzione di incertezza;
-- usa spesso un tasso \(\alpha\) costante;
-- non deriva automaticamente \(\alpha\) dalla precisione relativa di prior e dati;
+- usa spesso un tasso $\alpha$ costante;
+- non deriva automaticamente $\alpha$ dalla precisione relativa di prior e dati;
 - non rappresenta esplicitamente l'incertezza sull'ambiente.
 
 Modelli come il filtro di Kalman o altri modelli di apprendimento bayesiano aggiornano invece sia la stima sia la sua incertezza e possono modificare dinamicamente il peso attribuito ai nuovi esiti.
@@ -1449,66 +1387,43 @@ Modelli come il filtro di Kalman o altri modelli di apprendimento bayesiano aggi
 
 ## Interpretare e comunicare i parametri
 
-Una formulazione prudente potrebbe essere:
+Una formulazione prudente àncora il discorso al modello, alla scala e all'incertezza, come mostra l'esempio seguente:
 
 > Nel modello specificato, la posterior del tasso di apprendimento descrive quanto rapidamente i valori latenti vengono aggiornati dopo i feedback, mentre la posterior dell'inverse temperature descrive quanto fortemente le scelte dipendono dalle differenze tra tali valori. I controlli predittivi indicano se questa scomposizione riproduce le dinamiche comportamentali considerate. L'interpretazione dei parametri come caratteristiche psicologiche richiede ulteriori evidenze di recuperabilità, stabilità e validità esterna.
 
-È preferibile evitare formulazioni come:
-
-- “il partecipante ha un deficit di apprendimento”;
-- “\(\tau\) misura direttamente l'esplorazione”;
-- “il parametro dimostra il meccanismo neurale”;
-- “il modello ha scoperto lo stile cognitivo della persona”.
-
-Le alternative corrette specificano sempre:
-
-1. il modello adottato;
-2. la scala e il compito;
-3. l'incertezza;
-4. i controlli eseguiti;
-5. le interpretazioni concorrenti.
+È preferibile evitare affermazioni che attribuiscono ai parametri un significato psicologico o neurale senza le necessarie cautele (ad esempio: “il partecipante ha un deficit di apprendimento”, “$\tau$ misura direttamente l'esplorazione”, “il parametro dimostra il meccanismo neurale”, “il modello ha scoperto lo stile cognitivo della persona”). Una comunicazione corretta deve invece specificare sempre: (1) il modello adottato, (2) la scala e il compito, (3) l'incertezza associata alle stime, (4) i controlli predittivi condotti e (5) le interpretazioni concorrenti plausibili.
 
 ## Errori frequenti
 
-### Interpretare la percentuale di risposte corrette come apprendimento puro
+- **Interpretare la percentuale di risposte corrette come apprendimento puro.**  
+  La prestazione osservata dipende congiuntamente dalla dinamica di aggiornamento, dalla regola di scelta, dalla struttura dell’ambiente e dalla specificazione del modello.
 
-La prestazione dipende congiuntamente da aggiornamento, scelta, ambiente e specificazione del modello.
+- **Usare $\tau$ come “temperatura” senza distinguere le convenzioni.**  
+  Le convenzioni di temperatura e temperatura inversa hanno direzioni opposte. Testo, formule e codice devono adottare coerentemente la stessa convenzione.
 
-### Chiamare \(\tau\) “temperatura” e interpretarlo come inverse temperature
+- **Ignorare la scala dei rinforzi.**  
+  Modificare la scala dei valori $Q$ altera l’interpretazione del parametro $\tau$.
 
-Le due convenzioni hanno direzioni opposte. Il testo, le formule e il codice devono usare la stessa convenzione.
+- **Stimare troppi parametri con poche prove.**  
+  Un buon adattamento non garantisce che *learning rate*, sensibilità, perseverazione e parametro di *lapse* siano separatamente recuperabili.
 
-### Ignorare la scala dei rinforzi
+- **Controllare soltanto le distribuzioni marginali.**  
+  Un modello dinamico deve riprodurre anche adattamento nel tempo, dipendenze seriali e risposta ai cambiamenti delle contingenze.
 
-Cambiare la scala di \(Q\) modifica l'interpretazione di \(\tau\).
+- **Limitarsi a un solo modello.**  
+  Un parametro apparentemente interpretabile può assorbire un meccanismo omesso, producendo inferenze fuorvianti.
 
-### Stimare troppi parametri da poche prove
+- **Trattare gli stati latenti come misure osservate.**  
+  Le traiettorie $Q_t$ sono inferenze condizionate alla specificazione del modello, non grandezze direttamente misurate.
 
-Un buon fit non garantisce che learning rate, sensibilità, perseverazione e lapse siano separatamente recuperabili.
+- **Usare la *leave-one-out* trial per trial senza definire la generalizzazione.**  
+  La dipendenza temporale rende inadeguata l’assunzione di osservazioni scambiabili.
 
-### Controllare soltanto le distribuzioni marginali
+- **Interpretare un parametro come tratto stabile senza verifica.**  
+  La stabilità tra sessioni, compiti e contesti va dimostrata empiricamente, non presupposta.
 
-Un modello dinamico deve riprodurre adattamento, dipendenze seriali e risposta ai cambiamenti delle contingenze.
-
-### Usare un solo modello
-
-Un parametro interpretabile all'interno di un modello può assorbire un meccanismo omesso.
-
-### Trattare gli stati latenti come misure osservate
-
-Le traiettorie \(Q_t\) sono inferenze condizionate alla specificazione.
-
-### Usare la LOO trial per trial senza definire la generalizzazione
-
-La dipendenza temporale rende inadeguata l'assunzione di osservazioni scambiabili.
-
-### Trasformare un parametro in un tratto stabile
-
-La stabilità tra sessioni, compiti e contesti deve essere dimostrata.
-
-### Chiamare meccanicistico qualsiasi modello ricorsivo
-
-La plausibilità meccanicistica richiede collegamenti teorici e controlli indipendenti.
+- **Chiamare meccanicistico qualsiasi modello ricorsivo.**  
+  La plausibilità meccanicistica richiede un ancoraggio teorico esplicito e controlli indipendenti, non la semplice forma ricorsiva.
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
@@ -1520,7 +1435,7 @@ Questo passaggio non rende però automatica l'interpretazione psicologica. Learn
 
 Per questo motivo il workflow completo comprende:
 
-\[
+$$
 \text{teoria}
 \rightarrow
 \text{simulazione}
@@ -1538,18 +1453,18 @@ Per questo motivo il workflow completo comprende:
 \text{modello rivale}
 \rightarrow
 \text{revisione}.
-\]
+$$
 
-Il risultato più importante non è una singola stima di \(\alpha\) o \(\tau\), ma una teoria sufficientemente precisa da produrre dati, fallire controlli mirati ed essere modificata quando le sue predizioni non sono adeguate.
+Il risultato più importante non è una singola stima di $\alpha$ o $\tau$, ma una teoria sufficientemente precisa da produrre dati, fallire controlli mirati ed essere modificata quando le sue predizioni non sono adeguate.
 
 ## Concetti da ricordare
 
 1. Il modello contiene una componente di apprendimento e una componente di scelta.
-2. I valori \(Q_t\) sono stati latenti, non osservazioni.
+2. I valori $Q_t$ sono stati latenti, non osservazioni.
 3. L'errore di previsione è la differenza tra esito e valore atteso.
-4. \(\alpha\) regola la rapidità dell'aggiornamento.
-5. \(\tau\) regola la sensibilità delle scelte alle differenze di valore.
-6. La scala dei rinforzi determina la scala dei valori e influenza l'interpretazione di \(\tau\).
+4. $\alpha$ regola la rapidità dell'aggiornamento.
+5. $\tau$ regola la sensibilità delle scelte alle differenze di valore.
+6. La scala dei rinforzi determina la scala dei valori e influenza l'interpretazione di $\tau$.
 7. Simulare prima della stima chiarisce le conseguenze dei parametri.
 8. Un buon fit non garantisce recuperabilità.
 9. I controlli predittivi devono esaminare statistiche dinamiche.
@@ -1561,31 +1476,31 @@ Il risultato più importante non è una singola stima di \(\alpha\) o \(\tau\), 
 
 ### 1. Velocità di adattamento
 
-Simula il compito con \(\alpha=0.05\), \(0.20\) e \(0.80\), mantenendo fisso \(\tau=3\). Confronta il numero di trial necessario per preferire la nuova opzione ricca dopo il reversal.
+Simula il compito con $\alpha=0.05$, $0.20$ e $0.80$, mantenendo fisso $\tau=3$. Confronta il numero di trial necessario per preferire la nuova opzione ricca dopo il reversal.
 
 ### 2. Sensibilità della scelta
 
-Mantieni \(\alpha=0.20\) e varia \(\tau\). Confronta accuratezza, frequenza di switching e ricompensa totale.
+Mantieni $\alpha=0.20$ e varia $\tau$. Confronta accuratezza, frequenza di switching e ricompensa totale.
 
 ### 3. Condizioni iniziali
 
-Ripeti la simulazione con \(Q_0=0\), \(0.5\) e \(1\). In quale parte del compito le differenze sono più visibili?
+Ripeti la simulazione con $Q_0=0$, $0.5$ e $1$. In quale parte del compito le differenze sono più visibili?
 
 ### 4. Prior predictive check
 
-Sostituisci il prior di \(\log\tau\) con una distribuzione molto più ampia. Quali comportamenti estremi compaiono?
+Sostituisci il prior di $\log\tau$ con una distribuzione molto più ampia. Quali comportamenti estremi compaiono?
 
 ### 5. Recupero dei parametri
 
-Costruisci un piccolo esperimento di recovery per tre valori di \(\alpha\) e tre valori di \(\tau\). In quali regioni i parametri sono più difficili da distinguere?
+Costruisci un piccolo esperimento di recovery per tre valori di $\alpha$ e tre valori di $\tau$. In quali regioni i parametri sono più difficili da distinguere?
 
 ### 6. Perseverazione omessa
 
-Genera dati con \(\kappa>0\), adatta il modello di base e descrivi come cambiano le posterior di \(\alpha\) e \(\tau\).
+Genera dati con $\kappa>0$, adatta il modello di base e descrivi come cambiano le posterior di $\alpha$ e $\tau$.
 
 ### 7. Apprendimento asimmetrico
 
-Modifica il simulatore introducendo \(\alpha^+\) e \(\alpha^-\). Quale disegno rende i due parametri informativi?
+Modifica il simulatore introducendo $\alpha^+$ e $\alpha^-$. Quale disegno rende i due parametri informativi?
 
 ### 8. Modello senza apprendimento
 
@@ -1597,14 +1512,14 @@ Progetta una procedura che adatti il modello alla prima fase e valuti la previsi
 
 ### 10. Interpretazione
 
-Scrivi un paragrafo di risultati che descriva un \(\alpha\) più basso in un gruppo clinico senza trasformarlo automaticamente in prova di un deficit generale di apprendimento.
+Scrivi un paragrafo di risultati che descriva un $\alpha$ più basso in un gruppo clinico senza trasformarlo automaticamente in prova di un deficit generale di apprendimento.
 
 ::: {.callout-note collapse=true title="Tracce di soluzione"}
 
-1. \(\alpha\) elevato tende a ridurre il ritardo dopo il reversal, ma aumenta la sensibilità a feedback casuali.
-2. \(\tau\) elevato riduce le scelte dell'opzione momentaneamente inferiore; può però rendere più persistenti scelte sbagliate se i valori sono ancora inaccurati.
-3. Le differenze di \(Q_0\) sono soprattutto iniziali; con un numero sufficiente di feedback l'influenza tende a ridursi.
-4. Un prior molto ampio su \(\tau\) può generare sia scelte quasi casuali sia sequenze quasi deterministiche.
+1. $\alpha$ elevato tende a ridurre il ritardo dopo il reversal, ma aumenta la sensibilità a feedback casuali.
+2. $\tau$ elevato riduce le scelte dell'opzione momentaneamente inferiore; può però rendere più persistenti scelte sbagliate se i valori sono ancora inaccurati.
+3. Le differenze di $Q_0$ sono soprattutto iniziali; con un numero sufficiente di feedback l'influenza tende a ridursi.
+4. Un prior molto ampio su $\tau$ può generare sia scelte quasi casuali sia sequenze quasi deterministiche.
 5. La recuperabilità può essere peggiore quando le scelte sono quasi casuali, quasi deterministiche o il numero di trial è ridotto.
 6. Il modello di base può compensare la perseverazione alterando la sensibilità o la velocità di aggiornamento.
 7. Servono abbastanza errori di previsione positivi e negativi in diverse fasi e alternative.
@@ -1622,3 +1537,4 @@ sessionInfo()
 :::
 
 ## Bibliografia {.unnumbered .unlisted}
+

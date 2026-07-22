@@ -1,4 +1,4 @@
-# Dalla formula al programma: formule R, matrice del disegno e Stan {#sec-linar-models-brms}
+# Dalla formula al programma: formule R, matrice del modello e Stan {#sec-linar-models-brms}
 
 Nei capitoli precedenti abbiamo formalizzato il modello lineare in termini di distribuzioni probabilistiche, affidandone l'adattamento numerico alle funzioni del pacchetto `brms`. Per lo studente o il ricercatore, tuttavia, una formula sintattica espressa nella forma
 
@@ -16,13 +16,23 @@ e ancor più lontana dalla complessa struttura di un codice sorgente scritto in 
 In questo capitolo tracceremo l'intera catena di trasformazione che unisce l'intenzione teorica al calcolo computazionale, seguendo un percorso lineare:
 
 $$
-\text{Domanda scientifica} \longrightarrow \text{Equazione matematica} \longrightarrow \text{Formula R} \longrightarrow \text{Matrice del disegno} \longrightarrow \text{Programma Stan}.
+\text{Domanda scientifica} \longrightarrow \text{Equazione matematica} \longrightarrow \text{Formula R} \longrightarrow \text{Matrice del modello} \longrightarrow \text{Programma Stan}.
 $$
 
 L'obiettivo di questo approfondimento non è suggerire di sostituire sistematicamente le funzioni di `brms` con il codice Stan, operazione che risulterebbe inefficiente nella pratica quotidiana. Lo scopo è piuttosto quello di rendere esplicito e trasparente il contenuto semantico della formula, decodificando ciò che il software costruisce automaticamente dietro le quinte. Solo acquisendo questa consapevolezza, il ricercatore può comprendere appieno quali decisioni computazionali vengono delegate all'algoritmo e quali scelte metodologiche rimangono, in ultima istanza, sotto la sua diretta responsabilità scientifica.
 
+::: {.callout-important appearance="minimal" .chapter-status}
+**Da sapere.** Formula R, matrice del modello e programma Stan sono rappresentazioni, a diversi livelli di astrazione, dello stesso modello generativo. In una regressione multipla, ciascun coefficiente descrive l’associazione con l’esito mantenendo costanti gli altri predittori inclusi nel modello.
+
+**Da saper fare.** Tradurre una domanda scientifica in una formula R; leggere la matrice del modello prodotta da `model.matrix()`; specificare e adattare il modello con `brms`; riconoscere nel codice Stan generato i blocchi che rappresentano dati, parametri, prior e verosimiglianza; interpretare le stime ed eseguire i principali controlli diagnostici e predittivi.
+
+**Approfondimento facoltativo.** La sezione [Scrivere lo stesso modello direttamente in Stan](#sec-formula-stan-direct), compresi compilazione, adattamento e confronto delle stime, non appartiene al percorso essenziale. Se lavori soltanto con `brms`, puoi saltarla e riprendere da [Che cosa guadagniamo e che cosa perdiamo](#sec-formula-tradeoffs). È richiesto saper leggere la struttura generale del programma Stan, non scriverlo autonomamente.
+
+[Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
+:::
+
 ::: {.callout-note appearance="minimal" .chapter-status}
-**Da sapere.** Formula R, matrice del disegno e programma Stan sono rappresentazioni a diversi livelli di astrazione dello stesso modello; i coefficienti multipli sono associazioni condizionate agli altri termini inclusi.
+**Da sapere.** Formula R, matrice del modello e programma Stan sono rappresentazioni a diversi livelli di astrazione dello stesso modello; i coefficienti multipli sono associazioni condizionate agli altri termini inclusi.
 
 **Da saper fare.** Leggere una formula, ispezionare `model.matrix()`, adattare il modello con `brms` e riconoscere nel codice generato i blocchi che esprimono dati, parametri, prior e verosimiglianza.
 
@@ -197,9 +207,9 @@ $$
 \mu_i = \alpha + \beta_{\text{affect}}\,\text{negative\_affect}_i + \beta_{\text{sleep}}\,\text{sleep\_c}_i.
 $$
 
-## Dalla formula alla matrice del disegno
+## Dalla formula alla matrice del modello
 
-Dietro l'astrazione sintattica della formula R, il software traduce l'elenco dei predittori in una struttura matematica nota come **matrice del disegno** (o *design matrix*), indicata convenzionalmente con il simbolo $\mathbf{X}$. Questa matrice organizza i dati numerici in modo che l'intero sistema di equazioni lineari possa essere risolto simultaneamente tramite l'algebra lineare.
+Dietro l'astrazione sintattica della formula R, il software traduce l'elenco dei predittori in una struttura matematica nota come **matrice del modello** (o *design matrix*), indicata convenzionalmente con il simbolo $\mathbf{X}$. Questa matrice organizza i dati numerici in modo che l'intero sistema di equazioni lineari possa essere risolto simultaneamente tramite l'algebra lineare.
 
 Possiamo ispezionare direttamente questa trasformazione strutturale richiamando la funzione `model.matrix()`:
 
@@ -226,7 +236,7 @@ L'output rivela che la matrice risultante si articola in tre colonne distinte:
 2. `negative_affect`: i valori standardizzati dell'affetto negativo per ciascun soggetto;
 3. `sleep_c`: le ore di sonno centrate.
 
-Dato un campione di $N$ osservazioni, la matrice del disegno assume una dimensione geometrica pari a $N \times 3$, strutturandosi come segue:
+Dato un campione di $N$ osservazioni, la matrice del modello assume una dimensione geometrica pari a $N \times 3$, strutturandosi come segue:
 
 $$\mathbf{X} = \begin{bmatrix} 1 & x_{11} & x_{12} \\ 1 & x_{21} & x_{22} \\ \vdots & \vdots & \vdots \\ 1 & x_{N1} & x_{N2} \end{bmatrix}$$
 
@@ -264,16 +274,16 @@ all.equal(mu, mu_matrix)
 
 L'output dell'algoritmo (`TRUE`) conferma che l'equazione scalare applicata separatamente a ogni riga e l'operazione matriciale congiunta producono identici risultati numerici.
 
-::: {.callout-tip title="Il ruolo concettuale della matrice del disegno"}
-La struttura della matrice del disegno rende esplicito quanto segue:
+::: {.callout-tip title="Il ruolo concettuale della matrice del modello"}
+La struttura della matrice del modello rende esplicito quanto segue:
 
 * **Generazione delle colonne:** Ogni singolo termine inserito nella formula R si traduce nella generazione di una o più colonne all'interno della matrice;
 * **Associazione biunivoca:** Ciascun coefficiente stimato dal modello moltiplica linearmente una specifica colonna della matrice;
-* **Codifica universale:** Informazioni complesse come le codifiche delle variabili categoriali (es. variabili *dummy*), i termini di interazione o le trasformazioni non lineari (es. polinomi) vengono interamente risolte e linearizzate dentro la matrice del disegno prima del calcolo;
+* **Codifica universale:** Informazioni complesse come le codifiche delle variabili categoriali (es. variabili *dummy*), i termini di interazione o le trasformazioni non lineari (es. polinomi) vengono interamente risolte e linearizzate dentro la matrice del modello prima del calcolo;
 * **Astrazione per il motore di stima:** Una volta costruita la matrice $\mathbf{X}$, la sua griglia numerica può essere passata direttamente a un campionatore come Stan, a prescindere dai nomi originari o dal significato psicometrico delle variabili di partenza.
 :::
 
-## Regressione multipla e matrice del disegno {#sec-multiple-regression}
+## Regressione multipla e matrice del modello {#sec-multiple-regression}
 
 La regressione multipla estende il modello lineare consentendo l'inclusione simultanea di due o più predittori. Al fine di allinearci alla logica computazionale dei moderni software di stima (incluso Stan), risulta utile separare il parametro dell'intercetta dalla matrice dei predittori propriamente detti. Questa scomposizione ci consente di formulare il modello in forma matriciale come:
 
@@ -287,7 +297,7 @@ Per facilitare la comprensione dell'equazione, isoliamo le dimensioni matematich
 | --- | --- | --- |
 | $\mathbf{y}$ | $N\times1$ | Vettore colonna dell'outcome osservato empiricamente |
 | $\mathbf{1}$ | $N\times1$ | Vettore colonna composto interamente da valori pari a $1$ |
-| $\mathbf{X}$ | $N\times K$ | Matrice del disegno contenente i $K$ predittori (esclusa l'intercetta) |
+| $\mathbf{X}$ | $N\times K$ | Matrice del modello contenente i $K$ predittori (esclusa l'intercetta) |
 | $\boldsymbol{\beta}$ | $K\times1$ | Vettore colonna dei coefficienti parziali associati ai $K$ predittori |
 | $\alpha$ | Scalare | Intercetta globale del modello (valore atteso quando $\mathbf{X}\boldsymbol{\beta} = \mathbf{0}$) |
 | $\sigma$ | Scalare positivo | Deviazione standard condizionata (variabilità residua attorno alla media) |
@@ -424,7 +434,7 @@ standata_multiple <- make_standata(
 names(standata_multiple)
 ```
 
-L'ispezione dei nomi rivela vettori e matrici (come la matrice del disegno `X` e il vettore dell'outcome `Y`) pronti per essere elaborati dall'algebra lineare. Per esaminare il programma Stan completo generato automaticamente dietro le quinte, ricorriamo invece a `make_stancode()`:
+L'ispezione dei nomi rivela vettori e matrici (come la matrice del modello `X` e il vettore dell'outcome `Y`) pronti per essere elaborati dall'algebra lineare. Per esaminare il programma Stan completo generato automaticamente dietro le quinte, ricorriamo invece a `make_stancode()`:
 
 ```{r}
 #| label: inspect-generated-stan
@@ -440,7 +450,7 @@ stancode_multiple <- make_stancode(
 cat("```stan\n", stancode_multiple, "\n```", sep = "")
 ```
 
-Il codice prodotto è più articolato di quanto strettamente necessario per questo esempio. Questa complessità deriva dal fatto che `brms` adotta un'architettura software universale e generalizzata, progettata per scalare in modo efficiente ed estendersi a centinaia di famiglie di modelli differenti, complesse strutture di interazione, trasformazioni non lineari e calcoli automatici di quantità derivate. Questa complessità non implica che il modello statistico sia diverso: l'elemento centrale rimane il predittore lineare  mappato nella matrice del disegno.
+Il codice prodotto è più articolato di quanto strettamente necessario per questo esempio. Questa complessità deriva dal fatto che `brms` adotta un'architettura software universale e generalizzata, progettata per scalare in modo efficiente ed estendersi a centinaia di famiglie di modelli differenti, complesse strutture di interazione, trasformazioni non lineari e calcoli automatici di quantità derivate. Questa complessità non implica che il modello statistico sia diverso: l'elemento centrale rimane il predittore lineare  mappato nella matrice del modello
 
 ::: {.callout-note title="L'astrazione come risorsa: il concetto di zucchero sintattico"}
 Nel dominio dell'informatica e della programmazione, l'espressione *zucchero sintattico* (*syntactic sugar*) identifica una convenzione o una notazione formale introdotta per rendere la stesura del codice più agile, leggibile e intuitiva per l'operatore umano, senza per questo modificarne minimamente il funzionamento logico di basso livello.
@@ -454,7 +464,7 @@ Nell'ecosistema R, l'interfaccia di `brms` si comporta esattamente come una form
 **Approfondimento facoltativo.** Se lavori solo con `brms`, puoi saltare la scrittura, la compilazione e il confronto numerico del programma nativo e riprendere da [Che cosa guadagniamo e che cosa perdiamo](#sec-formula-tradeoffs). Resta invece richiesto saper leggere la traduzione prodotta da `make_stancode()` nella sezione precedente.
 :::
 
-Per meglio comprendere la struttura del modello depurata dalle sovrastrutture di `brms`, possiamo programmare l'algoritmo direttamente in codice Stan. Per fare questo, isoliamo i due predittori all'interno di una matrice del disegno sprovvista del vettore costante dei valori $1$: in questo modo, l'intercetta non sarà codificata come colonna di $\mathbf{X}$ ma verrà gestita come un parametro scalare esplicito e separato.
+Per meglio comprendere la struttura del modello depurata dalle sovrastrutture di `brms`, possiamo programmare l'algoritmo direttamente in codice Stan. Per fare questo, isoliamo i due predittori all'interno di una matrice del modello sprovvista del vettore costante dei valori $1$: in questo modo, l'intercetta non sarà codificata come colonna di $\mathbf{X}$ ma verrà gestita come un parametro scalare esplicito e separato.
 
 ```{r}
 #| label: build-stan-matrix
@@ -478,7 +488,7 @@ Il programma Stan nativo si articola nei seguenti blocchi:
 data {
   int<lower=1> N;       // Numero di osservazioni (righe)
   int<lower=1> K;       // Numero di predittori (colonne di X)
-  matrix[N, K] X;       // Matrice del disegno per i predittori
+  matrix[N, K] X;       // Matrice del modello per i predittori
   vector[N] y;          // Vettore colonna della variabile outcome
 }
 
@@ -753,7 +763,7 @@ ppc_dens_overlay(
 
 4. **Attribuire automaticamente un significato causale al verbo “controllare”.** Aggiungere una variabile può ridurre una distorsione, non avere utilità oppure introdurre un nuovo bias.
 
-5. **Passare a Stan senza controllare la matrice del disegno.** Ordine e scala delle colonne devono corrispondere all'ordine e al significato dei coefficienti.
+5. **Passare a Stan senza controllare la matrice del modello** Ordine e scala delle colonne devono corrispondere all'ordine e al significato dei coefficienti.
 
 6. **Confrontare `brms` e Stan con prior diversi.** Risultati differenti possono derivare dalla specificazione, non dal motore computazionale.
 
@@ -764,19 +774,19 @@ ppc_dens_overlay(
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-Una formula in R, una matrice del disegno e un programma in codice Stan non rappresentano tre modelli in competizione tra loro. Al contrario, costituiscono tre livelli di astrazione decrescenti della medesima struttura concettuale.
+Una formula in R, una matrice del modello e un programma in codice Stan non rappresentano tre modelli in competizione tra loro. Al contrario, costituiscono tre livelli di astrazione decrescenti della medesima struttura concettuale.
 
-La formula rende immediatamente leggibile l'architettura delle nostre ipotesi. La matrice del disegno rende chiaro il meccanismo algebrico sottostante, mostrando come ogni termine qualitativo o quantitativo venga convertito in vettori numerici per il calcolo. Stan, infine, rimuove qualsiasi barriera di astrazione rendendo espliciti i presupposti probabilistici: la verosimiglianza dei dati, la calibrazione dei *prior* e la derivazione delle quantità generate. In questo ecosistema, `brms` collega questi livelli traducendo automaticamente una specificazione di alto livello in un programma Stan.
+La formula rende immediatamente leggibile l'architettura delle nostre ipotesi. La matrice del modello rende chiaro il meccanismo algebrico sottostante, mostrando come ogni termine qualitativo o quantitativo venga convertito in vettori numerici per il calcolo. Stan, infine, rimuove qualsiasi barriera di astrazione rendendo espliciti i presupposti probabilistici: la verosimiglianza dei dati, la calibrazione dei *prior* e la derivazione delle quantità generate. In questo ecosistema, `brms` collega questi livelli traducendo automaticamente una specificazione di alto livello in un programma Stan.
 
 Oltre agli aspetti puramente computazionali, il passaggio alla regressione multipla ha fatto emergere un principio interpretativo cruciale: in un modello lineare, nessun coefficiente vive in isolamento. Ogni parametro descrive un'associazione condizionata alla presenza degli altri termini inclusi nel predittore lineare. Di conseguenza, l'entità e persino il segno di un effetto possono mutare radicalmente al variare della specificazione complessiva. Questa dipendenza non costituisce un difetto del modello, ma segnala che il significato del coefficiente è inseparabile dalla domanda, dalla codifica e dall'insieme dei predittori.
 
-Nei capitoli che seguono applicheremo la stessa grammatica generativa per mostrare come la stima di una singola media, il confronto  tra due o più gruppi e i tradizionali modelli di ANOVA non siano altro che casi particolari del modello lineare. La matrice disegno cambierà per adattarsi a nuovi disegni sperimentali, ma il workflow bayesiano rimarrà lo stesso.
+Nei capitoli che seguono applicheremo la stessa grammatica generativa per mostrare come la stima di una singola media, il confronto  tra due o più gruppi e i tradizionali modelli di ANOVA non siano altro che casi particolari del modello lineare. La matrice del modello cambierà per adattarsi a nuovi disegni sperimentali, ma il workflow bayesiano rimarrà lo stesso.
 
 ### Concetti da ricordare
 
 1. La formula R descrive la struttura del predittore lineare.
 2. L'intercetta è inclusa per impostazione predefinita.
-3. Ogni termine della formula genera una o più colonne della matrice del disegno.
+3. Ogni termine della formula genera una o più colonne della matrice del modello
 4. Il prodotto $\mathbf{X}\boldsymbol{\beta}$ produce i valori medi attesi.
 5. In regressione multipla, i coefficienti sono associazioni condizionate agli altri predittori inclusi.
 6. Formula, famiglia e prior sono componenti distinte della specificazione.
@@ -841,7 +851,7 @@ stress ~ negative_affect + sleep_c
 Quali nuove classi o coefficienti compaiono?
 
 ::: {.callout-tip collapse=true title="Traccia di soluzione"}
-Il secondo modello aggiunge una colonna nella matrice del disegno e un coefficiente population-level. Famiglia e parametro `sigma` rimangono invariati.
+Il secondo modello aggiunge una colonna nella matrice del modello e un coefficiente population-level. Famiglia e parametro `sigma` rimangono invariati.
 :::
 
 ### Esercizio 6 — Una verosimiglianza robusta
