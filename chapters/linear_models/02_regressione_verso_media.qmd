@@ -41,16 +41,12 @@ Questo capitolo appartiene soprattutto al **percorso concettuale**, ma è rileva
 here::here("code", "_common.R") |>
   source()
 
-if (!requireNamespace("pacman", quietly = TRUE)) {
-  install.packages("pacman")
+if (!requireNamespace("HistData", quietly = TRUE)) {
+  stop(
+    "Il pacchetto 'HistData' è necessario per questo capitolo. ",
+    "Installarlo prima del rendering con install.packages('HistData')."
+  )
 }
-
-pacman::p_load(
-  dplyr,
-  ggplot2,
-  HistData,
-  tidyr
-)
 
 set.seed(1234)
 ```
@@ -240,7 +236,7 @@ simulated_correlations |>
   # + theme_manuscript()
 ```
 
-Il confronto dei quattro scenari rivela chiaramente la dinamica del fenomeno. Nel caso di perfetta correlazione ($\rho = 1.0$), ogni scostamento dalla media osservato in $Z_X$ si traduce in una variazione di intensità identica in $Z_Y$. Di conseguenza, la retta di regressione coincide esattamente con la retta di identità $y = 1 \cdot x$. Nel caso di correlazione imperfetta ($\rho < 1.0$), la pendenza della retta di regressione campionaria si avvicina al valore teorico $\rho$. I valori previsti per la variabile condizionata sono sistematicamente meno estremi rispetto ai valori della variabile predittrice che li hanno generati. Questo effetto di attenuazione lineare è tanto più marcato quanto più debole è il legame lineare tra le due variabili. La simulazione offre quindi una dimostrazione empirica e visiva del principio di regressione verso la media: l'intensità del riavvicinamento al valore medio è inversamente proporzionale al grado di associazione statistica tra le variabili considerate.
+Il confronto dei quattro scenari rivela chiaramente la dinamica del fenomeno. Nel caso di perfetta correlazione ($\rho = 1.0$), ogni scostamento dalla media osservato in $Z_X$ si traduce in una variazione di intensità identica in $Z_Y$. Di conseguenza, la retta di regressione coincide esattamente con la retta di identità $y = 1 \cdot x$. Nel caso di correlazione imperfetta ($\rho < 1.0$), la pendenza della retta di regressione campionaria si avvicina al valore teorico $\rho$. I valori medi previsti per la variabile risposta sono sistematicamente meno estremi dei valori della variabile predittore sui quali si condiziona. Questo effetto di attenuazione lineare è tanto più marcato quanto più debole è il legame lineare tra le due variabili. La simulazione offre quindi una dimostrazione empirica e visiva del principio di regressione verso la media: l'intensità del riavvicinamento al valore medio è inversamente proporzionale al grado di associazione statistica tra le variabili considerate.
 
 ## Selezionare casi estremi e rimisurarli
 
@@ -331,11 +327,42 @@ Un gruppo di controllo è informativo se condivide con il gruppo sperimentale il
 
 La regressione verso la media non costituisce una spiegazione universale. Osservare un cambiamento verso valori meno estremi non implica che l'intero mutamento sia riconducibile a tale fenomeno, ma rappresenta piuttosto una spiegazione alternativa che deve essere presa in considerazione nella progettazione e nell'interpretazione dei risultati e non un'etichetta da applicare in modo automatico a qualsiasi variazione osservata.
 
+## Come impostare lo studio e l'analisi
+
+Quando l'accesso a un intervento dipende da un punteggio iniziale estremo, la domanda scientifica utile non è semplicemente se il gruppo cambi nel tempo, ma se il cambiamento osservato sia **maggiore di quello atteso in assenza dell'intervento**. Questa domanda richiede che disegno e analisi siano definiti prima di osservare i risultati.
+
+Un'impostazione di base comprende:
+
+1. **Criterio di inclusione comune.** Gruppo trattato e gruppo di controllo devono essere selezionati usando la stessa regola sul punteggio iniziale.
+2. **Assegnazione comparabile.** Quando possibile, l'assegnazione casuale dopo la selezione rende più credibile il confronto tra i gruppi.
+3. **Outcome esplicito.** Il punteggio alla seconda misurazione è l'esito da spiegare; il punteggio iniziale documenta il livello di partenza.
+4. **Quantità di interesse.** Si può stimare la differenza media tra i gruppi al follow-up, aggiustata per il punteggio iniziale, oppure la differenza tra i cambiamenti medi. Le due strategie non sono identiche, ma entrambe richiedono un gruppo di confronto adeguato.
+5. **Assunzioni dichiarate.** Occorre considerare comparabilità dei gruppi, stabilità della misura, forma della relazione, dati mancanti e possibili cambiamenti nella procedura di rilevazione.
+
+Una possibile specificazione lineare è:
+
+$$
+Y_{i,\text{post}}
+\sim
+\operatorname{Normal}\!\left(
+\alpha
++ \beta_T T_i
++ \beta_P (Y_{i,\text{pre}}-\bar Y_{\text{pre}}),
+\sigma
+\right),
+$$
+
+dove $T_i=1$ indica il trattamento. In uno studio randomizzato e correttamente condotto, $\beta_T$ rappresenta la differenza media aggiustata al follow-up compatibile con l'effetto dell'intervento. Il coefficiente $\beta_P$ descrive invece quanto il punteggio iniziale contribuisce alla previsione del punteggio successivo.
+
+::: {.callout-note title="Che cosa offre il modello, e che cosa non può offrire"}
+Il modello rende esplicita la previsione condizionata, quantifica l'incertezza e permette di confrontare il cambiamento del gruppo trattato con quello osservato nel controllo. Non può però trasformare un semplice studio pre–post a gruppo singolo in una valutazione causale, né correggere automaticamente gruppi non comparabili, misure inaffidabili o abbandoni differenziali.
+:::
+
 ## Affidabilità e ampiezza del fenomeno
 
 Nel modello classico della misurazione, $ X = T + E $ (dove $X$ è il punteggio osservato, $T$ il punteggio vero ed $E$ l'errore casuale), l'*affidabilità* è la proporzione della varianza osservata attribuibile a differenze stabili tra le unità statistiche. Se due misurazioni parallele condividono il medesimo punteggio vero e presentano errori tra loro indipendenti, la loro correlazione lineare coincide esattamente con il coefficiente di affidabilità ($\rho_{xx}$).
 
-In tali condizioni, esprimendo i punteggi in forma standardizzata (con media pari a 0 e deviazione standard pari a 1), il valore medio atteso alla seconda misurazione ($Z_2$), dato un punteggio iniziale ($Z_1 = z$), è data da:
+In tali condizioni, esprimendo i punteggi in forma standardizzata (con media pari a 0 e deviazione standard pari a 1), il valore medio atteso alla seconda misurazione ($Z_2$), dato un punteggio iniziale ($Z_1 = z$), è dato da:
 
 $$\mathbb{E}(Z_2 \mid Z_1 = z) = \rho_{xx} \cdot z.$$
 L'equazione evidenzia la dipendenza diretta tra la stabilità della misura e l'entità della regressione verso la media. Una misura con un'elevata affidabilità (con $\rho_{xx}$ prossimo a 1) genererà una previsione molto vicina al punteggio iniziale, contenendo lo spostamento statistico, mentre una misura poco affidabile (con $\rho_{xx}$ prossimo a 0) produrrà una previsione fortemente attratta verso la media del gruppo ($0$). Ad esempio, un punteggio iniziale di $z = 2$ dà luogo a una media prevista pari a $1.80$ se l'affidabilità è $0.90$, a $1.00$ se è $0.50$, e a $0.40$ se è $0.20$.
@@ -346,19 +373,23 @@ Il collegamento è intuitivo: maggiore è la componente d'errore (o la variabili
 
 ## Un'apparente asimmetria
 
-La regressione di $Y$ su $X$ e quella di $X$ su $Y$ non coincidono: si tratta di due rette geometricamente distinte. Quando i punteggi vengono standardizzati, le due rette hanno una pendenza pari al coefficiente di correlazione $r$, ma rispondono a domande condizionali radicalmente diverse:
+La regressione di $Y$ su $X$ e quella di $X$ su $Y$ non coincidono, perché rispondono a due domande condizionali differenti. Con variabili standardizzate:
 
-* La prima retta stima il valore medio di $Z_Y$ condizionatamente a un determinato valore di $Z_X$, secondo l'equazione:
+* la previsione di $Z_Y$ dato $Z_X$ è
 
-$$\mathbb{E}(Z_Y \mid Z_X = z_x) = r \cdot z_x$$
+$$
+\mathbb{E}(Z_Y \mid Z_X = z_x) = r z_x;
+$$
 
-* La seconda retta inverte la condizione e stima il valore medio di $Z_X$ dato un valore di $Z_Y$:
+* la previsione di $Z_X$ dato $Z_Y$ è
 
-$$\mathbb{E}(Z_X \mid Z_Y = z_y) = r \cdot z_y$$
+$$
+\mathbb{E}(Z_X \mid Z_Y = z_y) = r z_y.
+$$
 
-Questa asimmetria non genera alcuna contraddizione logica ma riflette il punto di partenza della selezione statistica. Se si isolano le unità con valori estremi nella variabile $X$, l'analisi mira a stabilire come si distribuisce $Y$ in funzione di tale vincolo. Viceversa, se si selezionano unità estreme in $Y$, la prospettiva si inverte.
+In ciascuna equazione la pendenza è $r$ quando il predittore è posto sull'asse orizzontale e la risposta su quello verticale. Se entrambe le rette vengono invece espresse nello stesso piano cartesiano, non coincidono, salvo il caso di correlazione perfetta: risolvere la seconda equazione rispetto a $Z_Y$ produce infatti una pendenza pari a $1/r$.
 
-In sintesi, la regressione non descrive una relazione geometrica simmetrica (come fa la semplice correlazione), ma introduce una direzione logica precisa, specificando quale variabile costituisce l'oggetto della previsione e quale rappresenta l'informazione condizionante.
+Questa asimmetria non genera alcuna contraddizione. Se si selezionano unità estreme in $X$, la domanda riguarda la distribuzione di $Y$ condizionata a quella selezione. Se si selezionano unità estreme in $Y$, la domanda si inverte. La correlazione è simmetrica; la previsione condizionata ha invece una direzione precisa.
 
 ## Errori frequenti
 
@@ -377,7 +408,7 @@ La regressione verso la media emerge come conseguenza matematica della prevision
 
 La rilevanza pratica di tale dinamica è cruciale nei disegni di ricerca in cui i partecipanti vengono selezionati in base a punteggi eccezionalmente alti o bassi. In questi scenari, infatti, una parte del cambiamento medio osservato nella seconda rilevazione si manifesterebbe per pura fluttuazione statistica, anche in assenza di un intervento.
 
-Da ciò deriva che la qualità del disegno di ricerca deve necessariamente precedere l'interpretazione del modello statistico. L'inclusione di un adeguato gruppo di controllo rappresenta l'unico strumento metodologico in grado di distinguere la variazione spontaneamente attesa dal cambiamento aggiuntivo, effettivamente compatibile con l'azione dell'intervento. Il legame con l'affidabilità dimostra inoltre che la regressione verso la media non è un'anomalia metodologica isolata, ma una diretta espressione dell'errore di misurazione: maggiore è la componente instabile dello strumento, minore sarà la prevedibilità dei punteggi estremi nel tempo.
+Da ciò deriva che la qualità del disegno di ricerca deve necessariamente precedere l'interpretazione del modello statistico. L'inclusione di un adeguato gruppo di controllo è una delle strategie più dirette per distinguere la variazione attesa in assenza di trattamento dal cambiamento aggiuntivo compatibile con l'intervento. Disegni con più rilevazioni prima e dopo l'intervento possono offrire ulteriori informazioni, ma nessuna tecnica statistica sostituisce un confronto credibile. Nelle misure ripetute, il legame con l'affidabilità mostra inoltre che una maggiore componente instabile rende meno prevedibili i punteggi estremi nel tempo; più in generale, la regressione verso la media deriva da qualunque associazione imperfetta tra la variabile usata per la selezione e quella successivamente osservata.
 
 Nel prossimo capitolo applicheremo l'intero flusso di lavoro (*workflow*) bayesiano al modello lineare. Questo cambio di paradigma ci permetterà di sostituire le stime puntuali con intere distribuzioni a posteriori e di utilizzare le simulazioni predittive per rappresentare in modo esplicito e rigoroso l'incertezza legata sia alla retta di regressione sia alle future osservazioni.
 
@@ -391,59 +422,100 @@ Nel prossimo capitolo applicheremo l'intero flusso di lavoro (*workflow*) bayesi
 6. Un gruppo di controllo comparabile aiuta a separare il cambiamento atteso dall'eventuale effetto aggiuntivo dell'intervento.
 7. Una minore affidabilità implica, sotto ipotesi appropriate, una regressione verso la media più pronunciata.
 
-::: {.callout-important title="Esercizi" collapse="true"}
+## Esercizi {.unnumbered .unlisted}
 
-### 1. Previsione standardizzata
+### Esercizio 1 — Comprendere e impostare l'analisi {.unnumbered .unlisted}
 
-Supponi che due misure standardizzate abbiano correlazione $0.60$. Qual è il valore medio previsto della seconda misura per un gruppo con valore $z=2.5$ nella prima? Quanto dista questa previsione dalla media?
+*Livello essenziale · 10–15 minuti · Codice: no*
 
-### 2. Confrontare due affidabilità
+Un servizio seleziona persone con un punteggio di ansia pari o superiore a 75 e offre loro un nuovo intervento. L'obiettivo è stabilire se l'intervento riduca l'ansia più di quanto ci si attenderebbe per regressione verso la media e per altri cambiamenti temporali.
 
-Un test viene somministrato due volte. Calcola il punteggio standardizzato medio atteso alla seconda somministrazione per persone con $z=2$ alla prima, assumendo alternativamente affidabilità $0.85$ e $0.40$. Interpreta la differenza.
+Indica:
 
-### 3. Scala originale e scala standardizzata
+1. quale dovrebbe essere il gruppo di confronto;
+2. quale variabile usare come outcome;
+3. quale quantità rappresenterebbe l'effetto medio dell'intervento;
+4. che cosa si potrebbe concludere disponendo soltanto del gruppo trattato;
+5. un vantaggio e un limite del modello lineare proposto nel capitolo.
 
-Nel dataset di Galton, verifica che la pendenza sulla scala originale sia uguale a
-
-$$
-r\frac{s_Y}{s_X}.
-$$
-
-Spiega perché non è corretto attribuire la regressione verso la media al solo fatto che questa pendenza sia inferiore a 1.
-
-### 4. Selezione dalla coda inferiore
-
-Modifica la simulazione pre–post selezionando il 10% dei punteggi iniziali più bassi. Rappresenta le medie nelle due occasioni e descrivi il risultato.
-
-### 5. Aggiungere un trattamento reale
-
-Nella simulazione pre–post, aggiungi 4 punti alla seconda misurazione di metà delle persone selezionate, assegnate casualmente al trattamento. Confronta:
-
-- il cambiamento nel gruppo trattato;
-- il cambiamento nel controllo;
-- la differenza tra i cambiamenti.
-
-Quale di queste quantità è più informativa sull'effetto del trattamento?
-
-### 6. Criticare un'interpretazione
-
-Uno studio seleziona pazienti con ansia molto elevata, somministra un intervento e osserva una riduzione media di 8 punti. Non è presente un gruppo di controllo. Elenca almeno tre ragioni per cui il cambiamento non può essere attribuito interamente all'intervento.
-
-### 7. Individui e gruppi
-
-Spiega perché l'affermazione seguente è errata:
-
-> Poiché esiste regressione verso la media, ogni persona con un punteggio estremo peggiorerà o migliorerà alla misurazione successiva.
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Distingui il cambiamento osservato nel gruppo trattato dal cambiamento aggiuntivo rispetto a persone selezionate nello stesso modo ma non esposte all'intervento.
 :::
 
-::: {.callout-tip collapse="true" title="Tracce di soluzione"}
-1. La previsione è $0.60\times2.5=1.5$. Rimane 1.5 deviazioni standard sopra la media, ma è meno estrema del valore iniziale.
-2. Con affidabilità $0.85$, la previsione è $1.70$; con affidabilità $0.40$, è $0.80$. La misura meno affidabile conserva una quota minore dell'estremità iniziale nella previsione della seconda misurazione.
-3. La pendenza originale dipende sia da $r$ sia dal rapporto tra le deviazioni standard. La regressione verso la media si valuta confrontando scarti standardizzati o scale comparabili.
-4. Il gruppo selezionato per punteggi bassi tenderà ad avere una media più alta alla seconda misurazione anche senza intervento.
-5. Il cambiamento trattato include effetto, regressione verso la media e cambiamenti temporali. Il cambiamento del controllo stima le componenti non dovute al trattamento. La differenza tra i cambiamenti è quindi più informativa, sotto le assunzioni del disegno randomizzato.
-6. Tra le possibili ragioni: regressione verso la media, cambiamenti spontanei nel tempo, eventi esterni, familiarità con il test, cambiamenti nella procedura e selezione non comparabile.
-7. La regressione verso la media riguarda il valore atteso del gruppo condizionato su un punteggio estremo. I singoli individui possono aumentare, diminuire o rimanere stabili.
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+Il controllo dovrebbe essere formato da persone che soddisfano lo stesso criterio iniziale e vengono misurate nelle stesse occasioni, ma ricevono una condizione di confronto. L'outcome naturale è il punteggio al follow-up; il punteggio iniziale può essere incluso come predittore. In uno studio randomizzato, il coefficiente del trattamento in un modello `post ~ trattamento + pre` rappresenta la differenza media aggiustata al follow-up.
+
+Con il solo gruppo trattato si può descrivere il cambiamento, ma non separarlo dalla regressione verso la media, dalla maturazione o da altri eventi temporali. Il modello lineare rende esplicita la quantità di interesse e quantifica l'incertezza; non compensa però un disegno privo di un confronto credibile o violazioni importanti delle assunzioni.
+:::
+
+### Esercizio 2 — Prevedere e interpretare {.unnumbered .unlisted}
+
+*Livello essenziale · 5–10 minuti · Codice: no*
+
+Due misurazioni standardizzate hanno correlazione $r=0.60$.
+
+1. Qual è il valore medio previsto della seconda misura per un gruppo con $Z_1=2.5$?
+2. Qual è il valore medio previsto per un gruppo con $Z_1=-2.0$?
+3. Perché questi risultati non implicano che ogni individuo debba muoversi verso la media?
+4. Che cosa cambierebbe se la correlazione fosse $0.90$?
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+Le previsioni sono $0.60\times2.5=1.5$ e $0.60\times(-2.0)=-1.2$. In entrambi i casi il segno viene conservato, ma il valore medio previsto è meno estremo. La relazione riguarda una media condizionata: le osservazioni individuali possono trovarsi sopra o sotto tale media. Con $r=0.90$, le previsioni sarebbero più vicine ai valori iniziali, perché la seconda misura è maggiormente prevedibile dalla prima.
+:::
+
+### Esercizio 3 — Modificare ed eseguire una verifica {.unnumbered .unlisted}
+
+*Livello essenziale · 10–15 minuti · Codice: guidato*
+
+La simulazione del capitolo seleziona il 10% dei punteggi iniziali più alti. Prima di eseguire il codice, prevedi che cosa accadrà passando al 5% più estremo. Poi completa ed esegui:
+
+```{r}
+#| eval: false
+
+cutoff_95 <- quantile(pre_post_population$pre, ___)
+
+selected_95 <- pre_post_population |>
+  filter(pre >= cutoff_95) |>
+  summarise(
+    mean_pre = mean(pre),
+    mean_post = mean(post),
+    mean_change = mean(post - pre)
+  )
+
+selected_95
+```
+
+Confronta il risultato con quello ottenuto usando il quantile `0.90`. Spiega perché modificare il criterio di selezione cambia l'ampiezza media del ritorno verso valori meno estremi.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Il valore mancante è il quantile corrispondente al 95° percentile. Una selezione più estrema include, in media, una componente occasionale positiva più grande.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+Il valore da inserire è `0.95`. Il gruppo selezionato al 95° percentile parte generalmente da una media più elevata e mostra una diminuzione media più pronunciata. La ragione non è una forza correttiva: la selezione più estrema concentra casi con livelli stabili elevati e con componenti occasionali particolarmente positive, che difficilmente si ripetono con la stessa intensità alla seconda misura.
+:::
+
+### Esercizio 4 — Criticare e comunicare {.unnumbered .unlisted}
+
+*Livello essenziale · 10–15 minuti · Codice: no*
+
+Uno studio randomizzato seleziona partecipanti con ansia elevata usando lo stesso criterio per entrambi i gruppi. I risultati medi sono:
+
+| Gruppo | Pre | Post | Cambiamento |
+|---|---:|---:|---:|
+| Intervento | 80 | 68 | -12 |
+| Controllo | 79 | 73 | -6 |
+
+Un ricercatore scrive:
+
+> L'intervento ha ridotto l'ansia di 12 punti. La riduzione dimostra che il trattamento funziona per i pazienti con ansia elevata.
+
+Individua almeno tre problemi e scrivi un resoconto più appropriato. Quale quantità è più informativa dei 12 punti osservati nel solo gruppo trattato?
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+Il resoconto ignora il cambiamento di 6 punti osservato anche nel controllo, attribuisce causalmente tutto il cambiamento all'intervento e generalizza una differenza media a tutti i pazienti. La quantità descrittiva più informativa è la differenza tra i cambiamenti: $-12-(-6)=-6$ punti. In alternativa, si può stimare la differenza aggiustata al follow-up mediante regressione.
+
+Una formulazione possibile è: “Tra i partecipanti selezionati per ansia elevata, entrambi i gruppi hanno mostrato una diminuzione media. Il gruppo di intervento è diminuito di 6 punti in più rispetto al controllo. In presenza di assegnazione casuale, misurazioni comparabili e assenza di abbandoni differenziali, questo contrasto è compatibile con un effetto medio aggiuntivo dell'intervento. Il risultato non implica che ogni partecipante migliori della stessa quantità.”
 :::
 
 ::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
@@ -454,10 +526,3 @@ sessionInfo()
 
 ## Bibliografia {.unnumbered .unlisted}
 
-<!--
-Note per l'integrazione editoriale:
-- mantenuto l'identificatore originale del capitolo per non interrompere i riferimenti incrociati;
-- verificare che HistData sia incluso nell'ambiente del progetto;
-- aggiungere eventuali riferimenti bibliografici storici a Galton usando le chiavi già presenti nel file .bib del Companion;
-- verificare che theme_manuscript() sia disponibile in code/_common.R.
--->

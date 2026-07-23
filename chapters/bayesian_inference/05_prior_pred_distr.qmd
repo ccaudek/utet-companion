@@ -1,549 +1,758 @@
-# Controllo predittivo a priori {#sec-prior-predictive-check}
+# Distribuzione predittiva a priori {#sec-prior-predictive-check}
 
 ::: {.callout-note appearance="minimal"}
 
-Questo materiale costituisce un approfondimento del capitolo 18 del manuale didattico, focalizzandosi sulle procedure per la validazione delle assunzioni a priori.
+Questo materiale costituisce un approfondimento del capitolo 18 del manuale didattico e introduce uno degli strumenti più caratteristici del workflow bayesiano: la distribuzione predittiva a priori.
 
-L'inferenza bayesiana integra sistematicamente due fonti di informazione: le conoscenze preliminari (formalizzate attraverso distribuzioni *a priori*) e l'evidenza empirica (rappresentata dalla funzione di verosimiglianza). Questo bilanciamento tra assunzioni iniziali e dati osservati costituisce il fondamento epistemologico del ragionamento statistico bayesiano. Ma sorge una questione metodologica fondamentale: *come possiamo valutare l'adeguatezza delle distribuzioni a priori prima di osservare i dati?*
+Una distribuzione a priori è formulata sulla scala dei parametri. Per valutarne il significato sostantivo, però, è spesso più utile chiedersi quali dati essa renda plausibili. La distribuzione predittiva a priori compie precisamente questa trasformazione: combina il prior con il modello generativo e descrive i dati che potremmo osservare prima di avere visto quelli reali.
 
-A questo interrogativo rispondono le *verifiche predittive a priori* [*prior predictive checks*; @gelman2020bayesianworkflow]. Il principio è tanto potente quanto intuitivo: se i *prior* codificano le nostre credenze preliminari, possiamo utilizzarli per *generare dati simulati* e verificare se questi risultati siano plausibili. Quando le simulazioni producono sistematicamente valori impossibili, ordini di grandezza irrealistici o pattern inverosimili, abbiamo un chiaro segnale che qualcosa non funziona nella specifica iniziale del modello.
+Le verifiche predittive a priori (*prior predictive checks*) permettono quindi di controllare se l'intera specificazione iniziale del modello produce valori, ordini di grandezza e pattern compatibili con la conoscenza del fenomeno [@gelman2020bayesianworkflow; @gabry2019visualization].
 :::
 
 ::: {.callout-important appearance="minimal" .chapter-status}
-**Da sapere.** La distribuzione predittiva a priori mostra quali dati il modello considera plausibili prima di osservare quelli reali. Permette di tradurre le assunzioni sui parametri in conseguenze osservabili e di individuare prior che producono valori impossibili, ordini di grandezza irrealistici o una variabilità incompatibile con il fenomeno studiato.
+**Da sapere.** La distribuzione predittiva a priori è una media delle distribuzioni dei dati condizionate ai diversi valori del parametro. Ciascuna distribuzione viene pesata dalla probabilità che il prior assegna al corrispondente valore del parametro.
 
-**Da saper fare.** Generare dati dalla distribuzione predittiva a priori; valutarne la plausibilità rispetto ai vincoli e alle conoscenze del dominio; confrontare specificazioni a priori alternative; modificare i prior quando le simulazioni rivelano previsioni implausibili, senza calibrarli sui dati reali.
+**Da saper fare.** Interpretare la formula della distribuzione predittiva a priori; passare dalla versione discreta alla versione continua; distinguere il prior sui parametri dalla predittiva sui dati; valutare se i dati generati dal modello siano sostantivamente plausibili.
 
-**Approfondimento facoltativo.** La derivazione formale della distribuzione predittiva, l’implementazione manuale del modello Beta-Binomiale e la sezione [Implementazione in Stan](#implementazione-in-stan) approfondiscono il calcolo. Nel percorso essenziale è sufficiente comprendere il workflow ed eseguire il controllo con gli strumenti forniti; la scrittura e la compilazione del programma Stan possono essere saltate.
+**Approfondimento facoltativo.** La formula Beta-Binomiale, il confronto numerico tra calcolo esatto e simulazione e l'implementazione in Stan approfondiscono il calcolo. Nel percorso essenziale è sufficiente comprendere il significato della media ponderata e saper interpretare gli esempi forniti.
 
 [Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
 :::
 
 ::: {.callout-note title="Obiettivi di questo approfondimento"}
-- Comprendere il quadro teorico della verifica predittiva a priori.
-- Capire perché è essenziale per una modellazione statisticamente coerente.
-- Imparare ad applicarla in pratica attraverso esempi concreti.
+
+- Comprendere intuitivamente la definizione della distribuzione predittiva a priori.
+- Capire che l'integrale rappresenta una media ponderata, non la scelta di un singolo valore del parametro.
+- Distinguere l'incertezza sul parametro dalla variabilità dei dati dato il parametro.
+- Tradurre le assunzioni a priori in conseguenze osservabili e valutarne la plausibilità.
 :::
 
 ::: {.callout-caution collapse=true title="Preparazione del Notebook"}
 
 ```{r}
 #| output: false
-here::here("code", "_common.R") |> 
+here::here("code", "_common.R") |>
   source()
-
-library(bayesplot)
-library(brms)
-library(posterior)
-library(priorsense)
-library(cmdstanr)
+conflicts_prefer(posterior::match)
+conflicts_prefer(dplyr::count)
 ```
 :::
 
-## La distribuzione predittiva a priori: definizione e importanza
+## Dalla distribuzione sui parametri alla distribuzione sui dati
 
-### Significato intuitivo
+### La domanda predittiva
 
-La distribuzione predittiva a priori rappresenta l'insieme delle previsioni generate dal modello prima che vengano osservati i dati reali. In altre parole, essa formalizza quali dati ci si aspetta di osservare sulla base delle sole assunzioni iniziali, tenendo conto dell'incertezza sui parametri.
+Supponiamo di avere specificato un modello con parametro $\theta$ e distribuzione a priori $p(\theta)$. Prima di osservare i dati reali possiamo porre una domanda concreta:
 
-Questa distribuzione è cruciale perché:
+> Se il modello fosse usato ora per generare nuovi dati, quali risultati produrrebbe e con quale probabilità?
 
-- identifica previsioni irrealistiche o impossibili;
-- verifica la coerenza tra credenze iniziali e conoscenza del dominio;
-- identifica previsioni irrealistiche o impossibili;
-- esplicita le conseguenze empiriche delle scelte di modellazione.
+La risposta non si ottiene scegliendo un solo valore di $\theta$. Il prior rappresenta infatti la nostra incertezza iniziale sul parametro. Occorre quindi considerare **tutti** i valori di $\theta$ contemplati dal prior e, per ciascuno di essi, i dati che il modello potrebbe generare.
 
-::: {.callout-tip title="Pensala così"}
-Prima di raccogliere dati reali, la distribuzione predittiva a priori ti dice: "Ecco il tipo di dati che il tuo modello considera plausibili". Se quei dati simulati non hanno senso, il problema è nel modello, non nei dati (che non hai ancora visto)!
-:::
-
-### Definizione formale
-
-Matematicamente, la distribuzione predittiva a priori si ottiene *integrando* la verosimiglianza dei dati futuri rispetto alla distribuzione a priori dei parametri:
+La distribuzione predittiva a priori è
 
 $$
-p(\tilde{y}) = \int p(\tilde{y} \mid \theta) \, p(\theta) \, d\theta,
+p(\tilde y)
+=
+\int p(\tilde y\mid\theta)\,p(\theta)\,d\theta,
 $$ {#eq-prior-predictive-distribution}
+
 dove:
 
-- $\tilde{y}$ rappresenta un'osservazione futura (o un insieme di osservazioni) non ancora rilevata;
-- $\theta$ è il vettore dei parametri del modello;
-- $p(\theta)$ è la distribuzione a priori che esprime l'incertezza iniziale su $\theta$;
-- $p(\tilde{y} \mid \theta)$ è la verosimiglianza che specifica come i dati dipendono dai parametri.
+- $\tilde y$ indica un dato futuro, o un intero insieme di dati futuri;
+- $p(\theta)$ indica quanto sono plausibili a priori i diversi valori del parametro;
+- $p(\tilde y\mid\theta)$ descrive quali dati verrebbero generati se il parametro avesse il valore $\theta$;
+- l'integrale combina tutte queste distribuzioni dei dati, usando $p(\theta)$ come sistema di pesi.
 
-**Cosa fa questa formula?** Calcola una media ponderata: per ogni possibile valore dei parametri $\theta$, genera una previsione per $\tilde{y}$; poi combina tutte queste previsioni pesandole con la loro plausibilità a priori $p(\theta)$.
+::: {.callout-tip title="Come leggere la formula"}
 
-Il risultato cattura due fonti di incertezza:
+La formula dice:
 
-1. la *variabilità intrinseca* del processo che genera i dati;
-2. l'*incertezza epistemica* sui valori veri dei parametri.
+1. considera un possibile valore di $\theta$;
+2. determina quali dati produrrebbe quel valore;
+3. pesa quella previsione in base alla plausibilità a priori di $\theta$;
+4. ripeti per tutti i valori di $\theta$;
+5. somma i contributi.
 
-### Intuizione con un esperimento mentale
-
-Per comprendere l'@eq-prior-predictive-distribution, è utile pensare alla distribuzione predittiva a priori come una *media ponderata di distribuzioni predittive*, dove i pesi provengono dalle nostre credenze iniziali.
-
-**Esempio concreto: il modello beta-binomiale.**
-
-Immaginiamo di voler prevedere quanti studenti risponderanno correttamente a un test di 10 domande. Il parametro $\theta$ rappresenta la probabilità di risposta corretta. Procediamo così:
-
-1.  **Consideriamo vari valori plausibili di $\theta$**: ad esempio, 0, 0.1, 0.2, ..., 0.9, 1.0.
-
-2.  **Per ciascun valore $\theta_j$, generiamo una previsione**:
-    $$
-    p(\tilde y \mid \theta_j) = \binom{10}{\tilde y} (\theta_j)^{\tilde y} (1 - \theta_j)^{10 - \tilde y}.
-    $$
-    
-    Questa è la distribuzione binomiale che dice: "Se la vera probabilità fosse $\theta_j$, ecco quanti successi mi aspetterei".
-
-3.  **Pesiamo ogni previsione** in base a quanto è plausibile $\theta_j$ secondo il nostro *prior* $p(\theta_j)$:
-
-    - se il *prior* concentra massa su $\theta \approx 0.7$ → le previsioni con $\theta \approx 0.7$ peseranno molto;
-    - se il *prior* assegna probabilità quasi zero a $\theta \approx 0.1$ → quelle previsioni contribuiranno poco.
-
-4.  **Combiniamo tutto** sommando le probabilità pesate per ogni possibile esito $\tilde y = k$.
-
-::: {.callout-important title="Messaggio chiave"}
-La distribuzione predittiva a priori NON è una singola previsione per un valore fisso di $\theta$. È una *media di tutte le possibili previsioni*, pesata dalle nostre credenze iniziali su $\theta$.
+L'integrale non seleziona il valore “migliore” di $\theta$. **Fa una media di tutte le previsioni possibili.**
 :::
 
-### Confronto: prior vs posterior
+### Una precisazione terminologica
 
-La struttura matematica è identica per le distribuzioni predittive a priori e a posteriori. I pesi, però, cambiano radicalmente.
+Il termine $p(\tilde y\mid\theta)$ ha la stessa forma matematica usata nella verosimiglianza, ma qui viene letto come una distribuzione sui possibili dati futuri, mantenendo fisso $\theta$. Per questo è più chiaro chiamarlo **distribuzione generativa dei dati condizionata al parametro**.
 
-| Distribuzione | Pesi utilizzati | Cosa riflette |
-|---------------|----------------|---------------|
-| **Predittiva a priori** | $p(\theta)$ | Solo credenze iniziali |
-| **Predittiva a posteriori** | $p(\theta \mid y)$ | Credenze aggiornate dai dati |
+- Nella verosimiglianza, i dati osservati sono fissi e la funzione viene esaminata al variare di $\theta$.
+- Nella predizione, $\theta$ è fissato e la distribuzione viene esaminata al variare di $\tilde y$.
 
-**Conseguenze pratiche:**
+Questa distinzione evita di confondere una distribuzione sui parametri con una distribuzione sui dati.
 
-- **Prior vago** → distribuzione predittiva a priori dispersa, con code pesanti.
-- **Prior informativo** → distribuzione predittiva a priori concentrata sugli esiti coerenti con la nostra conoscenza preliminare.
+## Prima l'intuizione discreta
 
-::: {.callout-tip title="Esempio numerico: test a 10 domande"}
+L'integrale della @eq-prior-predictive-distribution può sembrare astratto. Il suo significato diventa immediato quando il parametro può assumere pochi valori discreti. In quel caso l'integrale diventa una somma:
 
-Confrontiamo due specificazioni a priori per $p \sim \text{Beta}(\alpha, \beta)$:
+$$
+p(\tilde y)
+=
+\sum_j p(\tilde y\mid\theta_j)\,p(\theta_j).
+$$ {#eq-prior-predictive-discrete}
 
-**Scenario 1: Prior poco informativo** $\text{Beta}(2,2)$
+### Un esempio con tre possibili valori del parametro
 
-- $\mathbb{E}[p] = 0.5$, ma con molta incertezza.
-- Distribuzione predittiva a priori: massa distribuita su *tutti* i possibili risultati da 0 a 10.
-- I risultati estremi (0/10 o 10/10) hanno probabilità non trascurabile.
+Supponiamo che $\theta$ possa assumere soltanto i valori $0.2$, $0.5$ e $0.8$, con le seguenti probabilità a priori:
 
-**Scenario 2: Prior informativo** $\text{Beta}(10,3)$  
+| $\theta_j$ | $p(\theta_j)$ |
+|---:|---:|
+| 0.2 | 0.2 |
+| 0.5 | 0.3 |
+| 0.8 | 0.5 |
 
-- $\mathbb{E}[p] \approx 0.77$, con varianza ridotta.
-- Distribuzione predittiva a priori: massa concentrata su 6-9 successi.
-- I risultati estremi diventano estremamente improbabili.
-:::
+Vogliamo prevedere il numero $\tilde y$ di successi in due prove:
 
-### Perché è cruciale per la modellazione
+$$
+\tilde y\mid\theta_j \sim \operatorname{Binomiale}(2,\theta_j).
+$$
 
-La distribuzione predittiva a priori è il *primo e più importante controllo di coerenza* di un modello bayesiano.
-
-1. **Verifica compatibilità con il dominio**: rende espliciti i dati che il modello considera plausibili prima dell'osservazione, rivelando eventuali incongruenze tra i priors formali e la conoscenza sostanziale.
-
-2. **Previene errori grossolani**: un prior che assegna una massa significativa a parametri impossibili (ad esempio, probabilità negative o varianze infinite) produrrà predizioni irrealistiche.
-
-3. **Facilita la comunicazione**: trasforma assunzioni astratte in previsioni concrete e verificabili.
-
-4. **Migliora la specificazione**: permette di apportare aggiustamenti iterativi al modello prima di impegnare tempo nell'analisi.
-
-::: {.callout-warning title="Errore comune da evitare"}
-Non confondere "prior non informativo" con "prior ragionevole". Un prior uniforme su $(-\infty, +\infty)$ può sembrare "neutrale", ma spesso porta a previsioni assurde. La verifica predittiva a priori lo rivelerebbe immediatamente.
-:::
-
-## Il processo di verifica predittiva a priori
-
-### Workflow generale
-
-Il processo di *prior predictive check* segue questi passaggi:
-
-1. **specificare** le distribuzioni a priori dei parametri;
-2. **simulare** campioni dal *prior* $\theta^{(s)} \sim p(\theta)$ per $s = 1, \ldots, S$;
-3. **generare** dati predetti: per ogni $\theta^{(s)}$, campionare $\tilde{y}^{(s)} \sim p(y \mid \theta^{(s)})$;
-4. **valutare** la plausibilità dell'insieme $\{\tilde{y}^{(s)}\}$ rispetto alla conoscenza del dominio;
-5. **iterare** se necessario, rivedere i *prior* e ripetere il processo.
-
-::: {.callout-note title="Filosofia del processo"}
-Non stiamo cercando il *prior* "perfetto" che predica esattamente i dati reali (che non abbiamo ancora visto!). Stiamo solo verificando che il modello non produca previsioni assurde.
-:::
-
-### Criteri di valutazione
-
-Quando esaminiamo i dati simulati, ci poniamo le seguenti domande.
-
-**Supporto dei dati:**
-
-- I valori simulati rispettano i vincoli del problema?
-- Ci sono valori impossibili, come conteggi negativi o proporzioni superiori a 1?
-
-**Ordini di grandezza:**
-
-- Gli ordini di grandezza sono coerenti con le aspettative basate sulla conoscenza del dominio?
-- I valori rientrano nell'intervallo atteso, basato sulla conoscenza del dominio?
-- Per esempio, nel caso dei tempi di reazione, simulare 0.001 secondi o 1000 secondi indica un problema.
-
-**Pattern di variabilità:**
-
-- La dispersione simulata è realistica?
-- Un prior troppo vago può generare una variabilità implausibilmente alta.
-
-**Concentrazione della massa:**
-
-- Dove si concentra la maggior parte delle simulazioni?
-- Esempio: nel contesto dell'efficacia di un intervento psicologico, simulare tassi di miglioramento del 10-20% quando la letteratura consolidata riporta effetti nell'ordine del 60-70% rivela un'incoerenza sostanziale tra le aspettative formalizzate nel prior e l'evidenza empirica disponibile.
-
-::: {.callout-tip title="Regola pratica"}
-Se mostrassi i dati simulati a un collega esperto del settore (senza dirgli che si tratta di dati simulati), li troverebbe plausibili? Se la risposta è "assolutamente no", i *prior* necessitano di una revisione.
-:::
-
-### Quando rivedere i prior
-
-**Segnali di allarme che richiedono revisione.**
-
-1. **Violazioni dei vincoli fisici**: simulazioni che producono valori impossibili.
-2. **Estremi irrealistici**: >5-10% delle simulazioni in regioni note per essere estremamente rare.
-3. **Disallineamento con la letteratura**: predizioni sistematicamente lontane da quanto riportato in studi precedenti.
-4. **Incertezza eccessiva**: simulazioni che coprono l'intero spazio parametrico senza concentrazione.
-
-**Come rivedere:**
-
-- aggiungere vincoli se il modello permette valori impossibili;
-- stringere i prior se troppo vaghi (ma senza sovraspecificare);
-- aggiungere vincoli se il modello permette valori impossibili;
-- incorporare informazioni dalla letteratura;
-- utilizzare prior gerarchici, se appropriato.
-
-::: {.callout-caution title="Attenzione"}
-Rivedere i *prior* basandosi su simulazioni a priori è legittimo e raccomandato. Rivederli dopo aver visto i dati reali per "migliorare il fit" è metodologicamente scorretto (P-hacking bayesiano).
-:::
-
-## Simulazione predittiva a priori in R
-
-### Approccio manuale con il modello beta-binomiale
-
-Consideriamo un esempio concreto: un test di 10 domande somministrato a degli studenti. Vogliamo modellare il numero di risposte corrette.
-
-**Modello:**
-
-- $y_i \sim \text{Binomial}(10, p)$ per studente $i$;
-- $p \sim \text{Beta}(\alpha, \beta)$.
-
-**Scenario di ricerca:** sappiamo da studi precedenti che gli studenti tendono a rispondere correttamente al 70-80% delle domande. Usiamo la distribuzione $\text{Beta}(10, 3)$ che ha una media approssimativamente pari a 0.77.
+Per ciascun valore di $\theta_j$ otteniamo una diversa distribuzione sui possibili risultati $\tilde y=0,1,2$. La tabella seguente mostra anche il contributo pesato di ciascuna distribuzione.
 
 ```{r}
-set.seed(42)
-n_sim <- 10000        # numero di simulazioni
-n_items <- 10         # domande nel test
-alpha_prior <- 10     # parametri Beta
-beta_prior <- 3
+theta_values <- c(0.2, 0.5, 0.8)
+prior_weights <- c(0.2, 0.3, 0.5)
 
-# Passo 1: simula parametri dal prior
-p_sim <- rbeta(n_sim, alpha_prior, beta_prior)
+mixture_components <- tidyr::expand_grid(
+  theta = theta_values,
+  y_tilde = 0:2
+) |>
+  mutate(
+    prior_weight = prior_weights[match(theta, theta_values)],
+    p_y_given_theta = dbinom(y_tilde, size = 2, prob = theta),
+    weighted_contribution = prior_weight * p_y_given_theta
+  )
 
-# Passo 2: per ogni p simulato, genera dati
-y_sim <- rbinom(n_sim, size = n_items, prob = p_sim)
-
-# Definisci i colori tematici
-col_prior_pred <- palette_qualitative[2]    # Azzurro per distribuzioni predittive
-col_histogram <- palette_qualitative[5]     # Blu per istogrammi
-col_facets <- palette_qualitative[c(1, 3, 6)] # Arancione, Verde, Rosso-arancio per facet
-
-# Visualizza la distribuzione predittiva a priori
-tibble(y_sim = y_sim) |>
-  ggplot(aes(x = y_sim)) +
-  geom_histogram(
-    aes(y = after_stat(density)),
-    bins = 11,
-    fill = col_histogram,
-    color = "white",
-    alpha = 0.8
-  ) +
-  scale_x_continuous(breaks = 0:10) +
-  labs(
-    x = "Numero di risposte corrette (su 10)",
-    y = "Densità",
-    title = "Distribuzione predittiva a priori:\nBeta(10,3) -> Binomiale(10, p)",
-    subtitle = "Rappresenta i dati attesi prima dell'osservazione"
+mixture_components |>
+  mutate(
+    across(
+      c(prior_weight, p_y_given_theta, weighted_contribution),
+      ~ round(.x, 3)
+    )
+  ) |>
+  knitr::kable(
+    col.names = c(
+      "$\\theta_j$",
+      "$\\tilde y$",
+      "$p(\\theta_j)$",
+      "$p(\\tilde y\\mid\\theta_j)$",
+      "Contributo pesato"
+    ),
+    align = c("c", "c", "c", "c", "c"),
+    caption = "Componenti della distribuzione predittiva discreta"
   )
 ```
 
-**Interpretazione:**
-
-- la maggior parte delle simulazioni prevede tra 6 e 9 risposte corrette;
-- questo è coerente con l'aspettativa di accuratezza ~70-80%;
-- valori estremi (0-2 o 10) sono rari, come ci si aspetterebbe.
-
-::: {.callout-tip title="Esercizio di riflessione"}
-Prova a cambiare i parametri a $\text{Beta}(2, 2)$ (prior uniforme). Cosa succede alla distribuzione predittiva? È ancora plausibile per il nostro scenario?
-:::
-
-### Confronto tra specificazioni alternative
-
-Confrontiamo tre scelte di *prior* per comprendere l'impatto sulla predittiva.
+Per ottenere la probabilità predittiva di ciascun risultato, sommiamo verticalmente i contributi relativi allo stesso valore di $\tilde y$.
 
 ```{r}
-# Simulazioni per tre prior differenti
-simulate_prior_predictive <- function(alpha, beta, n_sim = 10000, n_items = 10) {
-  p_sim <- rbeta(n_sim, alpha, beta)
-  y_sim <- rbinom(n_sim, size = n_items, prob = p_sim)
-  return(y_sim)
+prior_predictive_discrete <- mixture_components |>
+  group_by(y_tilde) |>
+  summarise(
+    prior_predictive_probability = sum(weighted_contribution),
+    .groups = "drop"
+  )
+
+prior_predictive_discrete |>
+  mutate(
+    prior_predictive_probability = round(
+      prior_predictive_probability,
+      3
+    )
+  ) |>
+  knitr::kable(
+    col.names = c(
+      "$\\tilde y$",
+      "$p(\\tilde y)$"
+    ),
+    align = c("c", "c"),
+    caption = "Distribuzione predittiva a priori"
+  )
+```
+
+I calcoli sono:
+
+$$
+\begin{aligned}
+p(\tilde y=0)
+&=0.2(0.64)+0.3(0.25)+0.5(0.04)=0.223,\\
+p(\tilde y=1)
+&=0.2(0.32)+0.3(0.50)+0.5(0.32)=0.374,\\
+p(\tilde y=2)
+&=0.2(0.04)+0.3(0.25)+0.5(0.64)=0.403.
+\end{aligned}
+$$
+
+::: {.callout-important title="Il punto essenziale"}
+
+Per calcolare, per esempio, $p(\tilde y=2)$ non scegliamo tra $\theta=0.2$, $0.5$ e $0.8$. Calcoliamo la probabilità di due successi sotto **ciascuno** dei tre scenari e poi facciamo una media usando i pesi del prior.
+
+Il valore $\theta=0.8$ contribuisce maggiormente perché:
+
+- rende due successi abbastanza probabili;
+- riceve anche il peso a priori più elevato.
+:::
+
+### Vedere la miscela
+
+```{r}
+predictive_plot_data <- bind_rows(
+  mixture_components |>
+    transmute(
+      y_tilde,
+      probability = p_y_given_theta,
+      distribution = paste0("Se theta = ", theta)
+    ),
+  prior_predictive_discrete |>
+    transmute(
+      y_tilde,
+      probability = prior_predictive_probability,
+      distribution = "Media pesata: predittiva"
+    )
+)
+
+predictive_plot_data |>
+  ggplot(aes(x = factor(y_tilde), y = probability)) +
+  geom_col(fill = PRIMARY, alpha = 0.85) +
+  facet_wrap(~distribution, nrow = 1) +
+  labs(
+    x = "Numero futuro di successi",
+    y = "Probabilità",
+    title = "La predittiva è una media di distribuzioni",
+    subtitle = "I pesi della media sono le probabilità a priori dei valori di theta"
+  )
+```
+
+La distribuzione finale non coincide necessariamente con nessuna delle tre distribuzioni condizionate. È una nuova distribuzione ottenuta combinandole.
+
+## Dalla somma all'integrale
+
+Quando $\theta$ può assumere infiniti valori continui, non possiamo elencarli uno per uno. La logica, tuttavia, non cambia:
+
+$$
+\underbrace{
+\sum_j p(\tilde y\mid\theta_j)p(\theta_j)
+}_{\text{parametro discreto}}
+\quad\longrightarrow\quad
+\underbrace{
+\int p(\tilde y\mid\theta)p(\theta)d\theta
+}_{\text{parametro continuo}}.
+$$
+
+L'integrale è dunque la versione continua della stessa media ponderata vista nell'esempio discreto.
+
+::: {.callout-warning title="Tre interpretazioni da non confondere"}
+
+La formula **non**:
+
+- calcola una posterior, perché non sono ancora stati osservati dati;
+- sostituisce $\theta$ con la media del prior;
+- sceglie il valore di $\theta$ con densità a priori più alta.
+
+La formula combina tutte le distribuzioni $p(\tilde y\mid\theta)$ nella misura indicata dal prior.
+:::
+
+## Due fonti di incertezza
+
+La distribuzione predittiva a priori incorpora contemporaneamente due forme di incertezza.
+
+### Incertezza sul parametro
+
+Non conosciamo il valore di $\theta$. Il prior assegna plausibilità a valori diversi, che possono implicare previsioni differenti.
+
+### Variabilità dei dati dato il parametro
+
+Anche se conoscessimo esattamente $\theta$, i dati non sarebbero necessariamente identici in ogni replica. Per esempio, con $\theta=0.8$ non otteniamo sempre otto successi su dieci: la distribuzione binomiale rappresenta la variabilità residua del processo.
+
+::: {.callout-tip title="Perché non basta usare la media del prior?"}
+
+Sostituire $\theta$ con $E(\theta)$ conserva il centro del prior, ma elimina l'incertezza sui parametri. In generale,
+
+$$
+p(\tilde y)
+\neq
+p\!\left(\tilde y\mid E(\theta)\right).
+$$
+
+La differenza è particolarmente importante quando il prior è molto disperso o quando il modello è non lineare.
+:::
+
+## Un esempio paradigmatico: il modello Beta-Binomiale
+
+Consideriamo un test di dieci domande. Il parametro $\theta$ rappresenta la probabilità di risposta corretta e il numero futuro di risposte corrette è
+
+$$
+\tilde y\mid\theta\sim\operatorname{Binomiale}(10,\theta).
+$$
+
+Poniamo
+
+$$
+\theta\sim\operatorname{Beta}(10,3).
+$$
+
+Il prior ha media
+
+$$
+E(\theta)=\frac{10}{13}\approx 0.77,
+$$
+
+e concentrazione $10+3=13$. Prima di osservare il test, il modello considera quindi più plausibili probabilità di risposta corretta relativamente alte, pur mantenendo una certa incertezza.
+
+### La distribuzione Beta-Binomiale
+
+Integrando $\theta$ otteniamo una distribuzione Beta-Binomiale:
+
+$$
+p(\tilde y=k)
+=
+\binom{10}{k}
+\frac{B(k+10,10-k+3)}{B(10,3)},
+\qquad k=0,\ldots,10,
+$$
+
+dove $B(\cdot,\cdot)$ è la funzione beta.
+
+```{r}
+dbeta_binomial <- function(y, size, alpha, beta) {
+  exp(
+    lchoose(size, y) +
+      lbeta(y + alpha, size - y + beta) -
+      lbeta(alpha, beta)
+  )
 }
 
-# Prior 1: Molto vago - Beta(1,1) = Uniforme(0,1)
-y_vague <- simulate_prior_predictive(1, 1)
-
-# Prior 2: Debolmente informativo - Beta(2,2)
-y_weak <- simulate_prior_predictive(2, 2)
-
-# Prior 3: Informativo - Beta(10,3)
-y_informative <- simulate_prior_predictive(10, 3)
-
-# Combina per visualizzazione
-prior_comparison <- tibble(
-  y = c(y_vague, y_weak, y_informative),
-  prior = rep(
-    c("Beta(1,1):\nUniforme", "Beta(2,2):\nDebole", "Beta(10,3):\nInformativo"),
-    each = 10000
+prior_predictive_beta_binomial <- tibble(
+  y_tilde = 0:10,
+  probability = dbeta_binomial(
+    y = 0:10,
+    size = 10,
+    alpha = 10,
+    beta = 3
   )
 )
 
-prior_comparison |>
-  ggplot(aes(x = y, fill = prior)) +
-  geom_histogram(
-    aes(y = after_stat(density)),
-    bins = 11,
-    position = "identity",
-    alpha = 0.6
-  ) +
-  scale_fill_manual(
-    values = setNames(
-      col_facets,
-      c("Beta(1,1):\nUniforme", "Beta(2,2):\nDebole", "Beta(10,3):\nInformativo")
-    )
-  ) +
-  facet_wrap(~prior, nrow = 1) +
+prior_predictive_beta_binomial |>
+  ggplot(aes(x = y_tilde, y = probability)) +
+  geom_col(fill = PRIMARY, alpha = 0.85) +
   scale_x_continuous(breaks = 0:10) +
   labs(
-    x = "Numero di risposte corrette",
-    y = "Densità",
-    title = "Confronto tra diverse specificazioni a priori",
-    subtitle = "Come cambia la distribuzione predittiva"
-  ) +
-  theme(legend.position = "none")
+    x = "Numero futuro di risposte corrette",
+    y = "Probabilità",
+    title = "Distribuzione predittiva a priori",
+    subtitle = "theta ~ Beta(10, 3); y-tilde | theta ~ Binomiale(10, theta)"
+  )
 ```
 
-**Osservazioni:**
+Le principali implicazioni sostantive sono:
 
-1. Beta(1,1) - Uniforme: 
-   - ogni valore compreso tra 0 e 10 è quasi equiprobabile;
-   - implica che non sappiamo letteralmente nulla;
-   - è troppo vago se abbiamo conoscenze sul dominio.
+```{r}
+prior_predictive_summary <- prior_predictive_beta_binomial |>
+  summarise(
+    media = sum(y_tilde * probability),
+    prob_da_6_a_10 = sum(probability[y_tilde >= 6]),
+    prob_da_0_a_2 = sum(probability[y_tilde <= 2]),
+    prob_10 = probability[y_tilde == 10]
+  )
 
-2. Beta(2,2) - Debole:
-   - leggera preferenza per i valori centrali (4-6);
-   - è ancora abbastanza disperso;
-   - ragionevole se abbiamo poche informazioni preliminari.
+prior_predictive_summary |>
+  mutate(across(everything(), ~ round(.x, 3))) |>
+  knitr::kable(
+    col.names = c(
+      "Numero medio corretto",
+      "$P(\\tilde y \\geq 6)$",
+      "$P(\\tilde y \\leq 2)$",
+      "$P(\\tilde y = 10)$"
+    ),
+    align = rep("c", 4),
+    caption = "Alcune implicazioni della specificazione a priori"
+  )
+```
 
-3. Beta(10,3) - Informativo:
-   - forte concentrazione su 6-9 risposte corrette;
-   - coerente con un'aspettativa di accuratezza del 70-80%;
-   - appropriato quando abbiamo una conoscenza robusta.
+Il modello prevede in media circa `r round(prior_predictive_summary$media, 2)` risposte corrette. Assegna probabilità `r scales::percent(prior_predictive_summary$prob_da_6_a_10, accuracy = 0.1)` a un risultato compreso tra 6 e 10, e soltanto `r scales::percent(prior_predictive_summary$prob_da_0_a_2, accuracy = 0.1)` a un risultato compreso tra 0 e 2.
 
-::: {.callout-important title="Quale scegliere?"}
-Non esiste una scelta "migliore" in assoluto. La scelta dipende dalla conoscenza disponibile:
+Un punteggio perfetto non è invece trascurabile: $P(\tilde y=10)$ è circa `r scales::percent(prior_predictive_summary$prob_10, accuracy = 0.1)`. Questa conseguenza può essere appropriata oppure no; dipende da ciò che sappiamo sul test. Il controllo predittivo serve precisamente a renderla visibile.
 
-- **Poche informazioni:** prior più vago (ma non completamente piatto).
-- **Letteratura consolidata:** prior informativo.
-- **Incertezza su aspetti specifici:** prior gerarchico (argomento avanzato).
+::: {.callout-important title="Una verifica, non una conferma automatica"}
+
+Dire che il prior Beta(10,3) ha media 0.77 non basta per giudicarlo ragionevole. Bisogna anche chiedersi se le sue conseguenze sulla scala osservabile siano plausibili. Se un punteggio perfetto dovrebbe essere molto raro, la specificazione Beta(10,3) potrebbe essere troppo permissiva nella regione alta, nonostante una media apparentemente sensata.
 :::
 
-### Verifica formale della plausibilità
+## Posizione e forza del prior producono effetti diversi
 
-Possiamo quantificare alcune proprietà delle simulazioni.
+Per comprendere una predittiva a priori è utile distinguere due proprietà del prior:
+
+- la **posizione**, che indica quali valori del parametro sono favoriti;
+- la **concentrazione**, che indica quanto strettamente il prior si concentra intorno a quei valori.
+
+### Stessa media, concentrazione diversa
+
+Confrontiamo due prior con media 0.75:
+
+$$
+\operatorname{Beta}(3,1)
+\qquad\text{e}\qquad
+\operatorname{Beta}(30,10).
+$$
+
+Il primo ha concentrazione 4, il secondo concentrazione 40. Entrambi collocano il centro nello stesso punto, ma il primo ammette molta più incertezza su $\theta$.
 
 ```{r}
-#| message: false
-#| warning: false
-# Calcola statistiche descrittive per il prior informativo
-summary_stats <- tibble(y = y_informative) |>
-  summarise(
-    media = mean(y),
-    mediana = median(y),
-    dev_std = sd(y),
-    q05 = quantile(y, 0.05),
-    q95 = quantile(y, 0.95),
-    prob_estremi = mean(y <= 2 | y >= 10)
+prior_strength_comparison <- bind_rows(
+  tibble(
+    y_tilde = 0:10,
+    probability = dbeta_binomial(0:10, 10, 3, 1),
+    prior = "Beta(3, 1): concentrazione 4"
+  ),
+  tibble(
+    y_tilde = 0:10,
+    probability = dbeta_binomial(0:10, 10, 30, 10),
+    prior = "Beta(30, 10): concentrazione 40"
   )
+)
 
-summary_stats |>
-  knitr::kable(
-    digits = 2,
-    caption = "Statistiche della distribuzione predittiva: Beta(10,3)"
+prior_strength_comparison |>
+  ggplot(aes(x = y_tilde, y = probability, fill = prior)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~prior, nrow = 1) +
+  scale_fill_qualitative() +
+  scale_x_continuous(breaks = 0:10) +
+  labs(
+    x = "Numero futuro di risposte corrette",
+    y = "Probabilità",
+    title = "Stessa media del prior, diversa forza informativa",
+    subtitle = "La predittiva più debole assegna maggiore massa agli esiti lontani dal centro"
   )
 ```
 
-**Checklist di validazione:**
+Le due predittive hanno lo stesso valore atteso, ma non la stessa dispersione. Il prior meno concentrato permette valori di $\theta$ più diversi tra loro e produce quindi una predittiva più dispersa.
 
-✓ Media ~7.7: coerente con l'aspettativa teorica ($\mathbb{E}[p] \times 10 \approx 0.77 \times 10$).
+### Stessa concentrazione, media diversa
 
-✓ Intervallo credibile 90% (Q05-Q95): dovrebbe coprire il range realistico.  
+Confrontiamo ora due prior con concentrazione 12:
 
-✓ Probabilità di estremi (<3 o >9): dovrebbe essere bassa se non ci si aspetta valori estremi.
-
-## Implementazione in Stan
-
-Per analisi più complesse, Stan fornisce un framework robusto per le verifiche predittive.
-
-### Modello Stan completo
+$$
+\operatorname{Beta}(3,9)
+\qquad\text{e}\qquad
+\operatorname{Beta}(9,3).
+$$
 
 ```{r}
-binom_prior_ppc_stan <- '
+prior_location_comparison <- bind_rows(
+  tibble(
+    y_tilde = 0:10,
+    probability = dbeta_binomial(0:10, 10, 3, 9),
+    prior = "Beta(3, 9): media 0.25"
+  ),
+  tibble(
+    y_tilde = 0:10,
+    probability = dbeta_binomial(0:10, 10, 9, 3),
+    prior = "Beta(9, 3): media 0.75"
+  )
+)
+
+prior_location_comparison |>
+  ggplot(aes(x = y_tilde, y = probability, fill = prior)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~prior, nrow = 1) +
+  scale_fill_qualitative() +
+  scale_x_continuous(breaks = 0:10) +
+  labs(
+    x = "Numero futuro di risposte corrette",
+    y = "Probabilità",
+    title = "Stessa forza informativa, diversa posizione",
+    subtitle = "Cambiare il centro del prior sposta i dati che il modello considera plausibili"
+  )
+```
+
+Questi confronti mostrano perché etichette generiche come “prior vago” o “prior informativo” non bastano. È necessario specificare **dove** il prior concentra la massa e **quanto** è concentrato.
+
+## Calcolo esatto e simulazione esprimono la stessa formula
+
+La distribuzione predittiva può essere calcolata analiticamente, quando la forma del modello lo consente, oppure approssimata mediante simulazione.
+
+L'algoritmo di simulazione è:
+
+$$
+\theta^{(s)}\sim p(\theta),
+\qquad
+\tilde y^{(s)}\sim p(\tilde y\mid\theta^{(s)}),
+\qquad s=1,\ldots,S.
+$$
+
+Ogni replica compie due passaggi:
+
+1. estrae un possibile valore del parametro dal prior;
+2. genera un possibile dato condizionato a quel valore.
+
+La distribuzione empirica degli $\tilde y^{(s)}$ approssima l'integrale della @eq-prior-predictive-distribution.
+
+```{r}
+set.seed(42)
+number_of_draws <- 20000
+
+prior_draws <- rbeta(number_of_draws, shape1 = 10, shape2 = 3)
+predictive_draws <- rbinom(
+  number_of_draws,
+  size = 10,
+  prob = prior_draws
+)
+
+simulated_probabilities <- tibble(y_tilde = predictive_draws) |>
+  count(y_tilde, name = "frequency") |>
+  tidyr::complete(y_tilde = 0:10, fill = list(frequency = 0)) |>
+  mutate(probability_simulated = frequency / sum(frequency))
+
+exact_and_simulated <- prior_predictive_beta_binomial |>
+  rename(probability_exact = probability) |>
+  left_join(simulated_probabilities, by = "y_tilde")
+
+exact_and_simulated |>
+  ggplot(aes(x = probability_exact, y = probability_simulated)) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
+  geom_point(size = 3) +
+  coord_equal() +
+  labs(
+    x = "Probabilità esatta Beta-Binomiale",
+    y = "Frequenza relativa simulata",
+    title = "La simulazione approssima la stessa distribuzione",
+    subtitle = "Ogni punto rappresenta un possibile punteggio da 0 a 10"
+  )
+```
+
+La simulazione non introduce un nuovo principio. È un modo operativo di eseguire la media continua quando l'integrale non è disponibile in forma chiusa.
+
+## Che cosa controlla una verifica predittiva a priori
+
+Una verifica predittiva a priori non valuta soltanto il prior isolatamente. Valuta l'intera specificazione generativa:
+
+$$
+\text{prior sui parametri}
++
+\text{modello dei dati}
++
+\text{scala osservabile}.
+$$
+
+Un prior può sembrare ragionevole sulla scala di un coefficiente e produrre tuttavia dati assurdi dopo essere stato propagato attraverso una funzione di collegamento o una struttura gerarchica.
+
+### Vincoli e supporto
+
+- I dati simulati rispettano i limiti logici e fisici del fenomeno?
+- Un modello per conteggi produce soltanto interi non negativi?
+- Un modello per proporzioni produce valori compresi tra 0 e 1?
+
+### Ordine di grandezza
+
+- I valori simulati hanno una scala realistica?
+- I tempi di reazione sono dell'ordine dei millisecondi o di molte ore?
+- I punteggi simulati sono compatibili con il range dello strumento?
+
+### Dispersione e frequenza degli estremi
+
+- Il modello rende comuni eventi che dovrebbero essere eccezionali?
+- Oppure esclude quasi completamente eventi che sappiamo essere possibili?
+
+### Struttura dei dati
+
+Nei modelli più complessi non basta controllare i valori individuali. È necessario esaminare anche pattern come asimmetria, eterogeneità tra persone, correlazioni, numero di valori nulli e dipendenza temporale.
+
+::: {.callout-tip title="Domanda guida"}
+
+Se un esperto del fenomeno osservasse questi dati senza sapere che sono simulati, li considererebbe almeno plausibili?
+
+Il controllo non richiede che le simulazioni assomiglino esattamente ai dati che saranno osservati. Richiede che non contraddicano in modo evidente ciò che è già noto o i vincoli del problema.
+:::
+
+## Il workflow della verifica predittiva a priori
+
+Il processo può essere riassunto in cinque passaggi:
+
+1. **specificare** il prior e il modello generativo;
+2. **generare** valori dei parametri dal prior;
+3. **generare** dati condizionati a quei parametri;
+4. **valutare** le conseguenze sulla scala osservabile;
+5. **rivedere** la specificazione quando le conseguenze sono implausibili.
+
+La revisione non deve servire a costruire un prior che anticipi esattamente i dati reali. Lo scopo è eliminare specificazioni incoerenti, eccessivamente permissive o incompatibili con la conoscenza sostantiva.
+
+::: {.callout-caution title="Uso dei dati e trasparenza"}
+
+È preferibile svolgere il controllo predittivo a priori prima di adattare il modello ai dati in esame. Nella pratica, tuttavia, la costruzione del modello può essere iterativa e alcune revisioni possono avvenire dopo avere osservato caratteristiche dei dati.
+
+In quel caso la revisione deve essere dichiarata come esplorativa. Le conclusioni possono essere valutate mediante analisi di sensibilità, dati tenuti da parte, nuove osservazioni o repliche. Non è corretto descrivere come completamente pre-specificata una scelta formulata dopo avere esaminato i dati.
+:::
+
+## Implementazione essenziale in Stan {.unnumbered .unlisted}
+
+Questa sezione è facoltativa. Il codice rende esplicita la stessa sequenza già utilizzata nella simulazione manuale.
+
+```{r}
+#| eval: false
+binomial_prior_predictive_stan <- '
 data {
-  int<lower=1> N;        // numero di unità di osservazione (studenti)
-  int<lower=1> n_items;  // numero di item per studente
+  int<lower=1> N;
+  int<lower=1> n_items;
 }
 parameters {
-  real<lower=0, upper=1> p;   // probabilità di successo globale
+  real<lower=0, upper=1> theta;
 }
 model {
-  p ~ beta(10, 3);            // distribuzione a priori esatta
-  // Nessuna verosimiglianza: campionamento esclusivamente dalle distribuzioni a priori
+  theta ~ beta(10, 3);
 }
 generated quantities {
-  array[N] int y_rep;         // dati replicati
+  array[N] int y_tilde;
   for (i in 1:N) {
-    y_rep[i] = binomial_rng(n_items, p);
+    y_tilde[i] = binomial_rng(n_items, theta);
   }
 }
 '
 ```
 
-**Struttura del modello:**
-
-1. **Blocco `data`**: dichiara le dimensioni del problema (numero studenti, domande).
-2. **Blocco `parameters`**: definisce $p$ con supporto $[0,1]$.
-3. **Blocco `model`**: specifica il prior $p \sim \text{Beta}(10,3)$.
-4. **Blocco `generated quantities`**: simula dati dalla distribuzione predittiva.
-
-**Vantaggi di Stan:**
-
-- Sampling efficiente anche per prior complessi.
-- Facile incorporare gerarchie e correlazioni.
-- Controllo automatico di diagnostiche di convergenza.
-
-
-### Compilazione ed esecuzione
-
-```{r}
-#| output: false
-mod <- cmdstan_model(
-  write_stan_file(binom_prior_ppc_stan),
-  compile = TRUE
-)
-```
-
-```{r}
-#| output: false
-n_studenti <- 50
-n_item     <- 10
-
-fit_beta <- mod$sample(
-  data = list(N = n_studenti, n_items = n_item),
-  chains = 4, iter_warmup = 500, iter_sampling = 1000,
-  seed = 123, refresh = 0
-)
-```
-
-**Processo di simulazione in tre fasi:**
-
-1. **Campionamento dai prior**: il campionatore estrae valori del parametro $p$ dalla distribuzione a priori specificata $\text{Beta}(10, 3)$, generando così l'insieme dei valori plausibili del parametro prima di osservare i dati.
-
-2. **Propagazione probabilistica**: per ogni valore campionato $p^{(s)}$, il modello propaga l'incertezza attraverso la distribuzione predittiva $\text{Binomial}(n = 10, p = p^{(s)})$, che formalizza il meccanismo di generazione dei dati.
-
-3. **Generazione di dati replicati**: ogni campione $y_{\text{rep}}^{(s)}$ rappresenta un possibile insieme di dati che il modello considera plausibile sotto le attuali assunzioni a priori, permettendo così una valutazione empirica della loro ragionevolezza.
-
-Questa sequenza opera esclusivamente a livello delle distribuzioni a priori, senza essere influenzata dai dati osservati, e costituisce quindi una verifica puramente pre-osservativa del modello specificato.
-
-### Visualizzazione dei risultati
-
-```{r}
-# Estrai e visualizza le simulazioni
-draws_mat <- fit_beta$draws("y_rep", format = "draws_matrix")
-y_rep_vec <- as.vector(as.matrix(draws_mat))
-
-tibble(y = y_rep_vec) |>
-  ggplot(aes(x = y)) +
-  geom_histogram(
-    aes(y = after_stat(density)),
-    bins = 11,
-    fill = col_prior_pred,
-    color = "white",
-    linewidth = 0.2,
-    alpha = 0.85
-  ) +
-  scale_x_continuous(breaks = 0:10) +
-  labs(
-    x = "Numero di risposte corrette su 10",
-    y = "Densità",
-    title = "Distribuzione predittiva a priori (Stan)",
-    subtitle = "Beta(10,3) -> valutazione pre-dati"
-  )
-```
-
-**Visualizzazione:**
-
-```{r}
-# Usa bayesplot 
-vars <- paste0("y_rep[", 1:n_studenti, "]")
-yrep_mat <- posterior::as_draws_matrix(fit_beta$draws(variables = vars))
-
-p <- bayesplot::ppc_bars(
-  y = rep(0, n_studenti),  # placeholder (non abbiamo dati reali)
-  yrep = as.matrix(yrep_mat)[1:200, ]
-) +
-  labs(
-    title = "Verifica predittiva a priori (Stan)",
-    # subtitle = "Distribuzione attesa per ciascuno studente"
-  )
-# Il primo layer (rimosso) è la barra dei dati fittizi osservati
-p$layers <- p$layers[-1]
-p
-```
-
-### Rilevanza metodologica
-
--   **Trasparenza:** l'implementazione diretta in Stan rende esplicite le implicazioni delle nostre scelte a priori.
--   **Prevenzione degli errori:** consente di identificare criticità nella specificazione del modello prima di impegnare risorse nella raccolta e analisi dei dati osservati.
--   **Apprendimento concettuale:** favorisce una comprensione più profonda del nesso tra distribuzioni a priori e distribuzioni predittive.
-
-::: {.callout-success title="Punto chiave da ricordare"}
-> La verifica predittiva a priori funge da "test di coerenza sostantiva" per le nostre assunzioni iniziali. Se i dati simulati risultano sistematicamente implausibili, la criticità non risiede nei dati reali — che non sono ancora stati osservati — bensì nella specificazione del modello bayesiano, la quale richiede una revisione critica.
-:::
+Nel blocco `model`, Stan estrae valori di $\theta$ dal prior. Nel blocco `generated quantities`, ciascun valore di $\theta$ viene trasformato in possibili dati. Non compare alcun dato osservato e non viene calcolata una posterior.
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-Il controllo predittivo a priori trasforma le assunzioni iniziali da entità astratte in ipotesi empiricamente verificabili. Questo approccio consente una valutazione *ante hoc* di plausibilità, prima della raccolta dei dati, migliorando così gli standard di trasparenza nella ricerca empirica.
+La distribuzione predittiva a priori traduce una distribuzione astratta sui parametri in una distribuzione concreta sui dati osservabili. Il suo significato può essere compreso senza ambiguità partendo dalla versione discreta:
 
-La distribuzione predittiva a priori è una media ponderata delle previsioni del modello, dove i pesi riflettono le credenze iniziali codificate nei *prior*. 
+$$
+p(\tilde y)
+=
+\sum_j p(\tilde y\mid\theta_j)p(\theta_j).
+$$
 
-Distribuzioni a priori apparentemente plausibili sulla scala dei parametri possono generare previsioni empiricamente incoerenti una volta proiettate sulla scala osservabile dei dati, il che sottolinea la necessità di una validazione sistematica delle implicazioni predittive delle assunzioni iniziali.
+Per ciascun possibile valore del parametro consideriamo la distribuzione dei dati che esso produrrebbe; poi facciamo una media usando le probabilità a priori come pesi. Quando il parametro è continuo, la somma diventa un integrale, ma il ragionamento resta identico.
 
-Il flusso di lavoro iterativo si articola in una sequenza ciclica che prevede la specifica delle distribuzioni a priori, la simulazione dei dati attesi, la valutazione della loro plausibilità sostanziale e, se necessario, la revisione critica delle assunzioni iniziali. Questa procedura conserva la propria integrità metodologica solo se implementata in fase pre-osservativa, preservando l'indipendenza tra le assunzioni iniziali e l'evidenza empirica. Gli strumenti pratici forniti da R e Stan rendono questo processo accessibile e riproducibile.
+Questa distribuzione incorpora sia l'incertezza sui parametri sia la variabilità dei dati dato il parametro. Per questo non coincide, in generale, con la distribuzione ottenuta fissando il parametro alla media del prior.
 
-I prossimi approfondimenti estenderanno questo framework ai controlli predittivi a posteriori, completando così l'architettura di una modellazione bayesiana coerente, rigorosa e trasparente. Per un'esplorazione più approfondita che coinvolga modelli di complessità crescente, si rimanda all'@sec-apx-prior-predictive-check.
+Il controllo predittivo a priori è un controllo sostantivo dell'intero modello generativo. Rende visibili conseguenze che possono essere difficili da intuire sulla scala dei parametri e permette di correggere specificazioni implausibili prima che diventino parte dell'inferenza.
 
-::: {.callout-note title="Messaggio finale"}
-Un modello bayesiano ben specificato deve superare due verifiche complementari: il controllo predittivo a priori, che valuta se il modello genera dati plausibili prima dell'osservazione, e il controllo predittivo a posteriori, che verifica quanto bene il modello riproduca i dati effettivamente osservati. Trascurare la prima verifica significa costruire l'edificio inferenziale su fondamenta traballanti, compromettendo la solidità dell'intera analisi.
+Nel capitolo successivo la stessa struttura verrà utilizzata con pesi diversi. La distribuzione predittiva a posteriori sostituisce infatti $p(\theta)$ con $p(\theta\mid y)$:
+
+$$
+p(\tilde y\mid y)
+=
+\int p(\tilde y\mid\theta)p(\theta\mid y)d\theta.
+$$
+
+La meccanica è la stessa; cambia l'informazione usata per pesare i diversi valori del parametro.
+
+## Esercizi {.unnumbered .unlisted}
+
+### Esercizio 1 — Comprendere {.unnumbered .unlisted}
+
+*Livello essenziale · 10 minuti · Codice: no*
+
+Nell'esempio discreto del capitolo, $\theta$ può assumere i valori $0.2$, $0.5$ e $0.8$, con pesi a priori rispettivamente $0.2$, $0.3$ e $0.5$. Il risultato futuro è il numero di successi in due prove.
+
+1. Spiega con parole tue perché, per calcolare $p(\tilde y=2)$, occorre considerare tutti e tre i valori di $\theta$.
+2. Interpreta il termine $0.5\times0.64$ che compare nel calcolo.
+3. Spiega perché il risultato finale, $p(\tilde y=2)=0.403$, non è una probabilità relativa al parametro.
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+
+Distingui tre oggetti: il peso a priori di $\theta=0.8$, la probabilità di due successi condizionata a $\theta=0.8$ e la probabilità marginale del dato futuro.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+
+Per calcolare la probabilità di due successi dobbiamo considerare tutti gli scenari ammessi dal prior, perché non sappiamo quale valore di $\theta$ sia quello pertinente. Ogni scenario produce una probabilità diversa di due successi.
+
+Il termine $0.5\times0.64$ è il contributo dello scenario $\theta=0.8$: il prior assegna probabilità 0.5 a questo valore e, se $\theta=0.8$, la probabilità di due successi è 0.64.
+
+Il valore 0.403 è la probabilità predittiva del dato $\tilde y=2$. È una probabilità sulla scala dei possibili risultati, ottenuta dopo avere mediato sull'incertezza relativa a $\theta$.
+:::
+
+### Esercizio 2 — Prevedere {.unnumbered .unlisted}
+
+*Livello essenziale · 5–10 minuti · Codice: no*
+
+Quale delle seguenti frasi interpreta correttamente
+
+$$
+p(\tilde y)=\int p(\tilde y\mid\theta)p(\theta)d\theta?
+$$
+
+A. Si sceglie il valore di $\theta$ con densità a priori più alta e si usa la sua distribuzione dei dati.
+
+B. Si sostituisce $\theta$ con la media del prior e si genera una sola distribuzione dei dati.
+
+C. Si combinano le distribuzioni dei dati associate a tutti i valori di $\theta$, pesandole secondo il prior.
+
+D. Si aggiornano i valori di $\theta$ usando il dato futuro $\tilde y$.
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+
+Chiediti quale termine della formula svolga la funzione di peso e quale sia l'oggetto sul quale viene fatta la media.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+
+La risposta corretta è **C**. Il prior $p(\theta)$ fornisce i pesi, mentre $p(\tilde y\mid\theta)$ fornisce una distribuzione dei dati per ogni possibile valore del parametro.
+
+A confonde integrazione e massimizzazione; B elimina l'incertezza sui parametri; D descrive un aggiornamento a posteriori, che non appartiene alla distribuzione predittiva a priori.
+:::
+
+### Esercizio 3 — Modificare {.unnumbered .unlisted}
+
+*Livello essenziale · 10 minuti · Codice: no*
+
+Nel capitolo sono confrontati i prior $\operatorname{Beta}(3,1)$ e $\operatorname{Beta}(30,10)$. Entrambi hanno media 0.75, ma il secondo è molto più concentrato.
+
+Senza eseguire nuovi calcoli, indica quale delle due distribuzioni predittive dovrebbe:
+
+1. avere il valore atteso più alto;
+2. essere più dispersa;
+3. assegnare maggiore probabilità ai risultati lontani da 7–8 successi su 10;
+4. riflettere una maggiore incertezza iniziale su $\theta$.
+
+Giustifica ogni risposta collegando la forma della predittiva alla forza del prior.
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+
+I due prior hanno lo stesso centro. Cambia soltanto la loro concentrazione.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+
+Le due predittive hanno lo stesso valore atteso, perché i prior hanno la stessa media e il numero di prove è lo stesso.
+
+La predittiva associata a $\operatorname{Beta}(3,1)$ è più dispersa e assegna maggiore probabilità ai risultati lontani dal centro. Il prior ha concentrazione 4 e ammette valori di $\theta$ molto diversi tra loro.
+
+La predittiva associata a $\operatorname{Beta}(30,10)$ è più concentrata, perché il prior ha concentrazione 40 e colloca quasi tutta la plausibilità vicino a 0.75.
+:::
+
+### Esercizio 4 — Criticare {.unnumbered .unlisted}
+
+*Livello essenziale · 10 minuti · Codice: no*
+
+Uno studente afferma:
+
+> «La distribuzione predittiva a priori è semplicemente la distribuzione dei dati calcolata usando la media del prior. L'integrale serve soltanto a trovare quella media. Se il prior sul parametro sembra ragionevole, non occorre controllare i dati simulati.»
+
+Individua almeno due errori nell'affermazione e riscrivila correttamente.
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+
+Considera sia il significato dell'integrale sia il fatto che il prior viene propagato attraverso l'intero modello generativo.
+:::
+
+::: {.callout-note collapse=true title="Elementi per la risposta"}
+
+L'integrale non serve a sostituire $\theta$ con la media del prior. Combina le distribuzioni $p(\tilde y\mid\theta)$ associate a tutti i valori del parametro, usando il prior come insieme di pesi. Fissare $\theta$ alla media elimina una fonte di incertezza e può produrre una distribuzione diversa.
+
+Inoltre, un prior può sembrare plausibile sulla scala del parametro ma produrre dati implausibili quando viene propagato attraverso il modello. Il controllo predittivo valuta quindi le conseguenze osservabili dell'intera specificazione, non soltanto l'aspetto del prior.
 :::
 
 ::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+
 ```{r}
 sessionInfo()
 ```
 :::
 
 ## Bibliografia {.unnumbered .unlisted}
-
-

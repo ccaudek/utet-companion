@@ -1,20 +1,23 @@
-# L'influenza della distribuzione a priori {#sec-bayes-inference-prior}
+# L'equilibrio tra prior e verosimiglianza {#sec-bayes-inference-prior}
 
 ::: {.callout-note appearance="minimal"}
 
-In psicologia, spesso operiamo in condizioni che rendono complessa l'inferenza statistica, come campioni di piccole dimensioni, misure soggette a rumore e effetti reali ma di lieve entità. In questo contesto, l'approccio bayesiano offre un vantaggio sostanziale, in quanto rende esplicito il modo in cui le conoscenze pregresse si integrano con l'evidenza empirica. Non si tratta di una "correzione" arbitraria dei risultati, ma di una stabilizzazione dell'inferenza che riduce le sovrastime tipiche degli studi condotti su piccoli campioni e gli errori di tipo M.[^M]
+L'aggiornamento bayesiano combina due fonti di informazione sullo stesso parametro:
 
-[^M]: *Errore di tipo M (Magnitude)*: scostamento sistematico tra la magnitudine stimata di un effetto e il suo valore reale. Nei piccoli campioni, la selezione dei risultati basata sulla significatività statistica tende a *sovrastimare* gli effetti. Si distingue dall'errore di tipo S (*Sign*), che riguarda l'inversione del segno dell'effetto. L'uso di distribuzioni a priori debolmente informative a code pesanti introduce uno *shrinkage adattivo* che mitiga gli errori di tipo M quando l'evidenza è debole, preservando gli effetti genuini quando l'evidenza è forte [@gelman2014beyond; @ioannidis2005contradicted].
+- la **distribuzione a priori**, che descrive quali valori sono plausibili prima dei dati e con quale precisione;
+- la **verosimiglianza**, che descrive quali valori del parametro rendono più compatibili i dati osservati.
 
-Questa dinamica riflette un principio epistemologico fondamentale: quando le nuove informazioni sono poche, è ragionevole affidarsi maggiormente alle conoscenze consolidate; quando le nuove informazioni sono molte, è opportuno lasciar parlare i dati. L'approccio bayesiano non sostituisce i dati con la teoria, ma ne modula la combinazione in base all'informazione disponibile.
+La distribuzione a posteriori dipende sia dalla posizione sia dalla **forza informativa** di queste due fonti. Se il prior è concentrato e i dati sono pochi, la posterior rimane vicina al prior. Se la verosimiglianza è concentrata perché i dati sono numerosi o precisi, la posterior rimane vicina a ciò che indicano i dati.
+
+Il punto essenziale non è che una fonte “vince” sempre sull'altra. La posterior registra il loro equilibrio, condizionatamente al modello scelto.
 :::
 
 ::: {.callout-important appearance="minimal" .chapter-status}
-**Da sapere.** La distribuzione a priori esprime in modo esplicito ciò che è plausibile prima di osservare i dati. La sua influenza è maggiore quando i dati sono scarsi o rumorosi e diminuisce quando l’informazione empirica aumenta. Le prior debolmente informative regolarizzano le stime e possono ridurre le sovrastime tipiche dei piccoli campioni, ma nessuna prior è neutrale rispetto alla scala su cui viene definita.
+**Da sapere.** La forza di una distribuzione non coincide con la correttezza delle sue assunzioni. Nel modello Beta-Binomiale la forza del prior è rappresentata dalla concentrazione $\kappa=\alpha+\beta$, mentre la forza della verosimiglianza cresce con il numero di prove $n$. Nel modello Normale-Normale l'informazione è espressa dalla precisione, cioè dall'inverso della varianza.
 
-**Da saper fare.** Confrontare l’aggiornamento prodotto da prior con diverso grado di informatività; scegliere una prior coerente con la scala e i vincoli del parametro; interpretare lo *shrinkage* come equilibrio tra informazione iniziale e dati; eseguire un *prior predictive check* e un’analisi di sensibilità per verificare plausibilità e robustezza delle conclusioni.
+**Da saper fare.** Leggere prior, dati e posterior come tre parti dello stesso aggiornamento; prevedere se la posterior sarà più vicina al prior o ai dati; distinguere il centro di una distribuzione dalla sua concentrazione; interpretare un conflitto tra prior e dati; spiegare perché un'analisi di sensibilità è informativa.
 
-**Approfondimento facoltativo.** La formalizzazione delle prior sul rapporto segnale-rumore $\beta/s$, le prior empiriche costruite da corpora di studi, le miscele di distribuzioni e i dettagli computazionali delle simulazioni possono essere rimandati in una prima lettura.
+**Approfondimento facoltativo.** Le prior empiriche calibrate su corpora di studi, le prior scalate mediante l'errore standard, le miscele di distribuzioni e gli aspetti computazionali possono essere rimandati in una prima lettura.
 
 [Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
 :::
@@ -22,467 +25,626 @@ Questa dinamica riflette un principio epistemologico fondamentale: quando le nuo
 ::: {.callout-caution collapse=true title="Preparazione del Notebook"}
 
 ```{r}
-here::here("code", "_common.R") |> 
+here::here("code", "_common.R") |>
   source()
-
-# Load packages
-if (!requireNamespace("pacman")) install.packages("pacman")
-pacman::p_load(conflicted, tidytable)
-
-conflicts_prefer(tidyr::extract)
 ```
 :::
 
-## L'aggiornamento bayesiano: un esempio illustrativo
+## Due domande distinte: dove e con quale forza?
 
-Il meccanismo dell'inferenza bayesiana è più facile da comprendere osservando direttamente come la distribuzione a priori trasforma le credenze iniziali alla luce dei dati. Il modello Beta-Binomiale, grazie alla sua trasparenza analitica, costituisce un contesto ideale per questa analisi.
+Per interpretare una distribuzione a priori servono due domande:
 
-Consideriamo il problema della stima del parametro $\theta$, che rappresenta la probabilità che un soggetto fornisca una risposta corretta in un compito cognitivo. In uno scenario sperimentale con 9 prove di memoria, si osservano 6 risposte corrette. L'obiettivo è aggiornare le convinzioni iniziali su $\theta$ alla luce di questa evidenza.
+1. **Dove si trova?** Quali valori del parametro considera più plausibili?
+2. **Quanto è concentrata?** Quanto precisamente esprime questa valutazione iniziale?
 
-### Il framework coniugato
+Le stesse due domande valgono per la verosimiglianza. I dati possono indicare un valore centrale, ma con precisione molto diversa a seconda della numerosità campionaria, del rumore delle misure e del disegno dello studio.
 
-La distribuzione Beta gode della proprietà di coniugazione rispetto alla Binomiale, il che rende particolarmente agevole il processo di aggiornamento:
+Di conseguenza, non basta dire che prior e dati “sono in accordo” oppure “sono in conflitto”. Occorre anche chiedersi quanta informazione porta ciascuna fonte.
+
+::: {.callout-tip title="Una distinzione da mantenere"}
+Una distribuzione più concentrata è **più informativa all'interno del modello**, non necessariamente più vera. Un prior molto preciso ma mal calibrato può esercitare una forte influenza nella direzione sbagliata. Una verosimiglianza molto concentrata può essere fuorviante se il modello o i dati sono inadeguati.
+:::
+
+## Il caso paradigmatico: il modello Beta-Binomiale
+
+Consideriamo un parametro $\theta$ che rappresenta la probabilità di una risposta corretta. Prima di osservare i dati specifichiamo:
 
 $$
-\begin{aligned}
-\text{Prior: } & \theta \sim \text{Beta}(\alpha, \beta), \\
-\text{Dati: } & y \sim \text{Binomiale}(n, \theta), \\
-\text{Posterior: } & \theta \mid y \sim \text{Beta}(\alpha + y, \beta + n - y).
-\end{aligned}
+\theta \sim \operatorname{Beta}(\alpha,\beta).
 $$
 
-La distribuzione a posteriori mantiene la forma Beta, modificandone esclusivamente i parametri. La seguente funzione consente di visualizzare questo processo.
+Osserviamo poi $y$ risposte corrette su $n$ prove:
+
+$$
+y\mid\theta \sim \operatorname{Binomiale}(n,\theta).
+$$
+
+La distribuzione a posteriori è:
+
+$$
+\theta\mid y \sim
+\operatorname{Beta}(\alpha+y,\beta+n-y).
+$$
+
+Questa forma rende visibile l'equilibrio tra le due fonti di informazione: i successi osservati si aggiungono ad $\alpha$ e gli insuccessi osservati si aggiungono a $\beta$.
+
+### Media e concentrazione del prior
+
+È utile riscrivere i parametri della Beta attraverso:
+
+$$
+m=\frac{\alpha}{\alpha+\beta},
+\qquad
+\kappa=\alpha+\beta.
+$$
+
+- $m$ è la **media a priori** e descrive il centro della distribuzione;
+- $\kappa$ è la **concentrazione** e descrive quanto la distribuzione è raccolta intorno al proprio centro.
+
+I parametri originari si ricavano da:
+
+$$
+\alpha=m\kappa,
+\qquad
+\beta=(1-m)\kappa.
+$$
+
+La media a posteriori può essere scritta come:
+
+$$
+\mathbb{E}(\theta\mid y)
+=
+\frac{\kappa}{\kappa+n}m
++
+\frac{n}{\kappa+n}\frac{y}{n}.
+$$
+
+La formula è una media ponderata tra:
+
+- la media a priori $m$;
+- la proporzione osservata $y/n$.
+
+I pesi sono determinati da $\kappa$ e $n$:
+
+$$
+w_{\text{prior}}=\frac{\kappa}{\kappa+n},
+\qquad
+w_{\text{dati}}=\frac{n}{\kappa+n}.
+$$
+
+I due pesi sommano a 1. Perciò, in questo modello, è possibile vedere direttamente quanta influenza relativa hanno prior e dati sulla media posterior.
+
+::: {.callout-note title="Pseudo-conteggi: un'interpretazione utile, ma non letterale"}
+Nel modello Beta-Binomiale, $\alpha$ e $\beta$ si aggiornano come conteggi. È quindi utile pensare al prior come a un insieme di pseudo-conteggi. Tuttavia, non si tratta necessariamente di osservazioni realmente raccolte: sono parametri che rappresentano una distribuzione di plausibilità. La concentrazione $\kappa$ esprime la forza del prior all'interno di questo modello.
+:::
+
+## Tre confronti che chiariscono l'equilibrio
+
+Supponiamo di osservare 6 risposte corrette su 9 prove, quindi:
+
+$$
+\frac{y}{n}=\frac{6}{9}=0.667.
+$$
+
+### Confronto 1: un prior moderatamente concentrato
+
+Usiamo:
+
+$$
+\theta\sim\operatorname{Beta}(2,2).
+$$
+
+La media a priori è 0.50 e la concentrazione è 4. Dopo i dati:
+
+$$
+\theta\mid y\sim\operatorname{Beta}(8,5).
+$$
+
+La media posterior è:
+
+$$
+\frac{8}{13}=0.615.
+$$
+
+I pesi sono:
+
+$$
+w_{\text{prior}}=\frac{4}{13}=0.308,
+\qquad
+w_{\text{dati}}=\frac{9}{13}=0.692.
+$$
+
+La posterior è più vicina alla proporzione osservata che alla media del prior, perché i dati portano più peso del prior.
+
+### Confronto 2: lo stesso centro, ma un prior molto più concentrato
+
+Manteniamo la media a priori a 0.50, ma aumentiamo la concentrazione:
+
+$$
+\theta\sim\operatorname{Beta}(20,20).
+$$
+
+Ora $\kappa=40$. Dopo gli stessi 6 successi su 9 prove:
+
+$$
+\theta\mid y\sim\operatorname{Beta}(26,23),
+$$
+
+con media:
+
+$$
+\frac{26}{49}=0.531.
+$$
+
+I pesi sono:
+
+$$
+w_{\text{prior}}=\frac{40}{49}=0.816,
+\qquad
+w_{\text{dati}}=\frac{9}{49}=0.184.
+$$
+
+La proporzione osservata è ancora 0.667, ma questa volta la posterior rimane vicina a 0.50. Non è cambiata la direzione indicata dai dati: è cambiato il rapporto tra le quantità di informazione.
+
+### Confronto 3: lo stesso prior, ma molti più dati
+
+Torniamo al prior Beta(2,2), ma osserviamo 60 successi su 90 prove. La proporzione è ancora 0.667:
+
+$$
+\theta\mid y\sim\operatorname{Beta}(62,32).
+$$
+
+La media posterior è:
+
+$$
+\frac{62}{94}=0.660.
+$$
+
+I pesi sono:
+
+$$
+w_{\text{prior}}=\frac{4}{94}=0.043,
+\qquad
+w_{\text{dati}}=\frac{90}{94}=0.957.
+$$
+
+La posterior è quasi sovrapposta a ciò che indicano i dati. Il prior non è stato cancellato: il suo peso relativo è semplicemente diventato piccolo.
+
+### Sintesi dei tre confronti
+
+| Scenario | Prior | Dati | Peso del prior | Peso dei dati | Media posterior |
+|---|---:|---:|---:|---:|---:|
+| Prior moderato, pochi dati | Beta(2,2) | 6/9 | 0.308 | 0.692 | 0.615 |
+| Prior concentrato, pochi dati | Beta(20,20) | 6/9 | 0.816 | 0.184 | 0.531 |
+| Prior moderato, molti dati | Beta(2,2) | 60/90 | 0.043 | 0.957 | 0.660 |
+
+La tabella mostra il principio fondamentale: **non è la distanza tra prior e dati, da sola, a determinare la posterior; conta anche la forza relativa delle due fonti**.
+
+### Visualizzazione dei tre scenari
 
 ```{r}
-# Definisci i colori tematici
-col_prior <- palette_qualitative[8]      # Grigio per prior
-col_likelihood <- palette_qualitative[1] # Arancione per verosimiglianza
-col_posterior <- palette_qualitative[5]  # Blu per posterior
-col_scenarios <- palette_qualitative[c(2, 3, 6)] # Azzurro, Verde, Rosso-arancio per scenari
+theta_grid <- seq(0.001, 0.999, length.out = 600)
 
-# Funzione aggiornata con la palette
-plot_beta_binomial <- function(alpha, beta, y, n) {
-  theta <- seq(0, 1, length.out = 100)
-  prior <- dbeta(theta, alpha, beta)
-  likelihood <- dbinom(y, n, theta)
-  posterior <- dbeta(theta, alpha + y, beta + n - y)
-  
-  tibble(
-    theta,
-    Prior = prior / max(prior),
-    Likelihood = likelihood / max(likelihood),
-    Posterior = posterior / max(posterior)
+scenarios <- tibble::tribble(
+  ~scenario, ~alpha, ~beta, ~y, ~n,
+  "Prior moderato, pochi dati", 2, 2, 6, 9,
+  "Prior concentrato, pochi dati", 20, 20, 6, 9,
+  "Prior moderato, molti dati", 2, 2, 60, 90
+)
+
+density_list <- lapply(seq_len(nrow(scenarios)), function(i) {
+  row <- scenarios[i, ]
+
+  bind_rows(
+    tibble(
+      theta = theta_grid,
+      densita = dbeta(theta_grid, row$alpha, row$beta),
+      distribuzione = "Prior"
+    ),
+    tibble(
+      theta = theta_grid,
+      densita = dbeta(
+        theta_grid,
+        row$alpha + row$y,
+        row$beta + row$n - row$y
+      ),
+      distribuzione = "Posterior"
+    )
   ) |>
-    pivot_longer(-theta, names_to = "Distribuzione", values_to = "Densità") |>
-    ggplot(aes(x = theta, y = Densità, color = Distribuzione)) +
-    geom_line(size = 1.2) +
-    scale_color_manual(
-      values = c(
-        "Prior" = col_prior,
-        "Likelihood" = col_likelihood,
-        "Posterior" = col_posterior
-      )
-    ) +
-    labs(
-      title = "Aggiornamento Beta–Binomiale\n(6 successi su 9)",
-      x = expression(theta),
-      y = "Densità (scala normalizzata)"
-    ) +
-    theme(legend.position = "right")
-}
-```
+    mutate(scenario = row$scenario)
+})
 
-### Tre scenari a confronto
+densities <- bind_rows(density_list)
 
-#### Scenario A: Prior non informativa
-
-```{r}
-plot_beta_binomial(alpha = 1, beta = 1, y = 6, n = 9)
-```
-
-La distribuzione a priori uniforme assegna la stessa probabilità a tutti i valori di $\theta$, riflettendo incertezza totale. La distribuzione a posteriori coincide sostanzialmente con la verosimiglianza: l'inferenza è interamente dominata dall'evidenza empirica.
-
-#### Scenario B: Prior moderatamente informativa
-
-```{r}
-plot_beta_binomial(alpha = 2, beta = 2, y = 6, n = 9)
-```
-
-La prior esprime una moderata credenza che $\theta$ si collochi intorno a 0.5, mantenendo notevole variabilità. Dopo l'aggiornamento, la posteriori si sposta verso i valori suggeriti dai dati (0.67), ma conserva una forma più conservativa, con media attorno a 0.62. La prior esercita un effetto stabilizzante.
-
-#### Scenario C: Prior fortemente informativa
-
-```{r}
-plot_beta_binomial(alpha = 2, beta = 5, y = 6, n = 9)
-```
-
-La prior riflette una convinzione forte che $\theta$ assuma valori modesti (media a priori = 0.29). Nonostante l'evidenza empirica suggerisca 0.67, la posteriori mantiene una posizione intermedia (attorno a 0.45), dimostrando come convinzioni iniziali forti possano resistere parzialmente all'evidenza contraria.
-
-### La prior come evidenza fittizia
-
-Il confronto tra i tre scenari rivela un principio fondamentale: la distribuzione a priori può essere concepita come un insieme di "osservazioni fittizie" che precedono la raccolta dei dati. Nel modello Beta-Binomiale, questa interpretazione è particolarmente trasparente: i parametri $(\alpha,\beta)$ si sommano rispettivamente ai successi e agli insuccessi osservati.
-
-La quantità $\alpha + \beta$, nota come *sample size equivalente* della prior, quantifica il peso delle convinzioni iniziali. Con $\alpha + \beta = 2$, la prior possiede un'influenza modesta; con $\alpha + \beta = 20$, incorpora un peso informativo rilevante e richiede evidenza empirica sostanziale per essere modificata.
-
-L'equilibrio tra prior ed evidenza emerge dalla struttura della media a posteriori:
-
-$$
-\mathbb{E}[\theta \mid D] = \frac{\alpha+\beta}{\alpha+\beta+n} \cdot \underbrace{\frac{\alpha}{\alpha+\beta}}_{\text{media a priori}} + \frac{n}{\alpha+\beta+n} \cdot \underbrace{\frac{y}{n}}_{\text{media campionaria}}
-$$
-
-La stima finale è una media ponderata tra credenza iniziale ed evidenza osservata. In contesti *data-rich* $(n \gg \alpha+\beta)$, domina l'evidenza empirica; in situazioni *data-poor* $(n \ll \alpha+\beta)$, la prior esercita un effetto stabilizzante.
-
-## L'influenza della prior in relazione all'informazione disponibile
-
-La conclusione della sezione precedente mette in evidenza come l'influenza della distribuzione a priori non sia costante, ma vari in funzione della quantità e della qualità delle informazioni contenute nei dati. Quando i dati sono numerosi e precisi, è la verosimiglianza a prevalere, rendendo le stime robuste anche in presenza di scelte di prior ragionevolmente diverse. Quando i dati sono limitati o rumorosi, condizione frequente nella ricerca psicologica, la prior acquisisce un peso determinante.
-
-### Due scenari empirici
-
-Si consideri uno studio sull'efficacia di un intervento di mindfulness nella riduzione dello stress. Con un campione di 15 partecipanti e elevata variabilità individuale, la stima potrebbe essere $b = -0.4$ con errore standard $s = 0.3$. Il segnale risulterebbe debole ($z = -1.33$) e i dati fornirebbero evidenza ambigua. Una prior debolmente informativa, come $\beta \sim \mathrm{Normal}(0, 1)$, eserciterebbe un'importante azione di regolarizzazione, attirando la stima verso lo zero.
-
-Con un campione di 500 partecipanti, a parità di stima puntuale, l'errore standard si ridurrebbe a $s = 0.04$, portando a $z = -10$. La verosimiglianza dominerebbe il processo inferenziale, rendendo trascurabile l'impatto della prior.
-
-Il principio è semplice: *l'influenza della prior è inversamente proporzionale all'informazione contenuta nei dati*.
-
-### Visualizzazione mediante simulazione
-
-Come mostrato nel grafico seguente, con $n = 10$, la posteriori è ampia e la prior esercita un'influenza visibile. Con $n = 50$, la posteriori si restringe. Con $n = 500$, la posteriori risulta stretta e centrata sul valore vero e l'influenza della prior diventa trascurabile.
-
-```{r}
-theta_true <- 0.6
-alpha <- 2; beta <- 2
-n_values <- c(10, 50, 500)
-
-posterior_list <- list()
-for (i in seq_along(n_values)) {
-  n <- n_values[i]
-  k <- round(theta_true * n)
-  theta <- seq(0, 1, length.out = 400)
-  dens <- dbeta(theta, alpha + k, beta + n - k)
-  posterior_list[[i]] <- data.frame(theta = theta, dens = dens, n = n)
-}
-
-posterior_densities <- do.call(rbind, posterior_list)
-
-ggplot(posterior_densities, aes(x = theta, y = dens, color = factor(n))) +
-  geom_line(size = 1.2) +
+ggplot(
+  densities,
+  aes(x = theta, y = densita, colour = distribuzione)
+) +
+  geom_line(linewidth = 1.1) +
+  facet_wrap(~scenario, scales = "free_y", ncol = 1) +
+  scale_colour_manual(
+    values = c(
+      "Prior" = palette_qualitative[8],
+      "Posterior" = palette_qualitative[5]
+    )
+  ) +
   labs(
-    title = "Effetto della numerosità campionaria\nsulla distribuzione a posteriori",
+    title = "Il peso relativo di prior e dati",
+    subtitle = "La stessa proporzione osservata può produrre posterior diverse",
     x = expression(theta),
     y = "Densità",
-    color = "n (campione)"
-  ) 
+    colour = NULL
+  ) +
+  legenda_in_alto
 ```
 
-| Situazione                      | Influenza della prior | Effetto pratico              |
-| ------------------------------- | --------------------- | ---------------------------- |
-| Campione piccolo, dati rumorosi | Alta                  | Stabilizza, evita sovrastime |
-| Campione medio                  | Moderata              | Compromesso equilibrato      |
-| Campione grande                 | Bassa                 | I dati dominano              |
+La prima e la seconda figura differiscono soltanto per la concentrazione del prior. La prima e la terza differiscono soprattutto per la quantità di dati. Questi confronti controllati permettono di attribuire correttamente le differenze tra le posterior.
 
-Questo meccanismo, formalmente noto come "shrinkage", implementa una regola epistemologicamente sensata: in presenza di informazioni deboli, si evitano stime estreme; in presenza di informazioni robuste, prevale il segnale dei dati.
+## Accordo e conflitto tra prior e dati
 
-## La scala del parametro: perché è decisiva
+La forza relativa è importante soprattutto quando i centri delle due fonti non coincidono.
 
-Un aspetto fondamentale ma spesso trascurato è che le distribuzioni a priori non sono invarianti rispetto ai cambiamenti di scala. Dichiarare di aver scelto "una prior uniforme" non equivale automaticamente ad adottare un atteggiamento neutrale: la stessa distribuzione a priori può assumere un significato completamente diverso quando si modifica l'unità di misura del parametro.
+### Quando prior e dati concordano
 
-Immaginiamo uno studio sulla soddisfazione lavorativa misurata su una scala 1–10. Un ricercatore assegna una prior uniforme all’effetto $\beta$, ritenendo equiprobabili tutti i valori tra –10 e +10. Se successivamente ricodifica la variabile su una scala 0–100 senza modificare la prior, l’intervallo originario si dilata di un ordine di grandezza: ciò che prima rappresentava una gamma moderata di variazioni diventa ora un insieme estremamente ampio di possibilità. La credenza “uniforme” iniziale non è più la stessa.
-
-La conclusione è semplice: una prior non può essere piatta su qualunque scala allo stesso tempo. La sua apparente “neutralità” vale soltanto rispetto alla scala in cui è stata formulata.
-
-### La soluzione: lavorare con un parametro adimensionale
-
-Per ottenere inferenze coerenti e confrontabili, conviene definire le prior su quantità prive di unità di misura. Quando stimiamo un coefficiente $\beta$ con errore standard $s$, l’informazione rilevante non sta in $\beta$ in sé, ma nel rapporto adimensionale
+Supponiamo che il prior abbia media 0.667 e che anche la proporzione osservata sia 0.667. Per esempio:
 
 $$
-\xi = \frac{\beta}{s},
-$$
-che quantifica l’intensità del segnale rispetto al rumore.
-
-L'uso di $\xi$ presenta tre vantaggi: l’inferenza diventa *invariante* ai cambi di unità, permette confronti *consistenti* tra studi diversi e rende più trasparente *il ruolo effettivo* della prior nei risultati finali.
-
-Per esempio, se osserviamo un effetto $b = 4$ con errore standard $s = 2$ su una scala 0–10, il valore z è pari a 2. Se ricodifichiamo la variabile su una scala 0–100, otteniamo (b' = 40) e $s' = 20$, ma il rapporto resta invariato: $z = z' = 2$. Una prior definita su $\beta/s$ produce dunque la stessa inferenza in entrambe le scale. Una prior definita direttamente su $\beta$, invece, porterebbe a conclusioni diverse semplicemente perché la scala è cambiata.
-
-### Verifica mediante simulazione
-
-```{r}
-b <- 4; s <- 2
-a <- 10  # fattore di riscalamento
-b2 <- a * b; s2 <- a * s
-
-grid1 <- seq(-20, 20, length.out = 1001)
-grid2 <- seq(-200, 200, length.out = 1001)
-
-like1 <- dnorm(grid1, mean = b,  sd = s)
-like2 <- dnorm(grid2, mean = b2, sd = s2)
-
-# Prior uniforme su β (non invariante)
-prior_unif1 <- rep(1/length(grid1), length(grid1))
-prior_unif2 <- rep(1/length(grid2), length(grid2))
-
-post_unif1 <- like1 * prior_unif1; post_unif1 <- post_unif1 / sum(post_unif1)
-post_unif2 <- like2 * prior_unif2; post_unif2 <- post_unif2 / sum(post_unif2)
-
-# Prior Cauchy su β/s (invariante)
-prior_cauchy1 <- dcauchy(grid1 / s) / s
-prior_cauchy2 <- dcauchy(grid2 / s2) / s2
-
-post_cauchy1 <- like1 * prior_cauchy1; post_cauchy1 <- post_cauchy1 / sum(post_cauchy1)
-post_cauchy2 <- like2 * prior_cauchy2; post_cauchy2 <- post_cauchy2 / sum(post_cauchy2)
-
-# Medie posteriori (riportate alla scala originale)
-m_unif1 <- sum(grid1 * post_unif1)
-m_unif2 <- sum(grid2 * post_unif2) / a
-m_cauchy1 <- sum(grid1 * post_cauchy1)
-m_cauchy2 <- sum(grid2 * post_cauchy2) / a
-
-tibble(
-  Prior = c("Uniforme su β", "Cauchy su β/s"),
-  Media_orig = c(m_unif1, m_cauchy1),
-  Media_rescaled = c(m_unif2, m_cauchy2)
-)
-```
-
-La prior uniforme produce risultati diversi dopo il cambio di scala, mentre la prior su $\beta/s$ produce risultati identici. In pratica, definire la prior sul rapporto segnale-rumore garantisce coerenza, confrontabilità e indipendenza da convenzioni arbitrarie.
-
-| Tipo di trasformazione | Esempio        | Prior uniforme su $\beta$    | Prior su $\beta/s$       |
-| ---------------------- | -------------- | ---------------------------- | ------------------------ |
-| Cambio unità           | 0-10 → 0-100   | Cambia forma e densità       | Nessuna differenza       |
-| Inversione segno       | A-B → B-A      | Cambia il centro             | Solo inversione segno    |
-| Standardizzazione      | Grezzi → z     | Cambia la scala              | Nessuna differenza       |
-
-## Tipologie di distribuzioni a priori
-
-### Prior non informative
-
-**Scopo:** minimizzare l'influenza delle convinzioni preesistenti.
-
-**Esempio:** per indagare la relazione tra l'arousal fisiologico e i pensieri intrusivi in assenza di letteratura pregressa, si potrebbe adottare la seguente distribuzione a priori:
-$$
-\rho \sim \text{Uniform}(-1, 1).
+\theta\sim\operatorname{Beta}(8,4),
+\qquad
+\frac{y}{n}=\frac{6}{9}=0.667.
 $$
 
-**Avvertenza:** il termine "non informativa" è fuorviante. Una prior uniforme su una scala non lo è su un'altra (ad esempio, dopo una trasformazione non lineare). Inoltre, questo approccio attribuisce probabilità non trascurabili a valori estremi che si manifestano raramente nei fenomeni psicologici.
+La posterior è Beta(14,7), con la stessa media 0.667. L'aggiornamento non cambia il centro, ma rende la distribuzione più concentrata. I dati hanno aumentato la precisione dell'informazione già contenuta nel prior.
 
-### Prior debolmente informative
+### Quando prior e dati sono in conflitto
 
-**Scopo:** imporre vincoli di plausibilità senza precludere ai dati di esprimersi.
-
-**Esempio:** per uno studio sull'efficacia di un intervento di mindfulness:
-$$
-\beta \sim \text{Normal}(0, 1).
-$$
-Questa scelta comunica: "riteniamo più probabile un effetto nullo o modesto, ma non escludiamo effetti più sostanziali se i dati li supporteranno".
-
-**Vantaggio:** funge da stabilizzatore, soprattutto in campioni piccoli, prevenendo la sovrastima di effetti spurii.
-
-### Prior informative
-
-**Scopo:** incorporare evidenze consolidate da studi precedenti o meta-analisi.
-
-**Esempio:** se una meta-analisi indica che la CBT produce una riduzione media dei sintomi depressivi pari a $d = 0.5$:
-$$
-\beta \sim \text{Normal}(0.5, 0.2).
-$$
-Questa distribuzione esprime una convinzione ragionevolmente forte, pur ammettendo un margine di incertezza.
-
-### Prior empiriche (da corpus)
-
-**Scopo:** calibrare la prior sui dati quantitativi di un insieme di studi affini.
-
-**Esempio:** analizzando la distribuzione degli z-score riportati in studi che utilizzano l'*Experience Sampling Method*, si può stimare una distribuzione empirica che rappresenti il tipico rapporto segnale-rumore in questo ambito.
-
-### Visualizzazione comparativa
-
-```{r}
-beta_grid <- seq(-3, 3, length.out = 500)
-priors <- tibble(
-  beta = rep(beta_grid, 3),
-  tipo = rep(c("Uniforme", "Normal(0,1)", "Normal(0.5,0.2)"), each = length(beta_grid)),
-  dens = c(
-    dunif(beta_grid, -3, 3),
-    dnorm(beta_grid, 0, 1),
-    dnorm(beta_grid, 0.5, 0.2)
-  )
-)
-
-ggplot(priors, aes(x = beta, y = dens, color = tipo)) +
-  geom_line(linewidth = 1.2) +
-  labs(
-    title = "Confronto tra distribuzioni a priori\nper un coefficiente β",
-    x = expression(beta),
-    y = "Densità",
-    color = "Tipo di Prior"
-  ) 
-```
-
-La prior uniforme assegna una densità costante senza preferenze. La Normal(0,1) esprime un moderato scetticismo nei confronti dell'ipotesi nulla. La Normal(0.5, 0.2) incorpora un'aspettativa precisa.
-
-| Tipo                       | Quando usarla                      | Vantaggi                   | Rischi                                      |
-| -------------------------- | ---------------------------------- | -------------------------- | ------------------------------------------- |
-| **Non informativa**        | Nessuna conoscenza pregressa       | Lascia parlare i dati      | Instabile con campioni piccoli              |
-| **Debolmente informativa** | Effetti plausibili ma incerti      | Regolarizza, evita outlier | Può sembrare arbitraria                     |
-| **Informativa**            | Evidenze forti da studi precedenti | Integra conoscenza teorica | Può dominare se i dati sono pochi           |
-
-## Prior su scala SNR: strategie in presenza o assenza di corpus empirici
-
-@zwet2022proposal propongono l'utilizzo di prior informative basate su *corpora* di studi di riferimento, implementate mediante miscele di distribuzioni. Consideriamo una prior costituita da una miscela simmetrica di due componenti normali centrate sullo zero:
+Consideriamo invece:
 
 $$
-p(\xi) = \pi_1 \cdot \mathcal{N}(\xi \mid 0, \tau_1^2) + \pi_2 \cdot \mathcal{N}(\xi \mid 0, \tau_2^2)
-$$
-dove:
-
-- **i pesi** ($\pi_1, \pi_2$) rappresentano la proporzione relativa di effetti "piccoli" rispetto a quelli "più sostanziali";
-- **le scale** ($\tau_1, \tau_2$) catturano l'ampiezza tipica degli effetti in ciascuna categoria.
-
-I valori specifici si ottengono calibrando la miscela su un corpus di studi metodologicamente affini, consentendo uno *shrinkage* differenziato: effetti plausibilmente piccoli vengono regolarizzati più fortemente, mentre effetti sostanziali subiscono un'interferenza minima.
-
-### Strategie in assenza di corpus consolidato
-
-Quando non si dispone di un corpus di riferimento o mancano informazioni preliminari affidabili, è consigliabile adottare distribuzioni a code più pesanti. La proposta standard è la distribuzione di Cauchy:
-
-$$
-\frac{\beta}{s} \sim \mathrm{Cauchy}(0, 1).
+\theta\sim\operatorname{Beta}(2,8),
 $$
 
-La scelta della Cauchy non è casuale ma riflette un preciso profilo statistico:
+che ha media 0.20 e concentrazione 10. Con 6 successi su 9 prove, la posterior è:
 
-- **code più marcate** rispetto alla normale, riducendo la penalizzazione eccessiva per effetti moderatamente grandi;
-- **comportamento ottimale**: forte regolarizzazione per effetti modesti ($|z| < 2$), interferenza minima per effetti sostanziali ($|z| > 3$);
-- **proprietà di calibrazione**: pari probabilità di effetti sopra/sotto una determinata soglia (es. $P(|\xi|>2.5) \approx 0.1$).
+$$
+\theta\mid y\sim\operatorname{Beta}(8,11),
+$$
 
-Per modelli complessi o quando si desidera maggiore controllo sulle code, è possibile considerare:
+con media:
 
-- troncamenti ragionevoli della distribuzione (es. $|\xi| < 10$)
-- distribuzioni $t$ di Student con gradi di libertà $\nu \in [3,7]$, che permettono di modulare il peso delle code
+$$
+\frac{8}{19}=0.421.
+$$
 
-### Quadro decisionale per la scelta della prior
+La posterior si trova tra 0.20 e 0.667. Il suo centro non è il punto medio aritmetico tra i due valori: è determinato dai pesi 10 e 9, quasi equivalenti in questo caso.
 
-| Situazione metodologica | Prior consigliata su $\beta/s$ | Vantaggi e considerazioni |
-|-------------------------|--------------------------------|---------------------------|
-| **Nessun corpus disponibile** | Cauchy(0,1) | Default robusto, adatto a scenari esplorativi; bilancia regolarizzazione e sensibilità |
-| **Corpus di studi metodologicamente affini** | Miscela di Normali | Shrinkage adattivo: calibra la regolarizzazione in base alla distribuzione empirica degli effetti nel campo |
-| **Pregressa evidenza di effetti piccoli** | Normal(0,0.5) o Normal(0,1) | Prior più concentrate riducono il rischio di sovrastime per effetti modesti |
-| **Potenziali effetti grandi e incertezza elevata** | t₃(0,2) o Cauchy(0,2) | Code più ampie preservano la capacità di rilevare segnali sostanziali, anche quando rari |
+::: {.callout-warning title="Il conflitto non identifica automaticamente il colpevole"}
+Un forte disaccordo tra prior e dati non dimostra, da solo, che il prior sia sbagliato. Potrebbe indicare:
 
-Questa struttura decisionale permette di ancorare la scelta della prior a considerazioni sostantiva e metodologiche, promuovendo inferenze più coerenti e replicabili. L'approccio basato sul parametro adimensionale $\beta/s$ garantisce che tali scelte rimangano invarianti rispetto alle scale di misurazione utilizzate nello studio.
+- un prior mal calibrato;
+- dati insoliti ma genuini;
+- errori nei dati;
+- un modello di campionamento inadeguato;
+- differenze tra il contesto degli studi precedenti e quello attuale.
 
-## Dalla teoria alla pratica
-
-### Guida alla scelta della prior
-
-La costruzione di una prior ben calibrata richiede di rispondere a tre domande: *Su quale scala è definito il parametro? Quale intervallo è plausibile? Quanto è forte la nostra convinzione iniziale?*
-
-**Scala:** per coefficienti di regressione, la scala adimensionale $\xi = \beta/s$ è preferibile. Nei GLM, la prior deve essere specificata sulla scala del link (logit, log). La standardizzazione dei predittori conferisce interpretazione immediata.
-
-**Plausibilità:** per predittori standardizzati, effetti con $|\beta| > 1-2$ sono generalmente sostanziali. La prior deve delimitare lo spazio dei valori plausibili senza "indovinare" il valore vero.
-
-**Informatività:** in assenza di evidenze solide, distribuzioni a code pesanti su $\xi$ realizzano shrinkage adattivo. Con letteratura consolidata, una normale centrata su stime meta-analitiche è appropriata.
-
-::: {.callout-tip title="Procedura operativa"}
-1. **Identifica la scala e i vincoli.** Ci sono limiti naturali (≥0 per varianze, [0,1] per probabilità)? È possibile usare una scala adimensionale?
-
-2. **Stima l'ordine di grandezza plausibile.** Quale intervallo ha senso per il fenomeno studiato?
-
-3. **Attingi alla letteratura.** Meta-analisi e studi precedenti ancorano la prior a valori empiricamente plausibili.
-
-4. **Calibra l'informatività.** Distribuzioni a code pesanti offrono un buon compromesso: regolarizzano senza escludere effetti inattesi.
-
-**Regola empirica:** in assenza di letteratura solida, una $t$ o Cauchy sul rapporto $\beta/s$ rappresenta la scelta più sicura.
+Il conflitto è un segnale diagnostico che richiede verifiche, non un verdetto automatico.
 :::
+
+## La stessa idea nel modello Normale-Normale
+
+Il principio non è specifico del modello Beta-Binomiale. Supponiamo che una stima $b$ abbia una distribuzione di campionamento approssimativamente normale:
+
+$$
+b\mid\beta\sim\operatorname{Normal}(\beta,s^2),
+$$
+
+e che il prior sia:
+
+$$
+\beta\sim\operatorname{Normal}(\mu_0,\tau_0^2).
+$$
+
+La precisione è l'inverso della varianza. Definiamo:
+
+$$
+\lambda_0=\frac{1}{\tau_0^2},
+\qquad
+\lambda_D=\frac{1}{s^2}.
+$$
+
+La media posterior è:
+
+$$
+\mu_1
+=
+\frac{\lambda_0}{\lambda_0+\lambda_D}\mu_0
++
+\frac{\lambda_D}{\lambda_0+\lambda_D}b,
+$$
+
+mentre la varianza posterior è:
+
+$$
+\tau_1^2=\frac{1}{\lambda_0+\lambda_D}.
+$$
+
+Anche qui, la posterior è determinata da una media ponderata. Il peso non dipende direttamente dalla numerosità campionaria, ma dalla precisione delle due fonti.
+
+### Esempio: stessa stima, diversa precisione
+
+Usiamo il prior:
+
+$$
+\beta\sim\operatorname{Normal}(0,0.2^2)
+$$
+
+e una stima osservata $b=-0.40$.
+
+| Errore standard | Peso del prior | Peso dei dati | Media posterior | DS posterior |
+|---:|---:|---:|---:|---:|
+| $s=0.30$ | 0.692 | 0.308 | -0.123 | 0.166 |
+| $s=0.04$ | 0.038 | 0.962 | -0.385 | 0.039 |
+
+Nel primo caso la stima è imprecisa e il prior esercita una forte influenza. Nel secondo caso la stessa stima puntuale è molto precisa e la posterior rimane quasi centrata su $-0.40$.
+
+L'esempio mostra perché la “forza dei dati” non è determinata dalla sola ampiezza della stima. Una stima grande ma molto rumorosa può contenere meno informazione di una stima più piccola ma precisa.
+
+## Che cosa significa davvero “shrinkage”?
+
+Quando il prior è centrato su valori moderati e la verosimiglianza è debole, la posterior viene spostata verso il centro del prior. Questo spostamento viene chiamato *shrinkage*.
+
+Lo shrinkage non consiste nel modificare arbitrariamente i dati. È la conseguenza matematica della combinazione tra due fonti di informazione. La sua intensità dipende da:
+
+- distanza tra il centro del prior e quello della verosimiglianza;
+- concentrazione o precisione del prior;
+- concentrazione o precisione della verosimiglianza.
+
+Prior debolmente informative possono stabilizzare stime ottenute con dati poco informativi. Questa regolarizzazione può attenuare stime estreme e ridurre gli errori di tipo M in alcuni contesti, ma non costituisce una garanzia generale e non corregge automaticamente la selezione dei soli risultati favorevoli [@gelman2014beyond].
+
+::: {.callout-tip title="Tre casi da riconoscere"}
+1. **Centri simili, entrambe le fonti forti:** la posterior mantiene il centro comune e diventa più precisa.
+2. **Centri diversi, prior più forte:** la posterior rimane più vicina al prior.
+3. **Centri diversi, dati più forti:** la posterior rimane più vicina alla verosimiglianza.
+:::
+
+## Una prior deve avere un significato sulla scala del parametro
+
+La forza di una prior può essere interpretata soltanto rispetto alla scala sulla quale è definita. Una distribuzione Normal(0,1) può essere molto vaga per un parametro che varia tra -100 e 100, ma estremamente restrittiva per un parametro che varia tipicamente tra -0.05 e 0.05.
+
+Per scegliere una prior occorre quindi chiedersi:
+
+- quale valore rappresenta l'assenza o il livello di riferimento;
+- quali valori sono ordinari;
+- quali valori sarebbero sorprendenti ma possibili;
+- quali valori sono impossibili o incompatibili con il fenomeno.
+
+Una prior uniforme non è automaticamente neutrale. Per esempio, Beta(1,1) ha densità costante su $[0,1]$, ma possiede comunque una concentrazione pari a 2 nel calcolo della media posterior. Inoltre, una distribuzione uniforme su una scala non rimane uniforme dopo una trasformazione non lineare.
+
+### Tipi di prior
+
+| Tipo | Funzione principale | Domanda sostantiva |
+|---|---|---|
+| Prior di riferimento o molto vaga | Ridurre l'influenza esplicita del prior | Quali conseguenze ha lasciare ai dati quasi tutto il peso? |
+| Prior debolmente informativa | Escludere valori implausibili e regolarizzare | Quali effetti sono ordinari e quali eccezionali? |
+| Prior informativa | Integrare conoscenze teoriche o empiriche specifiche | Che cosa sappiamo già in questo preciso contesto? |
+
+Le etichette sono relative. Lo stesso prior può essere debole in uno studio e forte in un altro, a seconda della scala del parametro e dell'informazione contenuta nei dati.
+
+::: {.callout-note collapse=true title="Approfondimento: prior scalate mediante l'errore standard"}
+@zwet2022proposal discutono prior empiriche calibrate sulla distribuzione degli effetti standardizzati rispetto al loro errore standard. Questa strategia può essere utile per costruire prior di default a partire da corpora di studi comparabili e per regolarizzare stime rumorose.
+
+Non si tratta però di una regola universale per la scelta di prior sostantive. L'errore standard dipende dal disegno, dalla numerosità campionaria e dal modello. Una prior scalata mediante $s$ deve quindi essere presentata come una specifica strategia empirica, con un ambito di applicazione dichiarato, non come una soluzione automaticamente invariante o neutrale.
+:::
+
+## Controllare il prior prima e dopo l'analisi
 
 ### Prior predictive check
 
-Prima di analizzare i dati, occorre verificare che le assunzioni siano coerenti con la fenomenologia del dominio: "Quali dati potrei osservare se le mie prior rispecchiassero la realtà?"
+Un prior non va giudicato soltanto osservandone la forma sul parametro. Occorre chiedersi quali dati rende plausibili quando viene combinato con il modello generativo.
+
+Supponiamo:
+
+$$
+\mu\sim\operatorname{Normal}(0,1),
+$$
+
+$$
+y_i\mid\mu\sim\operatorname{Normal}(\mu,1),
+\qquad n=30.
+$$
+
+Prima di osservare i dati, la media campionaria ha distribuzione:
+
+$$
+\bar y\sim
+\operatorname{Normal}\left(
+0,
+1^2+\frac{1^2}{30}
+\right).
+$$
+
+La sua deviazione standard predittiva è circa 1.016 e l'intervallo centrale al 95% è approssimativamente $[-1.99,1.99]$.
 
 ```{r}
-set.seed(1)
-n <- 30
-mu_prior_sd <- 1.0
-S <- 2000
-
-mu_samp <- rnorm(S, mean = 0, sd = mu_prior_sd)
-ybar_rep <- sapply(mu_samp, function(m) mean(rnorm(n, mean = m, sd = 1)))
-
-quantile(ybar_rep, c(.025, 0.5, .975))
+sd_prior_predictive <- sqrt(1^2 + 1^2 / 30)
+qnorm(
+  c(0.025, 0.50, 0.975),
+  mean = 0,
+  sd = sd_prior_predictive
+)
 ```
 
-Con $n=30$ e $\sigma=1$, una prior $\mu \sim \text{Normal}(0,1)$ genera medie campionarie tra -0.7 e 0.7. Se il fenomeno produce tipicamente effetti con medie attorno a $\pm 1.5$, questa prior potrebbe essere troppo restrittiva.
+Il controllo sostantivo consiste nel chiedersi se medie campionarie vicine a $-2$ o $2$ siano plausibili sulla scala dell'outcome. Il calcolo non dichiara da solo che il prior sia adeguato: rende visibili le sue conseguenze.
 
-### Errori comuni
+### Analisi di sensibilità
 
-**L'illusione della neutralità:** le distribuzioni uniformi non sono invarianti rispetto alle trasformazioni e tendono a concentrare massa in regioni implausibili.
+Dopo l'analisi, si confrontano prior alternative ragionevoli. Se la conclusione sostantiva rimane stabile, i dati sono sufficientemente informativi rispetto alle differenze tra i prior considerati. Se cambia molto, significa che l'informazione disponibile non separa chiaramente le diverse assunzioni iniziali.
 
-**Incoerenza con la realtà:** specificare prior che assegnano probabilità a esiti impossibili (tempi di reazione negativi, probabilità fuori da [0,1]) compromette la credibilità del modello.
+Questa dipendenza non va nascosta. È una parte del risultato:
 
-**Asimmetrie ingiustificate:** se l'interpretazione cambia radicalmente ricodificando una variabile, la prior non è stata definita su una scala appropriata.
+> con i dati disponibili, la conclusione dipende ancora in misura rilevante da ciò che si considera plausibile prima dell'osservazione.
 
-## Il conflitto tra prior e verosimiglianza: un test di coerenza inferenziale
+Un'analisi di sensibilità non consiste nel provare prior finché si ottiene il risultato desiderato. Le alternative devono essere motivate e interpretate.
 
-Cosa accade quando le nostre assunzioni a priori entrano in conflitto con l'evidenza empirica contenuta nei dati? Questo scenario, più che un problema, rappresenta un'opportunità istruttiva: ci permette di valutare quanto il nostro modello sia internamente coerente e quanto i dati siano in grado di opporre resistenza alle nostre aspettative iniziali.
+## Buone pratiche
 
-Come sottolinea Richard McElreath, in questi casi non possiamo affidarci all'intuizione: anche combinazioni apparentemente semplici di prior e verosimiglianza possono generare distribuzioni a posteriori sorprendenti e controintuitive. Questa complessità intrinseca richiede un'attenta analisi delle dinamiche in gioco.
-
-### Le trappole delle specificazioni improprie
-
-**Prior eccessivamente restrittive**: una distribuzione a priori troppo concentrata può soffocare il segnale dei dati, producendo stime a posteriori che riflettono più le nostre preconcezioni che l'evidenza osservata. Questo è particolarmente problematico quando la prior viene scelta per convenienza computazionale piuttosto che per plausibilità sostanziale.
-
-**Prior eccessivamente vaghe**: all'estremo opposto, distribuzioni troppo diffuse producono stime a posteriori dominate dal rumore dei dati, con intervalli di credibilità talmente ampi da risultare praticamente inutili per la ricerca o la decisione.
-
-**La soluzione intermedia delle code pesanti**: le prior flessibili, come la Cauchy o le distribuzioni $t$ di Student con pochi gradi di libertà, offrono un compromesso robusto: forniscono una regolarizzazione efficace per gli effetti modesti (evitando sovrastime) senza reprimere eccessivamente segnali sostanziali e inattesi.
-
-### Oltre l'impostazione meccanica: verso un approccio critico
-
-L'implementazione di modelli bayesiani richiede un approccio critico che vada oltre l'applicazione meccanica di formule. Non basta semplicemente "avere una prior": è necessario valutarne sistematicamente la compatibilità con i dati osservati.
-
-**Analisi di sensibilità** prevede che variazioni ragionevoli nella specificazione della prior non alterino drasticamente le conclusioni sostanziali. Se piccole modifiche producono grandi cambiamenti nelle stime a posteriori, ciò indica che i dati sono insufficientemente informativi o che la specificazione del modello è eccessivamente dipendente dalle assunzioni iniziali.
-
-**Prior predictive checks**: questa tecnica fondamentale passa dalla domanda "che prior ho scelto?" a "che tipo di dati si aspetta la mia prior?". Simulando i dati dall'assegnazione congiunta della prior e del modello, possiamo valutare se le nostre assunzioni iniziali corrispondono a pattern realistici e plausibili per il fenomeno in studio. Se la prior predice regolarmente valori estremi o pattern implausibili, è necessario riconsiderare la specificazione.
-
-### Questo conflitto come strumento diagnostico
-
-Il disaccordo tra la prior e la verosimiglianza non è un fallimento del modello, ma piuttosto un segnale che le nostre ipotesi iniziali non reggono il confronto con la realtà empirica, spingendoci a rivedere o affinare sia la specificazione del modello che la nostra comprensione teorica del fenomeno. In questo senso, il conflitto diventa uno strumento diagnostico centrale nell'inferenza bayesiana responsabile, trasformando quello che potrebbe sembrare un problema tecnico in un'opportunità per un apprendimento scientifico più approfondito.
-
-## Buone pratiche e raccomandazioni
-
-### Costruire un corpus onesto
-
-Quando si utilizza un corpus per definire una prior, è essenziale che i dati siano rappresentativi: è necessario includere repliche e registered reports, evitare la selezione dei soli risultati "positivi" e documentare chiaramente i criteri e le fonti utilizzati. Un corpus ben costruito evita di perpetuare stime gonfiate.
-
-### Specificare l'ambito
-
-Una prior non è universale, ma vale all'interno di un ambito metodologico ben definito. Una prior per gli studi EMA sulla self-compassion non è adatta agli esperimenti con rinforzo. Indicare sempre il tipo di disegno, la variabile dipendente e la scala di misura aumenta la trasparenza.
-
-### Verificare la sensibilità
-
-Dopo l'analisi, è necessario verificare quanto i risultati dipendano dalla prior: è necessario confrontare la prior con prior alternative (più strette, più larghe o centrate altrove), controllare come cambiano la media e gli intervalli di credibilità e discutere le differenze. Se la conclusione cambia drasticamente, i dati da soli non sono ancora convincenti: un'informazione preziosa.
-
-### Il prior come ipotesi teorica
-
-Un buon prior non è solo una forma di distribuzione, ma un'ipotesi teorica esplicita. Specificarlo significa dichiarare ciò che riteniamo plausibile e fino a che punto siamo disposti a lasciarci sorprendere. In psicologia, questo rappresenta un vantaggio epistemologico: i modelli diventano luoghi di dialogo tra teoria e dati.
-
-| Principio               | Implicazione pratica                         |
-| ----------------------- | -------------------------------------------- |
-| Corpus onesto           | Basi empiriche trasparenti                   |
-| Ambito definito         | Evita l'uso improprio                        |
-| Analisi di sensibilità  | Verifica la robustezza                       |
-| Prior heavy-tailed      | Default prudente quando manca evidenza       |
-| Prior = ipotesi teorica | Connessione esplicita tra teoria e dati      |
+1. **Dichiarare la scala.** Specificare unità di misura, trasformazioni e vincoli del parametro.
+2. **Descrivere centro e forza.** Non limitarsi al nome della distribuzione; spiegare quali valori favorisce e quanto è concentrata.
+3. **Usare conoscenze pertinenti.** Studi precedenti devono essere comparabili per popolazione, misure e disegno.
+4. **Controllare le implicazioni predittive.** Verificare quali dati genera il prior insieme al modello.
+5. **Esaminare il conflitto.** Un forte disaccordo tra prior e dati richiede diagnosi, non una sostituzione automatica del prior.
+6. **Condurre un'analisi di sensibilità.** Confrontare un piccolo insieme di prior plausibili e documentare ciò che cambia.
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-L'inferenza bayesiana è un dialogo metodologicamente strutturato tra teoria ed esperienza. Ogni distribuzione a priori incorpora un frammento di conoscenza pregressa—esplicita, criticabile, migliorabile attraverso l'evidenza. Questo approccio riconosce che l'analisi dei dati non avviene nel vuoto epistemologico, ma all'interno di un contesto teorico che informa l'interpretazione.
+La posterior non è un compromesso generico o necessariamente equidistante tra prior e dati. È il risultato quantitativo della loro combinazione, e la sua posizione dipende dalla forza informativa relativa delle due fonti.
 
-La relazione dinamica tra prior ed evidenza rappresenta un aspetto centrale. In condizioni di scarsità informativa, le prior esercitano un'influenza determinante, incorporando trasparentemente le conoscenze accumulate. Quando l'evidenza diventa abbondante, è la verosimiglianza a dominare. Questa proprietà garantisce che l'approccio bayesiano non imponga rigidamente le convinzioni iniziali, ma specifichi esplicitamente il peso dell'informazione pregressa.
+Nel modello Beta-Binomiale questa relazione è particolarmente trasparente: la concentrazione $\kappa$ rappresenta il peso del prior e il numero di prove $n$ rappresenta il peso dei dati nella media posterior. Nel modello Normale-Normale lo stesso principio viene espresso mediante le precisioni.
 
-La regolarizzazione verso valori plausibili, particolarmente rilevante quando l'evidenza è debole, riduce sistematicamente gli errori di grandezza e contribuisce alla replicabilità dei risultati. L'approccio bayesiano supera la dicotomia tra "fidarsi dei dati" e "credere nella teoria", mostrando come questi elementi possano essere combinati in modo coerente, proporzionato e trasparente.
+Questa prospettiva aiuta a interpretare correttamente il ruolo del prior. Un prior più concentrato non è automaticamente migliore; rende semplicemente più impegnativa una revisione delle credenze iniziali. Dati più numerosi o precisi non rendono il prior logicamente irrilevante, ma ne riducono il peso relativo. Quando prior e dati concordano, l'aggiornamento aumenta soprattutto la precisione. Quando sono in conflitto, la posterior e le analisi diagnostiche mostrano quanto il risultato dipenda da ciascuna fonte.
 
-Un punto pratico importante: per rendere le priors confrontabili e indipendenti da scelte arbitrarie di unità è utile specificarle su grandezze adimensionali (p. es. il rapporto $\beta/s$) oppure **standardizzare le variabili prima di modellare**. Questa semplice convenzione (che non sostituisce la necessità di motivare la prior) facilita la scelta di priors interpretabili, mantiene l’invarianza rispetto alla scala di misura e semplifica il confronto fra studi; ricordarsi inoltre di riportare sempre i risultati nella scala originale per favorire l’interpretazione sostantiva.
+Il valore dell'approccio bayesiano consiste anche nel rendere visibile questa dipendenza. Invece di trattare le conoscenze iniziali come implicite, consente di esprimerle, verificarne le conseguenze e valutarne l'influenza sulle conclusioni.
 
-La vera forza dell'inferenza bayesiana risiede nella sua onestà epistemologica: non presume neutralità, ma esplicita il punto di partenza e mantiene costante disponibilità a rivedere le convinzioni attraverso l'evidenza. Questa trasparenza rappresenta un contributo fondamentale per una pratica di ricerca più consapevole e cumulativa.
+## Esercizi {.unnumbered .unlisted}
+
+### Esercizio 1 — Comprendere {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · Tempo indicativo: 15 minuti*
+
+Riconsidera i tre scenari principali del capitolo:
+
+| Scenario | Prior | Dati | Media posterior |
+|---|---:|---:|---:|
+| A | Beta(2,2) | 6 successi su 9 | 0.615 |
+| B | Beta(20,20) | 6 successi su 9 | 0.531 |
+| C | Beta(2,2) | 60 successi su 90 | 0.660 |
+
+Per ciascuno scenario:
+
+1. indica la media e la concentrazione del prior;
+2. indica la proporzione osservata;
+3. stabilisci se la posterior è più vicina al prior o ai dati;
+4. spiega questa posizione usando la forza relativa delle due fonti;
+5. confronta A e B, poi A e C, indicando quale singolo elemento è stato modificato.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+In A e B la proporzione osservata è identica; cambia soltanto la concentrazione del prior. In A e C il prior è identico e la proporzione osservata è identica; cambia soltanto il numero di prove.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+Nel caso A, il prior ha media 0.50 e concentrazione 4. I dati indicano 0.667 e hanno peso 9, maggiore del peso 4 del prior. La posterior, 0.615, è quindi più vicina ai dati.
+
+Nel caso B, il prior ha ancora media 0.50, ma concentrazione 40. Poiché il prior porta molto più peso dei 9 dati, la posterior, 0.531, rimane vicina a 0.50.
+
+Nel caso C, il prior è di nuovo Beta(2,2), ma i dati hanno peso 90. La posterior, 0.660, è quasi uguale alla proporzione osservata 0.667.
+
+Il confronto A-B isola la forza del prior. Il confronto A-C isola la forza della verosimiglianza. La posizione della posterior non dipende soltanto dalla distanza tra i centri, ma dal rapporto tra le quantità di informazione.
+:::
+
+### Esercizio 2 — Prevedere {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · Tempo indicativo: 12 minuti*
+
+Prima di calcolare, prevedi dove si troverà la media posterior nei quattro casi seguenti:
+
+| Caso | Media prior | Concentrazione prior | Proporzione osservata | Numero di prove |
+|---|---:|---:|---:|---:|
+| A | 0.50 | 4 | 0.70 | 10 |
+| B | 0.50 | 40 | 0.70 | 10 |
+| C | 0.70 | 40 | 0.70 | 10 |
+| D | 0.20 | 10 | 0.80 | 100 |
+
+Per ogni caso indica se la posterior sarà:
+
+- vicina soprattutto al prior;
+- vicina soprattutto ai dati;
+- centrata nello stesso punto di entrambi.
+
+Spiega inoltre quale caso produrrà il maggiore spostamento rispetto al centro del prior.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Confronta $\kappa$ e $n$. Se i centri coincidono, l'aggiornamento non sposta la media, ma aumenta la concentrazione.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+Nel caso A i dati hanno peso 10 e il prior peso 4: la posterior è più vicina a 0.70; la media esatta è $(4\times0.50+10\times0.70)/14=0.643$.
+
+Nel caso B il prior ha peso 40 e i dati peso 10: la posterior rimane vicina a 0.50; la media è 0.540.
+
+Nel caso C prior e dati hanno lo stesso centro, 0.70. La media posterior rimane 0.70, ma la distribuzione diventa più concentrata.
+
+Nel caso D i dati hanno peso 100 e il prior peso 10. Nonostante il forte conflitto tra 0.20 e 0.80, la posterior è vicina ai dati: la media è $(10\times0.20+100\times0.80)/110=0.745$.
+
+Il maggiore spostamento rispetto al prior si verifica in D, perché i dati sono molto più informativi e indicano un valore lontano dal centro iniziale.
+:::
+
+### Esercizio 3 — Modificare {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · Tempo indicativo: 15 minuti*
+
+Mantieni fissi i dati a 6 successi su 9 prove e mantieni fissa la media a priori a 0.50. Considera tre prior:
+
+- Beta(2,2), con concentrazione 4;
+- Beta(10,10), con concentrazione 20;
+- Beta(50,50), con concentrazione 100.
+
+1. Scrivi i parametri delle tre posterior.
+2. Calcola le tre medie posterior.
+3. Ordina le posterior dalla più vicina alla proporzione osservata alla più vicina al prior.
+4. Spiega perché aumentare la concentrazione non cambia ciò che il prior afferma sul valore centrale, ma cambia quanto resiste ai dati.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Aggiungi 6 al primo parametro e 3 al secondo. La proporzione osservata è 0.667.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+Le posterior sono:
+
+$$
+\operatorname{Beta}(8,5),
+\qquad
+\operatorname{Beta}(16,13),
+\qquad
+\operatorname{Beta}(56,53).
+$$
+
+Le medie sono rispettivamente:
+
+$$
+\frac{8}{13}=0.615,
+\qquad
+\frac{16}{29}=0.552,
+\qquad
+\frac{56}{109}=0.514.
+$$
+
+La posterior Beta(8,5) è la più vicina ai dati; Beta(56,53) è la più vicina al prior. Tutti i prior hanno media 0.50, quindi esprimono lo stesso centro iniziale. Aumentando la concentrazione, cresce però il peso attribuito a quel centro rispetto ai nove dati osservati.
+:::
+
+### Esercizio 4 — Criticare {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · Tempo indicativo: 15 minuti*
+
+Valuta la seguente affermazione:
+
+> “Una prior più forte è più affidabile. La posterior è sempre a metà tra prior e dati. Quando il campione è grande, il prior scompare; se un'analisi di sensibilità produce risultati diversi, significa che il ricercatore ha scelto male il modello.”
+
+Individua almeno quattro problemi e riscrivi l'affermazione in forma corretta.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Distingui forza e correttezza, media aritmetica e media ponderata, peso nullo e peso relativamente piccolo, dipendenza informativa e errore metodologico.
+:::
+
+::: {.callout-note collapse="true" title="Elementi per la risposta"}
+Una prior più concentrata è più informativa, ma non necessariamente più accurata. La posterior non è sempre a metà: si colloca secondo i pesi relativi di prior e verosimiglianza. Con molti dati il peso relativo del prior può diventare molto piccolo, ma il prior rimane una componente del modello. Infine, risultati sensibili a prior ragionevoli non dimostrano automaticamente che il modello sia sbagliato: indicano che i dati disponibili non sono sufficientemente informativi per rendere trascurabili le differenze tra le assunzioni iniziali.
+
+Una formulazione corretta potrebbe essere:
+
+> “La concentrazione del prior rappresenta la sua forza informativa all'interno del modello, non la sua verità. La posterior combina prior e dati secondo la loro precisione relativa. Quando i dati sono molto informativi, l'influenza relativa del prior diminuisce. Se conclusioni sostantive diverse emergono da prior alternative plausibili, questa dipendenza deve essere comunicata come parte dell'incertezza dell'analisi.”
+:::
 
 ::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+
 ```{r}
 sessionInfo()
 ```

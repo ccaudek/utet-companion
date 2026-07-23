@@ -2,15 +2,15 @@
 
 I dati psicologici presentano spesso una struttura gerarchica. Le misurazioni possono essere ripetute sulla stessa persona, gli studenti possono appartenere a classi diverse, i pazienti possono essere seguiti in centri clinici differenti e gli stimoli possono essere raggruppati in categorie. In tutti questi casi, osservazioni appartenenti alla stessa unità tendono ad assomigliarsi più di osservazioni appartenenti a unità diverse.
 
-Un modello lineare che ignora questa struttura tratta implicitamente tutte le osservazioni come intercambiabili. Il problema non riguarda soltanto il calcolo dell'incertezza. In psicologia siamo spesso interessati a due domande simultanee:
+Un modello lineare che ignora questa struttura tratta implicitamente tutte le osservazioni come intercambiabili. Il problema non riguarda soltanto il calcolo dell'incertezza. Molte analisi psicologiche tradizionali sintetizzano il fenomeno attraverso una media di gruppo; tale media è importante, ma non descrive automaticamente il processo di ciascun individuo. In psicologia siamo spesso interessati a due domande simultanee:
 
 1. quale relazione emerge, in media, nella popolazione considerata;
 2. quanto e in quale modo le persone o i gruppi differiscono da tale relazione media.
 
-I modelli multilivello rispondono a entrambe le domande costruendo una distribuzione comune per i parametri delle diverse unità. Le stime individuali non vengono né completamente identificate con la media generale né trattate come se fossero indipendenti. Sono stimate mediante **partial pooling**, cioè combinando l'informazione specifica dell'unità con quella condivisa dall'insieme delle unità.
+I modelli multilivello affrontano entrambe le domande costruendo una distribuzione comune per i parametri delle diverse unità. Le stime individuali non vengono né identificate con la media generale né trattate come se fossero completamente indipendenti. Sono stimate mediante **partial pooling**, cioè combinando l'informazione specifica dell'unità con quella condivisa dall'insieme delle unità. Il risultato non è soltanto una correzione tecnica della dipendenza tra osservazioni: è un modo per studiare l'eterogeneità individuale senza scambiare il rumore di ogni piccolo campione personale per una differenza stabile.
 
 ::: {.callout-important appearance="minimal" .chapter-status}
-**Da sapere.** I modelli multilivello rappresentano esplicitamente la dipendenza tra osservazioni annidate e distinguono la relazione media della popolazione dall’eterogeneità tra persone o gruppi. Il *partial pooling* combina l’informazione individuale con quella condivisa, producendo uno *shrinkage* maggiore per le unità con dati meno informativi. La variabilità tra le pendenze individuali è distinta dall’incertezza sulla pendenza media.
+**Da sapere.** I modelli multilivello rappresentano esplicitamente la dipendenza tra osservazioni annidate e distinguono la relazione media della popolazione dall’eterogeneità tra persone o gruppi. Una pendenza media non è la pendenza di ogni individuo. Il *partial pooling* combina l’informazione individuale con quella condivisa, producendo uno *shrinkage* maggiore per le unità con dati meno informativi. La variabilità tra le pendenze individuali è distinta dall’incertezza sulla pendenza media.
 
 **Da saper fare.** Riconoscere una struttura gerarchica nei dati; distinguere *complete pooling*, *no pooling* e *partial pooling*; specificare e stimare con `brms` un modello con intercette e pendenze variabili; interpretare parametri di popolazione, deviazioni individuali, componenti di varianza e correlazioni; distinguere `ranef()` da `coef()`; eseguire controlli predittivi e formulare previsioni per un’unità osservata, per la relazione media e per una nuova unità.
 
@@ -53,21 +53,6 @@ Sono particolarmente utili:
 
 here::here("code", "_common.R") |>
   source()
-
-if (!requireNamespace("pacman", quietly = TRUE)) {
-  install.packages("pacman")
-}
-
-pacman::p_load(
-  brms,
-  cmdstanr,
-  dplyr,
-  ggplot2,
-  posterior,
-  purrr,
-  rio,
-  tidyr
-)
 
 set.seed(1234)
 ```
@@ -118,6 +103,19 @@ Il grafico mette in luce almeno tre aspetti rilevanti:
 
 Il secondo aspetto descrive la tendenza media; il terzo stabilisce fino a che punto tale tendenza sia generalizzabile ai singoli individui. Un modello multilivello non si limita a stimare una pendenza media, ma la accompagna con una distribuzione delle deviazioni individuali da essa, consentendo di rappresentare sia la regolarità media sia l’eterogeneità tra i soggetti.
 
+### Dalla media all'individuo
+
+Supponiamo che la pendenza media sia pari a 10 ms al giorno. Questa quantità descrive il centro della distribuzione delle pendenze individuali; non afferma che ogni partecipante aumenti esattamente di 10 ms al giorno. Per comprendere che cosa accade agli individui servono almeno altre due informazioni:
+
+- quanto sono disperse le pendenze individuali attorno alla media;
+- quanta informazione possediamo sulla traiettoria di ciascun partecipante.
+
+Il primo punto riguarda l'eterogeneità reale rappresentata dal modello; il secondo riguarda l'incertezza delle stime individuali. Confondere queste due componenti porta a due errori opposti: trattare la media come se valesse per tutti oppure interpretare ogni differenza osservata tra persone come una caratteristica stabile. Il modello multilivello mantiene distinte entrambe le fonti di informazione.
+
+::: {.callout-important appearance="minimal" title="Messaggio epistemologico"}
+La media di popolazione è una proprietà importante della distribuzione delle traiettorie, ma non sostituisce la conoscenza dell'individuo. Il modello multilivello costruisce un ponte tra i due livelli: usa l'informazione della popolazione per stabilizzare le stime personali e usa le differenze personali per descrivere l'eterogeneità della popolazione.
+:::
+
 ## Tre strategie di modellazione
 
 Prima di specificare il modello gerarchico, confrontiamo tre possibili strategie.
@@ -151,7 +149,7 @@ cp_model <- brm(
   chains = 4,
   iter = 2000,
   warmup = 1000,
-  cores = 4,
+  cores = min(4, parallel::detectCores(logical = FALSE)),
   seed = 1234,
   backend = "cmdstanr",
   refresh = 0
@@ -181,7 +179,7 @@ sleep2 |>
   )
 ```
 
-Il modello sintetizza la tendenza media, ma non tiene conto delle differenze sistematiche tra partecipanti. Di conseguenza, attribuisce all’errore residuo tutta la variabilità sistematica che deriva dalla struttura annidata dei dati. Quando tale variabilità è rilevante, l’incertezza sui coefficienti può risultare sottostimata e le inferenze rischiano di essere distorte.
+Il modello sintetizza la tendenza media, ma non rappresenta le differenze sistematiche tra partecipanti. Di conseguenza, attribuisce alla componente residua anche variazioni che appartengono alla struttura annidata dei dati. L'incertezza sui coefficienti può essere rappresentata in modo inadeguato e, soprattutto, il modello non può rispondere alla domanda su quanto le traiettorie individuali differiscano dalla relazione media.
 
 ### No pooling
 
@@ -233,7 +231,7 @@ Questo approccio mette in luce le differenze individuali, ma comporta il rischio
 
 ### Partial pooling
 
-Il **partial pooling** rappresenta una via intermedia: stima le rette specifiche per ciascun partecipante, ma considera i coefficienti individuali come estrazioni da una distribuzione comune di popolazione. In questo modo, i dati di un soggetto informano le stime degli altri e viceversa, senza che i parametri debbano necessariamente coincidere.
+Il **partial pooling** rappresenta una via intermedia: stima le rette specifiche per ciascun partecipante, ma considera i coefficienti individuali come estrazioni da una distribuzione comune di popolazione. Le osservazioni di tutti i soggetti contribuiscono a stimare questa distribuzione comune; essa, a sua volta, regolarizza le stime dei singoli senza imporre che coincidano.
 
 La formula `brms` 
 
@@ -264,7 +262,7 @@ Y_{ij} \mid \mu_{ij}, \sigma
 \end{aligned}
 $$ {#eq-multilevel-observation}
 
-I parametri $\alpha$ e $\beta$ rappreentano rispettivamente l'intercetta e la pendenza medie della popolazione. Gli scostamenti individuali $a_j$ e $b_j$ sono modellati come:
+I parametri $\alpha$ e $\beta$ rappresentano rispettivamente l'intercetta e la pendenza medie della popolazione. Gli scostamenti individuali $a_j$ e $b_j$ sono modellati come:
 
 $$
 \begin{pmatrix}
@@ -316,7 +314,7 @@ Nel modello multilivello convivono quattro fonti di incertezza, concettualmente 
 
 I prior devono essere coerenti con la scala dei tempi di reazione e con la struttura gerarchica del modello. Per l’intercetta media $\alpha$ e la pendenza media $\beta$, utilizziamo distribuzioni normali con valori attesi e dispersioni ragionevoli: $\alpha \sim \operatorname{Normal}(250, 50)$ e $\beta \sim \operatorname{Normal}(10, 10)$. Tali scelte riflettono l’ipotesi che al basale i tempi di reazione si collochino attorno a 250 ms, con un incremento giornaliero di circa 10 ms, senza però vincolare eccessivamente le stime.
 
-Per le deviazioni standard degli effetti casuali, $\tau_\alpha$ e $\tau_\beta$, adottiamo distribuzioni Student-$t$ troncate al semiasse positivo, con parametri di scala calibrati sugli scostamenti plausibili tra i partecipanti: $\tau_\alpha \sim \operatorname{Student\text{-}t}^{+}(3, 0, 50)$ e $\tau_\beta \sim \operatorname{Student\text{-}t}^{+}(3, 0, 10)$. Queste prior sono debolmente informative: concedono ampia libertà ai dati, ma escludono valori eccessivi o irrealistici.
+Per le deviazioni standard degli effetti casuali, $\tau_\alpha$ e $\tau_\beta$, adottiamo distribuzioni Student-$t$ troncate al semiasse positivo, con parametri di scala calibrati sugli scostamenti plausibili tra i partecipanti: $\tau_\alpha \sim \operatorname{Student\text{-}t}^{+}(3, 0, 50)$ e $\tau_\beta \sim \operatorname{Student\text{-}t}^{+}(3, 0, 10)$. Queste prior sono pensate come debolmente informative sulla scala del problema. La loro adeguatezza non dipende però dall'etichetta, ma dalle traiettorie che generano nel controllo predittivo a priori.
 
 Per la correlazione $\rho$ tra intercetta e pendenza individuali, utilizziamo una prior LKJ con parametro di forma 2, che concentra moderatamente la massa attorno allo zero senza escludere correlazioni forti, ma penalizza le correlazioni estreme in assenza di evidenza.
 
@@ -377,14 +375,14 @@ pp_prior_model <- brm(
   chains = 4,
   iter = 1000,
   warmup = 500,
-  cores = 4,
+  cores = min(4, parallel::detectCores(logical = FALSE)),
   seed = 1234,
   backend = "cmdstanr",
   refresh = 0
 )
 ```
 
-Per non sovraccaricare la visualizzazione, consiamo quattro partecipanti e un sottoinsieme delle traiettorie simulate:
+Per non sovraccaricare la visualizzazione, consideriamo quattro partecipanti e un sottoinsieme delle traiettorie simulate:
 
 ```{r}
 #| label: fig-prior-trajectories-multilevel
@@ -455,7 +453,7 @@ pp_model <- brm(
   chains = 4,
   iter = 3000,
   warmup = 1500,
-  cores = 4,
+  cores = min(4, parallel::detectCores(logical = FALSE)),
   seed = 1234,
   backend = "cmdstanr",
   control = list(adapt_delta = 0.95),
@@ -553,6 +551,45 @@ Con un numero limitato di soggetti, la stima della correlazione può essere molt
 | `coef()` | Coefficienti completi per gruppo | Intercetta e pendenza di ciascun partecipante |
 | `VarCorr()` | Deviazioni standard e correlazioni | Entità e struttura dell'eterogeneità |
 
+### Dalla pendenza media alla distribuzione delle pendenze
+
+La pendenza media e la deviazione standard tra pendenze possono essere combinate per formulare una domanda più vicina all'individuo: secondo il modello, quanto è plausibile che un nuovo partecipante abbia una pendenza positiva?
+
+A ogni estrazione a posteriori, la pendenza di un nuovo partecipante è descritta da
+
+$$
+\beta_{\text{nuovo}}
+\sim
+\operatorname{Normal}(\beta,\tau_\beta).
+$$
+
+Di conseguenza, per ciascun draw si può calcolare la probabilità che la pendenza del nuovo individuo superi zero e poi mediare questa probabilità sulla posterior:
+
+```{r}
+#| label: probability-positive-new-slope
+
+slope_distribution <- as_draws_df(pp_model) |>
+  transmute(
+    beta = b_days_deprived,
+    tau_beta = sd_Subject__days_deprived,
+    p_new_slope_positive = pnorm(beta / tau_beta)
+  )
+
+slope_distribution |>
+  summarise(
+    posterior_mean_probability = mean(p_new_slope_positive),
+    lower = quantile(p_new_slope_positive, 0.05),
+    upper = quantile(p_new_slope_positive, 0.95)
+  )
+```
+
+Questa quantità non è la percentuale osservata di partecipanti con una pendenza positiva. È una previsione per un nuovo individuo, condizionata alla forma normale scelta per la distribuzione delle pendenze e agli altri elementi del modello. Rende tuttavia evidente la differenza tra due affermazioni:
+
+- la pendenza media della popolazione è positiva;
+- la pendenza di un nuovo individuo è probabilmente positiva.
+
+La seconda richiede sia la posizione sia la dispersione della distribuzione delle pendenze. Una media positiva può infatti coesistere con una probabilità non trascurabile di pendenze individuali nulle o negative.
+
 ## Lo shrinkage
 
 Lo shrinkage emerge dal confronto tra le stime ottenute con il *no pooling* e quelle del modello gerarchico.
@@ -597,7 +634,7 @@ shrinkage_data |>
       xend = intercept_pp,
       yend = slope_pp
     ),
-    arrow = arrow(length = grid::unit(0.16, "cm")),
+    arrow = grid::arrow(length = grid::unit(0.16, "cm")),
     alpha = 0.7
   ) +
   geom_point(
@@ -638,7 +675,7 @@ shrinkage_data |>
   )
 ```
 
-Le stime separate sono libere di inseguire il rumore di ogni piccolo campione individuale. Il modello gerarchico richiede invece evidenza sufficiente prima di collocare un partecipante molto lontano dalla distribuzione comune. In media, questa regolarizzazione migliora la capacità predittiva su dati futuri, anche se la singola stima individuale può naturalmente rimanere imperfetta.
+Le stime separate sono libere di inseguire il rumore di ogni piccolo campione individuale. Il modello gerarchico richiede invece evidenza sufficiente prima di collocare un partecipante molto lontano dalla distribuzione comune. Quando la struttura gerarchica è adeguata, questa regolarizzazione può migliorare la capacità predittiva su dati futuri; non garantisce tuttavia che la stima di ogni individuo sia accurata.
 
 ## Visualizzare le traiettorie posteriori
 
@@ -709,7 +746,7 @@ sleep2 |>
   )
 ```
 
-Le traiettorie individuali mostrano andamenti eterogenei, ma la loro variabilità è stata regolarizzata dalla struttura gerarchica. Le fasce di incertezza riflettono sia la variabilità residua sia l’informazione disponibile per ciascun soggetto: più i dati sono scarsi o rumorosi, più l’intervallo di credibilità si allarga. Questo tipo di visualizzazione integra la lettura tabellare dei coefficienti e aiuta a valutare se le differenze tra i partecipanti siano sufficientemente sostenute dall’evidenza empirica.
+Le traiettorie individuali mostrano andamenti eterogenei, ma la loro variabilità è stata regolarizzata dalla struttura gerarchica. Poiché il grafico usa `posterior_epred()`, le fasce rappresentano l'incertezza sulla media condizionata di ciascun soggetto e non includono la variabilità residua di una nuova osservazione. Più i dati di un soggetto sono scarsi o poco informativi, maggiore tende a essere l'incertezza sulla sua traiettoria. Questo tipo di visualizzazione integra la lettura tabellare dei coefficienti e aiuta a valutare quanto le differenze tra i partecipanti siano sostenute dall'evidenza empirica.
 
 ## Tre domande predittive diverse
 
@@ -837,7 +874,7 @@ pp_check(
 )
 ```
 
-Questi controlli raggruppati sono più informativi di quelli marginali: verificano se il modello è in grado di riprodurre le differenze nei livelli iniziali e nella dispersione individuale. Tra i segnali che suggeriscono una specificazione inadeguata figurano curvature sistematiche nelle traiettorie, dispersione residua crescente nel tempo, osservazioni estreme non riprodotte dal modello, andamenti qualitativamente diversi tra partecipanti o correlazione seriale residua all’interno di uno stesso soggetto. La presenza di questi segnali richiede una revisione della struttura del modello — non un semplice aumento dei parametri di controllo del campionatore.
+Questi controlli raggruppati sono più informativi di quelli marginali: valutano se il modello riproduce le medie e le dispersioni osservate nei diversi partecipanti. Non verificano però direttamente ogni caratteristica delle traiettorie. Tra i segnali che suggeriscono una specificazione inadeguata figurano curvature sistematiche, dispersione residua crescente nel tempo, osservazioni estreme non riprodotte, andamenti qualitativamente diversi tra partecipanti o correlazione seriale residua all’interno dello stesso soggetto. La presenza di questi segnali richiede una revisione della struttura del modello, non un semplice aumento dei parametri di controllo del campionatore.
 
 ## Scegliere la struttura degli effetti di gruppo
 
@@ -862,7 +899,7 @@ Reaction ~ 0 + Intercept + days_deprived +
   (1 + days_deprived | Subject)
 ```
 
-Questa è la struttura più ricca e generalmente più realistica, ma richiede un numero sufficiente di gruppi e osservazioni per essere stimata in modo stabile.
+Questa struttura rappresenta più forme di eterogeneità, ma non è automaticamente più appropriata. Richiede inoltre un numero sufficiente di gruppi e osservazioni per stimare in modo informativo le componenti di varianza e la loro correlazione.
 
 ### Intercette e pendenze non correlate
 
@@ -935,67 +972,123 @@ Nel prossimo capitolo, abbandoneremo l'analisi della variabilità ben rappresent
 9. Una diagnostica MCMC soddisfacente non dimostra l'adeguatezza del modello.
 10. L'eterogeneità quantitativa attorno a una relazione comune è un'ipotesi, non una conseguenza necessaria dei dati.
 
-::: {.callout-important title="Esercizi" collapse="true"}
+## Esercizi {.unnumbered .unlisted}
 
-### 1. Riconoscere i livelli
+### Esercizio 1 — Comprendere: dalla media all'individuo {.unnumbered .unlisted}
 
-Per ciascuno dei seguenti studi, identifica il livello delle osservazioni e il fattore di raggruppamento:
+*Livello essenziale · Codice: no · 10–15 minuti*
 
-- risposte a 40 item entro partecipante;
-- studenti entro classi e classi entro scuole;
-- sedute terapeutiche entro paziente;
-- valutazioni di più giudici sugli stessi elaborati.
+Un modello multilivello produce il seguente riepilogo:
 
-### 2. Complete pooling e no pooling
+- pendenza media della popolazione: 12 ms al giorno;
+- intervallo di credibilità al 90% per la pendenza media: $[8,16]$;
+- deviazione standard tra le pendenze individuali: 10 ms al giorno;
+- deviazione standard residua: 25 ms.
 
-Spiega quale informazione viene ignorata dal complete pooling e quale informazione non viene condivisa nel no pooling.
+Rispondi alle domande seguenti.
 
-### 3. Leggere il modello generativo
+1. Che cosa comunica la pendenza media?
+2. Perché l'intervallo della pendenza media non descrive la variabilità tra individui?
+3. Che cosa comunica la deviazione standard di 10 ms tra le pendenze?
+4. È corretto concludere che tutti i partecipanti peggiorano di circa 12 ms al giorno?
+5. Quale ruolo svolge la deviazione standard residua di 25 ms?
 
-Interpreta $\alpha$, $\beta$, $\tau_\alpha$, $\tau_\beta$, $\rho$ e $\sigma$ nelle @eq-multilevel-observation e @eq-multilevel-group.
-
-### 4. Modificare la struttura
-
-Adatta un modello con sole intercette variabili e confronta i controlli predittivi con quelli del modello che include anche pendenze variabili.
-
-### 5. Correlazione degli effetti di gruppo
-
-Adatta il modello usando `||`. Confronta la posterior dei parametri comuni e le previsioni con quelle del modello correlato.
-
-### 6. Previsioni
-
-Costruisci e confronta gli intervalli per:
-
-- la media di un partecipante già osservato;
-- una nuova osservazione dello stesso partecipante;
-- la relazione media;
-- la media di un nuovo partecipante;
-- una nuova osservazione di un nuovo partecipante.
-
-### 7. Shrinkage e quantità di dati
-
-Simula un dataset nel quale alcuni partecipanti abbiano molte osservazioni e altri soltanto due. Verifica graficamente se la contrazione è maggiore per le unità meno informative.
-
-### 8. Criticare la linearità
-
-Esamina le traiettorie individuali e individua eventuali partecipanti per i quali una retta appare inadeguata. Proponi una specificazione alternativa.
-
-### 9. Effetto medio ed eterogeneità
-
-Immagina una posterior della pendenza media interamente positiva, ma una distribuzione delle pendenze individuali che assegna massa anche a valori negativi. Formula una comunicazione dei risultati che rappresenti entrambe le informazioni.
-
-### 10. Disegno e causalità
-
-Elenca le informazioni sul disegno sperimentale necessarie per attribuire alla pendenza media un'interpretazione causale.
+::: {.callout-tip collapse=true title="Suggerimento"}
+Distingui il centro della distribuzione delle pendenze, la dispersione tra persone, l'incertezza sul centro e la variabilità delle singole osservazioni.
 :::
 
-::: {.callout-tip collapse="true" title="Tracce di soluzione"}
-- Nel complete pooling si ignora la struttura tra unità; nel no pooling si ignora la loro appartenenza a una popolazione comune.
-- $\tau_\beta$ descrive l'eterogeneità delle pendenze, non l'incertezza su $\beta$.
-- Per la relazione media usa `re_formula = NA`; per un livello noto usa `re_formula = NULL`.
-- Per un nuovo livello imposta `allow_new_levels = TRUE` e specifica come generare i nuovi effetti di gruppo.
-- Lo shrinkage dovrebbe aumentare quando diminuisce la precisione della stima individuale.
-- Una comunicazione completa riporta sia la tendenza media sia la dispersione delle pendenze individuali.
+::: {.callout-note collapse=true title="Soluzione commentata"}
+La pendenza media descrive il centro della distribuzione delle traiettorie individuali. L'intervallo $[8,16]$ quantifica l'incertezza su questo centro, non l'intervallo entro cui cadono le pendenze delle persone. La deviazione standard di 10 ms descrive invece l'eterogeneità tra le pendenze individuali. Non è quindi corretto attribuire 12 ms a ogni partecipante: alcuni possono mostrare incrementi più piccoli, più grandi o, se la distribuzione assegna massa sotto zero, anche andamenti opposti. La deviazione standard residua descrive infine la variabilità delle osservazioni attorno alla traiettoria del singolo soggetto.
+:::
+
+### Esercizio 2 — Prevedere: come agisce il partial pooling? {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 10 minuti*
+
+Tre partecipanti hanno pendenze stimate separatamente mediante *no pooling*:
+
+| Partecipante | Pendenza no pooling | Informazione individuale |
+|---|---:|---|
+| A | 11 | molte osservazioni, poco rumore |
+| B | 28 | due osservazioni, molto rumore |
+| C | -6 | tre osservazioni, molto rumore |
+
+La pendenza media stimata dal modello gerarchico è circa 10.
+
+1. Per quale partecipante ti aspetti lo shrinkage minore?
+2. Quali stime verranno probabilmente spostate maggiormente verso 10?
+3. Lo shrinkage deve necessariamente portare tutte le pendenze dalla stessa parte di zero?
+4. Perché una stima individuale estrema non costituisce, da sola, una prova di una differenza stabile?
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+La contrazione dipende dalla precisione della likelihood individuale, non soltanto dalla distanza dalla media.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+La stima di A dovrebbe cambiare poco, perché è sostenuta da molti dati coerenti ed è già vicina alla media. Le stime di B e C dovrebbero contrarsi maggiormente verso 10, perché sono basate su informazioni scarse e rumorose. Lo shrinkage non impone che tutti i coefficienti diventino positivi: se i dati di una persona sono sufficientemente informativi, la sua posterior può rimanere lontana dal centro o assegnare massa a valori negativi. Una stima estrema ottenuta da pochi dati può riflettere soprattutto rumore campionario; il modello richiede maggiore evidenza prima di interpretarla come caratteristica individuale stabile.
+:::
+
+### Esercizio 3 — Impostare ed eseguire: quale quantità serve? {.unnumbered .unlisted}
+
+*Livello essenziale · Codice guidato · 15 minuti*
+
+Per ciascuna domanda indica la formula o la funzione appropriata.
+
+1. Stimare soltanto una relazione media, ignorando l'identità dei partecipanti.
+2. Consentire differenze individuali nel livello iniziale, ma non nella pendenza.
+3. Consentire differenze individuali sia nell'intercetta sia nella pendenza.
+4. Estrarre la pendenza media della popolazione.
+5. Estrarre gli scostamenti individuali dalla pendenza media.
+6. Estrarre direttamente le pendenze complete dei partecipanti.
+7. Prevedere la media di un partecipante già osservato.
+8. Prevedere la relazione media della popolazione.
+9. Prevedere la traiettoria media di un nuovo partecipante.
+
+Completa inoltre lo schema seguente:
+
+```r
+fit <- brm(
+  Reaction ~ 0 + Intercept + days_deprived +
+    (___ + ___ | Subject),
+  data = sleep2,
+  family = gaussian(),
+  prior = priors_pp,
+  backend = "cmdstanr"
+)
+
+population <- ___(fit)
+deviations <- ___(fit)$Subject
+individual <- ___(fit)$Subject
+```
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+`fixef()` restituisce i parametri di popolazione; `ranef()` le deviazioni; `coef()` la loro somma. Nelle previsioni, `re_formula = NULL` include gli effetti di gruppo e `re_formula = NA` li esclude.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+Il complete pooling usa `Reaction ~ days_deprived`; il modello con sola intercetta variabile aggiunge `(1 | Subject)`; il modello con intercetta e pendenza variabili usa `(1 + days_deprived | Subject)`. Nel codice proposto gli spazi vanno completati con `1`, `days_deprived`, `fixef`, `ranef` e `coef`.
+
+Per un partecipante noto si usa `posterior_epred(..., re_formula = NULL)`. Per la relazione media si usa `re_formula = NA`. Per un nuovo partecipante si includono gli effetti di gruppo e si aggiungono `allow_new_levels = TRUE` e una regola esplicita per `sample_new_levels`.
+:::
+
+### Esercizio 4 — Criticare e comunicare {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 10–15 minuti*
+
+Valuta il seguente resoconto:
+
+> Il modello ha stimato una pendenza media positiva, quindi la deprivazione del sonno peggiora la prestazione di ogni partecipante. Le rette individuali dimostrano che esistono tipi psicologici stabili. Il partial pooling ha corretto le persone più anomale riportandole verso la normalità. Poiché non vi sono divergenze, il modello descrive accuratamente ciascun individuo.
+
+Individua almeno quattro problemi e riscrivi il resoconto in modo appropriato.
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+Distingui: media e distribuzione individuale; stime e tipi psicologici; regolarizzazione e correzione normativa; diagnostica del campionamento e adeguatezza idiografica; associazione e causalità.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+Una pendenza media positiva non implica che tutte le pendenze individuali siano positive. Le differenze quantitative tra coefficienti non dimostrano l'esistenza di tipi qualitativi stabili. Lo shrinkage non riporta le persone verso una norma psicologica: regolarizza stime incerte verso il centro della distribuzione stimata. L'assenza di divergenze riguarda il calcolo, non l'accuratezza del modello per ogni persona. L'interpretazione causale dipende inoltre dal disegno sperimentale.
+
+Una formulazione adeguata potrebbe essere: “Il modello ha stimato un incremento medio dei tempi di reazione con i giorni di deprivazione e ha indicato eterogeneità tra le traiettorie individuali. Le stime dei partecipanti sono state ottenute mediante partial pooling, con una contrazione maggiore quando i dati individuali erano meno informativi. I risultati descrivono variazioni quantitative attorno a una forma lineare comune; non implicano che la relazione media valga nello stesso modo per ogni individuo né che le differenze identifichino tipi psicologici stabili. L'adeguatezza per il singolo caso richiede controlli predittivi individuali e dati sufficienti per quella persona.”
 :::
 
 ::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}

@@ -1,24 +1,33 @@
 # Stan: leggere un modello bayesiano {#sec-mcmc-stan-intro}
 
 ::: {.callout-note appearance="minimal" .chapter-status}
-**Da sapere.** Un programma Stan separa dati, parametri e modello; il blocco `model` traduce in codice prior e verosimiglianza.
+**Da sapere.** Un programma Stan distingue ciò che è osservato, ciò che è incognito, il modello probabilistico e le quantità calcolate dopo il campionamento.
 
-**Da saper fare.** Leggere un modello semplice, riconoscere i blocchi e collegare le istruzioni Stan alla formulazione probabilistica.
+**Da saper fare.** Leggere un programma semplice, riconoscere i blocchi `data`, `parameters`, `model` e `generated quantities` e collegare le istruzioni alla formulazione probabilistica.
 
-**Approfondimento facoltativo.** Compilare ed eseguire il programma con `cmdstanr`, scrivere codice Stan autonomamente e consultare le appendici K--N.
+**Approfondimento facoltativo.** Compilare ed eseguire il programma con `cmdstanr`, scrivere codice Stan autonomamente e consultare le appendici tecniche.
 
 [Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
 :::
 
-L'algoritmo di Metropolis, analizzato nel manuale, costituisce il fondamento concettuale del campionamento MCMC. Queste basi trovano applicazione pratica in Stan, l'ambiente di programmazione probabilistica diventato lo standard di riferimento per la modellazione bayesiana. La sua implementazione dell'Hamiltonian Monte Carlo, in particolare l'algoritmo NUTS, è molto più efficiente di un campionatore Metropolis elementare, pur rimanendo fedele ai principi inferenziali già acquisiti.
+Nel capitolo precedente abbiamo distinto due compiti. Il ricercatore specifica il modello; il software sceglie ed esegue il metodo numerico con cui approssimare la distribuzione a posteriori. Stan rende concreta questa separazione.
 
-Lo scopo di questo capitolo è circoscritto: **non imparare a scrivere Stan, ma imparare a leggerlo**. Per un modello semplice, un programma Stan non è una scatola nera: il blocco che descrive il modello si può leggere quasi come la notazione statistica che gli sta dietro.
+Stan è un linguaggio per descrivere modelli probabilistici e un sistema di calcolo per l'inferenza bayesiana. Per il campionamento MCMC utilizza l'Hamiltonian Monte Carlo e, normalmente, l'algoritmo NUTS. Tuttavia, lo scopo di questo capitolo non è studiare la meccanica di NUTS né imparare a programmare. L'obiettivo è più semplice e più importante per il percorso essenziale:
+
+> **leggere un programma Stan come una traduzione del modello statistico.**
+
+Per un modello elementare, quasi tutto ciò che serve sapere si può ricondurre a quattro domande:
+
+1. quali quantità sono osservate?
+2. quali quantità sono incognite?
+3. quale distribuzione a priori viene assegnata ai parametri?
+4. come si suppone che i dati siano stati generati, dati i parametri?
 
 ::: {.callout-tip collapse=true title="Riferimenti tecnici facoltativi"}
 - Sintassi completa del linguaggio: [appendice K sul linguaggio Stan](../appendix/a43_stan_lang.qmd).
 - Configurazione dell'ambiente con `cmdstanr`: [appendice J su cmdstanr](../appendix/a42_cmdstanr_intro.qmd).
 - Diagnostiche di convergenza: [appendice L sulla diagnostica](../appendix/a44_stan_diagnostics.qmd).
-- Controlli predittivi in Stan: [appendici M--N](../appendix/a45_stan_prior-predictive.qmd) e [controlli posteriori](../appendix/a46_stan_posterior_predictive.qmd).
+- Controlli predittivi: [appendice sulla predittiva a priori](../appendix/a45_stan_prior-predictive.qmd) e [appendice sulla predittiva a posteriori](../appendix/a46_stan_posterior_predictive.qmd).
 :::
 
 ::: {.callout-caution collapse=true title="Preparazione del notebook"}
@@ -26,127 +35,503 @@ Lo scopo di questo capitolo è circoscritto: **non imparare a scrivere Stan, ma 
 ```{r}
 #| output: false
 
-here::here("code", "_common.R") |> 
+here::here("code", "_common.R") |>
   source()
-if (!requireNamespace("pacman")) install.packages("pacman")
-pacman::p_load(cmdstanr, posterior, insight)
+
+if (!requireNamespace("cmdstanr", quietly = TRUE)) {
+  stop("Per eseguire i blocchi facoltativi occorre installare cmdstanr.")
+}
 ```
 :::
 
-## L'anatomia di un programma Stan
+## Dal modello scientifico al programma
 
-Un programma Stan è organizzato in blocchi, ciascuno con una funzione precisa [@nicenboim2025introduction]:
+Consideriamo un dado che è stato lanciato $N=1000$ volte. Il numero 6 è comparso $k=184$ volte. Indichiamo con $	heta$ la probabilità, ignota, che un lancio produca un 6.
 
-- **"data"**: dichiara i dati osservati (punteggi, risposte, conteggi);
-- **parameters**: dichiara i parametri incogniti da stimare;
-- **"model"**: specifica il modello probabilistico che collega i parametri ai dati tramite prior e verosimiglianza;
-- **"generated quantities"** (opzionale): calcola quantità derivate, come previsioni o trasformazioni dei parametri.
-
-Il vantaggio di questa architettura è che il flusso del codice rispecchia il ragionamento statistico: si parte dai dati osservati, si dichiarano le incognite e si formalizzano le relazioni probabilistiche. Ogni variabile deve essere dichiarata con il suo tipo (`int`, `real` o `vector`) e con eventuali vincoli (ad esempio, per una quantità positiva si usa il vincolo `<lower=0>`, per una probabilità si usa il vincolo `<lower=0, upper=1>`). La trattazione completa del sistema di tipi è disponibile nell'[appendice sul linguaggio Stan](../appendix/a43_stan_lang.qmd).
-
-## Un primo modello: il dado forse truccato
-
-Lanciamo un dado 1000 volte e registriamo come "successo" ogni volta che esce il numero 6. Un dado equilibrato avrebbe una probabilità di successo pari a $\theta = 1/6 \approx 0.167$, ma non lo assumiamo: vogliamo che siano i dati a indicare il valore più plausibile di $\theta$.
-
-```{r}
-set.seed(123)
-n <- 1000
-dice_df <- tibble(res = sample(1:6, size = n, replace = TRUE))
-y <- as.integer(dice_df$res == 6)    # 1 per "6", 0 altrimenti
-mean(y)                              # Frequenza osservata di "6"
-```
-
-Il modello ha due componenti:
+Un modello Beta-Binomiale semplice è
 
 $$
-y_i \sim \text{Bernoulli}(\theta), \qquad \theta \sim \text{Beta}(1,1).
+\begin{aligned}
+\theta &\sim \operatorname{Beta}(1,1), \\
+k \mid \theta,N &\sim \operatorname{Binomiale}(N,\theta).
+\end{aligned}
 $$
 
-La verosimiglianza considera ogni lancio come una prova di Bernoulli indipendente; la prior $\text{Beta}(1,1)$ è una distribuzione uniforme su $[0,1]$ che non privilegia alcun valore di $\theta$.
+La prima riga descrive la distribuzione a priori di $	heta$. La seconda descrive come il numero di successi osservato dipenda da $	heta$. La prior $\operatorname{Beta}(1,1)$ è uniforme sull'intervallo $[0,1]$; in questo esempio è poco influente rispetto a 1000 osservazioni, ma non deve essere interpretata come una scelta universalmente “oggettiva”.
 
-### Lo stesso modello in Stan
+Lo stesso modello può essere scritto in Stan nel modo seguente [@nicenboim2025introduction]:
 
-```{r}
-stancode <- "
+```stan
 data {
-  int<lower=1> N;                    // Numero di osservazioni
-  array[N] int<lower=0, upper=1> y;  // Esiti binari (0/1)
+  int<lower=1> N;
+  int<lower=0, upper=N> k;
 }
 parameters {
-  real<lower=0, upper=1> theta;      // Probabilità di successo
+  real<lower=0, upper=1> theta;
 }
 model {
-  theta ~ beta(1, 1);                // Prior
-  y ~ bernoulli(theta);              // Verosimiglianza
+  theta ~ beta(1, 1);
+  k ~ binomial(N, theta);
 }
-"
 ```
 
-Questo è il punto cruciale del capitolo. Il blocco `data` dichiara ciò che osserviamo, il blocco `parameters` ciò che non conosciamo, e il blocco `model` **è** il modello statistico, riga per riga:
+La corrispondenza con la formulazione matematica è quasi letterale:
 
-| Notazione statistica | Riga nel blocco `model` |
-|---|---|
-| $\theta \sim \text{Beta}(1,1)$ | `theta ~ beta(1, 1);` |
-| $y_i \sim \text{Bernoulli}(\theta)$ | `y ~ bernoulli(theta);` |
+| Domanda | Formulazione statistica | Stan |
+|---|---|---|
+| Che cosa è osservato? | $N=1000$, $k=184$ | blocco `data` |
+| Che cosa è incognito? | $\theta$ | blocco `parameters` |
+| Qual è il prior? | $\theta\sim\operatorname{Beta}(1,1)$ | `theta ~ beta(1, 1);` |
+| Come sono generati i dati? | $k\mid\theta,N\sim\operatorname{Binomiale}(N,\theta)$ | `k ~ binomial(N, theta);` |
 
-La corrispondenza è quasi letterale. È in questo senso che, per un modello semplice, il codice Stan è *trasparente*: chi sa leggere la formulazione probabilistica, sa già leggere il modello. Scrivere modelli propri, gestire tipi e strutture dati più complessi e ottimizzare il codice sono competenze che si acquisiscono altrove (l'[appendice sul linguaggio Stan](../appendix/a43_stan_lang.qmd)). Qui basta saper riconoscere che il modello non nasconde nulla.
+Questa tabella contiene l'intuizione essenziale del capitolo. Il programma non sostituisce il modello: **lo rende eseguibile**.
 
-## Eseguire il modello {#sec-stan-intro-execute}
+## I quattro blocchi da riconoscere
 
-::: {.callout-tip appearance="minimal" .optional-section}
-**Deviazione del percorso essenziale.** Se lavori solo con `brms`, questa sezione e la successiva sono facoltative: la competenza richiesta termina con la lettura del programma. Puoi passare direttamente a [Regressione bayesiana con `brms`: il workflow completo](../linear_models/03_regressione_bayesiana_brms.qmd).
+Un programma Stan può contenere diversi blocchi. Per il livello essenziale ne bastano quattro.
+
+### `data`: ciò che entra nel modello come noto
+
+```stan
+data {
+  int<lower=1> N;
+  int<lower=0, upper=N> k;
+}
+```
+
+Il blocco `data` dichiara i valori forniti dall'esterno prima dell'esecuzione. Qui:
+
+- `N` è un numero intero almeno pari a 1;
+- `k` è un numero intero compreso tra 0 e `N`.
+
+I vincoli permettono a Stan di controllare che i dati siano ammissibili. Per esempio, `k = 1200` con `N = 1000` produrrebbe un errore prima del campionamento.
+
+Il blocco `data` non dice che $N$ e $k$ siano privi di errore in senso sostantivo. Dice soltanto che, **nel modello corrente**, sono trattati come valori noti forniti al programma.
+
+### `parameters`: ciò che il modello deve apprendere
+
+```stan
+parameters {
+  real<lower=0, upper=1> theta;
+}
+```
+
+Il blocco `parameters` dichiara le quantità incognite. Il vincolo stabilisce che `theta` deve appartenere a $[0,1]$, perché rappresenta una probabilità.
+
+::: {.callout-warning title="Un vincolo non è un prior"}
+La dichiarazione
+
+```stan
+real<lower=0, upper=1> theta;
+```
+
+stabilisce il dominio del parametro, ma **non equivale** a scrivere $\theta\sim\operatorname{Beta}(1,1)$. Il prior viene specificato nel blocco `model`. Dominio e distribuzione a priori sono due scelte distinte.
 :::
 
-Il flusso di lavoro con `cmdstanr` è sempre lo stesso: compilare, preparare i dati e campionare.
+### `model`: prior e modello dei dati
+
+```stan
+model {
+  theta ~ beta(1, 1);
+  k ~ binomial(N, theta);
+}
+```
+
+Nel blocco `model` vengono definite le componenti che determinano la densità a posteriori bersaglio.
+
+La prima riga contribuisce con il prior. La seconda contribuisce con la probabilità del dato osservato dato il parametro. In termini bayesiani,
+
+$$
+p(\theta\mid k,N)
+\propto
+p(\theta)\,p(k\mid N,\theta).
+$$
+
+Stan lavora sulla scala logaritmica: ogni istruzione con `~` aggiunge alla quantità interna chiamata `target` il contributo della corrispondente log-densità o log-massa, a meno di termini costanti che non dipendono dai parametri. Per leggere un modello introduttivo, però, è sufficiente riconoscere prior e distribuzione dei dati.
+
+::: {.callout-important title="Il simbolo `~` non genera dati nel blocco `model`"}
+La riga
+
+```stan
+k ~ binomial(N, theta);
+```
+
+non ordina a Stan di estrarre un nuovo valore di `k`. `k` è già stato osservato e fornito nel blocco `data`. La riga valuta quanto quel valore sia compatibile con ciascun possibile valore di `theta` e contribuisce così alla posterior.
+:::
+
+### `generated quantities`: conseguenze della posterior
+
+Dopo avere prodotto un'estrazione dalla posterior, Stan può calcolare trasformazioni, probabilità di eventi e dati replicati. Queste quantità si dichiarano nel blocco `generated quantities`.
+
+```stan
+generated quantities {
+  real delta_fair = theta - 1.0 / 6.0;
+  int<lower=0, upper=1> theta_gt_fair = theta > 1.0 / 6.0;
+  int<lower=0, upper=N> k_rep = binomial_rng(N, theta);
+}
+```
+
+Per ogni estrazione di `theta`:
+
+- `delta_fair` misura la distanza dalla probabilità di un dado equilibrato;
+- `theta_gt_fair` vale 1 quando l'estrazione supera $1/6$ e 0 altrimenti;
+- `k_rep` è un possibile numero di 6 in una nuova serie di `N` lanci.
+
+Il blocco `generated quantities` viene eseguito **dopo** che un valore dei parametri è stato campionato. Le quantità calcolate qui non modificano la posterior di `theta`. Riassumono o propagano l'incertezza già rappresentata dai campioni posteriori.
+
+Questa distinzione collega Stan ai capitoli precedenti:
+
+| Oggetto | Nel programma |
+|---|---|
+| distribuzione a priori | istruzione sul parametro nel blocco `model` |
+| distribuzione a posteriori | approssimata dal campionatore a partire dal blocco `model` |
+| probabilità posteriori e trasformazioni | calcolabili in `generated quantities` |
+| distribuzione predittiva a posteriori | generazione di nuovi dati in `generated quantities` |
+
+## Leggere il programma completo
+
+Il programma completo è quindi:
+
+```stan
+data {
+  int<lower=1> N;
+  int<lower=0, upper=N> k;
+}
+parameters {
+  real<lower=0, upper=1> theta;
+}
+model {
+  theta ~ beta(1, 1);
+  k ~ binomial(N, theta);
+}
+generated quantities {
+  real delta_fair = theta - 1.0 / 6.0;
+  int<lower=0, upper=1> theta_gt_fair = theta > 1.0 / 6.0;
+  int<lower=0, upper=N> k_rep = binomial_rng(N, theta);
+}
+```
+
+Una lettura sostantiva, senza soffermarsi sulla sintassi, è la seguente:
+
+> Abbiamo osservato 184 risultati uguali a 6 in 1000 lanci. La probabilità incognita di ottenere un 6 è compresa tra 0 e 1 e riceve una prior uniforme. Il conteggio osservato è modellato con una distribuzione binomiale. Per ogni valore estratto dalla posterior calcoliamo quanto esso differisca da $1/6$, se superi $1/6$ e quanti 6 potremmo osservare in una nuova serie di 1000 lanci.
+
+Saper produrre questa parafrasi è l'obiettivo del percorso essenziale.
+
+## Che cosa Stan calcola
+
+Dal modello precedente segue analiticamente
+
+$$
+\theta\mid k,N
+\sim
+\operatorname{Beta}(1+k,\,1+N-k)
+=
+\operatorname{Beta}(185,817).
+$$
+
+La media posterior è circa 0.185 e l'intervallo di credibilità al 95% è approssimativamente $[0.161,0.209]$. Inoltre, nel modello specificato,
+
+$$
+P\!\left(\theta>\frac{1}{6}\mid k,N\right)\approx 0.93.
+$$
+
+Queste quantità non sono inserite manualmente nel programma: emergono dall'interazione tra prior e distribuzione dei dati. Stan le approssima mediante campioni posteriori.
+
+Il fatto che la probabilità sia elevata non dimostra che il dado sia stato materialmente manipolato. La conclusione è condizionata al modello Binomiale, all'indipendenza dei lanci, alla stabilità di $\theta$, alla correttezza dei dati e al prior scelto. Stan esegue l'inferenza specificata; non verifica da solo tutte queste assunzioni.
+
+## Eseguire il modello con `cmdstanr` {#sec-stan-intro-execute}
+
+::: {.callout-tip appearance="minimal" .optional-section}
+**Approfondimento facoltativo.** Il percorso essenziale termina con la capacità di leggere e parafrasare il programma. Non è necessario comprendere ogni istruzione R seguente.
+:::
+
+Il codice Stan può essere conservato in una stringa, scritto in un file temporaneo e compilato.
 
 ```{r}
-#| output: false
-mod <- cmdstan_model(write_stan_file(stancode), compile = TRUE)
+#| eval: false
 
-stan_data <- list(N = length(y), y = y)
+stan_code <- "
+data {
+  int<lower=1> N;
+  int<lower=0, upper=N> k;
+}
+parameters {
+  real<lower=0, upper=1> theta;
+}
+model {
+  theta ~ beta(1, 1);
+  k ~ binomial(N, theta);
+}
+generated quantities {
+  real delta_fair = theta - 1.0 / 6.0;
+  int<lower=0, upper=1> theta_gt_fair = theta > 1.0 / 6.0;
+  int<lower=0, upper=N> k_rep = binomial_rng(N, theta);
+}
+"
 
-fit1 <- mod$sample(
+stan_file <- cmdstanr::write_stan_file(stan_code)
+mod <- cmdstanr::cmdstan_model(stan_file)
+```
+
+I dati passati da R devono avere gli stessi nomi dichiarati nel blocco `data`.
+
+```{r}
+#| eval: false
+
+stan_data <- list(
+  N = 1000,
+  k = 184
+)
+
+fit <- mod$sample(
   data = stan_data,
-  iter_warmup = 1000,
-  iter_sampling = 2000,
   chains = 4,
   parallel_chains = 4,
+  iter_warmup = 1000,
+  iter_sampling = 2000,
   seed = 4790,
   refresh = 0
 )
 ```
 
-I nomi presenti nella lista dei dati devono corrispondere esattamente a quelli dichiarati nel blocco `data`, altrimenti l'esecuzione fallisce.
+Cambiare `iter_sampling` o il numero di catene può modificare la precisione Monte Carlo e la capacità di diagnosticare il campionamento. Non cambia, però, il modello probabilistico né la posterior bersaglio.
 
 ## Leggere i risultati
 
-```{r}
-fit1$summary(variables = "theta")
-```
-
-La colonna `mean` fornisce la media a posteriori di $\theta$, mentre le colonne dei quantili forniscono l'intervallo di credibilità. Gli indicatori `rhat` (prossimo a 1) e `ess_bulk`/`ess_tail` (elevati) segnalano che le catene hanno raggiunto la convergenza; l'interpretazione completa di queste diagnostiche è nell'[appendice dedicata](../appendix/a44_stan_diagnostics.qmd).
-
-Poiché il modello Beta-Binomiale è coniugato, è possibile ottenere una soluzione analitica esatta con cui confrontare l'output di Stan:
+Una sintesi di `theta` può essere ottenuta dai campioni generati da Stan.
 
 ```{r}
-k <- sum(y)
-post_mean_analytical <- (1 + k) / (2 + n)
-post_ci_analytical   <- qbeta(c(0.025, 0.975), 1 + k, 1 + n - k)
+#| eval: false
 
-post_mean_analytical
-post_ci_analytical
+posterior::summarise_draws(
+  fit$draws("theta"),
+  mean,
+  median,
+  q2.5 = ~stats::quantile(.x, 0.025),
+  q97.5 = ~stats::quantile(.x, 0.975),
+  posterior::rhat,
+  posterior::ess_bulk,
+  posterior::ess_tail
+)
 ```
 
-Le stime MCMC coincidono con questi valori a meno della variabilità Monte Carlo. È la conferma concreta che Stan non fa nulla di misterioso: ricostruisce, per via numerica, una distribuzione a posteriori che qui conosciamo anche in forma chiusa.
+La media, la mediana e i quantili descrivono la posterior. $\hat R$ ed ESS descrivono invece la qualità del campionamento. Valori diagnostici favorevoli sono necessari, ma non dimostrano che il modello scientifico sia appropriato.
 
-## Oltre la stima
+Le quantità prodotte nel blocco `generated quantities` si interpretano direttamente:
 
-Una volta ottenuti i campioni a posteriori, è possibile calcolare tutto il resto. Le sintesi della posterior, ovvero le stime puntuali, gli intervalli di credibilità e la probabilità che $\theta$ superi una soglia, si ottengono come già visto nella sezione precedente, applicandole ora ai campioni prodotti da Stan. Le previsioni su nuovi dati si ottengono dalla distribuzione predittiva a posteriori, tipicamente calcolata nel blocco `generated quantities` (si veda l'[appendice sulle verifiche predittive](../appendix/a46_stan_posterior_predictive.qmd)).
+```{r}
+#| eval: false
+
+fit$summary(
+  variables = c("theta_gt_fair", "delta_fair", "k_rep")
+)
+```
+
+- la media di `theta_gt_fair` approssima $P(\theta>1/6\mid k,N)$;
+- la distribuzione di `delta_fair` descrive quanto $\theta$ possa differire da $1/6$;
+- la distribuzione di `k_rep` è una distribuzione predittiva a posteriori per una nuova serie di 1000 lanci.
+
+## Un controllo con la soluzione analitica
+
+Poiché questo modello è coniugato, possiamo calcolare la posterior esatta e confrontarla con l'approssimazione MCMC.
+
+```{r}
+#| eval: false
+
+alpha_post <- 1 + stan_data$k
+beta_post <- 1 + stan_data$N - stan_data$k
+
+posterior_exact <- tibble::tibble(
+  media = alpha_post / (alpha_post + beta_post),
+  limite_inferiore = stats::qbeta(0.025, alpha_post, beta_post),
+  limite_superiore = stats::qbeta(0.975, alpha_post, beta_post),
+  prob_supera_un_sesto = 1 - stats::pbeta(
+    1 / 6,
+    alpha_post,
+    beta_post
+  )
+)
+
+posterior_exact
+```
+
+L'accordo entro l'errore Monte Carlo mostra che Stan sta approssimando numericamente la stessa posterior ottenuta qui in forma chiusa. Nei modelli più complessi la soluzione analitica non sarà disponibile, ma la logica rimane invariata.
+
+## Che cosa non si può concludere dal codice
+
+Un programma che compila e produce campioni può essere ancora scientificamente inadeguato. Stan può controllare molti aspetti formali e numerici, ma non può decidere autonomamente:
+
+- se il parametro rappresenti il costrutto sostantivo di interesse;
+- se la distribuzione Binomiale sia adatta al processo osservato;
+- se i lanci siano realmente indipendenti;
+- se la probabilità sia costante nel tempo;
+- se il prior sia giustificato;
+- se i dati siano stati raccolti e registrati correttamente.
+
+La leggibilità del programma serve proprio a rendere queste scelte visibili e discutibili.
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-Stan implementa il campionamento MCMC, introdotto in forma teorica nel manuale, con un'efficienza che consente di elaborare modelli al di fuori della portata dei metodi analitici. Il messaggio di questo capitolo è più modesto, ma anche più utile: la struttura a blocchi di un programma Stan rende il modello *leggibile* e nel blocco `model` la formulazione probabilistica si ritrova quasi immutata. Non è necessario padroneggiare il linguaggio per capire cosa fa un modello semplice.
+Leggere Stan significa ricostruire il modello a partire dalla struttura del programma. Il blocco `data` dichiara ciò che viene trattato come osservato; `parameters` dichiara ciò che deve essere appreso; `model` combina prior e distribuzione dei dati per definire la posterior bersaglio; `generated quantities` trasforma i campioni posteriori e genera possibili dati nuovi senza modificare la posterior.
 
-I due capitoli successivi mettono alla prova questa leggibilità sui casi più semplici e frequenti nella ricerca psicologica: l'inferenza su un odds ratio e il confronto tra due medie.
+Tre distinzioni meritano di essere ricordate:
+
+1. un vincolo sul parametro ne stabilisce il dominio, non il prior;
+2. una dichiarazione con `~` nel blocco `model` contribuisce alla densità bersaglio, non genera un nuovo dato;
+3. una quantità calcolata in `generated quantities` è una conseguenza della posterior, non una componente che la determina.
+
+Il vantaggio di Stan non consiste nel rendere automatiche le decisioni scientifiche. Consiste nel separare una formulazione leggibile del modello dal difficile lavoro numerico necessario per esplorarne la posterior.
+
+## Esercizi {.unnumbered .unlisted}
+
+### Esercizio 1 — Comprendere {.unnumbered .unlisted}
+
+*Livello essenziale · 10 minuti · Codice: no*
+
+Considera nuovamente il programma:
+
+```stan
+data {
+  int<lower=1> N;
+  int<lower=0, upper=N> k;
+}
+parameters {
+  real<lower=0, upper=1> theta;
+}
+model {
+  theta ~ beta(1, 1);
+  k ~ binomial(N, theta);
+}
+```
+
+Rispondi alle domande senza eseguire il codice:
+
+1. quali quantità sono osservate?
+2. quale quantità è incognita?
+3. quale riga specifica il prior?
+4. quale riga specifica il modello dei dati?
+5. che cosa significa il vincolo `lower=0, upper=1`?
+6. il vincolo assegna automaticamente una prior uniforme a `theta`?
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+Distingui il dominio ammissibile del parametro dalla distribuzione di plausibilità assegnata al suo interno.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+`N` e `k` sono osservati e vengono forniti nel blocco `data`. `theta` è incognito e viene dichiarato nel blocco `parameters`.
+
+La riga
+
+```stan
+theta ~ beta(1, 1);
+```
+
+specifica il prior. La riga
+
+```stan
+k ~ binomial(N, theta);
+```
+
+specifica come il conteggio osservato dipenda da `N` e `theta`.
+
+Il vincolo stabilisce che `theta` può assumere soltanto valori tra 0 e 1. Non assegna una prior uniforme: senza la riga `theta ~ beta(1, 1);`, il modello non conterrebbe esplicitamente quella distribuzione a priori.
+:::
+
+### Esercizio 2 — Prevedere {.unnumbered .unlisted}
+
+*Livello essenziale · 10 minuti · Codice: no*
+
+Per ciascuna modifica, indica se cambia:
+
+- **A. il modello e la posterior bersaglio**;
+- **B. soltanto il calcolo o la precisione Monte Carlo**;
+- **C. soltanto una quantità derivata, senza modificare la posterior di `theta`**.
+
+1. sostituire `theta ~ beta(1, 1);` con `theta ~ beta(20, 100);`;
+2. aumentare `iter_sampling` da 2000 a 5000;
+3. sostituire `k = 184` con `k = 250` nei dati;
+4. eliminare `k_rep` dal blocco `generated quantities`;
+5. sostituire la Binomiale con un diverso modello dei dati;
+6. aumentare il numero di catene da 4 a 8.
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+Prior, dati e likelihood determinano la posterior bersaglio. Le impostazioni del campionatore determinano come viene approssimata. `generated quantities` opera dopo il campionamento.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+1. **A:** cambia il prior e quindi la posterior bersaglio.
+2. **B:** aumenta il numero di campioni posteriori, ma non cambia il modello.
+3. **A:** cambiano i dati osservati e quindi la posterior.
+4. **C:** scompare una previsione calcolata dopo il campionamento; la posterior di `theta` resta invariata.
+5. **A:** cambia la relazione tra parametri e dati, quindi cambia il modello.
+6. **B:** può migliorare la valutazione della convergenza e aumentare i campioni disponibili, senza cambiare la posterior bersaglio.
+:::
+
+### Esercizio 3 — Modificare {.unnumbered .unlisted}
+
+*Livello essenziale · 10 minuti · Codice: no*
+
+Un ricercatore desidera ottenere, oltre alla posterior di `theta`, tre quantità:
+
+1. la differenza tra `theta` e 0.20;
+2. la probabilità a posteriori che `theta` superi 0.20;
+3. un possibile numero di successi in 200 nuove prove.
+
+Per ciascuna quantità indica:
+
+- se appartiene al blocco `model` o al blocco `generated quantities`;
+- che cosa rappresenterebbe una singola estrazione;
+- come si dovrebbe interpretare la distribuzione di molte estrazioni.
+
+Non è necessario scrivere la sintassi Stan.
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+Le tre quantità sono conseguenze dei valori posteriori di `theta`; nessuna deve contribuire a definire la posterior.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+Tutte e tre appartengono a `generated quantities`.
+
+1. Una singola estrazione della differenza è il valore corrente di $\theta-0.20$. L'insieme delle estrazioni descrive la posterior della distanza dalla soglia.
+2. Una singola estrazione è 1 oppure 0 a seconda che il valore corrente di `theta` superi 0.20. La media di molte estrazioni approssima $P(\theta>0.20\mid y)$.
+3. Una singola estrazione è un possibile conteggio futuro generato da una Binomiale con 200 prove e il valore corrente di `theta`. L'insieme delle estrazioni approssima la distribuzione predittiva a posteriori.
+
+Collocarle nel blocco `model` sarebbe concettualmente errato, perché sono conseguenze della posterior e non componenti del prior o della likelihood.
+:::
+
+### Esercizio 4 — Criticare {.unnumbered .unlisted}
+
+*Livello essenziale · 10 minuti · Codice: no*
+
+Valuta il seguente commento:
+
+> «Il programma assegna automaticamente una prior uniforme a `theta` perché il parametro è vincolato tra 0 e 1. La riga `k ~ binomial(N, theta)` genera i dati usati nell'analisi. Poiché il programma compila senza errori e $\hat R$ è vicino a 1, il modello del dado è corretto.»
+
+Individua almeno tre errori e riscrivi il commento in forma corretta.
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+Distingui vincolo, prior, valutazione del dato osservato, qualità del campionamento e adeguatezza scientifica del modello.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+Il commento contiene almeno tre confusioni.
+
+Primo, il vincolo tra 0 e 1 stabilisce il dominio del parametro, non una prior uniforme. La prior uniforme è specificata separatamente da `theta ~ beta(1, 1);`.
+
+Secondo, `k` è già osservato e viene fornito nel blocco `data`. Nel blocco `model`, `k ~ binomial(N, theta);` valuta la compatibilità del dato con i possibili valori di `theta`; non genera il dato analizzato.
+
+Terzo, compilazione riuscita e diagnostiche favorevoli riguardano la correttezza formale e la qualità del campionamento. Non dimostrano che il modello Binomiale, l'indipendenza dei lanci, la costanza di `theta` o il prior siano scientificamente adeguati.
+
+Una formulazione corretta è:
+
+> «Il programma vincola `theta` all'intervallo delle probabilità e gli assegna esplicitamente una prior Beta(1,1). Il conteggio osservato viene valutato con un modello Binomiale. Se le diagnostiche sono favorevoli, i campioni possono rappresentare adeguatamente la posterior specificata; l'adeguatezza del modello deve comunque essere valutata separatamente.»
+:::
+
+::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+```{r}
+#| code-fold: true
+sessionInfo()
+```
+:::
 
 ## Bibliografia {.unnumbered .unlisted}

@@ -1,15 +1,21 @@
-# Famiglie coniugate come scorciatoie computazionali
+# Il modello Beta-Binomiale e le famiglie coniugate
 
 ::: {.callout-note appearance="minimal"}
-Questo capitolo non introduce nuovi elementi della teoria della probabilità. Il suo scopo è più circoscritto: mostrare come alcune coppie prior-verosimiglianza permettano di calcolare la distribuzione a posteriori in forma chiusa. Le famiglie coniugate sono quindi utilizzate come **scorciatoie computazionali** per visualizzare chiaramente l'aggiornamento bayesiano.
+Questo capitolo usa il modello Beta-Binomiale come esempio paradigmatico di aggiornamento bayesiano. La coniugazione non introduce una nuova regola: rende calcolabile in forma chiusa la stessa operazione vista con l'approssimazione su griglia,
+
+$$
+\text{posterior} \propto \text{verosimiglianza} \times \text{prior}.
+$$
+
+Nel modello Beta-Binomiale, la moltiplicazione tra prior e verosimiglianza si traduce in una semplice somma di parametri. Proprio questa trasparenza consente di capire che cosa viene conservato, che cosa viene aggiunto dai dati e quanto pesa l'informazione iniziale.
 :::
 
 ::: {.callout-important appearance="minimal" .chapter-status}
-**Da sapere.** Una prior è coniugata rispetto a una verosimiglianza quando la distribuzione a posteriori appartiene alla stessa famiglia della prior. Nei modelli coniugati l’aggiornamento bayesiano può essere ottenuto modificando direttamente i parametri della distribuzione, rendendo trasparente il modo in cui prior e dati contribuiscono alla posterior. La coniugazione è una scorciatoia computazionale utile, non un criterio generale per scegliere un modello.
+**Da sapere.** Una prior è coniugata rispetto a una verosimiglianza quando la posterior appartiene alla stessa famiglia della prior. Nel modello Beta-Binomiale, una prior Beta combinata con dati binomiali produce una posterior ancora Beta. I parametri della posterior si ottengono aggiungendo i successi e gli insuccessi osservati ai corrispondenti parametri della prior.
 
-**Da saper fare.** Aggiornare i parametri nei modelli Beta-Binomiale e Normale-Normale; interpretare i parametri della prior come quantità di informazione iniziale; calcolare e rappresentare prior, verosimiglianza e posterior; ricavare intervalli di credibilità e probabilità posteriori; valutare la sensibilità dei risultati rispetto a prior alternative.
+**Da saper fare.** Passare da prior e dati ai parametri posteriori; interpretare separatamente media e concentrazione di una distribuzione Beta; leggere la media posterior come media ponderata tra informazione iniziale e proporzione campionaria; aggiornare i dati in un'unica volta o in sequenza; valutare come posizione e concentrazione della prior influenzano la posterior.
 
-**Approfondimento facoltativo.** Le coppie Gamma-Poisson e Gamma-Esponenziale, i dettagli algebrici delle formule di aggiornamento e l’implementazione completa delle funzioni in R possono essere rimandati in una prima lettura.
+**Approfondimento facoltativo.** Il modello Normale-Normale, le coppie Gamma-Poisson e Gamma-Esponenziale e le distribuzioni predittive possono essere rimandati in una prima lettura.
 
 [Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
 :::
@@ -17,490 +23,935 @@ Questo capitolo non introduce nuovi elementi della teoria della probabilità. Il
 ::: {.callout-caution collapse="true" title="Preparazione del notebook"}
 
 ```{r}
-here::here("code", "_common.R") |> 
+here::here("code", "_common.R") |>
   source()
-
-# Load packages
-if (!requireNamespace("pacman")) install.packages("pacman")
-pacman::p_load(dplyr, tidyr, tibble, purrr, ggplot2)
 ```
 :::
 
-## Perché studiare le famiglie coniugate
+## Perché il modello Beta-Binomiale è paradigmatico
 
-Nel capitolo precedente abbiamo visto l'idea fondamentale dell'inferenza bayesiana: combinare una distribuzione a priori con la verosimiglianza dei dati e normalizzare il risultato. In simboli:
+Nel capitolo precedente abbiamo costruito una posterior su una griglia. Per ogni valore candidato di $\theta$ abbiamo:
+
+1. calcolato il peso assegnato dal prior;
+2. calcolato la verosimiglianza dei dati;
+3. moltiplicato le due quantità;
+4. normalizzato i prodotti.
+
+Il modello Beta-Binomiale esegue esattamente gli stessi passaggi, ma l'algebra consente di riconoscere immediatamente la forma della posterior. Non è quindi una procedura diversa dall'approssimazione su griglia: è un caso nel quale il prodotto può essere semplificato senza approssimazioni numeriche.
+
+Il modello è appropriato quando:
+
+- ogni prova ha due esiti, convenzionalmente chiamati successo e insuccesso;
+- il parametro $\theta$ rappresenta la probabilità di successo;
+- osserviamo $y$ successi su $n$ prove;
+- le assunzioni binomiali sono ragionevoli per la domanda considerata.
+
+Esempi psicologici includono il numero di risposte corrette, la quota di partecipanti che sceglie una certa opzione o la probabilità che si verifichi un comportamento in condizioni definite.
+
+## Dalla moltiplicazione alla posterior Beta
+
+Supponiamo di assegnare a $\theta$ una prior Beta:
 
 $$
-p(\theta \mid y) \propto p(y \mid \theta)\,p(\theta).
+\theta \sim \operatorname{Beta}(\alpha,\beta).
 $$
 
-In molti modelli realistici questa operazione richiede metodi computazionali, come il campionamento MCMC. Tuttavia, in alcuni casi particolarmente semplici, la distribuzione a posteriori può essere ottenuta con poche operazioni algebriche. Questi casi prendono il nome di **modelli coniugati**.
-
-Una distribuzione a priori è detta **coniugata** rispetto a una verosimiglianza quando la distribuzione a posteriori appartiene alla stessa famiglia della distribuzione a priori. Ad esempio, se il parametro sconosciuto è una proporzione $\theta$ e si sceglie una distribuzione a priori Beta, l'osservazione di dati binomiali produce una distribuzione a posteriori ancora Beta.
-
-Il valore didattico della coniugazione è duplice:
-
-1. rende visibile il meccanismo dell'aggiornamento bayesiano;
-2. permette di distinguere il principio generale di Bayes dalla difficoltà tecnica del calcolo.
-
-I modelli coniugati non vanno però confusi con l'intera inferenza bayesiana. Si tratta di casi speciali utili per comprendere, controllare e sviluppare intuizioni. Nella pratica moderna, la scelta del modello e dei prior dovrebbe essere guidata dalla domanda di ricerca, dalla teoria psicologica e dalla struttura dei dati e non soltanto dalla convenienza matematica.
-
-## L'idea di base: aggiornare parametri, non formule
-
-La caratteristica più utile dei modelli coniugati è che l'aggiornamento bayesiano si traduce in una modifica diretta dei parametri della prior. Nel modello Beta-Binomiale, ad esempio, la prior Beta ha due parametri, $\alpha$ e $\beta$. Dopo avere osservato $y$ successi su $n$ prove, la posterior è:
+Ignorando le costanti che non dipendono da $\theta$, la densità del prior è:
 
 $$
-\theta \mid y \sim \text{Beta}(\alpha + y,\, \beta + n - y).
+p(\theta) \propto
+\theta^{\alpha-1}(1-\theta)^{\beta-1}.
 $$
 
-In altre parole, ai parametri della prior si aggiungono i dati osservati. Per questo motivo i parametri della prior possono essere interpretati come **pseudo-osservazioni**: $\alpha$ rappresenta i successi virtuali e $\beta$ gli insuccessi virtuali.
+Se osserviamo $y$ successi su $n$ prove, la verosimiglianza binomiale è:
 
-Algebricamente, questa interpretazione è letterale: $\alpha$ e $\beta$ si sommano ai conteggi come osservazioni aggiuntive (anche frazionari), e la media a posteriori è una media ponderata tra prior e dati. L'avvertimento è che non si tratta di dati passati reali, ma di una sintesi matematica delle convinzioni iniziali. È proprio questa sommabilità a rendere esplicito che la prior ha una forza informativa quantificabile e un peso relativo ben definito rispetto alle osservazioni empiriche.
+$$
+p(y\mid\theta) \propto
+\theta^y(1-\theta)^{n-y}.
+$$
 
-## Panoramica delle principali coppie coniugate
+Moltiplicando prior e verosimiglianza otteniamo:
 
-La tabella seguente riassume alcune coppie coniugate ricorrenti. In questo capitolo useremo principalmente il modello Beta-Binomiale e il modello Normale-Normale come esempi. Gli altri casi sono riportati nei box seguenti a titolo di riferimento operativo.
+$$
+\begin{aligned}
+p(\theta\mid y)
+&\propto p(y\mid\theta)p(\theta)\\
+&\propto
+\theta^y(1-\theta)^{n-y}
+\theta^{\alpha-1}(1-\theta)^{\beta-1}\\
+&\propto
+\theta^{\alpha+y-1}
+(1-\theta)^{\beta+n-y-1}.
+\end{aligned}
+$$
 
-| Dati osservati | Parametro incognito | Prior coniugata | Posterior |
-|---|---:|---:|---:|
-| Binomiale$(n, \theta)$ | proporzione $\theta \in [0,1]$ | Beta$(\alpha, \beta)$ | Beta$(\alpha + y, \beta + n - y)$ |
-| Normale$(\mu, \sigma^2)$, con $\sigma$ nota | media $\mu$ | Normale$(\mu_0, \tau_0^2)$ | Normale$(\mu_n, \tau_n^2)$ |
-| Poisson$(\lambda)$ | tasso $\lambda > 0$ | Gamma$(a,b)$ | Gamma$(a + \sum y_i, b + n)$ |
-| Esponenziale$(\lambda)$ | tasso $\lambda > 0$ | Gamma$(a,b)$ | Gamma$(a + n, b + \sum t_i)$ |
+Questa è la forma di una distribuzione Beta con parametri aggiornati:
 
-Nel resto del capitolo useremo sempre la parametrizzazione Gamma con *shape* $a$ e *rate* $b$, cioè con media $a/b$.
+$$
+\boxed{
+\theta\mid y
+\sim
+\operatorname{Beta}(\alpha+y,\,\beta+n-y)
+}
+$$
 
-## Due funzioni essenziali
+La regola operativa è quindi:
 
-Le funzioni seguenti non sostituiscono la comprensione del modello. Piuttosto, servono a rendere esplicito il passaggio dai parametri della prior ai parametri della posterior.
+$$
+\begin{aligned}
+\alpha_{\text{post}} &= \alpha_{\text{prior}} + \text{successi},\\
+\beta_{\text{post}} &= \beta_{\text{prior}} + \text{insuccessi}.
+\end{aligned}
+$$
 
-### Beta-Binomiale: inferenza su una proporzione
+::: {.callout-important title="Lo stesso prodotto visto sulla griglia"}
+L'approssimazione su griglia moltiplica numericamente prior e verosimiglianza in molti punti. La coniugazione riconosce algebricamente la forma del prodotto. In entrambi i casi, la posterior deriva dalla stessa operazione. Cambia soltanto il modo in cui viene eseguito il calcolo.
+:::
 
-Il modello Beta-Binomiale è appropriato quando il dato è il numero di successi su un numero fisso di prove. In psicologia, ad esempio, può descrivere la proporzione di risposte corrette, la quota di partecipanti che mostra un certo comportamento o la probabilità di risposta a un trattamento.
+## Come leggere i parametri della distribuzione Beta
+
+### Media e concentrazione
+
+I parametri $\alpha$ e $\beta$ determinano contemporaneamente la posizione e la concentrazione della distribuzione. Per separarli è utile definire:
+
+$$
+m = \frac{\alpha}{\alpha+\beta}
+$$
+
+come **media** del prior e
+
+$$
+\kappa = \alpha+\beta
+$$
+
+come **concentrazione**.
+
+Viceversa:
+
+$$
+\alpha=m\kappa,
+\qquad
+\beta=(1-m)\kappa.
+$$
+
+La media $m$ indica intorno a quali valori si concentra inizialmente la plausibilità. La concentrazione $\kappa$ indica quanto fortemente la distribuzione è concentrata intorno a quella media. A parità di media, un valore maggiore di $\kappa$ produce una prior più stretta e quindi più influente.
+
+### L'interpretazione come pseudo-conteggi
+
+Poiché i dati aggiornano $\alpha$ con i successi e $\beta$ con gli insuccessi, è comune descrivere questi parametri come **pseudo-conteggi**. Questa interpretazione è utile, ma non deve essere presa in modo troppo letterale:
+
+- $\alpha$ e $\beta$ non sono necessariamente conteggi interi;
+- non rappresentano obbligatoriamente osservazioni passate realmente raccolte;
+- nella densità Beta gli esponenti sono $\alpha-1$ e $\beta-1$;
+- il significato principale di $\alpha+\beta$ è il peso matematico che il prior esercita nella media posterior.
+
+Per questo motivo, in questo capitolo useremo soprattutto media $m$ e concentrazione $\kappa$. La terminologia degli pseudo-conteggi resta una scorciatoia intuitiva, non una descrizione storica dei dati.
+
+## La media posterior come media ponderata
+
+La media della posterior Beta è:
+
+$$
+E(\theta\mid y)
+=
+\frac{\alpha+y}{\alpha+\beta+n}.
+$$
+
+Usando $m=\alpha/(\alpha+\beta)$ e $\kappa=\alpha+\beta$, la stessa quantità può essere riscritta come:
+
+$$
+\boxed{
+E(\theta\mid y)
+=
+\frac{\kappa}{\kappa+n}m
++
+\frac{n}{\kappa+n}\frac{y}{n}
+}
+$$
+
+La media posterior è quindi una media ponderata tra:
+
+- la media del prior $m$;
+- la proporzione osservata $y/n$.
+
+I pesi sono determinati dalla concentrazione del prior $\kappa$ e dalla numerosità dei dati $n$. Se $n$ è molto maggiore di $\kappa$, prevale l'informazione dei dati. Se $\kappa$ è grande rispetto a $n$, il prior esercita un'influenza maggiore.
+
+::: {.callout-tip title="Una lettura da ricordare"}
+Nel modello Beta-Binomiale:
+
+- **$m$ dice dove si trova il prior**;
+- **$\kappa$ dice quanto pesa il prior**;
+- **$y/n$ dice dove puntano i dati**;
+- **$n$ dice quanto pesano i dati**.
+:::
+
+## Funzioni essenziali in R
+
+La funzione seguente aggiorna il modello e restituisce anche le quantità più utili per l'interpretazione.
 
 ```{r}
-beta_binomiale_aggiorna <- function(successi, prove, alpha_prior, beta_prior) {
+beta_binomiale_aggiorna <- function(successi, prove,
+                                     alpha_prior, beta_prior) {
+  stopifnot(
+    successi >= 0,
+    prove > 0,
+    successi <= prove,
+    alpha_prior > 0,
+    beta_prior > 0
+  )
+
   insuccessi <- prove - successi
-  list(
-    alpha_post = alpha_prior + successi,
-    beta_post  = beta_prior + insuccessi
+  alpha_post <- alpha_prior + successi
+  beta_post <- beta_prior + insuccessi
+
+  tibble(
+    alpha_prior = alpha_prior,
+    beta_prior = beta_prior,
+    media_prior = alpha_prior / (alpha_prior + beta_prior),
+    concentrazione_prior = alpha_prior + beta_prior,
+    successi = successi,
+    insuccessi = insuccessi,
+    proporzione_osservata = successi / prove,
+    numerosita = prove,
+    alpha_post = alpha_post,
+    beta_post = beta_post,
+    media_post = alpha_post / (alpha_post + beta_post),
+    concentrazione_post = alpha_post + beta_post
   )
 }
 ```
 
-La regola è semplice: i successi osservati aumentano $\alpha$; gli insuccessi osservati aumentano $\beta$.
-
-### Normale-Normale: inferenza su una media
-
-Il modello Normale-Normale è utile quando il parametro di interesse è la media di una variabile continua e la deviazione standard osservativa può essere considerata nota. Questa assunzione è semplificatrice, ma rende molto chiara l'idea di **combinazione ponderata delle informazioni**.
+Una seconda funzione riassume una distribuzione Beta.
 
 ```{r}
-normale_normale_aggiorna <- function(media_campionaria, numerosita,
-                                     sigma_noto, mu_prior, tau_prior) {
-  precisione_prior <- 1 / tau_prior^2
-  precisione_dati  <- numerosita / sigma_noto^2
-  precisione_post  <- precisione_prior + precisione_dati
-  varianza_post    <- 1 / precisione_post
-  mu_post <- varianza_post * (
-    mu_prior * precisione_prior + media_campionaria * precisione_dati
-  )
-  list(
-    mu_post = mu_post,
-    sd_post = sqrt(varianza_post),
-    precisione_prior = precisione_prior,
-    precisione_dati = precisione_dati,
-    precisione_post = precisione_post
+riassumi_beta <- function(alpha, beta, soglia = 0.5) {
+  stopifnot(alpha > 0, beta > 0, soglia >= 0, soglia <= 1)
+
+  moda <- if (alpha > 1 && beta > 1) {
+    (alpha - 1) / (alpha + beta - 2)
+  } else {
+    NA_real_
+  }
+
+  tibble(
+    alpha = alpha,
+    beta = beta,
+    media = alpha / (alpha + beta),
+    moda = moda,
+    concentrazione = alpha + beta,
+    limite_inferiore_95 = qbeta(0.025, alpha, beta),
+    limite_superiore_95 = qbeta(0.975, alpha, beta),
+    probabilita_sopra_soglia = pbeta(
+      soglia,
+      alpha,
+      beta,
+      lower.tail = FALSE
+    )
   )
 }
 ```
 
-Qui il concetto chiave è la *precisione*, ovvero il reciproco della varianza. Una fonte di informazione più precisa incide maggiormente sulla media a posteriori.
+## Esempio guidato: i dati dello studio di Milgram
 
-## Esempio guidato: il modello Beta-Binomiale nello studio di Milgram
-
-Consideriamo un esempio tratto dallo studio classico di @milgram1963behavioral sull'obbedienza all'autorità. Nell'esperimento, 26 partecipanti su 40 proseguirono fino al livello massimo dello strumento sperimentale. Il dato osservato è quindi:
+Consideriamo, a scopo didattico, un dato tratto dallo studio classico di @milgram1963behavioral. In una delle condizioni sperimentali, 26 partecipanti su 40 proseguirono fino al livello massimo previsto dalla procedura. Indichiamo con $\theta$ la proporzione che adotterebbe quel comportamento in condizioni analoghe al modello sperimentale.
 
 $$
-y = 26, \qquad n = 40.
+y=26,
+\qquad
+n=40,
+\qquad
+\frac{y}{n}=0.65.
 $$
 
-La domanda inferenziale non riguarda solo il campione osservato. Vogliamo stimare la proporzione $\theta$ nella popolazione di coloro che, in condizioni sperimentali analoghe, mostrerebbe un comportamento di obbedienza estrema.
+L'inferenza riguarda il parametro del modello nelle condizioni specificate. Non risolve, da sola, problemi di validità esterna, cambiamento storico, differenze culturali o adeguatezza della misurazione.
 
-### Specificare una prior scettica
+### Specificare una prior illustrativa
 
-Supponiamo di partire da una posizione scettica: prima di vedere i dati, riteniamo poco plausibile che l'obbedienza estrema sia molto diffusa. Una prior Beta(1, 10) esprime questa idea.
+Usiamo una prior Beta(2,8):
+
+$$
+\theta\sim\operatorname{Beta}(2,8).
+$$
+
+Questa scelta ha:
+
+$$
+m=\frac{2}{10}=0.20,
+\qquad
+\kappa=2+8=10.
+$$
+
+È quindi una prior scettica rispetto a valori elevati di $\theta$, con un peso equivalente a $\kappa=10$ nella formula della media ponderata. Si tratta di una scelta didattica, non di una ricostruzione storicamente validata delle aspettative precedenti allo studio.
 
 ```{r}
-alpha_prior <- 1
-beta_prior <- 10
-
-media_prior <- alpha_prior / (alpha_prior + beta_prior)
-
+alpha_prior <- 2
+beta_prior <- 8
 successi_osservati <- 26
 prove_totali <- 40
-```
 
-La media della prior è `r round(media_prior, 3)`. In termini intuitivi, questa prior equivale a un'esperienza virtuale molto debole e sbilanciata verso valori bassi di $\theta$.
-
-### Aggiornare la prior con i dati
-
-Applichiamo ora la regola coniugata.
-
-```{r}
-post <- beta_binomiale_aggiorna(
+aggiornamento <- beta_binomiale_aggiorna(
   successi = successi_osservati,
   prove = prove_totali,
   alpha_prior = alpha_prior,
   beta_prior = beta_prior
 )
 
-alpha_post <- post$alpha_post
-beta_post <- post$beta_post
-
-media_post <- alpha_post / (alpha_post + beta_post)
+aggiornamento
 ```
+
+### Aggiornare i parametri
 
 La posterior è:
 
 $$
-\theta \mid y \sim \text{Beta}(`r alpha_post`, `r beta_post`).
+\begin{aligned}
+\alpha_{\text{post}} &= 2+26=28,\\
+\beta_{\text{post}} &= 8+(40-26)=22.
+\end{aligned}
 $$
 
-Il significato dell'aggiornamento è evidente:
+Quindi:
 
-- il parametro $\alpha$ passa da 1 a `r alpha_post`, perché ai successi virtuali si aggiungono i 26 successi osservati;
-- il parametro $\beta$ passa da 10 a `r beta_post`, perché agli insuccessi virtuali si aggiungono i 14 insuccessi osservati.
+$$
+\boxed{
+\theta\mid y
+\sim
+\operatorname{Beta}(28,22)
+}
+$$
 
-La media a posteriori è pari a `r round(media_post, 3)`. Rispetto alla proporzione campionaria osservata, pari a `r round(successi_osservati / prove_totali, 3)`, la stima è spostata verso il basso, riflettendo l'effetto di regolarizzazione della prior scettica.
+La concentrazione passa da 10 a 50:
+
+$$
+\kappa_{\text{post}}=\kappa_{\text{prior}}+n=10+40=50.
+$$
+
+I dati non sostituiscono la prior: ne aggiornano i parametri. La posterior conserva l'informazione iniziale e incorpora i nuovi successi e insuccessi.
+
+### Verificare la media ponderata
+
+La media posterior può essere calcolata direttamente:
+
+$$
+E(\theta\mid y)=\frac{28}{50}=0.56.
+$$
+
+Oppure come media ponderata:
+
+$$
+E(\theta\mid y)
+=
+\frac{10}{50}(0.20)
++
+\frac{40}{50}(0.65)
+=0.56.
+$$
+
+La proporzione campionaria è 0.65, ma la posterior è spostata verso la media a priori 0.20. Questo spostamento è spesso chiamato **regolarizzazione** o **shrinkage verso il prior**. La sua intensità dipende dal rapporto tra $\kappa$ e $n$.
+
+```{r}
+media_prior <- alpha_prior / (alpha_prior + beta_prior)
+kappa_prior <- alpha_prior + beta_prior
+proporzione_osservata <- successi_osservati / prove_totali
+
+media_post_ponderata <-
+  kappa_prior / (kappa_prior + prove_totali) * media_prior +
+  prove_totali / (kappa_prior + prove_totali) * proporzione_osservata
+
+media_post_ponderata
+```
+
+### Una tabella dell'aggiornamento
+
+```{r}
+tabella_aggiornamento <- tibble(
+  componente = c("Prior", "Dati", "Posterior"),
+  successi_o_alpha = c(
+    alpha_prior,
+    successi_osservati,
+    alpha_prior + successi_osservati
+  ),
+  insuccessi_o_beta = c(
+    beta_prior,
+    prove_totali - successi_osservati,
+    beta_prior + prove_totali - successi_osservati
+  ),
+  media_o_proporzione = c(
+    media_prior,
+    proporzione_osservata,
+    media_post_ponderata
+  ),
+  peso = c(
+    kappa_prior,
+    prove_totali,
+    kappa_prior + prove_totali
+  )
+)
+
+knitr::kable(
+  tabella_aggiornamento,
+  digits = 3,
+  col.names = c(
+    "Componente",
+    "Successi / α",
+    "Insuccessi / β",
+    "Media / proporzione",
+    "Peso"
+  )
+)
+```
+
+La riga dei dati non descrive una distribuzione Beta. Serve a mettere in evidenza la corrispondenza operativa: i successi si aggiungono ad $\alpha$, gli insuccessi a $\beta$ e la numerosità si aggiunge alla concentrazione.
 
 ### Visualizzare prior, verosimiglianza e posterior
 
+Per confrontare le **forme** delle tre componenti, riportiamo ciascuna curva alla propria altezza massima. La verosimiglianza non viene trasformata in una distribuzione di probabilità su $\theta$: viene soltanto riscalata per la visualizzazione.
+
 ```{r}
-theta <- seq(0, 1, length.out = 500)
+theta <- seq(0.001, 0.999, length.out = 1000)
 
-prior_df <- tibble(
-  theta = theta,
-  densita = dbeta(theta, alpha_prior, beta_prior),
-  componente = "Prior"
+prior_raw <- dbeta(theta, alpha_prior, beta_prior)
+likelihood_raw <- dbinom(
+  successi_osservati,
+  size = prove_totali,
+  prob = theta
+)
+posterior_raw <- dbeta(
+  theta,
+  alpha_prior + successi_osservati,
+  beta_prior + prove_totali - successi_osservati
 )
 
-lik_raw <- dbinom(successi_osservati, size = prove_totali, prob = theta)
-post_raw <- dbeta(theta, alpha_post, beta_post)
-
-lik_df <- tibble(
-  theta = theta,
-  densita = lik_raw / max(lik_raw) * max(post_raw),
-  componente = "Verosimiglianza"
-)
-
-post_df <- tibble(
-  theta = theta,
-  densita = post_raw,
-  componente = "Posterior"
-)
-
-agg_df <- bind_rows(prior_df, lik_df, post_df) |>
-  mutate(componente = factor(
-    componente,
-    levels = c("Prior", "Verosimiglianza", "Posterior")
-  ))
+curve_beta_binomiale <- bind_rows(
+  tibble(
+    theta = theta,
+    altezza_relativa = prior_raw / max(prior_raw),
+    componente = "Prior Beta(2,8)"
+  ),
+  tibble(
+    theta = theta,
+    altezza_relativa = likelihood_raw / max(likelihood_raw),
+    componente = "Verosimiglianza"
+  ),
+  tibble(
+    theta = theta,
+    altezza_relativa = posterior_raw / max(posterior_raw),
+    componente = "Posterior Beta(28,22)"
+  )
+) |>
+  mutate(
+    componente = factor(
+      componente,
+      levels = c(
+        "Prior Beta(2,8)",
+        "Verosimiglianza",
+        "Posterior Beta(28,22)"
+      )
+    )
+  )
 ```
 
 ```{r}
 #| fig-width: 9
 #| fig-height: 5.5
 
-ggplot(agg_df, aes(x = theta, y = densita, color = componente)) +
-  geom_line(linewidth = 1.2) +
+ggplot(
+  curve_beta_binomiale,
+  aes(x = theta, y = altezza_relativa)
+) +
+  geom_line(linewidth = 1.1) +
+  facet_wrap(~ componente, nrow = 1) +
+  geom_vline_primary(xintercept = proporzione_osservata, linetype = "dashed") +
   labs(
-    title = "Aggiornamento Beta-Binomiale: dati dello studio di Milgram",
-    subtitle = paste0(successi_osservati, " successi su ", prove_totali, " osservazioni"),
+    title = "Il modello Beta-Binomiale in tre componenti",
+    subtitle = "La linea tratteggiata indica la proporzione osservata: 26/40 = 0,65",
     x = expression(theta),
-    y = "Densita' / scala relativa",
-    color = NULL
+    y = "Altezza relativa"
   )
 ```
 
-La verosimiglianza mostra quali valori di $\theta$ rendono i dati osservati più compatibili. La prior esprime lo scetticismo iniziale. La posterior combina le due fonti di informazione. Il risultato non coincide né con la prior né con la verosimiglianza, ma rappresenta una sintesi probabilistica delle assunzioni iniziali e dell'evidenza empirica.
+Il grafico permette di distinguere tre oggetti:
+
+- il prior assegna più plausibilità iniziale ai valori bassi;
+- la verosimiglianza è massima vicino alla proporzione osservata 0.65;
+- la posterior è un compromesso, ma è più concentrata perché incorpora più informazione.
+
+La posterior non viene ottenuta facendo una media geometrica delle curve. Deriva dal prodotto punto per punto tra prior e verosimiglianza, seguito dalla normalizzazione. La coniugazione consente di rappresentare quel prodotto attraverso i parametri Beta(28,22).
 
 ### Riassumere la posterior
 
-Una volta ottenuta la posterior, possiamo rispondere a domande direttamente interpretabili.
-
 ```{r}
-media_posterior <- alpha_post / (alpha_post + beta_post)
-moda_posterior <- (alpha_post - 1) / (alpha_post + beta_post - 2)
-ci_95 <- qbeta(c(0.025, 0.975), alpha_post, beta_post)
-prob_maggioranza <- pbeta(0.5, alpha_post, beta_post, lower.tail = FALSE)
-prob_alta <- pbeta(0.6, alpha_post, beta_post, lower.tail = FALSE)
+riassunto_post <- riassumi_beta(
+  alpha = alpha_prior + successi_osservati,
+  beta = beta_prior + prove_totali - successi_osservati,
+  soglia = 0.5
+)
+
+riassunto_post
 ```
 
-| Domanda | Quantità bayesiana | Risultato |
-|---|---:|---:|
-| Quale valore è più plausibile in media? | $E(\theta \mid y)$ | `r round(media_posterior, 3)` |
-| Quale valore ha densità massima? | moda posterior | `r round(moda_posterior, 3)` |
-| Qual è un intervallo credibile al 95%? | quantili posterior | [`r round(ci_95[1], 3)`, `r round(ci_95[2], 3)`] |
-| Quanto è plausibile che la proporzione superi il 50%? | $P(\theta > .50 \mid y)$ | `r round(prob_maggioranza, 3)` |
-| Quanto è plausibile che superi il 60%? | $P(\theta > .60 \mid y)$ | `r round(prob_alta, 3)` |
+La posterior permette di formulare domande direttamente probabilistiche, sempre condizionate al modello, alla prior e ai dati. Per esempio:
 
-Il vantaggio dell'approccio bayesiano non consiste solo nell'ottenere una stima puntuale. La distribuzione a posteriori consente di formulare affermazioni probabilistiche del tipo: dati il modello, la distribuzione a priori e i dati osservati, la probabilità che il parametro $\theta$ superi una certa soglia è pari a un certo valore.
+- la media posterior è `r round(riassunto_post$media, 3)`;
+- l'intervallo di credibilità al 95% è [`r round(riassunto_post$limite_inferiore_95, 3)`, `r round(riassunto_post$limite_superiore_95, 3)`];
+- la probabilità posterior che $\theta>0.50$ è `r round(riassunto_post$probabilita_sopra_soglia, 3)`.
 
-### Sensibilità alla prior
+Queste affermazioni non sono proprietà dei dati isolati. Dipendono dall'intero modello inferenziale.
 
-Poiché la prior influenza la posterior, è buona pratica verificare quanto i risultati dipendano dalla scelta iniziale. Confrontiamo tre prior:
+## Separare posizione e forza della prior
 
-- Beta(1, 1), uniforme;
-- Beta(1, 10), scettica;
-- Beta(10, 10), centrata su 0.5 e più concentrata.
+Per capire bene il modello è utile modificare una proprietà del prior alla volta.
+
+### Stessa media, concentrazioni diverse
+
+Confrontiamo tre prior con la stessa media 0.20, ma concentrazioni diverse:
+
+- Beta(1,4), con $\kappa=5$;
+- Beta(2,8), con $\kappa=10$;
+- Beta(10,40), con $\kappa=50$.
 
 ```{r}
-prior_sens <- tribble(
+prior_stessa_media <- tribble(
   ~prior, ~alpha_prior, ~beta_prior,
-  "Uniforme: Beta(1, 1)", 1, 1,
-  "Scettica: Beta(1, 10)", 1, 10,
-  "Moderata: Beta(10, 10)", 10, 10
+  "Beta(1,4): κ = 5", 1, 4,
+  "Beta(2,8): κ = 10", 2, 8,
+  "Beta(10,40): κ = 50", 10, 40
 ) |>
   mutate(
+    media_prior = alpha_prior / (alpha_prior + beta_prior),
+    concentrazione_prior = alpha_prior + beta_prior,
     alpha_post = alpha_prior + successi_osservati,
     beta_post = beta_prior + prove_totali - successi_osservati,
     media_post = alpha_post / (alpha_post + beta_post),
-    prob_theta_gt_50 = pbeta(0.5, alpha_post, beta_post, lower.tail = FALSE),
-    prob_theta_gt_60 = pbeta(0.6, alpha_post, beta_post, lower.tail = FALSE)
+    peso_prior = concentrazione_prior /
+      (concentrazione_prior + prove_totali),
+    peso_dati = prove_totali /
+      (concentrazione_prior + prove_totali)
   )
 
-prior_sens
+knitr::kable(
+  prior_stessa_media,
+  digits = 3,
+  col.names = c(
+    "Prior", "α", "β", "Media prior", "κ",
+    "α posterior", "β posterior", "Media posterior",
+    "Peso prior", "Peso dati"
+  )
+)
 ```
 
+A parità di media, la prior più concentrata esercita una maggiore attrazione verso 0.20. La posizione iniziale non cambia; cambia il peso assegnato all'informazione iniziale.
+
 ```{r}
-sens_df <- prior_sens |>
+posterior_stessa_media <- prior_stessa_media |>
   select(prior, alpha_post, beta_post) |>
   tidyr::crossing(theta = theta) |>
-  mutate(densita = dbeta(theta, alpha_post, beta_post))
+  mutate(
+    densita = dbeta(theta, alpha_post, beta_post)
+  )
 ```
 
 ```{r}
 #| fig-width: 9
 #| fig-height: 5.5
 
-ggplot(sens_df, aes(x = theta, y = densita, color = prior)) +
+ggplot(
+  posterior_stessa_media,
+  aes(x = theta, y = densita, color = prior)
+) +
   geom_line(linewidth = 1.1) +
+  geom_vline_primary(xintercept = proporzione_osservata, linetype = "dashed") +
+  scale_color_qualitative() +
   labs(
-    title = "Sensibilita' della posterior alla scelta della prior",
+    title = "Stessa media del prior, forza informativa diversa",
+    subtitle = "Aumentare κ aumenta il peso del prior nella posterior",
     x = expression(theta),
-    y = "Densita' posterior",
+    y = "Densità posterior",
     color = NULL
-  )
+  ) +
+  legenda_in_alto
 ```
 
-Quando i dati sono numerosi e informativi, prior ragionevoli tendono a produrre posterior simili. Quando i dati sono pochi o rumorosi, la scelta della prior diventa più rilevante e deve essere giustificata con particolare attenzione.
+### Stessa concentrazione, medie diverse
 
-## Secondo esempio: il modello Normale-Normale
+Consideriamo ora tre prior con la stessa concentrazione $\kappa=10$, ma medie differenti:
 
-Consideriamo ora una misura continua standardizzata. Supponiamo di voler stimare il punteggio medio di un gruppo a cui è stato somministrato un test psicologico. La deviazione standard del test è nota e pari a 15 punti. Prima di osservare i dati, utilizziamo una prior centrata sulla media normativa 100 con deviazione standard 10:
-
-$$
-\mu \sim \mathcal{N}(100, 10^2).
-$$
-
-In un campione di 25 persone osserviamo una media pari a 106.
+- Beta(2,8), media 0.20;
+- Beta(5,5), media 0.50;
+- Beta(8,2), media 0.80.
 
 ```{r}
-mu_prior <- 100
-tau_prior <- 10
-sigma_noto <- 15
-n <- 25
-media_campionaria <- 106
+prior_stessa_concentrazione <- tribble(
+  ~prior, ~alpha_prior, ~beta_prior,
+  "Beta(2,8): media = 0,20", 2, 8,
+  "Beta(5,5): media = 0,50", 5, 5,
+  "Beta(8,2): media = 0,80", 8, 2
+) |>
+  mutate(
+    media_prior = alpha_prior / (alpha_prior + beta_prior),
+    concentrazione_prior = alpha_prior + beta_prior,
+    alpha_post = alpha_prior + successi_osservati,
+    beta_post = beta_prior + prove_totali - successi_osservati,
+    media_post = alpha_post / (alpha_post + beta_post)
+  )
 
-post_norm <- normale_normale_aggiorna(
-  media_campionaria = media_campionaria,
-  numerosita = n,
-  sigma_noto = sigma_noto,
-  mu_prior = mu_prior,
-  tau_prior = tau_prior
+knitr::kable(
+  prior_stessa_concentrazione,
+  digits = 3,
+  col.names = c(
+    "Prior", "α", "β", "Media prior", "κ",
+    "α posterior", "β posterior", "Media posterior"
+  )
+)
+```
+
+Qui il peso iniziale è uguale in tutti i casi. Cambia invece la direzione verso cui il prior sposta la posterior.
+
+::: {.callout-important title="Due domande diverse"}
+Quando si valuta una prior Beta bisogna chiedere separatamente:
+
+1. **Dove è centrata?** Lo indica la media $m$.
+2. **Quanto pesa?** Lo indica la concentrazione $\kappa$.
+
+Confrontare prior che cambiano simultaneamente media e concentrazione rende più difficile capire quale proprietà abbia prodotto la differenza osservata.
+:::
+
+## Aggiornamento sequenziale
+
+L'aggiornamento bayesiano può essere effettuato in più passaggi. Dividiamo i 40 dati in due blocchi che contengono complessivamente gli stessi 26 successi:
+
+- primo blocco: 10 successi su 20 prove;
+- secondo blocco: 16 successi su 20 prove.
+
+```{r}
+alpha_iniziale <- 2
+beta_iniziale <- 8
+
+# Primo blocco
+alpha_dopo_1 <- alpha_iniziale + 10
+beta_dopo_1 <- beta_iniziale + 10
+
+# Secondo blocco
+alpha_dopo_2 <- alpha_dopo_1 + 16
+beta_dopo_2 <- beta_dopo_1 + 4
+
+# Aggiornamento in un unico blocco
+alpha_unico <- alpha_iniziale + 26
+beta_unico <- beta_iniziale + 14
+
+confronto_sequenziale <- tibble(
+  metodo = c("Due aggiornamenti", "Un unico aggiornamento"),
+  alpha_post = c(alpha_dopo_2, alpha_unico),
+  beta_post = c(beta_dopo_2, beta_unico),
+  media_post = c(
+    alpha_dopo_2 / (alpha_dopo_2 + beta_dopo_2),
+    alpha_unico / (alpha_unico + beta_unico)
+  )
 )
 
-post_norm
+confronto_sequenziale
 ```
 
-La media a posteriori è `r round(post_norm$mu_post, 2)` e la deviazione standard a posteriori è `r round(post_norm$sd_post, 2)`. La stima a posteriori si colloca tra la media a priori e la media campionaria. La sua posizione dipende dal rapporto tra la precisione della prior e la precisione dei dati.
+Entrambi i percorsi conducono a Beta(28,22). La posterior del primo blocco diventa semplicemente la prior del secondo. Questo risultato rende esplicita l'idea di apprendimento cumulativo: l'ordine dei due blocchi non cambia il risultato quando il modello e le assunzioni rimangono invariati.
+
+L'equivalenza non implica che sia sempre appropriato combinare studi diversi. Se cambiano popolazione, procedura, misurazione o processo generativo, può essere necessario un modello più articolato, per esempio gerarchico.
+
+## Un secondo schema: il modello Normale-Normale
+
+::: {.callout-note collapse="true" title="Approfondimento: combinare informazioni mediante le precisioni"}
+Nel modello Normale-Normale, il parametro di interesse è una media $\mu$. Supponiamo che:
+
+$$
+\bar y\mid\mu
+\sim
+\mathcal{N}\left(\mu,\frac{\sigma^2}{n}\right)
+$$
+
+con $\sigma$ nota, e che il prior sia:
+
+$$
+\mu\sim\mathcal{N}(\mu_0,\tau_0^2).
+$$
+
+La posterior è ancora normale. Le precisioni, cioè i reciproci delle varianze, si sommano:
+
+$$
+\frac{1}{\tau_n^2}
+=
+\frac{1}{\tau_0^2}
++
+\frac{n}{\sigma^2}.
+$$
+
+La media posterior è una media ponderata tra $\mu_0$ e $\bar y$:
+
+$$
+\mu_n
+=
+\frac{
+\mu_0/\tau_0^2
++
+\bar y\,n/\sigma^2
+}{
+1/\tau_0^2+n/\sigma^2
+}.
+$$
+
+La fonte più precisa riceve maggiore peso. Il principio è lo stesso del modello Beta-Binomiale, ma l'informazione viene rappresentata attraverso le precisioni anziché attraverso successi e insuccessi.
 
 ```{r}
-mu_grid <- seq(85, 120, length.out = 500)
-
-norm_df <- tibble(
-  mu = rep(mu_grid, 3),
-  densita = c(
-    dnorm(mu_grid, mu_prior, tau_prior),
-    dnorm(mu_grid, media_campionaria, sigma_noto / sqrt(n)),
-    dnorm(mu_grid, post_norm$mu_post, post_norm$sd_post)
-  ),
-  componente = rep(c("Prior", "Informazione dei dati", "Posterior"), each = length(mu_grid))
-) |>
-  mutate(componente = factor(
-    componente,
-    levels = c("Prior", "Informazione dei dati", "Posterior")
-  ))
-```
-
-```{r}
-#| fig-width: 9
-#| fig-height: 5.5
-
-ggplot(norm_df, aes(x = mu, y = densita, color = componente)) +
-  geom_line(linewidth = 1.2) +
-  labs(
-    title = "Aggiornamento Normale-Normale",
-    subtitle = "La posterior combina prior e informazione campionaria in base alle precisioni",
-    x = expression(mu),
-    y = "Densita'",
-    color = NULL
+normale_normale_aggiorna <- function(media_campionaria, numerosita,
+                                     sigma_noto, mu_prior, tau_prior) {
+  stopifnot(
+    numerosita > 0,
+    sigma_noto > 0,
+    tau_prior > 0
   )
-```
 
-Questo esempio mostra un secondo schema ricorrente della coniugazione: non sempre l'aggiornamento equivale alla somma di successi e insuccessi. Nel modello Normale-Normale, le informazioni si combinano attraverso le precisioni. La fonte più precisa riceve più peso nella media a posteriori.
+  precisione_prior <- 1 / tau_prior^2
+  precisione_dati <- numerosita / sigma_noto^2
+  precisione_post <- precisione_prior + precisione_dati
 
-::: {.callout-tip collapse="true" title="Formula della posterior nel modello Normale-Normale"}
-Se $\sigma$ è nota, $\bar y$ è la media campionaria e la prior è $\mu \sim \mathcal{N}(\mu_0, \tau_0^2)$, allora:
-
-$$
-\tau_n^2 = \left(\frac{1}{\tau_0^2} + \frac{n}{\sigma^2}\right)^{-1}
-$$
-
-e
-
-$$
-\mu_n = \tau_n^2 \left(\frac{\mu_0}{\tau_0^2} + \frac{n\bar y}{\sigma^2}\right).
-$$
-
-La media a posteriori è quindi una media ponderata tra la media a priori e la media campionaria. I pesi dipendono dalle rispettive precisioni.
-:::
-
-## Box operativi: altre famiglie coniugate
-
-Le famiglie seguenti sono utili in molti contesti applicativi, ma sono lasciate come riferimento. Il loro scopo qui non è ampliare la teoria delle distribuzioni, bensì mostrare che lo stesso schema di aggiornamento ricorre in modelli diversi.
-
-::: {.callout-note collapse="true" title="Gamma-Poisson: conteggi di eventi"}
-Il modello Gamma-Poisson è adatto a dati di conteggio: numero di errori in un compito, numero di episodi sintomatici in una settimana, numero di comportamenti osservati in sessioni comparabili.
-
-Se:
-
-$$
-y_i \mid \lambda \sim \text{Poisson}(\lambda)
-$$
-
-con prior:
-
-$$
-\lambda \sim \text{Gamma}(a, b),
-$$
-
-allora:
-
-$$
-\lambda \mid y \sim \text{Gamma}\left(a + \sum_i y_i,\, b + n\right).
-$$
-
-```{r}
-gamma_poisson_aggiorna <- function(conteggi_osservati, a_prior, b_prior) {
-  list(
-    a_post = a_prior + sum(conteggi_osservati),
-    b_post = b_prior + length(conteggi_osservati)
+  tibble(
+    mu_post = (
+      mu_prior * precisione_prior +
+      media_campionaria * precisione_dati
+    ) / precisione_post,
+    sd_post = sqrt(1 / precisione_post),
+    precisione_prior = precisione_prior,
+    precisione_dati = precisione_dati,
+    precisione_post = precisione_post
   )
 }
 
-conteggi <- c(2, 1, 0, 1)
-gp <- gamma_poisson_aggiorna(conteggi, a_prior = 1, b_prior = 1)
-gp
+normale_normale_aggiorna(
+  media_campionaria = 106,
+  numerosita = 25,
+  sigma_noto = 15,
+  mu_prior = 100,
+  tau_prior = 10
+)
 ```
-
-Con questi dati la posterior è Gamma(`r gp$a_post`, `r gp$b_post`) e la media a posteriori del tasso è `r round(gp$a_post / gp$b_post, 2)` eventi per intervallo.
-
-La regola ha una lettura intuitiva: il parametro $a$ aumenta con il numero totale di eventi osservati, mentre $b$ aumenta con il numero di intervalli osservati.
 :::
 
-::: {.callout-note collapse="true" title="Gamma-Esponenziale: tempi di attesa tra eventi"}
-Il modello Gamma-Esponenziale è utile quando non contiamo gli eventi in intervalli fissi, ma osserviamo i tempi di attesa tra eventi consecutivi. Ad esempio: tempo tra episodi comportamentali, tempo tra ricadute, latenza fino a una risposta.
+## Altre coppie coniugate
 
-Se:
+::: {.callout-note collapse="true" title="Approfondimento: una panoramica operativa"}
+La stessa struttura ricorre in altri modelli semplici.
 
-$$
-t_i \mid \lambda \sim \text{Esponenziale}(\lambda)
-$$
+| Dati osservati | Parametro | Prior | Posterior |
+|---|---|---|---|
+| Binomiale$(n,\theta)$ | proporzione $\theta$ | Beta$(\alpha,\beta)$ | Beta$(\alpha+y,\beta+n-y)$ |
+| Normale con varianza nota | media $\mu$ | Normale$(\mu_0,\tau_0^2)$ | Normale$(\mu_n,\tau_n^2)$ |
+| Poisson$(\lambda)$ | tasso $\lambda$ | Gamma$(a,b)$ | Gamma$(a+\sum y_i,b+n)$ |
+| Esponenziale$(\lambda)$ | tasso $\lambda$ | Gamma$(a,b)$ | Gamma$(a+n,b+\sum t_i)$ |
 
-con prior:
+Per le distribuzioni Gamma, la tabella usa la parametrizzazione *shape-rate*, con media $a/b$.
 
-$$
-\lambda \sim \text{Gamma}(a,b),
-$$
-
-allora:
-
-$$
-\lambda \mid t \sim \text{Gamma}\left(a + n,\, b + \sum_i t_i\right).
-$$
-
-```{r}
-gamma_esponenziale_aggiorna <- function(tempi_osservati, a_prior, b_prior) {
-  list(
-    a_post = a_prior + length(tempi_osservati),
-    b_post = b_prior + sum(tempi_osservati)
-  )
-}
-
-intervalli <- c(0.5, 1.2, 0.8, 2.4)
-ge <- gamma_esponenziale_aggiorna(intervalli, a_prior = 1, b_prior = 1)
-ge
-```
-
-Con questi dati la posterior è Gamma(`r ge$a_post`, `r round(ge$b_post, 2)`). La media a posteriori del tasso è `r round(ge$a_post / ge$b_post, 2)` eventi per unità di tempo. Il tempo medio corrispondente è circa `r round(1 / (ge$a_post / ge$b_post), 2)` unità di tempo.
-
-La differenza rispetto al modello Gamma-Poisson è sostanziale: nel Gamma-Poisson osserviamo conteggi; nel Gamma-Esponenziale osserviamo durate.
+Queste coppie sono utili per il calcolo e per costruire intuizioni, ma la coniugazione non è un criterio sufficiente per scegliere il modello. La domanda scientifica, il processo generativo e la plausibilità delle assunzioni vengono prima della comodità algebrica.
 :::
 
-::: {.callout-note collapse="true" title="Aggiornamento sequenziale"}
-Una proprietà importante dell'inferenza bayesiana è che l'aggiornamento può essere sequenziale. La posterior ottenuta dopo una prima analisi può diventare la prior dell'analisi successiva.
+## Posterior e distribuzione predittiva
 
-Nel modello Beta-Binomiale, ad esempio, dopo avere ottenuto Beta(`r alpha_post`, `r beta_post`) dai dati di Milgram, possiamo incorporare una replica con 19 successi su 40 prove:
+::: {.callout-note collapse="true" title="Una distinzione da conservare"}
+Nel modello Beta-Binomiale:
 
-```{r}
-successi_replica <- 19
-prove_replica <- 40
+- la **posterior** descrive l'incertezza su $\theta$;
+- la **posterior predictive** descrive l'incertezza su nuovi dati.
 
-alpha_post_2 <- alpha_post + successi_replica
-beta_post_2 <- beta_post + prove_replica - successi_replica
-media_post_2 <- alpha_post_2 / (alpha_post_2 + beta_post_2)
-```
+Per esempio, dopo avere ottenuto $\theta\mid y\sim\operatorname{Beta}(28,22)$, il numero di successi $\tilde y$ in un nuovo campione di ampiezza $\tilde n$ segue una distribuzione Beta-Binomiale dopo avere integrato l'incertezza su $\theta$.
 
-La nuova posterior è Beta(`r alpha_post_2`, `r beta_post_2`), con media `r round(media_post_2, 3)`. Questo mostra come l'inferenza bayesiana formalizzi l'accumulo progressivo dell'evidenza.
+La distribuzione predittiva non si ottiene sostituendo semplicemente $\theta$ con la media posterior. Deve incorporare sia la variabilità dei nuovi dati sia l'incertezza residua sul parametro. Il tema verrà sviluppato nei capitoli dedicati ai controlli predittivi.
 :::
 
-::: {.callout-note collapse="true" title="Nota sulle distribuzioni predittive"}
-I modelli coniugati permettono spesso di ottenere anche distribuzioni predittive in forma chiusa. Ad esempio, nel modello Beta-Binomiale la distribuzione predittiva del numero di successi in un nuovo campione segue una distribuzione Beta-Binomiale.
+## Cosa imparare dal modello Beta-Binomiale
 
-In questo capitolo non sviluppiamo il tema in dettaglio, perché le distribuzioni predittive vengono trattate nei capitoli successivi. Qui è sufficiente ricordare la distinzione concettuale:
+Il modello Beta-Binomiale rende visibili cinque idee generali dell'inferenza bayesiana.
 
-- la **posterior** descrive l'incertezza sul parametro;
-- la **posterior predictive** descrive l'incertezza su dati futuri.
-
-Questa distinzione sarà centrale quando useremo le predizioni per controllare l'adeguatezza dei modelli bayesiani.
-:::
-
-## Cosa imparare da questi esempi
-
-Le famiglie coniugate illustrano tre idee fondamentali.
-
-La prima è che l'aggiornamento bayesiano è una procedura ordinata: la posterior deriva dalla combinazione tra l'informazione iniziale e i dati osservati. Nei casi coniugati, questa combinazione è visibile direttamente nei parametri.
-
-La seconda è che la prior ha una forza informativa. Una prior molto concentrata esercita un'influenza maggiore, soprattutto quando i dati sono pochi. Una prior debole lascia più spazio alla verosimiglianza.
-
-La terza è che i modelli coniugati sono strumenti didattici e non vincoli metodologici. La loro semplicità aiuta a capire, ma i fenomeni psicologici richiedono spesso modelli più flessibili, come strutture gerarchiche, effetti individuali, distribuzioni robuste, predittori multipli e relazioni non lineari.
+1. **La posterior deriva dal prodotto.** La coniugazione non sostituisce il teorema di Bayes: ne semplifica il calcolo.
+2. **Prior e dati contribuiscono entrambi.** I parametri posteriori contengono l'informazione iniziale e i nuovi conteggi.
+3. **Posizione e forza sono proprietà diverse.** La media del prior indica dove è concentrato; $\kappa$ indica quanto pesa.
+4. **La posterior è più informativa.** La concentrazione aumenta di $n$, perché sono state incorporate nuove osservazioni.
+5. **L'aggiornamento è sequenziale.** Una posterior può diventare la prior della fase successiva, purché il modello rimanga appropriato.
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-Le famiglie coniugate costituiscono una palestra concettuale per l'inferenza bayesiana. Nel modello Beta-Binomiale abbiamo visto l'aggiornamento come somma di successi e insuccessi. Nel modello Normale-Normale, invece, l'aggiornamento avviene tramite la combinazione di precisioni. Nei box operativi abbiamo incontrato altri due casi utili: il modello Gamma-Poisson per conteggi e il modello Gamma-Esponenziale per tempi di attesa.
+Il modello Beta-Binomiale è un caso semplice, ma non banale. Permette di osservare senza ambiguità come il prior e la verosimiglianza contribuiscano alla posterior. La regola
 
-Il loro valore principale non risiede nella loro praticità matematica, ma nella loro capacità di rendere il ragionamento bayesiano più chiaro. Una volta compreso questo meccanismo, possiamo affrontare modelli più realistici senza perdere di vista l'idea centrale: l'inferenza bayesiana aggiorna in modo coerente l'incertezza alla luce dei dati.
+$$
+\operatorname{Beta}(\alpha,\beta)
++
+y\text{ successi e }n-y\text{ insuccessi}
+\longrightarrow
+\operatorname{Beta}(\alpha+y,\beta+n-y)
+$$
 
-Nei capitoli successivi, lo stesso principio verrà esteso alle distribuzioni predittive e al controllo dei modelli. Questo passaggio è importante: non ci limiteremo più a stimare i parametri, ma useremo i modelli per generare dati plausibili e valutarne l'adeguatezza rispetto ai fenomeni psicologici osservati.
+è la forma compatta della moltiplicazione tra prior e verosimiglianza.
+
+La parametrizzazione mediante media $m$ e concentrazione $\kappa$ chiarisce due aspetti che non devono essere confusi: ciò che riteniamo plausibile prima dei dati e la forza con cui sosteniamo quella valutazione. La media posterior mostra poi come l'informazione iniziale e quella campionaria vengano ponderate in modo esplicito.
+
+Le famiglie coniugate sono quindi una palestra concettuale. La loro semplicità non deve indurre a scegliere modelli soltanto perché producono formule comode. Il loro valore principale consiste nel preparare il passaggio a modelli più flessibili, nei quali lo stesso ragionamento viene conservato anche quando la posterior deve essere approssimata numericamente.
+
+## Esercizi {.unnumbered .unlisted}
+
+### Esercizio 1 — Comprendere {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · Tempo indicativo: 15 minuti*
+
+Una ricercatrice usa il prior
+
+$$
+\theta\sim\operatorname{Beta}(3,7)
+$$
+
+e osserva 8 successi su 12 prove.
+
+1. Calcola il numero di insuccessi.
+2. Determina $\alpha_{\text{post}}$ e $\beta_{\text{post}}$.
+3. Scrivi la distribuzione posterior.
+4. Calcola media e concentrazione del prior.
+5. Calcola la proporzione osservata.
+6. Calcola la media posterior sia dalla distribuzione Beta sia come media ponderata tra prior e dati.
+7. Spiega, con una frase, perché la media posterior si trova tra la media del prior e la proporzione osservata.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Il prior ha media $3/(3+7)$ e concentrazione $3+7$. I dati contengono 8 successi e $12-8$ insuccessi.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+Gli insuccessi sono $12-8=4$. La posterior è:
+
+$$
+\theta\mid y
+\sim
+\operatorname{Beta}(3+8,7+4)
+=
+\operatorname{Beta}(11,11).
+$$
+
+Il prior ha media $m=3/10=0.30$ e concentrazione $\kappa=10$. La proporzione osservata è $8/12\approx0.667$. La media posterior è:
+
+$$
+\frac{11}{22}=0.50.
+$$
+
+Usando la forma ponderata:
+
+$$
+\frac{10}{22}(0.30)
++
+\frac{12}{22}(0.667)
+=0.50.
+$$
+
+La media posterior è compresa tra 0.30 e 0.667 perché combina le due fonti con pesi positivi che sommano a uno. Il prior pesa 10 e i dati pesano 12.
+:::
+
+### Esercizio 2 — Prevedere {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · Tempo indicativo: 10 minuti*
+
+In tutti i casi si osservano 7 successi su 10 prove. Prima di calcolare i parametri posteriori, prevedi qualitativamente il risultato.
+
+1. Prior Beta(1,1).
+2. Prior Beta(5,5).
+3. Prior Beta(50,50).
+4. Prior Beta(8,2).
+
+Per ciascun caso indica:
+
+- se la media posterior sarà più vicina a 0.50 o a 0.70;
+- quale posterior sarà più concentrata;
+- quale prior eserciterà la maggiore regolarizzazione.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Confronta la media e la concentrazione di ciascun prior. Beta(1,1), Beta(5,5) e Beta(50,50) hanno la stessa media, ma pesi molto diversi.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+La proporzione osservata è 0.70.
+
+1. Beta(1,1) ha media 0.50 e $\kappa=2$: la posterior sarà molto vicina ai dati.
+2. Beta(5,5) ha media 0.50 e $\kappa=10$: la posterior sarà un compromesso più evidente.
+3. Beta(50,50) ha media 0.50 e $\kappa=100$: la posterior resterà molto vicina a 0.50 ed eserciterà la maggiore regolarizzazione. Sarà anche la più concentrata.
+4. Beta(8,2) ha media 0.80 e $\kappa=10$: prior e dati puntano entrambi verso valori alti, quindi la media posterior si collocherà tra 0.70 e 0.80.
+
+La concentrazione non dipende soltanto dall'accordo tra prior e dati. Nel modello coniugato, la concentrazione posterior è sempre $\kappa+n$; per questo il terzo caso, con $\kappa=100$, produce la posterior più concentrata.
+:::
+
+### Esercizio 3 — Modificare {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: sì · Tempo indicativo: 20 minuti*
+
+Riprendi i dati dell'esempio, 26 successi su 40 prove, e svolgi due confronti separati.
+
+**Confronto A — stessa media, forza diversa**
+
+Usa i prior Beta(1,4), Beta(2,8) e Beta(10,40). Per ciascuno calcola:
+
+- media e concentrazione del prior;
+- parametri della posterior;
+- media posterior;
+- peso del prior $\kappa/(\kappa+n)$.
+
+**Confronto B — stessa forza, posizione diversa**
+
+Usa i prior Beta(2,8), Beta(5,5) e Beta(8,2). Per ciascuno calcola la media posterior.
+
+Prima di eseguire il codice, scrivi due previsioni:
+
+1. quale prior del confronto A produrrà la media posterior più bassa;
+2. quale prior del confronto B produrrà la media posterior più alta.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Puoi riutilizzare `beta_binomiale_aggiorna()`. Nel confronto A tutte le prior hanno media 0.20; nel confronto B tutte hanno concentrazione 10.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+Nel confronto A, Beta(10,40) produce la media posterior più bassa perché ha la stessa media 0.20 delle altre prior, ma la concentrazione maggiore. Il suo peso nella media posterior è $50/(50+40)$, quindi superiore a quello di Beta(1,4) e Beta(2,8).
+
+Nel confronto B, Beta(8,2) produce la media posterior più alta perché tutte le prior hanno lo stesso peso, ma Beta(8,2) è centrata su 0.80. Il confronto mostra che la concentrazione regola **quanto** il prior influenza la posterior, mentre la media regola **in quale direzione** la influenza.
+
+Un possibile codice è:
+
+```r
+beta_binomiale_aggiorna(
+  successi = 26,
+  prove = 40,
+  alpha_prior = 10,
+  beta_prior = 40
+)
+```
+
+La stessa funzione può essere richiamata sostituendo i parametri delle altre prior.
+:::
+
+### Esercizio 4 — Criticare {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · Tempo indicativo: 10 minuti*
+
+Valuta criticamente la seguente affermazione:
+
+> “Una prior Beta(2,8) significa che prima dello studio sono già stati osservati esattamente 2 successi e 8 insuccessi. Dopo 26 successi su 40 prove, la posterior Beta(28,22) equivale quindi a un unico campione reale di 50 persone.”
+
+Individua almeno tre problemi e riscrivi l'affermazione in forma corretta.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Distingui tra interpretazione matematica, origine empirica delle informazioni e numerosità realmente osservata.
+:::
+
+::: {.callout-note collapse="true" title="Elementi per la risposta"}
+La prior Beta(2,8) non implica che siano stati realmente osservati 10 partecipanti. I parametri possono sintetizzare conoscenze precedenti, vincoli teorici o una scelta di regolarizzazione e possono anche essere non interi. Definire $\alpha$ e $\beta$ pseudo-conteggi è utile perché si aggiornano sommando successi e insuccessi, ma non trasforma il prior in un dataset storico.
+
+Inoltre, la numerosità empiricamente osservata rimane 40. Il valore 50 è la concentrazione posterior $\kappa_{\text{post}}=10+40$ e indica il peso matematico complessivo dell'informazione nel modello. Infine, nella densità Beta gli esponenti sono $\alpha-1$ e $\beta-1$, ulteriore ragione per non identificare i parametri troppo letteralmente con conteggi osservati.
+
+Una formulazione corretta è: “Beta(2,8) è una prior con media 0.20 e concentrazione 10. Nel modello coniugato, i 26 successi e i 14 insuccessi osservati aggiornano i parametri a Beta(28,22). La concentrazione posterior è 50, ma soltanto 40 osservazioni provengono dal campione reale.”
+:::
+
+::: {.callout-note collapse="true" title="Informazioni sull'ambiente di sviluppo"}
+```{r}
+sessionInfo()
+```
+:::
 
 ## Bibliografia {.unnumbered .unlisted}

@@ -1,15 +1,15 @@
-# Errori di segno e errori di grandezza {#sec-crisis-s-m-errors}
+# Errori di segno e di grandezza {#sec-crisis-s-m-errors}
 
 ::: {.callout-note appearance="minimal"}
-In questo capitolo analizzeremo la relazione tra la crisi della replicabilità e le procedure decisionali statistiche proprie dell'approccio frequentista. In particolare, approfondiremo gli errori di tipo *M* (*magnitude*) e di tipo *S* (*sign*), discussi da @loken2017measurement e il loro impatto sulla validità dei risultati scientifici.
+In questo capitolo analizzeremo una conseguenza cruciale del filtro della significatività statistica. Quando l’effetto vero è piccolo, il campione è ridotto e i dati sono rumorosi, le stime variano molto da uno studio all’altro. Se vengono selezionati e pubblicati soprattutto i risultati con $p < 0.05$, la letteratura non contiene un campione rappresentativo delle stime: contiene prevalentemente quelle che, per fluttuazione casuale, sono risultate abbastanza estreme da superare la soglia. Questo processo produce errori di tipo *M* (*magnitude*) e, talvolta, errori di tipo *S* (*sign*) [@gelman2014beyond; @loken2017measurement].
 :::
 
 ::: {.callout-important appearance="minimal" .chapter-status}
-**Da sapere.** La selezione dei risultati mediante la soglia $p < 0.05$ può produrre stime sistematicamente esagerate e, talvolta, con direzione errata. Gli errori di tipo *M* descrivono la sovrastima della grandezza dell’effetto; gli errori di tipo *S* indicano l’attribuzione del segno sbagliato. Entrambi diventano più probabili quando gli effetti sono piccoli e la potenza statistica è bassa.
+**Da sapere.** Il filtro $p < 0.05$ non rende necessariamente più accurate le stime selezionate. In condizioni di bassa potenza, tende invece a selezionare stime esagerate e può perfino selezionare stime con il segno opposto a quello dell’effetto vero.
 
-**Da saper fare.** Riconoscere e interpretare gli errori di tipo *M* e *S*; capire la simulazione per quantificarli; spiegare come cambiano al crescere della dimensione campionaria.
+**Da saper fare.** Spiegare la sequenza che collega effetto piccolo, campione ridotto, variabilità campionaria, bassa potenza e selezione dei risultati; distinguere gli errori di tipo *M* e *S*; interpretare le simulazioni e prevedere come cambiano al crescere della dimensione campionaria.
 
-**Approfondimento facoltativo.** L’implementazione completa delle simulazioni, il confronto computazionale tra stime frequentiste e bayesiane e l’analisi sistematica di diverse dimensioni campionarie possono essere rimandati in una prima lettura.
+**Approfondimento facoltativo.** I dettagli computazionali della simulazione efficiente e l’analisi sistematica di molte dimensioni campionarie possono essere rimandati in una prima lettura. Il significato delle figure e delle quantità prodotte è invece parte del percorso essenziale.
 
 [Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
 :::
@@ -17,748 +17,636 @@ In questo capitolo analizzeremo la relazione tra la crisi della replicabilità e
 ::: callout-important
 ## In questo capitolo imparerai a
 
-- Relazione tra crisi della replicabilità e approccio frequentista.
-- Limiti della significatività statistica.
-- Errori di grandezza e errori di segno.
-- Utilizzo dell'approccio bayesiano per ottenere stime più precise e affidabili.
+- spiegare perché le stime variano molto quando l’effetto è piccolo e il campione è ridotto;
+- distinguere la distribuzione di tutte le stime dalla distribuzione delle sole stime statisticamente significative;
+- interpretare gli errori di tipo *M* e di tipo *S*;
+- comprendere perché il filtro della significatività produce una distorsione sistematica nella letteratura pubblicata;
+- prevedere come potenza, errori di tipo *M* ed errori di tipo *S* cambiano al crescere del campione.
 :::
 
 ::: callout-tip
 ## Prerequisiti
 
-- Rivedere nel manuale la trattazione delle **distorsioni nelle stime** (il problema della significatività statistica), che introduce i concetti teorici di errore di tipo $M$ e $S$.
-- Leggere [Horoscopes](../../figures/horoscopes.pdf) di @McElreath_rethinking.
+- Rivedere nel manuale la sezione sulle **distorsioni nelle stime**, che introduce gli errori di tipo *M* e *S*.
+- Rivedere il capitolo del Companion sulla dimensione dell’effetto.
+- Come lettura intuitiva facoltativa, leggere [Horoscopes](../../figures/horoscopes.pdf) di @McElreath_rethinking.
 :::
 
 ::: callout-caution
-## Preparazione del Notebook
+## Preparazione del notebook
 
 ```{r}
-here::here("code", "_common.R") |> 
+here::here("code", "_common.R") |>
   source()
-
-# Load packages
-if (!requireNamespace("pacman")) install.packages("pacman")
-pacman::p_load(tidyr, purrr, forcats)
 ```
 :::
 
 ::: callout-tip
-## Domande Iniziali
+## Prima di eseguire la simulazione
 
-Prima di esplorare le simulazioni, prova a formulare delle ipotesi:
+Considera uno studio nel quale l’effetto vero è piccolo, $d = 0.20$, e i due gruppi contengono circa 20 partecipanti ciascuno. Prova a rispondere senza eseguire il codice:
 
-1. Se l'effetto vero è $d = 0.2$ e la potenza dello studio è solo 8%, di quanto saranno sovrastimate le stime "significative"?
-2. Quale percentuale di risultati significativi mostrerà un effetto nella direzione sbagliata?
-3. Come cambieranno questi errori aumentando la dimensione del campione?
+1. Le stime ottenute ripetendo lo studio saranno tutte vicine a 0.20 oppure saranno molto disperse?
+2. Quali stime avranno maggiori probabilità di produrre $p < 0.05$: quelle vicine all’effetto vero o quelle eccezionalmente lontane da zero?
+3. Tra i soli risultati significativi, la grandezza media stimata sarà vicina a 0.20 oppure maggiore?
+4. È possibile ottenere un risultato significativo negativo, nonostante l’effetto vero sia positivo?
 
-Tieni a mente le tue risposte mentre esplori le simulazioni.
+Conserva le tue risposte e confrontale con i risultati.
 :::
 
-## Il filtro ingannevole della significatività statistica
+## Dal rumore campionario alla selezione delle stime estreme
 
-L’idea che la significatività statistica, convenzionalmente definita dal superamento della soglia $p < 0.05$, possa fungere da filtro affidabile per distinguere i risultati reali dagli artefatti metodologici è un errore concettuale fondamentale nell’interpretazione dell’evidenza scientifica. Come documentato da @loken2017measurement, questa soglia non solo si è rivelata porosa e inefficace, ma ha anche introdotto **distorsioni sistematiche** che, paradossalmente, hanno amplificato il rumore statistico anziché eliminarlo.
-
-Il problema si acuisce in presenza di tre condizioni che, paradossalmente, caratterizzano molti ambiti della ricerca psicologica. In primo luogo, quando gli effetti reali sono **intrinsecamente piccoli**, come spesso accade nello studio di fenomeni complessi, difficilmente riconducibili a cause uniche e potenti. In secondo luogo, quando le dimensioni del campione sono **limitate**, una circostanza comune negli studi sperimentali che devono bilanciare costi logistici e praticabilità metodologica. Infine, quando la **potenza statistica** è insufficiente, situazione inevitabile quando le prime due condizioni coesistono, compromettendo la capacità di rilevare effetti genuini.
-
-In questo contesto metodologicamente fragile, i risultati che superano la soglia di significatività non rappresentano un campione fedele degli effetti reali. Al contrario, costituiscono una selezione distorta in cui sono le fluttuazioni casuali e non l'entità effettiva degli effetti a determinare il superamento della soglia statistica. Questo meccanismo produce stime sistematicamente sovrastimate rispetto ai valori reali, offrendo un'immagine distorta dell'evidenza scientifica accumulata. Invece di isolare il segnale dal rumore, il filtro della significatività finisce per concentrare e amplificare il rumore stesso, compromettendo l'integrità della conoscenza scientifica.
-
-## Errori di tipo *M* e *S*
-
-Per illustrare le implicazioni del processo decisionale basato sulla significatività statistica, @loken2017measurement hanno condotto una simulazione in uno scenario ipotetico con un effetto reale, seppur molto debole e difficilmente rilevabile senza un campione di dati molto ampio. Applicando l’approccio frequentista, hanno valutato la capacità di identificare l’effetto tramite la significatività statistica.
-
-I risultati hanno evidenziato che, anche in presenza di un effetto reale, l’approccio frequentista rilevava un risultato significativo solo in una frazione limitata dei casi. Quando un effetto risultava significativo, la stima della sua entità era spesso sovrastimata e instabile, generando una percezione distorta della sua forza reale.
-
-Questa simulazione mette in luce un meccanismo di **inflazione selettiva degli effetti**: il filtro della significatività non separa efficacemente il segnale dal rumore, ma tende a privilegiare quelle fluttuazioni casuali che superano la soglia statistica. Il risultato è una letteratura in cui gli effetti pubblicati appaiono più grandi e più affidabili di quanto non siano in realtà, compromettendo la replicabilità e la solidità della conoscenza scientifica, soprattutto nei campi della psicologia e delle scienze sociali, caratterizzati da effetti modesti e campioni relativamente piccoli.
-
-### Simulazione
-
-Riproduciamo qui, in forma semplificata, la simulazione condotta da @loken2017measurement.
-
-#### Setup della simulazione
-
-Consideriamo due campioni casuali indipendenti di dimensioni $n_1 = 20$ e $n_2 = 25$, estratti rispettivamente dalle distribuzioni normali $\mathcal{N}(102, 10)$ e $\mathcal{N}(100, 10)$. La dimensione dell’effetto ($d$) relativa alla differenza tra le medie dei due campioni viene calcolata come:
+Supponiamo che due popolazioni differiscano realmente, ma solo di poco. Se la deviazione standard comune è 10 e la differenza tra le medie è 2, la dimensione standardizzata dell’effetto è
 
 $$
-d = \frac{\bar{y}_1 - \bar{y}_2}{s_p},
-$$
-dove $\bar{y}_1$ e $\bar{y}_2$ sono le medie campionarie dei due gruppi e $s_p$ è la deviazione standard combinata, definita da:
-
-$$
-s_p = \sqrt{\frac{(n_1-1)s_1^2 + (n_2-1)s_2^2}{n_1 + n_2 - 2}}.
+d = \frac{102 - 100}{10} = 0.20.
 $$
 
-In questo scenario, la dimensione dell’effetto risulta molto piccola, indicando che la differenza osservata tra i due gruppi ha una rilevanza pratica minima. Ciò implica che, anche quando un’analisi statistica rileva una differenza “significativa”, l’impatto reale tra i gruppi resta trascurabile in termini pratici.
+Un singolo campione non restituisce esattamente questo valore. Le medie e le deviazioni standard campionarie cambiano casualmente da una replica all’altra; di conseguenza, anche la stima di $d$ cambia. Con campioni grandi le fluttuazioni sono relativamente contenute. Con campioni piccoli, invece, la distribuzione delle stime è ampia: uno studio può stimare un effetto quasi nullo, un altro un effetto molto più grande e un altro ancora un effetto negativo.
+
+Questa variabilità, da sola, non implica necessariamente una sovrastima sistematica. Se potessimo osservare **tutti** gli studi, le sovrastime e le sottostime tenderebbero in larga parte a compensarsi. Il problema nasce quando applichiamo un secondo passaggio:
+
+> conserviamo soprattutto gli studi nei quali il test produce $p < 0.05$.
+
+Quando la potenza è bassa, una stima vicina al piccolo effetto vero difficilmente supera la soglia. A superarla sono soprattutto le stime che, per rumore campionario, risultano eccezionalmente lontane da zero. Il filtro della significatività trasforma così una variabilità casuale e approssimativamente simmetrica in una distorsione sistematica della letteratura osservata.
+
+::: {.callout-note title="La sequenza da ricordare"}
+1. L’effetto vero è piccolo.
+2. Il campione è ridotto, quindi le stime sono rumorose.
+3. La potenza è bassa, quindi la maggior parte degli studi non supera la soglia.
+4. Tra gli studi che la superano sono sovrarappresentate le fluttuazioni più estreme.
+5. Le stime selezionate esagerano mediamente la grandezza dell’effetto e, talvolta, ne indicano la direzione sbagliata.
+:::
+
+## Errori di tipo *M* e di tipo *S*
+
+Gli errori di tipo *M* e *S* sono definiti rispetto ai risultati che soddisfano un criterio di selezione, tipicamente la significatività statistica [@gelman2014beyond].
+
+- L’**errore di tipo M** (*magnitude*) misura di quanto la grandezza stimata dell’effetto viene mediamente esagerata tra i risultati selezionati. Lo riassumeremo mediante il rapporto
+
+  $$
+  \text{Type M} =
+  \frac{E\left(|\hat d| \mid p < 0.05\right)}{|d_{\text{vero}}|}.
+  $$
+
+  Un valore pari a 4 indica che, tra i risultati significativi, la grandezza stimata è mediamente quattro volte quella reale.
+
+- L’**errore di tipo S** (*sign*) è la probabilità che un risultato selezionato abbia il segno opposto all’effetto vero:
+
+  $$
+  \text{Type S} =
+  P\left(\operatorname{segno}(\hat d) \neq
+  \operatorname{segno}(d_{\text{vero}}) \mid p < 0.05\right).
+  $$
+
+Queste quantità rispondono a una domanda diversa dal consueto errore di tipo I. Qui l’effetto vero **non è nullo**: è piccolo e positivo. La questione non è soltanto se lo studio riesca a rilevarlo, ma quanto siano affidabili la grandezza e la direzione delle stime dichiarate significative.
+
+## La simulazione
+
+### Scenario generativo
+
+Consideriamo due popolazioni normali:
+
+$$
+Y_1 \sim \mathcal{N}(102, 10),
+\qquad
+Y_2 \sim \mathcal{N}(100, 10).
+$$
+
+Da queste popolazioni estraiamo due campioni indipendenti, rispettivamente di dimensione $n_1 = 20$ e $n_2 = 25$. Per ogni studio calcoliamo
+
+$$
+\hat d = \frac{\bar y_1 - \bar y_2}{s_p},
+$$
+
+con
+
+$$
+s_p = \sqrt{
+\frac{(n_1-1)s_1^2 + (n_2-1)s_2^2}
+{n_1+n_2-2}
+}.
+$$
+
+Il valore vero è $d=0.20$. Ripetiamo idealmente lo stesso studio molte migliaia di volte. Ogni replica usa nuovi campioni, ma le popolazioni e l’effetto vero rimangono identici.
 
 ```{r}
-# Parametri della simulazione
-true_d <- 0.2          # Effetto vero (Cohen's d)
-mu_1 <- 102            # Media gruppo 1
-mu_2 <- 100            # Media gruppo 2 (differenza = 2)
-sigma <- 10            # Deviazione standard comune
-n1 <- 20               # Dimensione gruppo 1
-n2 <- 25               # Dimensione gruppo 2
-n_simulations <- 50000 # Numero di repliche
+# Parametri dello scenario
+mu_1 <- 102
+mu_2 <- 100
+sigma <- 10
+n1 <- 20
+n2 <- 25
+alpha <- 0.05
+n_simulations <- 50000
 
-# Verifica del Cohen's d teorico
-pooled_sd_true <- sigma  # Con varianze uguali
-d_true <- (mu_1 - mu_2) / pooled_sd_true
-
-cat(sprintf("Effetto vero (d di Cohen): %.2f\n", d_true))
-cat(sprintf("Dimensioni campionarie: n1 = %d, n2 = %d\n", n1, n2))
+true_d <- (mu_1 - mu_2) / sigma
+true_d
 ```
 
-#### Calcolo della potenza statistica
+### Che cosa fa il codice
 
-Prima di procedere con la simulazione, stimiamo la potenza dello studio, cioè la probabilità di ottenere $p < 0.05$ quando l’effetto esiste realmente:
+La funzione seguente usa una forma computazionalmente efficiente della stessa simulazione. Invece di conservare tutte le osservazioni individuali, genera direttamente le statistiche sufficienti di ciascun campione: media e somma dei quadrati. Sotto l’assunzione di normalità e varianze uguali, il risultato è equivalente a generare le osservazioni una per una.
 
-```{r}
-# Potenza approssimata per test t a due campioni
-# Formula: potenza ≈ Φ(|d|√(n1*n2/(n1+n2)) - z_{1-α/2})
-n_harmonic <- 2 * n1 * n2 / (n1 + n2)  # Media armonica * 2
-ncp <- true_d * sqrt(n_harmonic / 2)    # Parametro di non centralità
-power <- pnorm(ncp - qnorm(0.975))      # Potenza approssimata
+Per ciascuna replica, il codice:
 
-cat(sprintf("Potenza statistica: %.1f%%\n", power * 100))
-cat(sprintf("Questo significa che ~%.0f%% degli studi troverà p < 0.05\n", power * 100))
-```
-
-Con una potenza di appena ~10%, la maggior parte degli studi non rileverà un risultato significativo, anche quando l’effetto esiste davvero. Ma cosa succede ai pochi studi che riescono a ottenere la significatività statistica?
-
-#### Esecuzione della simulazione
-
-Per esplorare le conseguenze dell'approccio frequentista in questo scenario, conduciamo una simulazione in cui vengono estratti due campioni: il primo è composto da 20 osservazioni della prima popolazione, mentre il secondo è composto da 25 osservazioni della seconda popolazione. Per ciascuna iterazione applichiamo il test $t$ di Student per confrontare le medie dei due gruppi.
-
-Nell’approccio frequentista, il valore-$p$ guida la decisione statistica: se $p \ge 0.05$, il risultato è considerato non significativo e generalmente scartato; se $p < 0.05$, il risultato è considerato “significativo” e ritenuto meritevole di attenzione e di pubblicazione.
-
-Per analizzare in modo esaustivo le implicazioni di questa procedura, ripetiamo l’estrazione dei campioni e il calcolo del test $t$ di Student per un gran numero di iterazioni, ad esempio 50,000. Questo ci permette di ottenere una distribuzione completa dei risultati e di valutare la frequenza con cui emergono risultati significativi e la stabilità delle stime prodotte dall'approccio frequentista.
+1. genera due medie campionarie;
+2. genera la variabilità interna ai due gruppi;
+3. calcola la deviazione standard combinata;
+4. calcola la stima $\hat d$;
+5. esegue il test $t$ a due code;
+6. registra se $p < 0.05$.
 
 ```{r}
-# Funzione per simulare un singolo studio
-simulate_study <- function(mu_1, mu_2, sigma, n1, n2) {
-  y1 <- rnorm(n1, mean = mu_1, sd = sigma)
-  y2 <- rnorm(n2, mean = mu_2, sd = sigma)
-  
-  pooled_sd <- sqrt(((n1 - 1) * var(y1) + (n2 - 1) * var(y2)) / (n1 + n2 - 2))
-  d_observed <- (mean(y1) - mean(y2)) / pooled_sd
-  
-  t_result <- t.test(y1, y2, var.equal = TRUE)
-  
+simulate_two_group_studies <- function(
+  n_simulations,
+  n1,
+  n2,
+  mu_1,
+  mu_2,
+  sigma,
+  alpha = 0.05
+) {
+  df <- n1 + n2 - 2
+
+  mean_1 <- rnorm(
+    n_simulations,
+    mean = mu_1,
+    sd = sigma / sqrt(n1)
+  )
+  mean_2 <- rnorm(
+    n_simulations,
+    mean = mu_2,
+    sd = sigma / sqrt(n2)
+  )
+
+  ss_1 <- sigma^2 * rchisq(n_simulations, df = n1 - 1)
+  ss_2 <- sigma^2 * rchisq(n_simulations, df = n2 - 1)
+
+  pooled_sd <- sqrt((ss_1 + ss_2) / df)
+  mean_difference <- mean_1 - mean_2
+  d_observed <- mean_difference / pooled_sd
+
+  t_statistic <- mean_difference /
+    (pooled_sd * sqrt(1 / n1 + 1 / n2))
+  p_value <- 2 * pt(-abs(t_statistic), df = df)
+
   tibble(
     d_observed = d_observed,
-    p_value = t_result$p.value,
-    significant = p_value < 0.05
+    p_value = p_value,
+    significant = p_value < alpha
   )
 }
 
-# Esecuzione delle simulazioni
-results <- map_dfr(1:n_simulations, ~simulate_study(mu_1, mu_2, sigma, n1, n2))
-
-# Separazione dei risultati significativi e non
-significant_results <- results |> dplyr::filter(significant)
-nonsignificant_results <- results |> dplyr::filter(!significant)
-
-cat(sprintf("Studi totali: %d\n", nrow(results)))
-cat(sprintf("Studi con p < 0.05: %d (%.1f%%)\n", 
-            nrow(significant_results), 
-            100 * nrow(significant_results) / nrow(results)))
+results <- simulate_two_group_studies(
+  n_simulations = n_simulations,
+  n1 = n1,
+  n2 = n2,
+  mu_1 = mu_1,
+  mu_2 = mu_2,
+  sigma = sigma,
+  alpha = alpha
+)
 ```
 
-#### Quantificazione degli Errori M e S
+### La potenza dello studio
 
-Per comprendere meglio le distorsioni prodotte dall’approccio frequentista, calcoliamo due metriche chiave:
-
-* **Errore di tipo M (Magnitude)**: misura quanto le stime degli effetti significativi tendano a sovrastimare l’effetto reale.
-* **Errore di tipo S (Sign)**: misura la probabilità che l’effetto significativo abbia il segno opposto rispetto a quello reale.
+La potenza è la probabilità di ottenere $p < 0.05$ quando l’effetto specificato esiste. Per il test $t$ a due campioni possiamo calcolarla dalla distribuzione $t$ non centrale.
 
 ```{r}
-# Errore di tipo M: fattore di esagerazione
-type_m_ratio <- mean(abs(significant_results$d_observed)) / abs(true_d)
+df <- n1 + n2 - 2
+noncentrality <- true_d / sqrt(1 / n1 + 1 / n2)
+t_critical <- qt(1 - alpha / 2, df = df)
 
-# Errore di tipo S: probabilità di segno sbagliato
-type_s_rate <- mean(significant_results$d_observed < 0)
+power_theoretical <-
+  pt(-t_critical, df = df, ncp = noncentrality) +
+  1 - pt(t_critical, df = df, ncp = noncentrality)
+
+power_simulated <- mean(results$significant)
+
+cat(sprintf("Potenza teorica:   %.1f%%\n", 100 * power_theoretical))
+cat(sprintf("Potenza simulata:  %.1f%%\n", 100 * power_simulated))
 ```
 
-```{r}
-#| echo: false
-cat(sprintf("Effetto vero:                    d = %.2f\n", true_d))
-cat(sprintf("Media effetti significativi:    |d| = %.2f\n", 
-            mean(abs(significant_results$d_observed))))
-cat(sprintf("TYPE M (exaggeration ratio):     %.1fx\n", type_m_ratio))
-cat(sprintf("TYPE S (wrong sign rate):        %.1f%%\n", type_s_rate * 100))
-```
+La potenza è circa `r sprintf("%.1f%%", 100 * power_theoretical)`. Ciò significa che quasi nove studi su dieci non superano la soglia, pur essendo stati generati da popolazioni che differiscono realmente. La domanda cruciale è: **quali studi compongono il piccolo sottoinsieme che supera la soglia?**
 
-#### Interpretazione 
+## Prima e dopo il filtro
 
-I risultati della simulazione mostrano chiaramente il meccanismo di **inflazione selettiva degli effetti** tipico dell’approccio frequentista basato sulla significatività statistica. Solo una piccola frazione di studi raggiunge la soglia $p < 0.05$, e sono proprio questi studi “fortunati” a entrare nella letteratura, mentre la maggior parte dei risultati, pur basati sullo stesso effetto reale, viene ignorata. Questo processo genera due distorsioni principali:
-
-1. **sovrastima sistematica dell’effetto (Type M)**: le stime degli effetti statisticamente significativi risultano mediamente molto più grandi dell’effetto reale;
-2. **errore di segno (Type S)**: una piccola ma non trascurabile percentuale di effetti statisticamente significativi presenta il segno opposto rispetto all’effetto reale.
-
-In pratica, la soglia di significatività (ad esempio, $p$ < 0.05) non non filtra il segnale dal rumore, ma seleziona invece quegli studi in cui il caso ha prodotto un effetto apparentemente più forte rispetto alla realtà sottostante. Ne consegue una letteratura in cui gli effetti pubblicati appaiono più forti e coerenti di quanto non siano in realtà, compromettendo la **replicabilità** e la **solidità della conoscenza scientifica**.
-
-Questa dinamica spiega perché, in ambiti caratterizzati da effetti modesti e campioni piccoli, come la psicologia e le scienze sociali, gli studi "significativi" tendano a fornire un'immagine ingannevole della realtà, enfatizzando risultati che sono in larga parte il prodotto del caso piuttosto che della forza effettiva dell'effetto.
-
-#### Visualizzazione e interpretazione dei risultati
-
-Le figure seguenti mostrano come la selezione dei risultati basata sulla significatività statistica ($p < 0.05$) introduca una distorsione sistematica nella letteratura scientifica. Quando l’effetto reale è modesto, questo filtro opera una doppia distorsione: non solo **sovrastima sistematicamente l’entità degli effetti**, ma può anche **invertirne la direzione** percepita, producendo conclusioni che sembrano indicare un effetto opposto a quello realmente esistente.
-
-La prima figura include soltanto gli studi che superano la soglia di significatività. In questo sottoinsieme, la distribuzione delle stime dell'indice *d* di Cohen risulta nettamente spostata verso valori più elevati rispetto all’effetto reale:
+La figura seguente confronta la distribuzione di tutte le stime con quella delle sole stime per cui $p < 0.05$.
 
 ```{r}
-#| label: fig-type-m-error
-#| fig-cap: "Distribuzione delle stime del d di Cohen nei risultati 'statisticamente significativi'. La linea rossa indica l'effetto vero (d = 0.2). Il filtro della significatività seleziona sistematicamente stime gonfiate."
-#| fig-height: 5
+#| label: fig-before-after-filter
+#| fig-cap: "Distribuzione delle stime prima e dopo il filtro della significatività. In tutti gli studi le stime sono disperse ma centrate vicino all'effetto vero. Tra i soli risultati con p < 0.05 rimangono soprattutto le stime lontane da zero."
+#| fig-height: 6
 
-col_hist   <- palette_qualitative[5]  # Blu
-col_true   <- palette_qualitative[1]  # Arancione
-col_zero   <- palette_qualitative[8]  # Grigio
-col_emph   <- palette_qualitative[5]  # Blu (annotazione)
+plot_data <- bind_rows(
+  results |>
+    transmute(
+      d_observed,
+      insieme = "Tutti gli studi"
+    ),
+  results |>
+    filter(significant) |>
+    transmute(
+      d_observed,
+      insieme = "Solo risultati con p < 0.05"
+    )
+) |>
+  mutate(
+    insieme = factor(
+      insieme,
+      levels = c(
+        "Tutti gli studi",
+        "Solo risultati con p < 0.05"
+      )
+    )
+  )
 
-ggplot(significant_results, aes(x = d_observed)) +
+ggplot(plot_data, aes(x = d_observed)) +
   geom_histogram(
-    bins = 30,
-    fill = col_hist,
-    color = "white",
-    alpha = 0.8
+    bins = 60,
+    fill = palette_qualitative[5],
+    colour = "white",
+    alpha = 0.85
   ) +
   geom_vline(
     xintercept = true_d,
-    color = col_true,
+    colour = palette_qualitative[1],
     linetype = "dashed",
-    linewidth = 1.2
-  ) +
-  geom_vline(
-    xintercept = 0,
-    color = col_zero,
-    linetype = "dotted"
-  ) +
-  annotate(
-    "text",
-    x = true_d + 0.05,
-    y = Inf,
-    vjust = 2,
-    hjust = 0,
-    label = sprintf("Effetto vero\nd = %.2f", true_d),
-    color = col_true
-  ) +
-  annotate(
-    "text",
-    x = mean(abs(significant_results$d_observed)),
-    y = Inf,
-    vjust = 4,
-    hjust = 0.5,
-    label = sprintf(
-      "Media |d| significativi\n= %.2f (%.1fx il vero)",
-      mean(abs(significant_results$d_observed)),
-      type_m_ratio
-    ),
-    color = col_emph
-  ) +
-  labs(
-    x = "Stima d di Cohen",
-    y = "Frequenza",
-    title = "Errore di Tipo M:\nsovrastima sistematica degli effetti 'significativi'",
-    subtitle = sprintf(
-      "Solo %d/%d studi (%.1f%%) raggiungono p < 0.05",
-      nrow(significant_results),
-      n_simulations,
-      100 * nrow(significant_results) / n_simulations
-    )
-  )
-```
-
-La distribuzione asimmetrica delle stime, con una coda lunga verso valori elevati, non riflette la vera entità del fenomeno, ma è un **artefatto della selezione**. Solo quegli studi in cui la fluttuazione campionaria casuale ha prodotto una differenza eccezionalmente ampia riescono a superare la soglia della significatività statistica. Il risultato è che la letteratura scientifica finisce per rappresentare, in media, una sovrastima sistematica dell’effetto, quantificabile in **circa quattro volte** il suo valore reale. In sintesi, il problema non risiede nella misurazione dell'effetto, ma nella selezione sistematica dei risultati che tendono a esagerare il fenomeno.
-
-La seconda figura approfondisce un aspetto diverso: tra gli studi che superano la soglia di significatività, alcuni stimano un effetto nella direzione **opposta** rispetto a quella reale.
-
-```{r}
-#| label: fig-type-s-error
-#| fig-cap: "Errore di Tipo S: una quota non trascurabile di risultati significativi ha il segno sbagliato (d < 0 quando il vero effetto è positivo)."
-
-palette_sign_error <- setNames(
-  palette_qualitative[c(5, 1)],  # blu + arancione
-  c("FALSE", "TRUE")
-)
-
-col_zero <- palette_qualitative[8]  # grigio
-col_true <- palette_qualitative[1]  # arancione
-
-significant_results |>
-  mutate(sign_error = factor(d_observed < 0, levels = c(FALSE, TRUE))) |>
-  ggplot(aes(x = d_observed, fill = sign_error)) +
-  geom_histogram(bins = 30, color = "white", alpha = 0.8) +
-  geom_vline(
-    xintercept = 0,
-    color = col_zero,
     linewidth = 1
   ) +
   geom_vline(
+    xintercept = 0,
+    colour = palette_qualitative[8],
+    linetype = "dotted",
+    linewidth = 0.8
+  ) +
+  facet_wrap(~insieme, ncol = 1, scales = "free_y") +
+  labs(
+    title = "Il filtro seleziona le code della distribuzione",
+    subtitle = "La linea tratteggiata indica l'effetto vero, d = 0.20",
+    x = "Stima del d di Cohen",
+    y = "Frequenza"
+  )
+```
+
+Nel pannello superiore, che include tutti gli studi, le stime sono molto variabili ma si distribuiscono intorno all’effetto vero. Alcune sono troppo grandi, altre troppo piccole e alcune hanno segno negativo.
+
+Nel pannello inferiore non osserviamo semplicemente una versione più accurata della stessa distribuzione. Il criterio $p < 0.05$ elimina quasi tutta la regione centrale e conserva soprattutto le due code. Poiché l’effetto vero è positivo, la coda positiva è più popolata; tuttavia, una parte della coda negativa supera anch’essa la soglia e produce risultati significativi nella direzione sbagliata.
+
+## Quantificare gli errori di tipo *M* e *S*
+
+```{r}
+significant_results <- results |>
+  filter(significant)
+
+type_m_ratio <-
+  mean(abs(significant_results$d_observed)) / abs(true_d)
+
+type_s_rate <- mean(
+  sign(significant_results$d_observed) != sign(true_d)
+)
+
+summary_results <- tibble(
+  Quantità = c(
+    "Effetto vero",
+    "Media di tutte le stime",
+    "Proporzione di risultati significativi",
+    "Media di |d| tra i risultati significativi",
+    "Errore di tipo M",
+    "Errore di tipo S"
+  ),
+  Valore = c(
+    sprintf("%.2f", true_d),
+    sprintf("%.2f", mean(results$d_observed)),
+    sprintf("%.1f%%", 100 * mean(results$significant)),
+    sprintf("%.2f", mean(abs(significant_results$d_observed))),
+    sprintf("%.1f volte", type_m_ratio),
+    sprintf("%.1f%%", 100 * type_s_rate)
+  )
+)
+
+knitr::kable(
+  summary_results,
+  align = c("l", "r"),
+  caption = "Risultati principali della simulazione"
+)
+```
+
+I risultati chiariscono la differenza tra **variabilità** e **bias da selezione**:
+
+- considerando tutti gli studi, la media delle stime è vicina a $d=0.20$;
+- considerando solo gli studi con $p < 0.05$, la grandezza media stimata è `r sprintf("%.2f", mean(abs(significant_results$d_observed)))`, cioè circa `r sprintf("%.1f", type_m_ratio)` volte l’effetto vero;
+- tra i risultati significativi, circa `r sprintf("%.1f%%", 100 * type_s_rate)` indica un effetto negativo, nonostante l’effetto vero sia positivo.
+
+Il filtro non crea il rumore: il rumore deriva dal campionamento. Il filtro crea la **distorsione sistematica**, perché rende molto più visibili alcune realizzazioni del rumore rispetto alle altre.
+
+### Vedere l’errore di segno
+
+```{r}
+#| label: fig-type-s-error
+#| fig-cap: "Distribuzione delle stime statisticamente significative. La regione a sinistra dello zero contiene gli errori di tipo S: risultati significativi con direzione opposta all'effetto vero."
+
+significant_results |>
+  mutate(
+    direction = if_else(
+      d_observed < 0,
+      "Segno sbagliato",
+      "Segno corretto"
+    ),
+    direction = factor(
+      direction,
+      levels = c("Segno corretto", "Segno sbagliato")
+    )
+  ) |>
+  ggplot(aes(x = d_observed, fill = direction)) +
+  geom_histogram(
+    bins = 50,
+    colour = "white",
+    alpha = 0.85
+  ) +
+  geom_vline(
+    xintercept = 0,
+    colour = palette_qualitative[8],
+    linewidth = 0.9
+  ) +
+  geom_vline(
     xintercept = true_d,
-    color = col_true,
+    colour = palette_qualitative[1],
     linetype = "dashed",
     linewidth = 1
   ) +
   scale_fill_manual(
-    values = palette_sign_error,
-    labels = c(
-      "FALSE" = "Segno corretto",
-      "TRUE"  = "Segno sbagliato"
+    values = c(
+      "Segno corretto" = palette_qualitative[5],
+      "Segno sbagliato" = palette_qualitative[1]
     )
   ) +
   labs(
-    x = "Stima d di Cohen",
-    y = "Frequenza",
-    fill = "",
-    title = "Errore di Tipo S:\nrisultati significativi con direzione errata",
+    title = "Anche il segno può essere selezionato in modo errato",
     subtitle = sprintf(
-      "%.1f%% dei risultati 'significativi' ha il segno sbagliato",
-      type_s_rate * 100
-    )
-  )
-```
-
-Questo fenomeno si verifica in condizioni di **bassa potenza statistica**. In tali contesti, non solo è improbabile rilevare un piccolo effetto, ma aumenta anche il rischio che il rumore campionario generi una stima significativa nella direzione opposta. L'inclusione di questi risultati nella letteratura scientifica contribuisce a creare incoerenze empiriche, a ridurre la replicabilità degli studi e a generare dispute teoriche basate su dati non attendibili.
-
-La terza figura permette di confrontare questo scenario con la distribuzione delle stime ottenute considerando *tutti* i 50,000 studi simulati, indipendentemente dal valore-$p$: 
-
-```{r}
-#| label: fig-all-studies
-#| fig-cap: "Distribuzione delle stime del d di Cohen in tutti gli studi simulati. Senza filtro di selezione, le fluttuazioni casuali si compensano e la media coincide con l'effetto reale."
-#| fig-height: 5
-
-col_hist <- palette_qualitative[8]  # Grigio
-col_true <- palette_qualitative[1]  # Arancione
-col_mean <- palette_qualitative[5]  # Blu
-
-p3 <- ggplot(results, aes(x = d_observed)) +
-  geom_histogram(
-    bins = 50,
-    fill = col_hist,
-    color = "white",
-    alpha = 0.8
-  ) +
-  geom_vline(
-    xintercept = true_d,
-    color = col_true,
-    linetype = "dashed",
-    linewidth = 1
-  ) +
-  geom_vline(
-    xintercept = mean(results$d_observed),
-    color = col_mean,
-    linewidth = 1
-  ) +
-  labs(
-    title = "Tutti gli studi (N = 50.000)",
-    subtitle = sprintf(
-      "Media = %.3f (≈ effetto vero)",
-      mean(results$d_observed)
+      "%.1f%% dei risultati significativi ha segno negativo",
+      100 * type_s_rate
     ),
-    x = "Stima d di Cohen",
-    y = "Frequenza"
-  )
-
-p3
-```
-
-Quando tutti gli studi sono inclusi, le fluttuazioni casuali si compensano a vicenda e la media delle stime converge verso l'effetto reale. **Pertanto, gli errori di Tipo M (sovrastima) e di Tipo S (segno invertito) non sono una caratteristica delle stime stesse, ma emergono unicamente come artefatto del processo di selezione basato sulla soglia di significatività.**
-
-In sintesi, il valore $p$ non è un semplice criterio di rilevanza, ma agisce da **filtro altamente selettivo e distorsivo**. Isolando sistematicamente le stime più estreme, spesso aberranti, nelle code della distribuzione campionaria, questo meccanismo produce una **sovrastima sistematica** degli effetti nella letteratura pubblicata, rappresentando i fenomeni come più ampi di quanto non siano nella realtà. In casi estremi, può addirittura generare **inversioni di segno** statisticamente significative, dando credito a conclusioni fuorvianti. Il risultato è l'accumulo di un corpus di conoscenze affetto da una distorsione sistematica che erode il progresso cumulativo della scienza. Da ciò derivano, in larga parte, sia la crisi di replicabilità sia l'instabilità dei risultati nella psicologia empirica e in altre discipline [@gelman2006difference].
-
-## Confronto con l'approccio bayesiano
-
-A differenza dei test d'ipotesi frequentisti, l'inferenza bayesiana non opera con soglie dicotomiche. Invece di giudicare un risultato in base al superamento di un limite arbitrario, fornisce una distribuzione a posteriori che quantifica la plausibilità relativa di ogni possibile valore dell'effetto, aggiornando una credenza iniziale esplicita (*prior*) con i dati osservati. Questo approccio permette di rappresentare l’incertezza in modo continuo e naturale, evitando le distorsioni di selezione e sovrastima indotte dalla soglia del $p < 0.05$.
-
-Tuttavia, per un **confronto equo con il paradigma frequentista**, applicheremo lo stesso filtro della "significatività statistica" anche alle stime bayesiane, sebbene questo filtro sia estraneo alla filosofia bayesiana. Il confronto mostra che le stime bayesiane sono più robuste: anche quando selezionate arbitrariamente, presentano una distorsione sistematica (errori di tipo M e S) notevolmente inferiore rispetto a quelle frequentiste.
-
-### Un'analisi bayesiana
-
-Per la distribuzione a posteriori, utilizziamo un'approssimazione normale (valida per campioni non troppo piccoli). Definiamo un risultato bayesiano "significativo" quando la probabilità a posteriori che l'effetto sia positivo supera il 95% (equivalente approssimativo del $p < 0.05$ in un test a una coda).
-
-```{r}
-# Funzione per analisi bayesiana approssimata
-# Prior: d ~ N(0, 1) (prior debolmente informativa)
-# Likelihood: d_obs | d ~ N(d, SE²)
-# Posterior: d | d_obs ~ N(mu_post, sigma_post²)
-
-bayesian_estimate <- function(d_observed, se, prior_mean = 0, prior_sd = 1) {
-  prior_precision <- 1 / prior_sd^2
-  data_precision <- 1 / se^2
-  
-  posterior_precision <- prior_precision + data_precision
-  posterior_sd <- sqrt(1 / posterior_precision)
-  posterior_mean <- (prior_precision * prior_mean + data_precision * d_observed) / posterior_precision
-  
-  tibble(
-    posterior_mean = posterior_mean,
-    posterior_sd = posterior_sd,
-    prob_positive = pnorm(0, posterior_mean, posterior_sd, lower.tail = FALSE)
-  )
-}
-
-# Applica l'analisi bayesiana a tutti gli studi
-se_d <- sqrt(2 / ((n1 * n2) / (n1 + n2)))  # SE approssimato per Cohen's d
-
-bayesian_results <- results |>
-  rowwise() |>
-  mutate(
-    bayes = list(bayesian_estimate(d_observed, se_d))
-  ) |>
-  unnest(bayes) |>
-  ungroup()
-```
-
-### Confronto delle stime 
-
-```{r}
-#| label: fig-freq-vs-bayes
-#| fig-cap: "Confronto tra stime frequentiste e bayesiane. Le stime bayesiane sono 'tirate' verso la distribuzione a priori, riducendo la sovrastima."
-
-# Confronto per i risultati significativi
-comparison <- bayesian_results |>
-  dplyr::filter(significant) |>
-  dplyr::select(d_observed, posterior_mean) |>
-  pivot_longer(everything(), names_to = "method", values_to = "estimate") |>
-  mutate(method = ifelse(method == "d_observed", "Frequentista", "Bayesiano"))
-
-palette_methods <- setNames(
-  palette_qualitative[c(1, 5)],  # arancione + blu
-  c("Frequentista", "Bayesiano")
-)
-
-col_true <- palette_qualitative[8]  # grigio
-
-ggplot(comparison, aes(x = estimate, fill = method)) +
-  geom_histogram(
-    bins = 30,
-    alpha = 0.6,
-    position = "identity",
-    color = "white"
-  ) +
-  geom_vline(
-    xintercept = true_d,
-    color = col_true,
-    linetype = "dashed",
-    linewidth = 1.2
-  ) +
-  scale_fill_manual(values = palette_methods) +
-  labs(
-    x = "Stima d di Cohen",
+    x = "Stima del d di Cohen",
     y = "Frequenza",
-    fill = "Metodo",
-    title = "Stime frequentiste vs bayesiane\nper i risultati 'significativi'",
-    subtitle = "Le stime bayesiane sono meno estreme grazie allo shrinkage verso la prior"
-  )
+    fill = NULL
+  ) +
+  legenda_in_alto
 ```
 
-```{r}
-# Quantifica la riduzione dell'errore
-freq_mean_sig <- mean(abs(significant_results$d_observed))
-bayes_mean_sig <- mean(abs(bayesian_results$posterior_mean[bayesian_results$significant]))
-```
+Un errore di tipo S non significa che il test abbia prodotto un falso positivo nel senso usuale: l’effetto vero non è zero. Significa che uno studio rumoroso ha fornito un risultato sufficientemente estremo nella coda sbagliata da superare la soglia. Se quel risultato viene interpretato isolatamente, può sostenere una spiegazione teorica opposta a quella compatibile con il processo generativo.
+
+## Perché questo meccanismo compromette la replicabilità
+
+Supponiamo che venga pubblicato uno studio con $\hat d = 0.80$. Il risultato è statisticamente significativo e appare quattro volte più grande dell’effetto vero. Una replica condotta con un altro piccolo campione non parte però da $d=0.80$: parte ancora dalle popolazioni con $d=0.20$. È quindi probabile che produca una stima molto più piccola e spesso non significativa.
+
+Il contrasto tra studio originale e replica può sembrare sorprendente solo se si prende la prima stima come una rappresentazione accurata dell’effetto. Dal punto di vista della simulazione, invece, è una conseguenza prevedibile:
+
+- lo studio originale è entrato nella letteratura proprio perché ha prodotto una stima eccezionalmente grande;
+- la replica non è vincolata a ripetere quella particolare fluttuazione campionaria;
+- la sua stima tende quindi a “regredire” verso il piccolo effetto vero.
+
+La crisi non nasce semplicemente dall’esistenza di errori casuali. Nasce dall’interazione tra stime rumorose e un sistema decisionale ed editoriale che rende visibili soprattutto le stime estreme [@loken2017measurement].
+
+## Come cambiano gli errori con il campione?
+
+Aumentare la dimensione campionaria restringe la distribuzione delle stime. Di conseguenza:
+
+- cresce la probabilità di rilevare l’effetto vero;
+- diminuisce la necessità di una fluttuazione estrema per superare la soglia;
+- diminuisce l’errore di tipo *M*;
+- l’errore di tipo *S* diventa progressivamente raro.
+
+Ripetiamo la simulazione con campioni bilanciati di diversa ampiezza.
 
 ```{r}
-#| echo: false
-
-cat(sprintf("Effetto vero:                 d = %.2f\n", true_d))
-cat(sprintf("Media |d| frequentista:       %.2f (%.1fx il vero)\n", 
-            freq_mean_sig, freq_mean_sig / true_d))
-cat(sprintf("Media |d| bayesiana:          %.2f (%.1fx il vero)\n", 
-            bayes_mean_sig, bayes_mean_sig / true_d))
-cat(sprintf("Riduzione dell'errore:        %.0f%%\n", 
-            100 * (freq_mean_sig - bayes_mean_sig) / (freq_mean_sig - true_d)))
-```
-
-**Interpretazione:** anche quando è costretta a subire lo stesso filtro di selezione arbitrario del paradigma frequentista, l'analisi bayesiana riduce sia la sovrastima dell’effetto sia gli errori di segno. Questo avviene perché l’inferenza bayesiana incorpora in modo naturale lo "shrinkage": le stime estreme vengono "contratte" verso la distribuzione a priori, che in questo caso è centrata sullo zero. Il risultato non è l'eliminazione dell'errore, ma la sua sostanziale attenuazione, il che dimostra come la struttura stessa dell'inferenza bayesiana produca stime più robuste e meno sensibili alle distorsioni introdotte dalla selezione dei soli risultati pubblicabili.
-
-## Come cambiano gli errori con la dimensione del campione?
-
-```{r}
-#| label: fig-sample-size-effect
-#| fig-cap: "Gli errori M e S diminuiscono all'aumentare della dimensione del campione (e quindi della potenza)."
-
-# Simulazione con diverse dimensioni campionarie
 sample_sizes <- c(20, 50, 100, 200, 500)
+n_simulations_by_size <- 30000
 
-sample_size_analysis <- map_dfr(sample_sizes, function(n) {
-  # Simula studi con n osservazioni per gruppo
-  sim_results <- map_dfr(1:10000, function(i) {
-    y1 <- rnorm(n, mean = mu_1, sd = sigma)
-    y2 <- rnorm(n, mean = mu_2, sd = sigma)
-    
-    pooled_sd <- sqrt(((n - 1) * var(y1) + (n - 1) * var(y2)) / (2 * n - 2))
-    d_obs <- (mean(y1) - mean(y2)) / pooled_sd
-    p_val <- t.test(y1, y2, var.equal = TRUE)$p.value
-    
-    tibble(d_observed = d_obs, p_value = p_val, significant = p_val < 0.05)
+sample_size_analysis <- bind_rows(
+  lapply(sample_sizes, function(n) {
+    simulated <- simulate_two_group_studies(
+      n_simulations = n_simulations_by_size,
+      n1 = n,
+      n2 = n,
+      mu_1 = mu_1,
+      mu_2 = mu_2,
+      sigma = sigma,
+      alpha = alpha
+    )
+
+    selected <- simulated |>
+      filter(significant)
+
+    tibble(
+      n_per_group = n,
+      power = mean(simulated$significant),
+      type_m = mean(abs(selected$d_observed)) / abs(true_d),
+      type_s = mean(
+        sign(selected$d_observed) != sign(true_d)
+      )
+    )
   })
-  
-  sig_results <- sim_results |> filter(significant)
-  
-  tibble(
-    n_per_group = n,
-    power = mean(sim_results$significant),
-    type_m = mean(abs(sig_results$d_observed)) / true_d,
-    type_s = mean(sig_results$d_observed < 0)
-  )
-})
-
-col_power <- palette_qualitative[5]  # Blu
-col_m     <- palette_qualitative[1]  # Arancione
-col_s     <- palette_qualitative[7]  # Rosa
-col_ref   <- palette_qualitative[8]  # Grigio
-
-# Visualizzazione
-p_power <- ggplot(sample_size_analysis, aes(x = n_per_group, y = power)) +
-  geom_line(color = col_power, linewidth = 1.2) +
-  geom_point(color = col_power, size = 3) +
-  geom_hline(
-    yintercept = 0.80,
-    linetype = "dashed",
-    color = col_ref
-  ) +
-  scale_y_continuous(labels = scales::percent, limits = c(0, 1)) +
-  labs(
-    title = "Potenza statistica",
-    x = "n per gruppo",
-    y = "Potenza"
-  )
-
-p_type_m <- ggplot(sample_size_analysis, aes(x = n_per_group, y = type_m)) +
-  geom_line(color = col_m, linewidth = 1.2) +
-  geom_point(color = col_m, size = 3) +
-  geom_hline(
-    yintercept = 1,
-    linetype = "dashed",
-    color = col_ref
-  ) +
-  labs(
-    title = "Errore Tipo M (exaggeration)",
-    x = "n per gruppo",
-    y = "Fattore di esagerazione"
-  )
-
-p_type_s <- ggplot(sample_size_analysis, aes(x = n_per_group, y = type_s)) +
-  geom_line(color = col_s, linewidth = 1.2) +
-  geom_point(color = col_s, size = 3) +
-  scale_y_continuous(labels = scales::percent) +
-  labs(
-    title = "Errore Tipo S (wrong sign)",
-    x = "n per gruppo",
-    y = "Tasso errore di segno"
-  )
+)
 ```
 
 ```{r}
-p_power 
-```
+#| label: fig-sample-size-errors
+#| fig-cap: "Relazione tra dimensione campionaria, potenza ed errori di tipo M e S. Con campioni più grandi, le stime sono meno rumorose e il filtro della significatività è meno dipendente da fluttuazioni estreme."
 
-```{r}
-p_type_m 
-```
-
-```{r}
-p_type_s
-```
-
-Tabella riassuntiva:
-
-```{r}
-sample_size_analysis |>
-  mutate(
-    `n per gruppo` = n_per_group,
-    `Potenza` = sprintf("%.0f%%", power * 100),
-    `Type M (×)` = sprintf("%.1f", type_m),
-    `Type S (%)` = sprintf("%.1f%%", type_s * 100)
+sample_size_long <- sample_size_analysis |>
+  transmute(
+    n_per_group,
+    Potenza = power,
+    `Tipo M` = type_m,
+    `Tipo S` = type_s
   ) |>
-  dplyr::select(`n per gruppo`, Potenza, `Type M (×)`, `Type S (%)`) |>
-  knitr::kable(caption = "Errori M e S in funzione della dimensione del campione (effetto vero d = 0.2)")
+  pivot_longer(
+    cols = -n_per_group,
+    names_to = "quantity",
+    values_to = "value"
+  )
+
+ggplot(sample_size_long, aes(x = n_per_group, y = value)) +
+  geom_line(
+    colour = palette_qualitative[5],
+    linewidth = 1
+  ) +
+  geom_point(
+    colour = palette_qualitative[5],
+    size = 2.5
+  ) +
+  facet_wrap(
+    ~quantity,
+    scales = "free_y",
+    ncol = 1,
+    labeller = as_labeller(
+      c(
+        "Potenza" = "Potenza",
+        "Tipo M" = "Fattore di esagerazione (Tipo M)",
+        "Tipo S" = "Probabilità di segno sbagliato (Tipo S)"
+      )
+    )
+  ) +
+  labs(
+    x = "Partecipanti per gruppo",
+    y = NULL
+  )
 ```
 
-La tabella mostra una relazione chiara: con campioni piccoli e bassa potenza, gli errori sono enormi. Solo con $n \geq 500$ per gruppo (potenza ~90%) gli errori diventano accettabili.
+```{r}
+sample_size_table <- sample_size_analysis |>
+  transmute(
+    `n per gruppo` = n_per_group,
+    Potenza = sprintf("%.1f%%", 100 * power),
+    `Tipo M` = sprintf("%.2f volte", type_m),
+    `Tipo S` = sprintf("%.2f%%", 100 * type_s)
+  )
+
+knitr::kable(
+  sample_size_table,
+  align = c("r", "r", "r", "r"),
+  caption = "Potenza ed errori di tipo M e S al crescere del campione"
+)
+```
+
+Il miglioramento è graduale. Con $n=20$ per gruppo, i risultati significativi sono ancora fortemente esagerati. Con $n=500$ per gruppo, la potenza è elevata e il fattore di esagerazione si avvicina a 1. Campioni più grandi non rendono perfetto ogni singolo studio, ma riducono la dipendenza del risultato da fluttuazioni eccezionali.
+
+## Che cosa cambia in una prospettiva bayesiana?
+
+Questo capitolo non richiede ancora di costruire un modello bayesiano completo. Il punto essenziale è capire perché una prospettiva basata su distribuzioni e incertezza offre un’alternativa alla decisione dicotomica.
+
+Un’analisi bayesiana può contribuire in due modi:
+
+1. restituisce una distribuzione a posteriori dell’effetto, rendendo visibile l’ampiezza dell’incertezza invece di ridurre il risultato a “significativo” o “non significativo”;
+2. prior debolmente informativi e modelli gerarchici possono regolarizzare le stime estreme, evitando di trattare ogni grande stima campionaria come ugualmente plausibile.
+
+Tuttavia, l’approccio bayesiano non elimina magicamente il problema della selezione. Se vengono pubblicati soltanto gli studi che superano una soglia posteriore favorevole, anche la letteratura bayesiana può essere distorta. La soluzione richiede quindi un cambiamento più ampio del workflow: campioni informativi, preregistrazione, pubblicazione dei risultati indipendentemente dall’esito, reporting completo dell’incertezza e modelli che incorporino la conoscenza disponibile.
 
 ## Riflessioni conclusive
 
-Le simulazioni sviluppate in questo capitolo confermano empiricamente ciò che l'analisi teorica del manuale illustra concettualmente. Il primo insegnamento riguarda **l’inefficacia del filtro della significatività statistica**. Le simulazioni mostrano che il superamento della soglia di $p < 0.05$ non protegge dal rumore, ma opera come un **meccanismo selettivo** che favorisce sistematicamente le stime più estreme e spesso fuorvianti. Il risultato è una letteratura scientifica strutturalmente distorta, in cui le dimensioni degli effetti sono **sovrastimate in modo sistematico**.
+La simulazione permette di separare tre fenomeni che vengono spesso confusi.
 
-Il secondo insegnamento rivela come **gli errori di Tipo M (sovrastima) e di Tipo S (segno) siano prevedibili e quantificabili** in base alla potenza statistica. Con livelli di potenza tipici di molti studi (intorno all'8%), le simulazioni mostrano un’esagerazione media delle stime di circa **quattro volte** l’effetto reale, e una probabilità di invertire il segno dell’effetto di circa **il 4%** tra i risultati dichiarati significativi. Ciò trasforma quello che potrebbe sembrare un errore occasionale in un **problema sistemico e prevedibile**.
+Il primo è la **variabilità campionaria**. Con un effetto piccolo e campioni ridotti, le stime cambiano molto da uno studio all’altro. Questa variabilità è presente prima di qualunque test.
 
-Il terzo insegnamento valuta **il ruolo dell’approccio bayesiano nell’attenuare queste distorsioni**. L'incorporazione di una distribuzione a priori produce un effetto di **shrinkage statistico**, riducendo la dispersione e l'ampiezza delle stime verso valori più plausibili e mitigando così gli errori di sovrastima e segno. Tuttavia, le simulazioni chiariscono che si tratta di una **riduzione parziale**, non di una soluzione radicale al problema di fondo.
+Il secondo è la **bassa potenza**. Poiché una stima vicina all’effetto vero difficilmente produce $p < 0.05$, la maggior parte degli studi non supera la soglia.
 
-Il quarto e decisivo insegnamento identifica **l’incremento della potenza statistica come unica contromisura efficace**. Solo quando la potenza raggiunge almeno l’80% gli errori diventano trascurabili: la sovrastima si riduce a meno di **1,1 volte** il valore reale e la probabilità di errore di segno scende sotto **lo 0,1%**. Questo livello di potenza, ottenibile tramite campioni adeguati o metodi di aggregazione, è l’unica via per ottenere **stime affidabili e robuste**.
+Il terzo è il **bias di selezione**. Quando la letteratura conserva soprattutto i risultati significativi, le fluttuazioni estreme vengono rappresentate molto più frequentemente di quelle ordinarie. Da qui derivano la sovrastima sistematica della grandezza dell’effetto e, in una quota più piccola ma scientificamente importante, la selezione del segno sbagliato.
 
-In conclusione, le simulazioni proposte da @loken2017measurement fungono da **ponte metodologico** tra teoria e pratica, trasformando concetti statistici astratti in dimostrazioni concrete. Queste simulazioni dimostrano in modo incontrovertibile che la soglia di significatività introduce distorsioni anziché filtrarle, che la bassa potenza genera sistematicamente sovrastime e inversioni di segno e che solo un aumento sostanziale della potenza può garantire inferenze valide. Queste simulazioni non sono solo un esercizio didattico, ma un vero e proprio **laboratorio critico** che permette di acquisire consapevolezza dei limiti degli strumenti statistici convenzionali e di comprendere le condizioni necessarie per produrre inferenze affidabili.
+Il risultato cruciale non è dunque che ogni stima frequentista sia distorta. Considerando tutti gli studi, la distribuzione delle stime è centrata vicino all’effetto vero. La distorsione nasce dall’uso della significatività statistica come filtro per decidere quali stime meritino attenzione, interpretazione e pubblicazione.
+
+Questo meccanismo aiuta a comprendere perché una letteratura composta da studi piccoli e selezionati possa presentare effetti apparentemente grandi, instabili e difficili da replicare. Mettere in discussione il paradigma non significa soltanto sostituire una formula con un’altra: significa abbandonare l’idea che una soglia dicotomica possa trasformare automaticamente stime rumorose in conoscenza affidabile.
 
 ::: {.callout-tip title="Risposte alle domande iniziali" collapse="true"}
-Ora confrontiamo le previsioni con i risultati ottenuti dalle simulazioni:
-
-1. **Sovrastima della grandezza dell’effetto**: I risultati pubblicati tendono a essere selezionati sulla base della significatività statistica, il che porta a una sovrastima sistematica della grandezza dell’effetto rispetto alla realtà. Questo fenomeno, noto come errore di tipo *M* (magnitude), si verifica perché solo gli effetti con valori estremi (per caso) superano la soglia di significatività statistica e vengono pubblicati.
-   
-2. **Falsi positivi e loro frequenza**: In uno scenario in cui non esiste alcuna differenza tra i due gruppi (cioè la vera differenza è zero), il test t ha fornito risultati statisticamente significativi nel 5% dei casi, come previsto dalla soglia di α = 0.05. Tuttavia, la selezione dei risultati pubblicati amplifica questo problema, rendendo più probabile che i lettori incontrino falsi positivi nella letteratura scientifica.
-   
-3. **Bias nella pubblicazione**: Gli studi che riportano risultati significativi hanno maggiore probabilità di essere pubblicati rispetto a quelli che non trovano un effetto significativo. Questo porta a un effetto distorsivo nella letteratura scientifica, in cui i risultati pubblicati tendono a sovrastimare l’effetto reale. Il "filtro della significatività statistica" crea una percezione distorta della realtà scientifica, poiché gli effetti nulli o piccoli tendono a essere sottorappresentati nella letteratura.
-   
-4. **Replicabilità e significatività statistica**: Gli studi con effetti piccoli e campioni ridotti sono particolarmente vulnerabili al fallimento della replicazione. Anche quando un effetto reale esiste, la probabilità di ottenerne una stima precisa è bassa, e la replicazione potrebbe risultare in un valore non significativo, generando confusione nella comunità scientifica.
-
-**Considerazioni Finali**
-
-Le simulazioni evidenziano come la significatività statistica, utilizzata come criterio per la pubblicazione, contribuisca a un bias nella selezione dei risultati, distorcendo la percezione della realtà scientifica. Questo fenomeno, noto come "filtro della significatività statistica", è una delle cause principali della crisi della replicabilità, poiché induce i ricercatori e i lettori a sovrastimare la grandezza e la presenza di effetti studiati. 
-
-Per affrontare queste problematiche, approcci alternativi, come quelli bayesiani, possono offrire soluzioni più robuste, permettendo una valutazione più affidabile delle ipotesi alla luce dei dati osservati.
+1. Con campioni piccoli, le stime sono molto disperse intorno all’effetto vero.
+2. Hanno maggiore probabilità di superare la soglia le stime eccezionalmente lontane da zero.
+3. Tra i risultati significativi, la grandezza media è molto maggiore di 0.20: nella simulazione è circa `r sprintf("%.1f", type_m_ratio)` volte l’effetto vero.
+4. Sì. Circa `r sprintf("%.1f%%", 100 * type_s_rate)` dei risultati significativi ha segno negativo, nonostante l’effetto vero sia positivo.
 :::
 
+## Esercizi {.unnumbered .unlisted}
 
-## Esercizi {.unnumbered}
+### Esercizio 1 — Comprendere {.unnumbered .unlisted}
 
-::: {.callout-important title="Problemi 1" collapse="true"}
-1. Perché la significatività statistica non è un criterio affidabile per valutare la validità dei risultati scientifici?
-2. Spiega il concetto di "filtro della significatività statistica" e il suo impatto sulla pubblicazione dei risultati.
-3. Qual è la differenza tra errore di tipo *M* e errore di tipo *S*? Come influenzano l’interpretazione dei risultati?
-4. Perché i risultati pubblicati tendono a sovrastimare la grandezza dell’effetto rispetto alla realtà?
-5. Quali sono le conseguenze della pubblicazione selettiva dei risultati per la replicabilità degli studi?
-6. Perché gli studi con campioni di piccole dimensioni sono più vulnerabili a errori nella stima della grandezza dell’effetto?
-7. In che modo la selezione dei risultati pubblicati altera la percezione della forza degli effetti studiati?
-8. Perché un test frequentista può portare a una falsa conclusione sulla direzione di un effetto?
-9. Quali sono le principali differenze tra l’approccio frequentista e quello bayesiano nella valutazione della significatività di un effetto?
-10. In che modo l’approccio bayesiano può ridurre il rischio di errori dovuti alla selezione dei risultati basata sulla significatività statistica?
+*Livello essenziale · Codice: no · Tempo indicativo: 10 minuti*
+
+Ricostruisci con parole tue la catena causale che porta al bias di sovrastima, usando in ordine i seguenti elementi:
+
+- effetto vero piccolo;
+- campione ridotto;
+- ampia variabilità delle stime;
+- bassa potenza;
+- filtro $p < 0.05$;
+- selezione delle stime estreme;
+- errore di tipo *M*.
+
+Spiega poi perché la variabilità campionaria, da sola, non produce necessariamente una sovrastima sistematica nella media di **tutti** gli studi.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Confronta il pannello “Tutti gli studi” con il pannello “Solo risultati con $p < 0.05$”. Chiediti quale passaggio modifica la composizione dell’insieme osservato.
 :::
 
-::: {.callout-tip title="Soluzioni 1" collapse="true"}
-1. **La significatività statistica non garantisce la validità di un risultato** perché dipende dalla dimensione del campione e da soglie arbitrarie (come p < 0.05). Inoltre, non misura la rilevanza pratica di un effetto, ma solo la probabilità che i dati osservati siano ottenuti sotto l’ipotesi nulla.
-   
-2. **Il "filtro della significatività statistica"** si riferisce alla tendenza a pubblicare solo risultati con p < 0.05, tralasciando studi con risultati non significativi. Questo porta a una distorsione nella letteratura scientifica e a una sovrastima della forza degli effetti riportati.
-   
-3. **Errore di tipo *M* (Magnitude)** indica la sovrastima della grandezza dell’effetto nei risultati pubblicati, mentre **errore di tipo *S* (Sign)** si riferisce all’errata determinazione della direzione dell’effetto. Questi errori si verificano perché solo gli effetti più estremi tendono a superare il filtro della significatività statistica.
-   
-4. **I risultati pubblicati tendono a sovrastimare la grandezza dell’effetto** perché solo gli effetti più grandi (anche per pura casualità) superano la soglia di significatività statistica e vengono pubblicati, mentre quelli più piccoli restano inediti.
-   
-5. **La pubblicazione selettiva riduce la replicabilità** perché introduce una distorsione sistematica nei risultati disponibili. Le repliche spesso non trovano effetti altrettanto grandi o significativi, creando instabilità nella conoscenza scientifica.
-   
-6. **I campioni piccoli aumentano la variabilità delle stime dell’effetto**, rendendo più probabile che un risultato significativo sia solo un’oscillazione casuale dei dati piuttosto che un vero effetto replicabile.
-   
-7. **La selezione dei risultati pubblicati altera la percezione della forza degli effetti** perché induce i lettori a credere che gli effetti siano più forti e consistenti di quanto non siano realmente.
-   
-8. **Un test frequentista può portare a una falsa conclusione sulla direzione dell’effetto** perché, in campioni piccoli, le stime dell’effetto possono essere fortemente influenzate dal rumore, portando a interpretazioni errate.
-   
-9. **L’approccio frequentista si basa sul valore-p e sulla soglia di significatività, mentre l’approccio bayesiano utilizza la probabilità a posteriori** per aggiornare la credibilità delle ipotesi alla luce dei dati osservati. Il metodo bayesiano permette inferenze più flessibili e robuste.
-   
-10. **L’approccio bayesiano riduce il rischio di errori dovuti alla selezione dei risultati** perché non si basa su una soglia arbitraria di significatività, ma fornisce un quadro probabilistico della forza dell’effetto, evitando distorsioni dovute alla pubblicazione selettiva.
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+Quando l’effetto vero è piccolo e il campione è ridotto, l’errore standard è grande e le stime ottenute da studi diversi sono molto disperse. La potenza è quindi bassa: una stima vicina al piccolo effetto vero raramente supera la soglia $p < 0.05$. Il filtro conserva soprattutto gli studi nei quali il rumore ha prodotto una stima eccezionalmente lontana da zero. Tra i risultati selezionati, la grandezza dell’effetto è quindi mediamente esagerata: questo è l’errore di tipo *M*.
+
+Senza il filtro, le sovrastime e le sottostime sono entrambe presenti e tendono in larga parte a compensarsi. La distorsione sistematica emerge quando alcune stime hanno molte più probabilità di essere osservate, interpretate o pubblicate rispetto alle altre.
 :::
 
-::: {.callout-important title="Problemi 2" collapse="true"}
+### Esercizio 2 — Prevedere {.unnumbered .unlisted}
 
-In questo esercizio simuleremo più esperimenti, ognuno con **15 osservazioni**, per comprendere come il filtro della significatività statistica possa distorcere le nostre conclusioni sugli effetti osservati.
+*Livello essenziale · Codice: no · Tempo indicativo: 10 minuti*
 
-**Obiettivo**
+Senza eseguire nuove simulazioni, prevedi che cosa accade nei seguenti scenari. Per ciascuno indica come cambiano **potenza**, **errore di tipo M** ed **errore di tipo S** rispetto allo scenario principale.
 
-- Comprendere come l'approccio frequentista possa portare a stime errate dell'effetto reale.
-- Esplorare gli errori di tipo *M* (magnitude) e *S* (sign), derivanti dal filtro della significatività statistica.
+1. L’effetto vero resta $d=0.20$, ma il campione cresce da circa 20 a 200 partecipanti per gruppo.
+2. Il campione resta piccolo, ma l’effetto vero cresce da $d=0.20$ a $d=0.80$.
+3. Effetto e campione restano invariati, ma vengono riportati tutti gli studi, non soltanto quelli con $p < 0.05$.
 
-**Struttura dell'esercizio**
-
-1. Simuliamo esperimenti in cui il **vero effetto** tra due gruppi è piccolo (Cohen’s *d* = 0.2). Consideriamo i dati SWLS e due popolazioni che differiscono nel modo indicato. Ipotizziamo che le due popolazioni SWLS siano normali. 
-2. Estraiamo 15 osservazioni per gruppo.
-3. Usiamo un test *t* per verificare se la differenza tra i gruppi è significativa.
-4. Registriamo solo i risultati con *p* < 0.05, calcolando la distribuzione degli effetti significativi.
-5. Valutiamo se la stima dell'effetto nei risultati pubblicabili è gonfiata rispetto al vero effetto.
-6. Contiamo i casi in cui il segno dell'effetto è invertito.
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Nei primi due scenari chiediti se per superare la soglia sia ancora necessaria una fluttuazione eccezionalmente grande. Nel terzo scenario distingui la variabilità delle singole stime dal bias dell’insieme osservato.
 :::
 
-::: {.callout-tip title="Soluzioni 2" collapse="true"}
-
-```r
-# Librerie necessarie
-library(ggplot2)
-
-# Impostazioni della simulazione
-set.seed(42)         # Per la riproducibilità
-n_sims <- 50000      # Numero di simulazioni
-n_per_group <- 15    # Numero di osservazioni per gruppo
-true_d <- 0.2        # Vero effetto (Cohen's d)
-swls_mean <- 25      # Media ipotizzata per il primo gruppo
-swls_sd <- 5         # Deviazione standard ipotizzata per la SWLS
-
-# Calcolo della media del secondo gruppo sulla base di Cohen's d
-swls_mean_2 <- swls_mean + true_d * swls_sd
-
-# Inizializziamo i vettori per registrare i risultati
-effect_sizes <- c()
-false_sign_count <- 0
-
-# Simulazioni
-for (i in 1:n_sims) {
-  # Generazione dei due gruppi da distribuzioni normali
-  group1 <- rnorm(n_per_group, mean = swls_mean, sd = swls_sd)
-  group2 <- rnorm(n_per_group, mean = swls_mean_2, sd = swls_sd)
-  
-  # Calcolo della dimensione dell'effetto (Cohen's d)
-  mean_diff <- mean(group2) - mean(group1)
-  pooled_sd <- sqrt(((n_per_group - 1) * var(group1) + (n_per_group - 1) * var(group2)) / (2 * n_per_group - 2))
-  d_estimated <- mean_diff / pooled_sd
-  
-  # Test t per confrontare le medie
-  t_test <- t.test(group1, group2, var.equal = TRUE)
-  
-  # Consideriamo solo i risultati statisticamente significativi
-  if (t_test$p.value < 0.05) {
-    effect_sizes <- c(effect_sizes, d_estimated)
-    
-    # Conta i casi in cui il segno è invertito
-    if (d_estimated < 0) {
-      false_sign_count <- false_sign_count + 1
-    }
-  }
-}
-
-# Creazione di un dataframe per la visualizzazione
-res_df <- data.frame(effect_size = effect_sizes)
-
-# Istogramma della dimensione dell'effetto tra i risultati "significativi"
-ggplot(res_df, aes(x = effect_size)) +
-  geom_histogram(bins = 30, fill = "blue", color = "black", alpha = 0.7) +
-  geom_vline(xintercept = true_d, color = "red", linetype = "dashed", size = 1.2) +
-  labs(
-    x = "Dimensione dell'effetto stimata",
-    y = "Frequenza",
-    title = "Distribuzione degli effetti significativi (SWLS)"
-  ) +
-  theme_minimal()
-
-# Output di sintesi
-cat("Numero di risultati statisticamente significativi:", length(effect_sizes), "\n")
-cat("Media della dimensione dell'effetto tra i risultati pubblicati:", mean(effect_sizes), "\n")
-cat("Numero di risultati con segno invertito:", false_sign_count, "\n")
-cat("Proporzione di risultati con segno invertito:", false_sign_count / length(effect_sizes), "\n")
-```
-
-**Interpretazione dei Risultati**
-
-1. **Errore di tipo *M*** (Magnitude): La media degli effetti stimati nei risultati pubblicati sarà molto più grande di 0.2 (il vero effetto), dimostrando come il filtro della significatività tenda a sovrastimare gli effetti reali.
-2. **Errore di tipo *S*** (Sign): Una percentuale dei risultati pubblicabili mostrerà effetti nella direzione sbagliata (d < 0), dimostrando che il processo decisionale basato su *p* < 0.05 può portare a conclusioni errate.
-3. **Visualizzazione**: L'istogramma mostrerà che la distribuzione degli effetti significativi è spostata rispetto al vero effetto (linea rossa tratteggiata).
-
-**Domande di discussione**:
-
-  1. Perché la stima dell’effetto è gonfiata nei risultati pubblicabili?
-  2. Come cambia la situazione aumentando il numero di osservazioni per gruppo?
-  3. Quali strategie alternative potrebbero ridurre questi errori?
-
-**Approfondimento**:
-
-  - Ripetere l'esperimento con *n_per_group = 50* e osservare se l'errore di tipo *M* diminuisce.
-  - Confrontare questo approccio con un'analisi Bayesiana per evidenziare il ruolo dell'inferenza basata su probabilità posteriori.
-
-**Conclusione**
-
-Questo esercizio mostra chiaramente i problemi dell’approccio frequentista basato su *p* < 0.05, evidenziando i limiti dell’uso della significatività statistica come filtro decisionale.
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+1. Con un campione più grande, la potenza aumenta; gli errori di tipo *M* e *S* diminuiscono perché le stime sono meno disperse e non devono essere eccezionalmente estreme per superare la soglia.
+2. Con un effetto vero più grande, la potenza aumenta e diminuiscono entrambi gli errori. Anche con un campione piccolo, un effetto grande è più facile da distinguere dal rumore.
+3. Se vengono riportati tutti gli studi, la potenza del singolo test non cambia e le singole stime restano rumorose. Scompare però il meccanismo che rende sistematicamente più visibili le stime estreme: la media dell’insieme completo rimane vicina all’effetto vero. Gli errori *M* e *S*, definiti condizionatamente alla selezione, non descrivono più la composizione dell’intera letteratura.
 :::
 
-::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+### Esercizio 3 — Modificare {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: sì · Tempo indicativo: 15 minuti*
+
+Modifica lo scenario principale in due passaggi:
+
+1. imposta `n1 <- 100` e `n2 <- 100`, lasciando invariato `true_d`;
+2. ripristina i campioni iniziali e modifica le medie in modo da ottenere `true_d <- 0.50` mantenendo `sigma <- 10`.
+
+Per ogni scenario, esegui nuovamente la simulazione e annota:
+
+- la proporzione di risultati significativi;
+- il fattore di errore di tipo *M*;
+- la percentuale di errori di tipo *S*.
+
+Prima di eseguire il codice, scrivi la direzione prevista di ciascun cambiamento.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Per ottenere $d=0.50$ con deviazione standard 10, la differenza tra le medie deve essere 5. Puoi per esempio usare `mu_1 <- 105` e `mu_2 <- 100`.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+In entrambi i casi la potenza aumenta e gli errori *M* e *S* diminuiscono. Aumentare il campione riduce la variabilità delle stime; aumentare l’effetto separa maggiormente il segnale dallo zero. I valori esatti cambiano leggermente tra esecuzioni, ma la direzione del risultato deve essere stabile.
+
+Il punto da verificare non è soltanto che “si ottengono più risultati significativi”. Con maggiore informazione, le stime che superano la soglia sono anche meno eccezionali rispetto all’effetto vero e quindi meno distorte.
+:::
+
+### Esercizio 4 — Criticare {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · Tempo indicativo: 10 minuti*
+
+Valuta criticamente la seguente affermazione:
+
+> “Se un risultato ha $p < 0.05$, la probabilità che sia fuorviante è al massimo del 5%. Di conseguenza, la dimensione e il segno dell’effetto possono essere interpretati con fiducia.”
+
+Individua almeno tre problemi nell’affermazione, distinguendo:
+
+- il significato dell’errore di tipo I;
+- l’incertezza sulla grandezza dell’effetto;
+- la possibilità di un errore di segno;
+- il ruolo della selezione dei risultati.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Nella simulazione l’ipotesi nulla è falsa: l’effetto vero è $d=0.20$. Eppure le stime significative possono essere molto esagerate o avere segno negativo.
+:::
+
+::: {.callout-note collapse="true" title="Elementi per la risposta"}
+Il valore 5% si riferisce al tasso di errore di tipo I in una procedura specificata, assumendo vera l’ipotesi nulla; non è la probabilità che un risultato osservato sia fuorviante. Inoltre, la significatività non garantisce che la grandezza stimata sia accurata. Quando la potenza è bassa, le stime significative sono selezionate proprio perché eccezionalmente lontane da zero e possono quindi presentare un forte errore di tipo *M*. Anche il segno può essere sbagliato: un risultato estremo nella coda opposta può produrre $p < 0.05$. Infine, se la pubblicazione dipende dalla significatività, la letteratura osservata non rappresenta tutti gli studi condotti, ma un sottoinsieme selezionato e sistematicamente distorto.
+:::
+
+::: {.callout-note collapse="true" title="Informazioni sull'ambiente di sviluppo"}
 ```{r}
 sessionInfo()
 ```
 :::
 
 ## Bibliografia {.unnumbered .unlisted}
-

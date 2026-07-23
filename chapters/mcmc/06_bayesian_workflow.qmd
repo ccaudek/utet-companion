@@ -1,60 +1,326 @@
 # Flusso di lavoro bayesiano {#sec-mcmc-workflow}
 
 ::: {.callout-note appearance="minimal"}
-Abbiamo ormai gli strumenti fondamentali per affrontare l’inferenza bayesiana in contesti realistici. Abbiamo visto che, nei casi semplici, l’aggiornamento può essere calcolato analiticamente, ma che diventa impraticabile già con pochi parametri. Abbiamo introdotto l’algoritmo di Metropolis che ci ha mostrato come sia sempre possibile campionare dalla distribuzione a posteriori e poi abbiamo visto come i linguaggi probabilistici, in particolare Stan, rendano questa possibilità accessibile e utilizzabile nella ricerca psicologica.
+Nei capitoli precedenti abbiamo incontrato strumenti diversi: aggiornamento analitico, distribuzioni predittive, algoritmo di Metropolis, linguaggi di programmazione probabilistica e Stan. Ciascuno risolve una parte del problema, ma nessuno, da solo, garantisce una buona analisi.
 
-Ora, però, dobbiamo fare un passo ulteriore. Avere strumenti di calcolo non basta: serve un metodo di lavoro. L’inferenza bayesiana non è solo una formula o un algoritmo, ma un processo che accompagna il ricercatore dall'ideazione del modello fino alla comunicazione dei risultati. Questo processo prende il nome di *workflow bayesiano*.
+Il *workflow bayesiano* collega questi strumenti in un processo unitario. Si parte da una domanda sostantiva, la si traduce in un modello generativo, si controlla ciò che il modello implica prima dei dati, si esegue il calcolo, si valuta se il campionamento è affidabile e infine si confrontano le conseguenze del modello con i dati osservati e con dati futuri. Se qualcosa non funziona, si torna indietro e si modifica il modello.
 :::
 
 ::: {.callout-note appearance="minimal" .chapter-status}
-**Da sapere.** Il workflow bayesiano è un processo iterativo che collega teoria, modello generativo, prior, stima, diagnostica e valutazione predittiva. L’obiettivo non è soltanto ottenere una distribuzione a posteriori, ma verificare continuamente se il modello rappresenta in modo plausibile il processo che ha generato i dati.
+**Da sapere.** Il workflow bayesiano è un ciclo iterativo che collega domanda scientifica, modello generativo, prior, distribuzioni predittive, calcolo, diagnostica e comunicazione. Una posterior ben campionata non implica automaticamente che il modello sia adeguato.
 
-**Da saper fare.** Descrivere le fasi principali del workflow. Tradurre una domanda di ricerca in un modello probabilistico; distinguere la diagnostica del campionamento dalla valutazione del modello.
+**Da saper fare.** Riconoscere le principali fasi del workflow; distinguere un problema di campionamento da un problema di modello; spiegare quale controllo risponde a quale domanda.
 
-**Approfondimento facoltativo.**  Usare i controlli predittivi a priori e a posteriori per individuare specificazioni implausibili e motivare una revisione del modello. Le diagnostiche MCMC dettagliate, il confronto predittivo mediante LOO-CV e la lettura di Bulbulia (2023) possono essere rimandati in una prima lettura. Nel percorso essenziale è sufficiente comprendere il ciclo iterativo, stimare il modello con gli strumenti forniti e interpretare i principali controlli predittivi.
+**Approfondimento facoltativo.** Le diagnostiche MCMC dettagliate, il confronto predittivo mediante PSIS-LOO e la formulazione di workflow causali completi possono essere rimandati in una prima lettura. Nel percorso essenziale è sufficiente comprendere la logica del ciclo e saper interpretare l'esito dei controlli principali.
 
 [Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
 :::
 
-::: {.callout-tip}
-## Prerequisiti
+## Perché serve un workflow
 
-Può essere utile aver letto [Bulbulia (2023)](https://www.researchgate.net/profile/Joseph-Bulbulia/publication/361799820_A_workflow_for_causal_inference_in_cross-cultural_psychology-A-workflow-for-causal-inference-in-cross-cultural-psychology/links/62c5cad2f8c0fc18d3ec9798/A-workflow-for-causal-inference-in-cross-cultural-psychology-A-workflow-for-causal-inference-in-cross-cultural-psychology.pdf) sul flusso di lavoro bayesiano e l'inferenza causale.
+L'inferenza bayesiana non termina quando il software restituisce campioni posteriori. Prima del calcolo bisogna decidere quale domanda porre, quali quantità rappresentano la risposta e quale processo potrebbe avere generato i dati. Dopo il calcolo bisogna verificare almeno due aspetti distinti:
+
+1. **il calcolo ha approssimato in modo affidabile la posterior specificata?**
+2. **la posterior appartiene a un modello capace di rappresentare gli aspetti rilevanti dei dati e del fenomeno?**
+
+La prima è una domanda computazionale. La seconda è una domanda scientifica e modellistica. Un valore di $\widehat R$ vicino a 1, per esempio, può indicare che le catene si sono mescolate adeguatamente; non dimostra che la likelihood, il prior o la struttura causale siano appropriati.
+
+Il workflow serve proprio a evitare questa confusione. Il suo obiettivo non è produrre un unico risultato definitivo, ma rendere visibili le decisioni, controllare le conseguenze del modello e motivare eventuali revisioni.
+
+## Un ciclo in sei passaggi
+
+Le fasi seguenti sono presentate in ordine per chiarezza, ma nella pratica formano un ciclo. Una difficoltà emersa in un passaggio può richiedere di tornare a uno dei precedenti.
+
+### 1. Formulare la domanda e la quantità di interesse
+
+Si parte da una domanda sostantiva, non dal software. Occorre chiarire quale quantità risponderebbe alla domanda.
+
+Per esempio, nello studio di un intervento sulla memoria, domande diverse richiedono quantità diverse:
+
+- qual è la differenza media tra intervento e controllo?
+- qual è la probabilità che la differenza superi una soglia sostantivamente rilevante?
+- quanto varia l'effetto tra individui?
+- come si comporterebbe un nuovo campione?
+
+Queste quantità non sono intercambiabili. Definirle prima dell'analisi aiuta a scegliere un modello coerente e a evitare interpretazioni costruite soltanto dopo aver visto i risultati.
+
+### 2. Costruire il modello generativo
+
+Il modello generativo descrive come i dati osservabili potrebbero essere prodotti a partire da quantità incognite. Comprende almeno:
+
+- la struttura dei dati e della misurazione;
+- la likelihood;
+- i parametri e il loro significato;
+- i prior;
+- eventuali dipendenze, gerarchie e assunzioni causali.
+
+Il modello non è soltanto una formula utile per stimare coefficienti. È una rappresentazione esplicita del processo ipotizzato. Chiedersi “come potrei simulare dati da questo modello?” è spesso un buon modo per verificare se la specificazione è stata compresa.
+
+### 3. Controllare le implicazioni prima dei dati
+
+La distribuzione predittiva a priori,
+
+$$
+p(\tilde y)=\int p(\tilde y\mid\theta)p(\theta)\,d\theta,
+$$
+
+mostra quali dati il modello considera plausibili prima di usare il campione osservato. Il controllo predittivo a priori consente di individuare, per esempio:
+
+- valori impossibili o sostantivamente assurdi;
+- dispersioni eccessive o troppo ridotte;
+- prior che, combinati con la likelihood, concentrano quasi tutta la probabilità in regioni implausibili;
+- incompatibilità tra la scala dei parametri e quella del fenomeno.
+
+Questo controllo non stabilisce se il prior sia “vero”. Serve a verificare se le conseguenze del modello completo siano compatibili con ciò che si ritiene possibile prima di osservare i dati analizzati.
+
+### 4. Eseguire il calcolo e controllare il campionamento
+
+Una volta specificato il modello, un algoritmo come NUTS approssima la posterior mediante campioni. Le diagnostiche computazionali rispondono alla domanda: *possiamo fidarci di questa approssimazione?*
+
+Tra i segnali più comuni vi sono:
+
+- catene che esplorano regioni diverse;
+- $\widehat R$ sensibilmente maggiore di 1;
+- bassa dimensione campionaria effettiva;
+- divergenze;
+- transizioni che raggiungono la massima profondità dell'albero;
+- geometrie posteriori difficili da esplorare.
+
+Questi segnali richiedono attenzione. Aumentare semplicemente il numero di iterazioni non risolve necessariamente un modello mal parametrizzato o una geometria problematica.
+
+::: {.callout-important}
+## Due diagnosi diverse
+
+- **Diagnostica del campionamento:** valuta se l'algoritmo ha approssimato adeguatamente la posterior specificata.
+- **Diagnostica del modello:** valuta se quella posterior deriva da un modello utile e plausibile per la domanda scientifica.
+
+La prima non sostituisce la seconda.
 :::
 
-## Un processo iterativo
+### 5. Confrontare le previsioni con i dati
 
-Il flusso di lavoro bayesiano non è lineare, ma iterativo. Inizia con la formulazione di un modello, prosegue con l’analisi dei dati e la valutazione dei risultati, ma spesso richiede di tornare indietro, rivedere le ipotesi e migliorare le specifiche. A differenza dell'approccio frequentista tradizionale, che tende a concentrarsi solo sull'output numerico finale (ad esempio un valore-$p$), l’approccio bayesiano incoraggia una riflessione costante sul legame tra teoria, modello e dati.
+La distribuzione predittiva a posteriori,
 
-L'idea centrale è che ogni modello è un'ipotesi sul processo generativo che ha prodotto i dati. Il compito del ricercatore non è solo quello di stimare i parametri, ma anche di verificare se il modello che li definisce è coerente con ciò che sappiamo e con ciò che osserviamo.
+$$
+p(\tilde y\mid y)=\int p(\tilde y\mid\theta)p(\theta\mid y)\,d\theta,
+$$
 
-## Le fasi del workflow
+permette di generare dati replicati dal modello dopo l'aggiornamento. Nei *posterior predictive checks* si confrontano caratteristiche dei dati osservati con quelle dei dati replicati.
 
-Il flusso di lavoro può essere schematizzato in tre fasi principali che, nella pratica, si intrecciano continuamente.
+Il confronto può riguardare, per esempio:
 
-**1. Definizione del modello:**
-il punto di partenza è sempre la teoria o l’ipotesi psicologica che vogliamo testare. In questa fase, traduciamo le nostre idee in un modello probabilistico, definendo i parametri, scegliendo i priori e specificando la verosimiglianza. È il momento in cui ci si chiede: "*Quale processo potrebbe aver generato i dati che osserviamo?*".
+- centro e dispersione;
+- asimmetria e code;
+- frequenza di valori estremi;
+- differenze tra gruppi;
+- relazioni tra variabili;
+- pattern temporali o individuali.
 
-**2. Inferenza e stima.**
-Una volta definito il modello, utilizziamo strumenti come Stan per ottenere dei campioni dalla distribuzione a posteriori. In questa fase, verifichiamo la tecnica di campionamento (convergenza delle catene, numero effettivo di campioni indipendenti e diagnosi di autocorrelazione). È qui che la potenza degli algoritmi MCMC diventa essenziale, in quanto ci permette di trattare modelli complessi senza dover ricorrere a eccessive semplificazioni.
+Un modello può riprodurre bene la media e fallire sulle code, oppure descrivere la popolazione media e non l'eterogeneità individuale. Per questo il controllo deve concentrarsi sulle caratteristiche rilevanti per la domanda, non su un unico grafico generico.
 
-**3. Valutazione del modello**
-Il passo successivo è chiedersi se il modello "funziona". Ciò significa, da un lato, confrontare le previsioni del modello con i dati osservati (*posterior predictive checks*) e, dall'altro, valutare la capacità del modello di generalizzare a nuovi dati (ad esempio, tramite LOO-CV). La valutazione non è mai definitiva, ma una guida per decidere se mantenere, modificare o sostituire il modello.
+Un buon adattamento predittivo non dimostra che il modello sia vero. Indica soltanto che il modello riesce a riprodurre le caratteristiche controllate. Modelli diversi possono produrre previsioni simili per alcuni aspetti e divergere per altri.
 
-![Figura tratta da @blei2014build.](../../figures/boxes_loop.png)
+### 6. Interpretare, confrontare, comunicare e rivedere
+
+Dopo avere verificato calcolo e adeguatezza, si interpretano le quantità posteriori rilevanti e si comunicano:
+
+- il modello e le assunzioni principali;
+- i prior e la loro giustificazione;
+- le quantità di interesse;
+- l'incertezza posterior;
+- gli esiti dei controlli predittivi;
+- le analisi di sensibilità;
+- i limiti e le revisioni effettuate.
+
+Quando più modelli sono plausibili, strumenti predittivi come PSIS-LOO possono aiutare a confrontarne la capacità di generalizzare. Un confronto favorevole non trasforma però il modello vincente in una descrizione vera del processo: indica una migliore prestazione predittiva rispetto alle alternative considerate, secondo il criterio utilizzato.
+
+La revisione del modello deve essere documentata. Se i dati hanno suggerito una modifica, questa modifica appartiene alla fase esplorativa e dovrebbe essere valutata, quando possibile, su nuovi dati o mediante una procedura predittiva appropriata.
+
+## Il workflow non è una lista da spuntare
+
+È possibile eseguire formalmente tutti i passaggi senza produrre una buona analisi. Il workflow non è una garanzia automatica: è una disciplina del ragionamento.
+
+Per esempio:
+
+- una domanda vaga produce una quantità di interesse vaga;
+- un prior numericamente stabile può essere sostantivamente implausibile;
+- una catena senza divergenze può campionare perfettamente da un modello sbagliato;
+- un controllo predittivo troppo generico può non rilevare il difetto rilevante;
+- un modello con migliore LOO può essere inadatto a un'interpretazione causale;
+- una sintesi posterior precisa può essere fuorviante se la misurazione è debole.
+
+Il valore del workflow deriva dal collegamento tra le fasi. Ogni controllo deve poter condurre a una decisione motivata: mantenere il modello, riformularlo, raccogliere informazioni migliori oppure limitare la portata delle conclusioni.
+
+![Il ciclo di costruzione e valutazione dei modelli. Figura tratta da @blei2014build.](../../figures/boxes_loop.png){#fig-workflow-loop}
+
+## Un esempio sintetico
+
+Supponiamo di voler stimare l'effetto di un programma sul punteggio di memoria.
+
+| Fase | Domanda operativa | Possibile esito |
+|---|---|---|
+| Domanda | Quale quantità risponde all'obiettivo? | Differenza media dopo l'intervento, aggiustata per il punteggio iniziale |
+| Modello | Come potrebbero essere generati i punteggi? | Regressione con errore normale e possibile variabilità tra partecipanti |
+| Predittiva a priori | Il modello genera punteggi plausibili? | Alcuni prior producono valori fuori dalla scala del test |
+| Calcolo | Le catene approssimano la posterior? | Nessuna divergenza, $\widehat R$ vicino a 1, ESS adeguato |
+| Predittiva a posteriori | Il modello riproduce gli aspetti importanti? | Riproduce la media, ma sottostima i punteggi estremi |
+| Revisione | Che cosa va modificato? | Considerare una likelihood più robusta e ripetere i controlli |
+
+L'ultimo passaggio non rappresenta un fallimento. È il funzionamento normale del workflow: il controllo ha rivelato una discrepanza, la discrepanza suggerisce una modifica e la nuova specificazione deve essere controllata nuovamente.
 
 ## Una prospettiva cumulativa
 
-Il flusso di lavoro bayesiano ci ricorda che la scienza non procede verso verità definitive, ma verso modelli progressivamente migliori. Ogni modello rappresenta un passo in un percorso cumulativo in cui le ipotesi vengono testate, confrontate e, se necessario, abbandonate.
+Il workflow bayesiano favorisce una scienza cumulativa perché rende espliciti modelli, assunzioni, prior, controlli e revisioni. La conoscenza non avanza soltanto accumulando stime, ma confrontando modelli e imparando anche dai loro fallimenti.
 
-Dal punto di vista della psicologia, questo approccio rappresenta una risposta concreta alla crisi di replicazione. Non ci limitiamo a verificare le associazioni statistiche, ma costruiamo modelli espliciti dei processi psicologici, li testiamo sui dati e li confrontiamo in termini di capacità predittiva. Questo metodo promuove la trasparenza, l'apertura alla revisione e la cumulatività, tutti elementi essenziali per rafforzare le basi empiriche della disciplina.
+Questo orientamento è particolarmente importante in psicologia. Una stima replicabile è utile, ma non basta se non è chiaro quale processo dovrebbe spiegare, quali misure la sostengano e in quali condizioni possa generalizzare. Il workflow collega quindi inferenza, previsione, teoria e trasparenza, senza ridurre nessuna di queste dimensioni a un singolo indicatore numerico [@bulbulia2023workflow].
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-Con il flusso di lavoro bayesiano abbiamo completato il nostro percorso introduttivo all'inferenza bayesiana. Abbiamo capito che non si tratta solo di imparare un nuovo insieme di tecniche, ma di adottare una prospettiva diversa sul rapporto tra teoria, dati e analisi statistica.
+Con questo capitolo si conclude la Parte dedicata al calcolo. Metropolis ha mostrato l'intuizione del campionamento MCMC; i linguaggi probabilistici e Stan hanno mostrato come separare la specificazione del modello dal motore di calcolo; gli esempi applicativi hanno mostrato come ricavare quantità posteriori sostantivamente interpretabili.
 
-Il valore di questo approccio non risiede solo nei dettagli tecnici, ma nel modo in cui ci spinge a pensare: ogni modello è un'ipotesi esplicita, ogni analisi è trasparente e riproducibile e ogni risultato è accompagnato da una valutazione critica della sua incertezza e plausibilità.
+Il workflow ricompone questi elementi in un unico ciclo:
 
-Nei capitoli successivi vedremo come applicare questi principi a casi specifici e a modelli più complessi. Il workflow bayesiano rimarrà il filo conduttore: un metodo iterativo e riflessivo che ci guiderà nella costruzione di una conoscenza scientifica solida, cumulativa e in grado di rispondere alle sfide della psicologia contemporanea.
+$$
+\text{domanda}
+\rightarrow
+\text{modello generativo}
+\rightarrow
+\text{predittiva a priori}
+\rightarrow
+\text{calcolo e diagnostica}
+\rightarrow
+\text{predittiva a posteriori}
+\rightarrow
+\text{interpretazione e revisione}.
+$$
+
+Il risultato di un'analisi bayesiana non è quindi soltanto una distribuzione a posteriori. È un'argomentazione documentata che collega una domanda scientifica a un modello, ne controlla le conseguenze e dichiara con trasparenza ciò che i dati permettono — e non permettono — di concludere.
+
+## Esercizi {.unnumbered .unlisted}
+
+### Esercizio 1 — Comprendere {.unnumbered .unlisted}
+
+*Livello essenziale · 10 minuti · Codice: no*
+
+Associa ciascuna situazione alla fase del workflow più pertinente.
+
+1. Il modello genera, prima di osservare i dati, punteggi negativi per un test che varia da 0 a 40.
+2. Le quattro catene mostrano valori di $\widehat R$ pari a 1.18 e occupano regioni diverse.
+3. Il modello riproduce bene la media osservata, ma non la frequenza dei valori estremi.
+4. La domanda iniziale parla genericamente di “efficacia”, senza specificare quale differenza o previsione debba essere stimata.
+5. Dopo avere visto la discrepanza nelle code, si decide di confrontare una likelihood normale con una likelihood Student-$t$.
+
+Usa una volta ciascuna delle seguenti etichette:
+
+- formulazione della domanda;
+- controllo predittivo a priori;
+- diagnostica del campionamento;
+- controllo predittivo a posteriori;
+- revisione del modello.
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+
+Chiediti se il problema emerge prima dei dati, durante il calcolo, nel confronto con i dati osservati oppure nella definizione stessa dell'obiettivo.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+
+1. **Controllo predittivo a priori:** il modello produce dati sostantivamente impossibili prima di utilizzare il campione osservato.
+2. **Diagnostica del campionamento:** le catene non sembrano avere esplorato la stessa distribuzione in modo affidabile.
+3. **Controllo predittivo a posteriori:** la discrepanza riguarda dati replicati dal modello dopo l'aggiornamento.
+4. **Formulazione della domanda:** non è ancora definita la quantità di interesse.
+5. **Revisione del modello:** la discrepanza osservata conduce a una nuova specificazione da controllare nuovamente.
+:::
+
+### Esercizio 2 — Prevedere {.unnumbered .unlisted}
+
+*Livello essenziale · 10 minuti · Codice: no*
+
+Per ciascuna affermazione, indica se la conclusione è giustificata.
+
+A. «$\widehat R$ è vicino a 1 e non vi sono divergenze; quindi il modello psicologico è corretto.»
+
+B. «Il controllo predittivo a posteriori mostra che il modello sottostima sistematicamente la variabilità; conviene esaminare una specificazione alternativa.»
+
+C. «Il modello A ha un ELPD maggiore del modello B; quindi A è il vero processo causale.»
+
+D. «La predittiva a priori assegna probabilità elevata a dati impossibili; è opportuno rivedere prior, likelihood o entrambi prima di interpretare la posterior.»
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+
+Distingui la qualità del calcolo, l'adeguatezza predittiva e la verità o causalità del modello.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+
+A è **ingiustificata**. Le diagnostiche indicano che il campionamento può essere affidabile rispetto alla posterior specificata, non che il modello sia corretto.
+
+B è **giustificata**. Una discrepanza sistematica tra dati osservati e replicati è una ragione per esaminare una revisione del modello.
+
+C è **ingiustificata**. Una migliore prestazione predittiva relativa non dimostra che il modello rappresenti il vero meccanismo causale.
+
+D è **giustificata**. Il controllo predittivo a priori serve precisamente a esaminare le conseguenze congiunte di prior e modello dei dati prima dell'analisi principale.
+:::
+
+### Esercizio 3 — Modificare {.unnumbered .unlisted}
+
+*Livello essenziale · 10 minuti · Codice: no*
+
+Considera questo esito:
+
+> Le catene convergono e l'ESS è adeguato. Il modello riproduce correttamente la media dei dati, ma genera una dispersione molto più piccola di quella osservata.
+
+Valuta separatamente le seguenti possibili modifiche:
+
+1. aumentare il numero di iterazioni;
+2. cambiare il seed casuale;
+3. introdurre una struttura che rappresenti meglio l'eterogeneità tra individui;
+4. sostituire la likelihood normale con una distribuzione a code più pesanti, se il problema riguarda soprattutto valori estremi;
+5. ignorare la discrepanza perché la media è riprodotta correttamente.
+
+Indica quali modifiche rispondono al problema osservato e quali no.
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+
+Le diagnostiche computazionali sono già soddisfacenti. Il problema riguarda ciò che il modello genera, non la quantità di campioni MCMC.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+
+Le modifiche 3 e, a seconda del pattern osservato, 4 possono rispondere al problema modellistico. La prima aggiunge una fonte di eterogeneità; la seconda può rappresentare meglio dati con code più pesanti.
+
+Aumentare le iterazioni o cambiare il seed non corregge una posterior predittiva troppo concentrata quando il campionamento è già adeguato. Ignorare la discrepanza perché la media è corretta equivale a controllare soltanto una caratteristica dei dati e può nascondere un difetto importante del modello.
+:::
+
+### Esercizio 4 — Criticare {.unnumbered .unlisted}
+
+*Livello essenziale · 10 minuti · Codice: no*
+
+Valuta il seguente resoconto:
+
+> «Abbiamo scelto il modello dopo avere provato diverse specificazioni sugli stessi dati. Il modello finale non presenta divergenze, ha il miglior valore LOO e riproduce la media osservata. Possiamo quindi considerarlo validato e riportare soltanto l'analisi finale.»
+
+Individua almeno quattro problemi e riscrivi la conclusione in una forma compatibile con il workflow bayesiano.
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+
+Considera separatamente diagnostica del campionamento, confronto relativo, controlli predittivi, revisione guidata dai dati e trasparenza.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+
+Il resoconto presenta almeno questi problemi:
+
+1. l'assenza di divergenze riguarda il calcolo, non la validità scientifica;
+2. LOO confronta il modello soltanto con le alternative considerate e non dimostra che esso sia vero;
+3. riprodurre la media non garantisce di riprodurre dispersione, code, differenze tra gruppi o altre caratteristiche rilevanti;
+4. la selezione tra molte specificazioni sugli stessi dati deve essere dichiarata;
+5. una revisione guidata dai dati dovrebbe essere sottoposta, quando possibile, a verifica predittiva o a nuovi dati;
+6. riportare soltanto l'analisi finale nasconde il percorso decisionale.
+
+Una formulazione più corretta è:
+
+> «Tra le specificazioni considerate, il modello finale ha mostrato un campionamento adeguato e la migliore prestazione predittiva stimata mediante LOO. Ha inoltre riprodotto la media osservata, ma devono essere controllate altre caratteristiche rilevanti. Poiché il modello è stato selezionato e modificato usando gli stessi dati, documentiamo l'intero percorso e consideriamo le conclusioni provvisorie, da valutare con controlli ulteriori o nuovi dati.»
+:::
 
 ## Bibliografia {.unnumbered .unlisted}

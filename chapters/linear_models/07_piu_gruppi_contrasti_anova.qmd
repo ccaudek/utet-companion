@@ -7,7 +7,7 @@ Dal punto di vista della modellistica statistica, questo passaggio non introduce
 In questo capitolo applicheremo l’inferenza bayesiana al caso di predittori politomici, ovvero con più di due livelli, concentrandoci sulle quantità di effettivo interesse scientifico: la stima della distribuzione a posteriori dei parametri di posizione per ciascun gruppo e la valutazione della loro plausibilità; la specificazione e la verifica di contrasti pianificati, definiti sulla base di ipotesi teoriche e non di esplorazioni post-hoc; la quantificazione dell’ampiezza delle differenze, sia nella scala metrica originale sia in forma standardizzata; la propagazione esplicita e coerente dell’incertezza associata a ciascun confronto; e, infine, la valutazione probabilistica della plausibilità che i contrasti superino una soglia di rilevanza pratica stabilita a priori.
 
 ::: {.callout-important appearance="minimal" .chapter-status}
-**Da sapere.** Il confronto tra più gruppi è un modello lineare con un predittore categoriale. La codifica con gruppo di riferimento e la parametrizzazione a medie di cella descrivono le stesse medie, ma attribuiscono significati diversi ai coefficienti e ai prior. Le domande scientifiche devono essere espresse mediante contrasti pianificati, distinguendo la probabilità direzionale dalla rilevanza pratica. L’inferenza bayesiana non elimina automaticamente il problema della molteplicità.
+**Da sapere.** Il confronto tra più gruppi è un modello lineare con un predittore categoriale. Il test omnibus dell’ANOVA classica risponde alla domanda globale se almeno una media differisca dalle altre, ma non identifica quale differenza sia presente, in quale direzione e con quale ampiezza. I contrasti traducono invece le ipotesi scientifiche in quantità direttamente interpretabili. La codifica con gruppo di riferimento e la parametrizzazione a medie di cella descrivono le stesse medie, ma attribuiscono significati diversi ai coefficienti e ai prior. L’inferenza bayesiana non elimina automaticamente i problemi di selezione e molteplicità.
 
 **Da saper fare.** Specificare e stimare con `brms` un modello a più gruppi; scegliere prior plausibili; eseguire i controlli predittivi a priori e a posteriori; ricavare dai campioni posteriori le medie di gruppo e i contrasti pianificati; calcolare probabilità sostantive rispetto a zero e a una soglia di rilevanza pratica; comunicare i risultati mantenendo esplicita l’incertezza.
 
@@ -46,19 +46,11 @@ Il capitolo estende il confronto tra due gruppi discusso in @sec-linear-models-t
 here::here("code", "_common.R") |>
   source()
 
-if (!requireNamespace("pacman", quietly = TRUE)) {
-  install.packages("pacman")
+if (!requireNamespace("emmeans", quietly = TRUE)) {
+  stop("Per eseguire questo capitolo è necessario installare il pacchetto 'emmeans'.")
 }
 
-pacman::p_load(
-  bayesplot,
-  brms,
-  dplyr,
-  emmeans,
-  ggplot2,
-  posterior,
-  tidyr
-)
+library(emmeans)
 
 set.seed(123)
 ```
@@ -71,6 +63,12 @@ Per introdurre la formalizzazione dei contrasti pianificati, consideriamo un dis
 > **Quesito 1:** In media, i due trattamenti determinano una riduzione dei sintomi depressivi rispetto al gruppo di controllo?
 
 > **Quesito 2:** I due protocolli differiscono tra loro in termini clinicamente rilevanti?
+
+::: {.callout-important title="Dal test omnibus ai contrasti"}
+Il test $F$ omnibus dell’ANOVA classica valuta una domanda globale: i dati sono compatibili con l’ipotesi che tutte le medie siano uguali? Se il test porta a rifiutare tale ipotesi, sappiamo soltanto che almeno una differenza è presente. Non sappiamo ancora quali gruppi differiscano, in quale direzione, di quanti punti e se la differenza sia sostantivamente importante.
+
+I contrasti, disponibili sia nell’inferenza frequentista sia in quella bayesiana, rispondono invece a domande formulate prima dell’analisi. Nel nostro esempio, non interessa genericamente sapere che “qualcosa cambia” tra i tre gruppi: interessa confrontare il controllo con l’insieme delle terapie e, separatamente, confrontare i due protocolli. Il risultato omnibus può fornire una sintesi globale, ma i contrasti costituiscono il vero oggetto dell’interpretazione scientifica; l’approccio bayesiano ne restituisce direttamente la distribuzione a posteriori.
+:::
 
 Queste domande definiscono due *contrasti pianificati*, ovvero confronti specificati prima di aver visto i dati. Specificare in anticipo i confronti di interesse consente di evitare un'analisi esplorativa di tutte le possibili differenze a coppie, riducendo il rischio di falsi positivi e concentrando l'inferenza sulle sole domande rilevanti.
 
@@ -209,43 +207,34 @@ Le due parametrizzazioni — con intercetta e dummy, e a medie di cella — sono
 
 ## Specificare il modello bayesiano
 
-Useremo una verosimiglianza normale con deviazione standard comune:
+Adottiamo la parametrizzazione a medie di cella e una verosimiglianza normale con deviazione standard comune:
 
 $$
 \begin{aligned}
 y_i &\sim \operatorname{Normal}(\mu_{g[i]},\sigma),\\
 \mu_g &\sim \operatorname{Normal}(25,10),\\
-\sigma &\sim \operatorname{LogNormal}(\log 5,0.5).
+\sigma &\sim \operatorname{Student\text{-}t}^{+}(3,0,10).
 \end{aligned}
 $$ {#eq-anova-bayesian-model}
 
-Il prior sulle medie considera plausibili, prima dei dati, valori distribuiti attorno a 25 punti con ampia incertezza. Il prior su $\sigma$ assegna valori positivi e concentra la maggior parte della massa su dispersioni compatibili con la scala del punteggio.
+Il prior sulle medie considera plausibili, prima dei dati, valori distribuiti attorno a 25 punti, con ampia incertezza sulla scala del test. Il prior di Student-$t$ su $\sigma$ è troncato implicitamente a valori positivi da `brms`; assegna maggiore plausibilità a dispersioni moderate, ma conserva code sufficientemente ampie da non escludere a priori una variabilità più elevata.
 
 ```{r}
 #| label: define-anova-priors
 
 anova_priors <- c(
   prior(normal(25, 10), class = "b"),
-  prior(lognormal(log(5), 0.5), class = "sigma")
+  prior(student_t(3, 0, 10), class = "sigma")
 )
 ```
 
 ::: {.callout-warning title="I prior dipendono dalla parametrizzazione"}
-Con `0 + condizione`, i coefficienti di classe `b` sono le tre medie di gruppo. Con la codifica a riferimento, invece, il prior dell'intercetta riguarda la media del gruppo di controllo e i prior dei coefficienti riguardano differenze. Assegnare meccanicamente lo stesso prior alle due parametrizzazioni può produrre modelli a priori diversi.
+Con `0 + condizione`, i coefficienti di classe `b` sono le tre medie di gruppo. Con la codifica a riferimento, invece, il prior dell'intercetta riguarda una media di riferimento, mentre i prior degli altri coefficienti riguardano differenze. Assegnare meccanicamente gli stessi prior ai coefficienti delle due parametrizzazioni non produce necessariamente lo stesso modello a priori sulle medie.
 :::
 
 ## Controllo predittivo a priori
 
-Prima di procedere alla stima del modello e di condizionare i parametri all'evidenza empirica, definiamo le distribuzioni a priori per la parametrizzazione a medie di cella. Calibriamo i *prior* sulla scala metrica attesa del test CES-D:
-
-```{r}
-#| label: define-anova-priors2
-
-anova_priors <- c(
-  prior(normal(25, 10), class = "b"),        # Prior comune per le tre medie di cella
-  prior(student_t(3, 0, 10), class = "sigma") # Prior positivo per la dispersione residua
-)
-```
+Prima di condizionare il modello ai dati, controlliamo quali punteggi e quali configurazioni dei gruppi esso considera plausibili sulla base dei soli prior.
 
 Eseguiamo quindi una simulazione predittiva a priori (*prior predictive check*) estraendo campioni esclusivamente dalle distribuzioni probabilistiche definite, senza considerare i dati osservati:
 
@@ -322,7 +311,7 @@ Per verificare la stabilità numerica del campionamento MCMC, esaminiamo i *trac
 
 ```{r}
 #| label: fig-anova-trace
-#| fig-cap: "Trace plot delle traiettorie MCMC per le tre medie di cella e per la deviazione standard residua. La perfetta sovrapposizione e la stazionarietà delle catene indicano un campionamento efficiente."
+#| fig-cap: "Trace plot delle traiettorie MCMC per le tre medie di cella e per la deviazione standard residua. Catene stazionarie, ben mescolate e prive di separazioni persistenti sono compatibili con un campionamento adeguato."
 #| fig-width: 8
 #| fig-height: 6
 
@@ -415,7 +404,7 @@ replicated_group_stats |>
     aes(xintercept = media_osservata),
     linetype = "dashed",
     color    = "firebrick",
-    size     = 0.8
+    linewidth = 0.8
   ) +
   facet_wrap(~ condizione, scales = "free_x") +
   labs(
@@ -424,7 +413,7 @@ replicated_group_stats |>
   )
 ```
 
-Questo controllo disaggregato consente di valutare se il modello sia in grado di riprodurre le medie osservate in ciascuna condizione. Se le medie osservate cadono stabilmente nelle regioni ad alta densità delle distribuzioni replicate, la specificazione del predittore lineare risulta compatibile con i dati. La corretta riproduzione delle medie non implica tuttavia che l'assunzione di omoschedasticità — ovvero una varianza residua comune a tutti i gruppi — sia automaticamente valida. Per una verifica più completa, è opportuno estendere il controllo predittivo anche alla variabilità replicata.
+Questo controllo disaggregato consente di valutare se il modello sia in grado di riprodurre le medie osservate in ciascuna condizione. Se le medie osservate ricadono in regioni non anomale delle distribuzioni replicate, il modello non mostra una discrepanza evidente rispetto a questa specifica caratteristica dei dati. La corretta riproduzione delle medie non implica tuttavia che l'assunzione di omoschedasticità — ovvero una varianza residua comune a tutti i gruppi — sia automaticamente valida. Per una verifica più completa, è opportuno estendere il controllo predittivo anche alla variabilità replicata.
 
 ## Dalle medie ai contrasti pianificati
 
@@ -433,8 +422,8 @@ Se la parametrizzazione è scelta in modo che i coefficienti del modello corrisp
 ```{r}
 #| label: derive-anova-contrasts
 
-# Estraiamo i draws mantenendo intatta la struttura dell'oggetto posterior
-draws_cell_means <- as_draws(anova_fit)
+# Estraiamo i draw posteriori in un formato esplicito e manipolabile
+draws_cell_means <- as_draws_df(anova_fit)
 
 # Deriviamo i contrasti pianificati tramite mutate_variables
 draws_contrasts <- posterior::mutate_variables(
@@ -443,13 +432,18 @@ draws_contrasts <- posterior::mutate_variables(
   mu_p1           = b_condizionepsicoterapia1,
   mu_p2           = b_condizionepsicoterapia2,
   ctrl_vs_terapie = mu_ctrl - (mu_p1 + mu_p2) / 2,
-  p1_vs_p2        = mu_p1 - mu_p2
+  p1_vs_p2        = mu_p1 - mu_p2,
+  range_mu        = pmax(mu_ctrl, mu_p1, mu_p2) -
+                    pmin(mu_ctrl, mu_p1, mu_p2)
 )
 
 # Selezioniamo le sole variabili sostantive per il summary descrittivo
 subset_contrasts <- subset_draws(
   draws_contrasts,
-  variable = c("mu_ctrl", "mu_p1", "mu_p2", "ctrl_vs_terapie", "p1_vs_p2")
+  variable = c(
+    "mu_ctrl", "mu_p1", "mu_p2",
+    "ctrl_vs_terapie", "p1_vs_p2", "range_mu"
+  )
 )
 
 summarise_draws(subset_contrasts)
@@ -508,17 +502,20 @@ mat_contrasts <- as_draws_matrix(subset_contrasts)
 
 ctrl_vs_terapie_d <- mat_contrasts[, "ctrl_vs_terapie"]
 p1_vs_p2_d        <- mat_contrasts[, "p1_vs_p2"]
+range_mu_d        <- mat_contrasts[, "range_mu"]
 
 SESOI <- 3
 
 anova_probabilities <- tibble(
   quesito_clinico = c(
+    "Almeno due medie differiscono di oltre 3 punti (R_mu > 3)",
     "Le terapie riducono la sintomatologia rispetto al controllo (Δ > 0)",
     "La riduzione media dovuta alle terapie supera la SESOI (Δ > 3)",
-    "Il protocollo 2 è più efficace del protocollo 1 (Δ > 0)",
+    "Il protocollo 2 ha un punteggio medio inferiore al protocollo 1 (Δ > 0)",
     "La differenza tra i due protocolli supera la SESOI (|Δ| > 3)"
   ),
   probabilita_posterior = c(
+    mean(range_mu_d > SESOI),
     mean(ctrl_vs_terapie_d > 0),
     mean(ctrl_vs_terapie_d > SESOI),
     mean(p1_vs_p2_d > 0),
@@ -529,31 +526,59 @@ anova_probabilities <- tibble(
 anova_probabilities
 ```
 
-I quattro indici così ottenuti rispondono a domande distinte. Un contrasto può avere un'elevata probabilità di essere positivo, ma una probabilità modesta di superare la soglia di rilevanza pratica; viceversa, due trattamenti possono differire in modo stimabile, ma non in misura sufficiente da orientare una decisione clinica.
 
-La soglia SESOI deve essere definita prima di osservare i dati, sulla base di considerazioni teoriche, evidenze cliniche o valutazioni decisionali. Modificarla dopo aver visto la distribuzione a posteriori comprometterebbe la validità inferenziale, trasformando un criterio sostantivo in un accomodamento ai risultati osservati.
+```{r}
+#| label: anova-report-values
+#| include: false
 
-## Il ruolo della valutazione omnibus nel framework bayesiano
+ctrl_median <- median(ctrl_vs_terapie_d)
+ctrl_lower  <- quantile(ctrl_vs_terapie_d, 0.025, names = FALSE)
+ctrl_upper  <- quantile(ctrl_vs_terapie_d, 0.975, names = FALSE)
+ctrl_prob_sesoi <- mean(ctrl_vs_terapie_d > SESOI)
 
-L'ipotesi nulla omnibus dell'ANOVA classica — "tutte le medie di gruppo sono uguali" — fornisce un'informazione molto generica e, nella maggior parte dei contesti applicativi, scarsamente utile per orientare l'interpretazione clinica o teorica. Nell'approccio bayesiano, tuttavia, non siamo vincolati a questo interrogativo. Possiamo definire indicatori sintetici che, sebbene più informativi del test F, restano meno utili dei contrasti pianificati.
+p12_median <- median(p1_vs_p2_d)
+p12_lower  <- quantile(p1_vs_p2_d, 0.025, names = FALSE)
+p12_upper  <- quantile(p1_vs_p2_d, 0.975, names = FALSE)
+p12_prob_sesoi <- mean(abs(p1_vs_p2_d) > SESOI)
+```
 
-Laddove si desideri una sintesi globale, si può calcolare, ad esempio, l'ampiezza massima tra le medie di gruppo ($R_\mu = \max(\mu) - \min(\mu)$) e valutarne la distribuzione a posteriori. Pur fornendo un quadro d'insieme, questa metrica non sostituisce l'analisi dei contrasti specifici, che rimane lo strumento più informativo ed efficiente quando le ipotesi di ricerca sono direzionali e definite a priori.
+I cinque indici così ottenuti rispondono a domande distinte. Un contrasto può avere un'elevata probabilità di essere positivo, ma una probabilità modesta di superare la soglia di rilevanza pratica; viceversa, due trattamenti possono differire in modo stimabile, ma non in misura sufficiente da orientare una decisione clinica.
+
+In un’analisi confermativa, la SESOI dovrebbe essere motivata e specificata prima di esaminare i risultati, sulla base di considerazioni teoriche, cliniche o decisionali. È possibile esplorare soglie alternative dopo l’analisi, ma tali valutazioni devono essere dichiarate come analisi di sensibilità o approfondimenti post hoc, non presentate come criteri fissati in anticipo.
+
+## Il ruolo della valutazione omnibus
+
+Il test $F$ dell’ANOVA classica è un test omnibus: confronta la variabilità tra le medie dei gruppi con la variabilità entro i gruppi e valuta l’ipotesi che tutte le medie siano uguali. È utile come domanda globale e, in alcuni workflow frequentisti, come primo passaggio prima dei confronti successivi. Il suo limite interpretativo è che un risultato omnibus non identifica il pattern responsabile della differenza.
+
+Nel framework bayesiano, l’uguaglianza esatta di parametri continui non è normalmente valutata osservando la probabilità che le medie assumano precisamente lo stesso valore. È più utile formulare una domanda globale sostantiva. Per esempio,
+
+$$
+R_\mu = \max(\mu_C,\mu_{P1},\mu_{P2})-
+       \min(\mu_C,\mu_{P1},\mu_{P2})
+$$
+
+misura la massima separazione tra le medie. La probabilità $P(R_\mu>3\mid y)$ risponde alla domanda se almeno due gruppi differiscano di oltre la soglia pratica di tre punti. Questa sintesi è più interpretabile di una semplice decisione omnibus, ma non dice quali gruppi producano la separazione. Per rispondere ai quesiti clinici occorrono ancora i contrasti pianificati.
+
+::: {.callout-tip title="Messaggio centrale"}
+La valutazione omnibus e i contrasti non sono concorrenti. La prima offre una sintesi globale; i secondi identificano il pattern, la direzione e l’ampiezza delle differenze che interessano scientificamente. I contrasti non sono esclusivi dell’approccio bayesiano, ma la distribuzione a posteriori consente di interpretarli in termini di ampiezza, direzione e soglie sostantive. Un’analisi informativa non si ferma alla frase “esiste almeno una differenza”.
+:::
 
 ## Molteplicità: che cosa cambia e che cosa non cambia
 
-All’aumentare del numero di livelli di un fattore categoriale, il numero di confronti a coppie potenziali cresce in modo combinatorio. Nella statistica frequentista, questo problema viene affrontato con correzioni del valore-*p* (Bonferroni, Tukey) per controllare il tasso di errore di primo tipo.
+All’aumentare del numero di livelli, cresce rapidamente anche il numero dei confronti possibili. Nell’approccio frequentista, quando si desidera controllare una specifica frequenza di errori in una famiglia di test, si usano procedure come Tukey o Bonferroni.
 
-Nell’approccio bayesiano, non si procede a una dicotomizzazione dei contrasti in termini di significatività, e quindi le correzioni multiple non sono necessarie. Tuttavia, ciò non significa che il problema della molteplicità scompaia. Se il ricercatore esamina molti contrasti e riporta solo quelli più estremi, introduce una **distorsione da selezione** (*selection bias*). Inoltre, con campioni piccoli, i gruppi che per caso risultano più estremi tendono a produrre stime sovrastimate.
+L’analisi bayesiana non richiede automaticamente una correzione dei valori posteriori analoga a Bonferroni: ogni contrasto conserva la propria distribuzione a posteriori. Rimane però il problema scientifico della molteplicità. Se si esaminano molti contrasti e si riportano soltanto quelli più estremi, i risultati selezionati tendono a sovrastimare le differenze e il resoconto non rappresenta più l’insieme delle analisi svolte.
 
-Per garantire l’integrità dell’analisi in disegni complessi, è opportuno:
+Le strategie principali sono:
 
-1. **Pianificare i contrasti** in anticipo, sulla base di ipotesi teoriche;
-2. **Distinguere** nel report le analisi confermative da quelle esplorative;
-3. **Utilizzare modelli gerarchici** quando i gruppi possono essere considerati come provenienti da una popolazione comune. Questa strategia introduce il *partial pooling* (trattato nel prossimo capitolo), che contrae le stime più estreme verso la media globale, riducendo i falsi allarmi e stabilizzando l’inferenza.
+1. **pianificare i contrasti** sulla base della teoria;
+2. **riportare l’insieme delle analisi effettuate**, distinguendo conferma ed esplorazione;
+3. **valutare la sensibilità** delle conclusioni alle soglie e alle specificazioni;
+4. **usare modelli gerarchici** quando i gruppi possono essere rappresentati come unità provenienti da una popolazione comune. Il partial pooling stabilizza le stime estreme, ma non sostituisce la trasparenza sulla selezione dei risultati.
 
 ## Assunzioni del modello ed estensioni metodologiche
 
-Il modello lineare classico a medie di cella poggia su quattro assunzioni stocastiche fondamentali: l’indipendenza condizionale delle osservazioni, la normalità degli errori entro ciascun gruppo, l’omoschedasticità (ovvero una deviazione standard residua $\sigma$ comune a tutte le condizioni) e l’assenza di variabili latenti o covariate omesse in grado di spiegare variazioni sistematiche dell’outcome. Ciascuna di queste assunzioni va verificata attraverso i controlli predittivi a posteriori e, più in generale, alla luce del disegno di ricerca.
+Il modello a medie di cella assume che, condizionatamente al gruppo, le osservazioni siano indipendenti e seguano una distribuzione normale con deviazione standard comune $\sigma$. I controlli predittivi possono mostrare se il modello riproduce adeguatamente posizione, dispersione, asimmetria e code delle distribuzioni osservate. L’indipendenza dipende soprattutto dal disegno e dalla struttura dei dati: misure ripetute, partecipanti raggruppati in centri o altri cluster richiedono una modellazione esplicita. L’assenza di confondimento non è invece un’assunzione diagnostica della likelihood: riguarda la possibilità di interpretare causalmente i contrasti e deve essere valutata attraverso il disegno di ricerca e le conoscenze sostantive.
 
 Quando queste assunzioni risultano eccessivamente restrittive, il framework bayesiano offre estensioni naturali: l’adozione di una verosimiglianza Student-$t$ per distribuzioni con code pesanti o valori estremi; modelli con varianza eterogenea tra gruppi; l’inclusione di covariate e interazioni per controllare variabili di disturbo; e strutture gerarchiche per dati clusterizzati o misure ripetute.
 
@@ -588,13 +613,12 @@ Una rendicontazione scientifica trasparente ed efficace deve strutturarsi attorn
 
 Un possibile modello di stesura per la sezione dei Risultati è il seguente:
 
-> Per esaminare il gradiente di efficacia clinica tra le condizioni, abbiamo specificato un modello lineare bayesiano normale a medie di cella. Il modello ha stimato per ciascun braccio sperimentale la distribuzione a posteriori del punteggio medio di depressione. Il primo contrasto pianificato, volto a confrontare il gruppo di controllo con il punto medio dei due protocolli attivi, ha evidenziato una riduzione sintomatologica pari a $\Delta_{C:T} = 8.1$ punti di CES-D (HDI 95% $[5.4, 10.8]$). La probabilità a posteriori che tale decremento superi la soglia di rilevanza clinica minima di 3 punti è pari a $\Pr(\Delta_{C:T} > 3 \mid y) > .99$.
-> Il secondo contrasto pianificato, mirato al confronto diretto tra i due interventi psicoterapeutici, ha mostrato uno scostamento a favore del secondo protocollo pari a $\Delta_{P1:P2} = 4.8$ punti (HDI 95% $[2.1, 7.5]$); la probabilità che questa differenza metrica risulti clinicamente rilevante in valore assoluto è pari a $\Pr(\vert{}\Delta_{P1:P2}\vert{} > 3 \mid y) = .87$. Le conclusioni inferenziali qui presentate rimangono strettamente vincolate alla struttura dei contrasti specificati a priori e dipendono sia dall'adeguatezza della verosimiglianza gaussiana sia dalla tenuta del disegno di campionamento.
+> Per esaminare le differenze tra le condizioni, abbiamo specificato un modello lineare bayesiano normale a medie di cella. Il contrasto pianificato tra il controllo e la media dei due protocolli ha stimato una differenza di `r sprintf("%.1f", ctrl_median)` punti (intervallo di credibilità al 95%: `r sprintf("[%.1f, %.1f]", ctrl_lower, ctrl_upper)`). La probabilità a posteriori che tale differenza superi la soglia sostantiva di 3 punti è `r sprintf("%.1f%%", 100 * ctrl_prob_sesoi)`. Il confronto diretto tra i protocolli ha stimato una differenza di `r sprintf("%.1f", p12_median)` punti (intervallo di credibilità al 95%: `r sprintf("[%.1f, %.1f]", p12_lower, p12_upper)`), con probabilità `r sprintf("%.1f%%", 100 * p12_prob_sesoi)` che la differenza assoluta superi 3 punti. Questi risultati rispondono ai contrasti specificati e non implicano che ogni coppia di gruppi differisca, né autorizzano da soli un’interpretazione causale. Le conclusioni dipendono dall’adeguatezza del modello e dal disegno sperimentale.
 
 ## Errori frequenti
 
 ::: {.callout-warning collapse=true title="Trattare l'ANOVA come una tecnica separata"}
-Un fattore a più livelli entra nel modello lineare attraverso la matrice del moello La logica inferenziale non cambia rispetto al confronto tra due gruppi.
+Un fattore a più livelli entra nel modello lineare attraverso la matrice del modello. La logica inferenziale non cambia rispetto al confronto tra due gruppi.
 :::
 
 ::: {.callout-warning collapse=true title="Interpretare i coefficienti senza controllare la codifica"}
@@ -619,9 +643,9 @@ $\widehat R$, effective sample size e assenza di divergenze riguardano il calcol
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-L’analisi della varianza a una via non introduce un nuovo paradigma statistico, ma si inserisce  nel quadro del modello lineare: un predittore categoriale con più di due livelli viene tradotto in vettori numerici all’interno della matrice del modello La codifica con categoria di riferimento rende immediata la lettura degli scostamenti rispetto al gruppo baseline; la parametrizzazione a medie di cella esplicita invece direttamente i parametri di posizione di ciascuna condizione. Le due formulazioni descrivono il medesimo sottospazio lineare e producono identici valori adattati, purché le distribuzioni a priori siano specificate in modo coerente con la parametrizzazione adottata.
+L’analisi della varianza a una via non introduce un nuovo paradigma statistico, ma si inserisce  nel quadro del modello lineare: un predittore categoriale con più di due livelli viene tradotto in vettori numerici all’interno della matrice del modello. La codifica con categoria di riferimento rende immediata la lettura degli scostamenti rispetto al gruppo baseline; la parametrizzazione a medie di cella esplicita invece direttamente i parametri di posizione di ciascuna condizione. Le due formulazioni descrivono il medesimo sottospazio lineare e producono identici valori adattati, purché le distribuzioni a priori siano specificate in modo coerente con la parametrizzazione adottata.
 
-Il contributo più rilevante dell’approccio bayesiano risiede nella possibilità di tradurre le ipotesi scientifiche in **contrasti pianificati**. A differenza del test omnibus classico, che si limita a segnalare l’esistenza di almeno una differenza tra le medie, l’inferenza bayesiana restituisce l’intera distribuzione a posteriori di qualsiasi combinazione lineare delle medie definita *a priori*. Ciò consente di valutare l’ampiezza degli effetti sulla scala originaria, calcolare probabilità direzionali e verificare se le differenze superino una soglia di rilevanza pratica stabilita indipendentemente dai dati.
+Il messaggio principale è che la domanda omnibus e i contrasti hanno ruoli diversi. Una sintesi globale può indicare che le medie non sono tutte praticamente equivalenti, ma non identifica il pattern responsabile. I **contrasti pianificati** traducono invece le ipotesi scientifiche in combinazioni lineari delle medie e ne restituiscono l’intera distribuzione a posteriori. È così possibile valutare direzione, ampiezza e rilevanza pratica sulla scala originaria, anziché arrestarsi alla conclusione generica che “esiste almeno una differenza”.
 
 Infine, la presenza di molteplici livelli solleva una questione metodologica cruciale, che sarà al centro dei prossimi capitoli. Quando le condizioni o le unità da confrontare sono numerose e tra loro collegate — come avviene con dati provenienti da scuole, centri clinici, stimoli o studi diversi — stimare ciascun parametro in isolamento rischia di produrre stime instabili e scarsamente generalizzabili. I modelli gerarchici rispondono a questa vulnerabilità introducendo una distribuzione comune di secondo livello, in grado di rappresentare simultaneamente la variabilità tra i gruppi e le regolarità condivise dell’intera popolazione.
 
@@ -640,59 +664,115 @@ Infine, la presenza di molteplici livelli solleva una questione metodologica cru
 
 ## Esercizi {.unnumbered .unlisted}
 
-### Esercizio 1 — Leggere la matrice del modello
+### Esercizio 1 — Comprendere: dall’omnibus ai contrasti {.unnumbered .unlisted}
 
-Costruisci con `model.matrix()` le matrici associate a:
+*Livello essenziale · Codice: no · 10 minuti*
+
+Considera tre gruppi con medie ipotetiche $\mu_A=20$, $\mu_B=20$ e $\mu_C=28$.
+
+1. Quale informazione fornirebbe un test omnibus che concludesse che le medie non sono tutte uguali?
+2. Formula un contrasto che confronti il gruppo $C$ con la media dei gruppi $A$ e $B$.
+3. Formula un contrasto che confronti direttamente $A$ e $B$.
+4. Spiega perché il primo contrasto è informativo mentre la sola conclusione omnibus non descrive il pattern delle medie.
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+Un contrasto è una somma pesata delle medie. Per un confronto puro, i pesi sommano a zero.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+Il risultato omnibus dice soltanto che almeno una media differisce dalle altre. Il confronto tra $C$ e la media di $A$ e $B$ può essere scritto con i pesi $(-0.5,-0.5,1)$:
+
+$$
+\Delta_C=\mu_C-\frac{\mu_A+\mu_B}{2}=8.
+$$
+
+Il confronto tra $A$ e $B$ usa i pesi $(1,-1,0)$ e vale zero. I due contrasti mostrano quindi che il pattern non consiste in differenze diffuse tra tutte le coppie: $A$ e $B$ sono uguali, mentre $C$ è più alto. Il test omnibus, da solo, non fornisce questa informazione.
+:::
+
+### Esercizio 2 — Interpretare: che cosa dicono i contrasti? {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 10–15 minuti*
+
+Un’analisi produce i seguenti risultati:
+
+- controllo meno media delle terapie: mediana $8.0$, intervallo di credibilità al 95% $[5.2,10.7]$, $P(\Delta>3\mid y)=0.998$;
+- Terapia 1 meno Terapia 2: mediana $4.7$, intervallo di credibilità al 95% $[2.0,7.4]$, $P(|\Delta|>3\mid y)=0.88$.
+
+Interpreta separatamente:
+
+1. la direzione delle differenze;
+2. la loro ampiezza sulla scala CES-D;
+3. la rilevanza rispetto alla soglia di 3 punti;
+4. ciò che questi risultati non permettono di concludere sui singoli pazienti e sulla causalità.
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+Ricorda che punteggi più elevati indicano maggiore sintomatologia e che i contrasti sono definiti come controllo meno terapie e Terapia 1 meno Terapia 2.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+Il primo contrasto indica che il controllo presenta, in media, circa 8 punti di sintomatologia in più rispetto alla media delle terapie; la probabilità che la differenza superi 3 punti è quasi uno. Il secondo indica che la Terapia 2 è associata a punteggi medi inferiori alla Terapia 1 di circa 4.7 punti; la probabilità che la differenza assoluta superi 3 punti è elevata ma non certa. Queste sono affermazioni sulle medie dei gruppi: non implicano che ogni paziente migliori, né dimostrano un effetto causale senza un disegno adeguato.
+:::
+
+### Esercizio 3 — Impostare ed eseguire: medie di cella e contrasti {.unnumbered .unlisted}
+
+*Livello essenziale · Codice guidato · 15 minuti*
+
+Completa il codice seguente per stimare direttamente le tre medie di gruppo e derivare i due contrasti pianificati:
 
 ```r
-~ condizione
-~ 0 + condizione
+fit <- brm(
+  formula = punteggio ~ ___ + condizione,
+  data = anova_data,
+  family = gaussian(),
+  prior = anova_priors,
+  backend = "cmdstanr"
+)
+
+draws <- as_draws_df(fit) |>
+  posterior::mutate_variables(
+    mu_ctrl = ___,
+    mu_p1 = ___,
+    mu_p2 = ___,
+    ctrl_vs_terapie = ___,
+    p1_vs_p2 = ___
+  )
 ```
 
-Spiega il significato di ciascuna colonna e ricostruisci le tre medie a partire dai coefficienti della prima parametrizzazione.
+Spiega inoltre come cambierebbe il significato dei coefficienti usando `punteggio ~ condizione`.
 
-### Esercizio 2 — Cambiare il gruppo di riferimento
+::: {.callout-tip collapse=true title="Suggerimento"}
+Per ottenere le medie di cella occorre rimuovere l’intercetta. I nomi dei coefficienti sono quelli mostrati da `variables(fit)` o dal riepilogo del modello.
+:::
 
-Imposta `psicoterapia2` come riferimento e adatta il modello con intercetta. Quali coefficienti cambiano? Quali quantità rimangono identiche?
+::: {.callout-note collapse=true title="Soluzione commentata"}
+La formula è `punteggio ~ 0 + condizione`. I coefficienti sono `b_condizionecontrollo`, `b_condizionepsicoterapia1` e `b_condizionepsicoterapia2`. I contrasti sono:
 
-### Esercizio 3 — Formulare un contrasto teorico
+```r
+ctrl_vs_terapie = mu_ctrl - (mu_p1 + mu_p2) / 2
+p1_vs_p2 = mu_p1 - mu_p2
+```
 
-Definisci un contrasto che attribuisca peso doppio al secondo protocollo rispetto al primo nel confronto con il controllo. Motiva i pesi e verifica che sommino a zero.
+Con `punteggio ~ condizione`, l’intercetta rappresenta la media del gruppo di riferimento e gli altri coefficienti rappresentano differenze rispetto a quel gruppo. Le medie adattate e i contrasti rimangono ricostruibili, ma i coefficienti hanno un significato diverso e richiedono prior coerenti con la nuova parametrizzazione.
+:::
 
-### Esercizio 4 — Modificare la SESOI
+### Esercizio 4 — Criticare e comunicare {.unnumbered .unlisted}
 
-Ripeti il calcolo delle probabilità usando soglie di 1, 3 e 5 punti. Descrivi come cambia la conclusione senza modificare la posterior.
+*Livello essenziale · Codice: no · 10 minuti*
 
-### Esercizio 5 — Confronto esplorativo
+Valuta il seguente resoconto:
 
-Calcola tutti i confronti a coppie con `pairs(anova_emmeans)`. Indica quali domande aggiuntive rispondono e quali rischi interpretativi introduce la loro selezione a posteriori.
+> L’ANOVA bayesiana ha dimostrato che tutti e tre i gruppi sono significativamente diversi. Poiché la probabilità omnibus supera il 99%, entrambe le terapie sono clinicamente efficaci e la Terapia 2 è migliore per ogni paziente. Nell’approccio bayesiano non esiste alcun problema di confronti multipli.
 
-### Esercizio 6 — Controllo predittivo per la dispersione
+Individua almeno quattro problemi e riscrivi il resoconto in modo appropriato, facendo riferimento ai contrasti pianificati.
 
-Usa `replicated_group_stats` per confrontare le deviazioni standard replicate con quelle osservate. Il modello con $\sigma$ comune rappresenta adeguatamente tutti i gruppi?
+::: {.callout-tip collapse=true title="Suggerimento"}
+Distingui: domanda globale e confronti specifici; differenze tra medie e risposte individuali; associazione e causalità; posterior dei contrasti e selezione tra molti risultati.
+:::
 
-### Esercizio 7 — Dati sbilanciati
+::: {.callout-note collapse=true title="Soluzione commentata"}
+Una conclusione globale non implica che tutte le coppie differiscano. Le probabilità posteriori devono riferirsi a contrasti definiti e a soglie esplicite; una differenza media non descrive ogni paziente; l’efficacia causale dipende dal disegno; la selezione tra molti confronti rimane problematica anche senza valori-$p$.
 
-Simula gruppi con numerosità 20, 40 e 80. Confronta la media campionaria complessiva con il punto medio non ponderato delle tre medie. Spiega perché non sono la stessa quantità.
-
-### Esercizio 8 — Parametrizzazione e prior
-
-Adatta lo stesso modello con codifica a riferimento. Specifica prior che inducano approssimativamente le stesse credenze sulle tre medie del modello a medie di cella. Spiega perché assegnare semplicemente `normal(25, 10)` a tutti i coefficienti non produce lo stesso prior congiunto.
-
-### Esercizio 9 — Verso il modello multilivello
-
-Simula venti gruppi con poche osservazioni ciascuno. Spiega perché la stima indipendente di venti medie può essere instabile e anticipa come una distribuzione gerarchica potrebbe regolarizzarle.
-
-::: {.callout-tip collapse=true title="Tracce di soluzione"}
-- **Esercizio 1:** con l'intercetta, una colonna rappresenta il riferimento e le altre gli scostamenti; senza intercetta, ciascuna colonna identifica direttamente un gruppo.
-- **Esercizio 2:** cambiano intercetta e coefficienti visualizzati, ma medie adattate, contrasti e previsioni rimangono invariati quando il modello e i prior sono equivalenti.
-- **Esercizio 3:** i pesi devono riflettere la domanda e sommare a zero; per esempio, un confronto controllo versus combinazione ponderata delle terapie può usare $(1,-1/3,-2/3)$.
-- **Esercizio 4:** aumentando la soglia diminuisce la probabilità che il contrasto sia sostantivamente rilevante; la distribuzione a posteriori non cambia.
-- **Esercizio 5:** l'esplorazione è legittima se dichiarata come tale; il problema nasce quando i confronti selezionati vengono presentati come ipotesi pianificate.
-- **Esercizio 6:** confronta ciascuna deviazione standard osservata con la relativa distribuzione replicata; deviazioni sistematiche suggeriscono una specificazione eteroschedastica o robusta.
-- **Esercizio 7:** la media complessiva pondera le medie in base alle numerosità; il punto medio assegna lo stesso peso a ogni gruppo.
-- **Esercizio 8:** i prior sui coefficienti dipendono linearmente dalla parametrizzazione; prior indipendenti in un sistema di coordinate possono diventare dipendenti in un altro.
-- **Esercizio 9:** gruppi piccoli producono medie molto variabili; il partial pooling combina informazione del gruppo e informazione della popolazione dei gruppi.
+Una formulazione adeguata potrebbe essere: “Il contrasto pianificato ha indicato che, in media, i due gruppi di terapia presentavano punteggi inferiori al controllo. Il confronto tra i protocolli ha inoltre favorito la Terapia 2, con incertezza quantificata dalla relativa distribuzione a posteriori. Le conclusioni riguardano le medie dei gruppi e la loro interpretazione causale dipende dalla randomizzazione e dalle altre caratteristiche del disegno. Gli eventuali confronti esplorativi sono riportati separatamente.”
 :::
 
 ::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}

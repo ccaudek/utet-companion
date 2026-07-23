@@ -1,630 +1,727 @@
-# Quantificare e aggiornare l'incertezza
+# Quantificare e aggiornare l'incertezza con l'approssimazione su griglia {#sec-grid-approx}
 
 ::: {.callout-note appearance="minimal"}
+Nel capitolo del manuale dedicato alla quantificazione e all'aggiornamento dell'incertezza, il teorema di Bayes è stato presentato come una regola per combinare conoscenze iniziali e dati osservati. In forma simbolica,
 
-Nel capitolo 15 del manuale didattico abbiamo esplorato i fondamenti teorici dell'aggiornamento bayesiano, introducendo il concetto di distribuzione di probabilità come strumento per rappresentare l'incertezza e mostrando come il teorema di Bayes consenta di aggiornare in modo coerente le nostre credenze alla luce dei dati. Abbiamo utilizzato l'esempio del globo terrestre per sviluppare un'intuizione visiva del processo di apprendimento bayesiano e abbiamo concluso con un'applicazione concreta nel campo della psicologia: la stima della proporzione di persone che giudicano moralmente accettabile un'azione controversa nel dilemma del carrello ferroviario.
+$$
+p(\theta \mid y) \propto p(y \mid \theta)\,p(\theta).
+$$
 
-Questo capitolo non introduce nuovi aspetti della teoria della probabilità, ma traduce il teorema di Bayes in una procedura computazionale elementare. In questo materiale supplementare, mettiamo in pratica i principi discussi in precedenza attraverso implementazioni complete in R. L'obiettivo non è semplicemente riprodurre i calcoli presentati nel manuale, ma espandere la comprensione attraverso l'esperienza diretta con il codice. Ogni riga di codice sarà corredata da spiegazioni dettagliate che renderanno trasparente il processo computazionale sottostante. 
+La formula è compatta, ma l'operazione che descrive può rimanere astratta. L'approssimazione su griglia elimina questa difficoltà: scegliamo un insieme finito di valori possibili per $\theta$ e, **per ciascun valore**, moltiplichiamo il peso assegnato dal prior per la compatibilità espressa dalla verosimiglianza. La normalizzazione finale trasforma questi prodotti in probabilità a posteriori.
 
-Il capitolo è suddiviso in tre sezioni principali. Nella prima sezione, implementeremo il metodo basato su griglia, un approccio intuitivo che discretizza lo spazio dei parametri e calcola esplicitamente la distribuzione a posteriori punto per punto. Questo metodo ha un enorme valore pedagogico, in quanto rende visibile ogni passaggio dell'aggiornamento bayesiano. Nella seconda sezione, esploreremo il modello Beta-Binomiale che offre una soluzione analitica elegante per l'aggiornamento continuo. Nella terza sezione, applicheremo questi strumenti a un esercizio pratico sul riconoscimento delle emozioni, consolidando la comprensione attraverso l'applicazione attiva.
+L'obiettivo principale del capitolo è quindi rendere completamente trasparente la sequenza:
+
+$$
+\text{prior} \times \text{verosimiglianza}
+\longrightarrow
+\text{pesi posteriori non normalizzati}
+\longrightarrow
+\text{posterior}.
+$$
 :::
 
 ::: {.callout-important appearance="minimal" .chapter-status}
-**Da sapere.** L’aggiornamento bayesiano combina distribuzione a priori e verosimiglianza per ottenere la distribuzione a posteriori. Il metodo basato su griglia rende visibile questo processo calcolando la plausibilità di un insieme discreto di valori del parametro; il modello Beta-Binomiale ne mostra una soluzione analitica continua.
+**Da sapere.** Nell'approssimazione su griglia, prior e verosimiglianza vengono valutati sugli stessi valori del parametro. Il loro prodotto punto per punto assegna un peso elevato ai valori che sono sostenuti sia dalle conoscenze iniziali sia dai dati. Questi prodotti devono essere normalizzati prima di poter essere interpretati come probabilità a posteriori.
 
-**Da saper fare.** Costruire una griglia di valori plausibili; specificare e normalizzare un prior discreto; calcolare la verosimiglianza e la distribuzione a posteriori; ricavare e interpretare media, moda, dispersione, intervalli di credibilità e probabilità relative a ipotesi sostantive; visualizzare il passaggio da prior a posterior.
+**Da saper fare.** Costruire una griglia; assegnare e normalizzare i pesi a priori; calcolare la verosimiglianza; moltiplicare prior e verosimiglianza punto per punto; normalizzare i prodotti; interpretare la distribuzione a posteriori e confrontare l'approssimazione discreta con la soluzione Beta-Binomiale.
 
-**Approfondimento facoltativo.** I dettagli computazionali della coniugazione Beta-Binomiale, il confronto sistematico tra soluzione discreta e continua e l’esercizio completo sul riconoscimento delle emozioni possono essere rimandati in una prima lettura.
+**Approfondimento facoltativo.** La soluzione analitica Beta-Binomiale, il confronto tra griglie di diversa risoluzione e la seconda applicazione possono essere rimandati in una prima lettura.
 
 [Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
 :::
 
-::: {.callout-caution collapse=true title="Preparazione del Notebook"}
-
+::: {.callout-caution collapse="true" title="Preparazione del Notebook"}
 ```{r}
-here::here("code", "_common.R") |> 
+here::here("code", "_common.R") |>
   source()
-
-# Load packages
-if (!requireNamespace("pacman")) install.packages("pacman")
-pacman::p_load(patchwork)
 ```
 :::
 
 ## Il dilemma del carrello ferroviario
 
-Il dilemma del carrello ferroviario [@foot1967; @thomson1976] è uno degli scenari più studiati dalla psicologia morale. La versione classica presenta ai partecipanti una situazione in cui un treno fuori controllo sta per investire cinque persone che verranno inevitabilmente uccise. Il partecipante può deviare il treno su un binario alternativo, salvando le cinque persone ma causando la morte di una persona che si trova su quel binario. La domanda cruciale è: questa azione è moralmente accettabile?
+Il dilemma del carrello ferroviario [@foot1967; @thomson1976] è uno scenario classico della psicologia morale. Nella versione considerata, un treno fuori controllo sta per investire cinque persone. Il partecipante può deviarlo su un binario alternativo, salvando le cinque persone ma causando la morte di una persona.
 
-Questo dilemma ha generato decenni di ricerche in psicologia morale, filosofia e neuroscienze cognitive. Le risposte dei partecipanti rivelano il conflitto tra i principi morali deontologici, che vietano di utilizzare una persona come mezzo, e le considerazioni utilitaristiche, che privilegiano il bene maggiore per il maggior numero di persone. La variabilità delle risposte riflette le differenze individuali nei processi di ragionamento morale, nell'influenza delle emozioni sul giudizio e nelle intuizioni etiche di base.
+Indichiamo con $\theta$ la proporzione della popolazione che giudica moralmente accettabile deviare il treno. Ogni risposta è binaria e, nel modello più semplice, il numero di risposte positive in un campione di ampiezza $n$ segue una distribuzione binomiale.
 
-Dal punto di vista dell'inferenza statistica, il nostro obiettivo è stimare la proporzione $\theta$ della popolazione che giudica moralmente accettabile l'azione di deviare il treno. Ogni partecipante fornisce una risposta binaria: "accettabile" o "non accettabile". Questi dati possono essere modellati come prove Bernoulliane indipendenti e il conteggio totale delle risposte positive segue una distribuzione binomiale. L'approccio bayesiano ci permette di stimare $\theta$ integrando le conoscenze pregresse sulla psicologia morale con l'evidenza empirica raccolta nel nostro studio specifico.
-
-Supponiamo di aver reclutato un campione di trenta adulti e di aver osservato che ventidue di essi giudicano moralmente accettabile l'azione. Questi numeri costituiscono la nostra evidenza empirica. La domanda inferenziale è: quale credenza ragionevole possiamo sviluppare riguardo alla proporzione $\theta$ nella popolazione generale, dati questi risultati campionari?
-
-## Il metodo basato su griglia
-
-Il metodo basato su griglia rappresenta l'approccio più diretto e trasparente per implementare l'aggiornamento bayesiano. La sua logica è molto semplice: dividiamo l'intervallo dei valori possibili per $\theta$ in un insieme discreto di punti, calcoliamo la plausibilità di ciascun punto combinando *prior* e verosimiglianza, e normalizziamo per ottenere una distribuzione di probabilità valida.
-
-### Costruzione della griglia di valori
-
-Il primo passo consiste nel definire l'insieme dei valori possibili per il parametro $\theta$. Poiché $\theta$ rappresenta una proporzione, deve necessariamente cadere nell'intervallo tra 0 e 1. Per rendere il calcolo gestibile, è necessario discretizzare l'intervallo continuo in un numero finito di punti.
+Supponiamo di osservare 22 risposte positive in un campione di 30 persone:
 
 ```{r}
-# Creiamo una griglia di valori per il parametro theta
-# Usiamo una sequenza da 0 a 1 con incrementi di 0.1
-# Questo ci dà 11 valori possibili: 0.0, 0.1, 0.2, ..., 1.0
-theta_griglia <- seq(from = 0, to = 1, by = 0.1)
+successi <- 22
+prove <- 30
+proporzione_osservata <- successi / prove
+proporzione_osservata
+```
 
-# Visualizziamo i valori della griglia
+Vogliamo usare questi dati per aggiornare le nostre credenze sui possibili valori di $\theta$.
+
+## L'approssimazione su griglia
+
+### Passo 1: scegliere i valori possibili
+
+Poiché $\theta$ è una proporzione, può assumere valori tra 0 e 1. Per rendere ogni calcolo visibile, utilizziamo inizialmente una griglia grossolana di undici punti:
+
+```{r}
+theta_griglia <- seq(0, 1, by = 0.1)
 theta_griglia
 ```
 
-La griglia risultante contiene undici valori equidistanti. Questa discretizzazione è sufficientemente fine per scopi didattici, mantenendo comunque i calcoli trasparenti e gestibili. In applicazioni reali, potremmo utilizzare griglie molto più fini, con centinaia o migliaia di punti, per approssimare meglio la distribuzione continua sottostante. Tuttavia, per comprendere il meccanismo fondamentale dell'aggiornamento bayesiano, questa griglia grossolana è perfettamente adeguata e ha il vantaggio di rendere ogni calcolo esplicitamente verificabile.
+La griglia non afferma che $\theta$ possa assumere soltanto questi valori. È uno strumento computazionale: sostituisce temporaneamente un intervallo continuo con un insieme finito di possibilità.
 
-### Specificazione della distribuzione a priori
+### Passo 2: assegnare i pesi a priori
 
-La distribuzione a priori rappresenta le nostre credenze su $\theta$ prima di osservare i dati. In un approccio bayesiano, questa componente deve essere specificata esplicitamente, rendendo così trasparenti le assunzioni iniziali. Esistono diverse filosofie riguardo alla scelta del *prior*. Un prior uniforme, che assegna la stessa probabilità a tutti i valori, rappresenta uno stato di ignoranza totale iniziale. Un prior informativo incorpora invece conoscenze pregresse derivanti dalla letteratura, da studi pilota o da considerazioni teoriche.
-
-Per questo esempio, adottiamo un prior informativo che riflette una moderata credenza riguardo alla distribuzione di $\theta$. Questa distribuzione concentra la probabilità sui valori centrali, riflettendo l'aspettativa che le risposte estreme (tutti accettano o tutti rifiutano) siano meno probabili rispetto alle risposte intermedie.
+Per costruire un prior discreto, valutiamo una distribuzione Beta(2, 2) nei punti della griglia e normalizziamo i valori ottenuti. Il prior è simmetrico intorno a 0.5 e assegna poco peso ai valori estremi.
 
 ```{r}
-# Definiamo un prior informativo discreto
-# Questo vettore contiene le probabilità associate a ciascun valore di theta
-# Notiamo che i valori estremi (0 e 1) hanno probabilità zero
-# I valori centrali (0.4, 0.5, 0.6, 0.7) hanno probabilità più elevate
-prior_informativo <- c(0, 0.05, 0.05, 0.05, 0.175, 0.175, 0.175, 0.175, 0.05, 0.05, 0.05)
+pesi_prior <- dbeta(theta_griglia, shape1 = 2, shape2 = 2)
+prior <- pesi_prior / sum(pesi_prior)
 
-# Verifichiamo che le probabilità sommino a uno
-# Questa è una proprietà fondamentale di ogni distribuzione di probabilità valida
-somma_prior <- sum(prior_informativo)
+sum(prior)
 ```
 
-La somma delle probabilità nel nostro prior è `r somma_prior`, il che conferma che abbiamo specificato una distribuzione di probabilità valida. Questa distribuzione assegna una probabilità pari a zero agli estremi, ovvero ai valori di $\theta$ pari a 0 e a 1, riflettendo la convinzione che sia improbabile che nessuno o tutti accettino l'azione nel dilemma. I valori centrali, compresi tra 0.4 e 0.7, ricevono le probabilità più alte, riflettendo l'aspettativa che le opinioni morali siano distribuite in modo relativamente equilibrato all'interno della popolazione.
+Dopo la normalizzazione, `prior` è una distribuzione di probabilità discreta: a ogni valore della griglia corrisponde una probabilità e la somma è uguale a uno.
 
 ```{r}
-# Creiamo una visualizzazione della distribuzione a priori
-# Questo grafico mostra chiaramente quali valori di theta consideriamo
-# più o meno plausibili prima di osservare i dati
-
-# Organizziamo i dati in un dataframe per facilitare la visualizzazione
-dati_prior <- data.frame(
+dati_prior <- tibble(
   theta = theta_griglia,
-  probabilita = prior_informativo
+  prior = prior
 )
 
-col_prior <- palette_qualitative[8]      # Grigio
-col_likelihood <- palette_qualitative[1] # Arancione
-col_posterior <- palette_qualitative[5]  # Blu
-col_mean <- palette_qualitative[6]       # Rosso-arancio per linee verticali
-col_interval <- palette_qualitative[7]   # Rosa per intervalli di credibilità
-
-ggplot(dati_prior, aes(x = theta, y = probabilita)) +
-  geom_col(width = 0.08, fill = col_prior, alpha = 0.7) +  # Grigio
+ggplot(dati_prior, aes(theta, prior)) +
+  geom_col(width = 0.075, fill = palette_qualitative[8], alpha = 0.8) +
+  scale_x_continuous(breaks = theta_griglia) +
   labs(
-    x = expression(theta ~ "(proporzione che giudica accettabile)"),
-    y = "Probabilità a priori",
-    title = "Distribuzione a priori informativa",
-    subtitle = "Maggiore plausibilità per valori centrali di θ"
-  ) +
-  scale_x_continuous(breaks = theta_griglia)
+    title = "Distribuzione a priori sulla griglia",
+    subtitle = "Prior discreto ottenuto da una Beta(2, 2)",
+    x = expression(theta),
+    y = "Probabilità a priori"
+  )
 ```
 
-Il grafico rivela la struttura della nostra distribuzione a priori. La forma ricorda approssimativamente quella di una distribuzione normale, centrata sui valori intermedi e con code che decrescono verso gli estremi. Questa configurazione riflette una posizione epistemica ragionevole: pur non avendo certezze definitive prima di raccogliere i dati, abbiamo alcune aspettative qualitative basate sulla letteratura e sul buon senso psicologico.
+::: {.callout-note title="Densità continua e probabilità discreta"}
+`dbeta()` restituisce una **densità**, non una probabilità puntuale. Nell'approssimazione su griglia usiamo tali densità come pesi relativi e le dividiamo per la loro somma. Otteniamo così probabilità discrete associate ai punti della griglia.
+:::
 
-### Calcolo della funzione di verosimiglianza
+### Passo 3: calcolare la verosimiglianza
 
-La verosimiglianza quantifica quanto i dati osservati siano compatibili con ciascun possibile valore del parametro. Nel nostro caso, abbiamo osservato ventidue risposte positive su trenta partecipanti. Per ogni valore di $\theta$ nella griglia, calcoliamo la probabilità di ottenere questo risultato ($y$ = 22; $n$ = 30) se quel valore specifico fosse il parametro reale della popolazione.
+Per ogni valore candidato di $\theta$, calcoliamo la probabilità di osservare esattamente 22 successi su 30 prove:
 
 ```{r}
-# Definiamo i dati osservati
-successi_osservati <- 22  # numero di risposte "accettabile"
-prove_totali <- 30         # numero totale di partecipanti
-
-# Calcoliamo la verosimiglianza per ogni valore di theta nella griglia
-# La funzione dbinom calcola la probabilità binomiale
-# Argomenti: numero di successi, dimensione del campione, probabilità di successo
 verosimiglianza <- dbinom(
-  x = successi_osservati,
-  size = prove_totali,
+  x = successi,
+  size = prove,
   prob = theta_griglia
 )
 
-# Visualizziamo i valori di verosimiglianza calcolati
 verosimiglianza
 ```
 
-I valori di verosimiglianza mostrano un chiaro andamento. La verosimiglianza è massima per $\theta$ = 0.7, valore che corrisponde esattamente alla proporzione osservata nel campione (22/30 ≈ 0.73). I valori di $\theta$ vicini a 0.7 hanno anch'essi una verosimiglianza elevata, mentre i valori molto distanti hanno una verosimiglianza molto bassa o praticamente nulla. Ciò riflette il fatto che i nostri dati sono altamente incompatibili con ipotesi estreme come $\theta$ = 0.1 o $\theta$ = 0.9.
+La verosimiglianza risponde alla domanda:
+
+> Se un determinato valore di $\theta$ fosse quello usato dal modello generativo, quanto sarebbero compatibili con esso i dati osservati?
+
+La verosimiglianza è massima vicino alla proporzione campionaria $22/30 \approx 0.73$. Sulla griglia scelta, il massimo cade in $\theta=0.7$.
 
 ```{r}
-# Visualizziamo la funzione di verosimiglianza
-# Questo grafico mostra quali valori di theta sono più compatibili
-# con i dati che abbiamo osservato
+theta_massima_verosimiglianza <- theta_griglia[which.max(verosimiglianza)]
+theta_massima_verosimiglianza
+```
 
-dati_verosimiglianza <- data.frame(
+È essenziale non confondere la verosimiglianza con una distribuzione di probabilità su $\theta$. In questa fase non stiamo ancora assegnando probabilità ai valori del parametro; stiamo confrontando quanto bene ciascun valore rende conto degli stessi dati.
+
+```{r}
+dati_likelihood <- tibble(
   theta = theta_griglia,
   verosimiglianza = verosimiglianza
 )
 
-ggplot(dati_verosimiglianza, aes(x = theta, y = verosimiglianza)) +
-  geom_col(width = 0.08, fill = col_likelihood, alpha = 0.7) +  # Arancione
+ggplot(dati_likelihood, aes(theta, verosimiglianza)) +
+  geom_col(width = 0.075, fill = palette_qualitative[1], alpha = 0.8) +
+  scale_x_continuous(breaks = theta_griglia) +
   labs(
-    x = expression(theta ~ "(proporzione che giudica accettabile)"),
-    y = "Verosimiglianza",
-    title = "Funzione di verosimiglianza",
-    subtitle = paste0(
-      "Basata su ", successi_osservati, " successi in ", 
-      prove_totali, " prove"
-    )
-  ) +
-  scale_x_continuous(breaks = theta_griglia)
+    title = "Verosimiglianza dei dati",
+    subtitle = paste0(successi, " risposte positive su ", prove),
+    x = expression(theta),
+    y = expression(p(y == 22 ~ "|" ~ theta))
+  )
 ```
 
-Il picco di verosimiglianza si colloca chiaramente nella regione compresa tra 0.6 e 0.8, con il valore massimo a 0.7. Questo risultato è intuitivo: se dovessimo scegliere un valore di $\theta$ che massimizza la probabilità dei dati osservati, sceglieremmo un valore prossimo alla proporzione campionaria. Tuttavia, la verosimiglianza da sola non costituisce una stima completa di $\theta$, in quanto non tiene conto delle nostre conoscenze pregresse né dell'incertezza associata alla stima.
+### Passo 4: moltiplicare punto per punto
 
-### L'aggiornamento bayesiano: combinazione di prior e verosimiglianza
+Ora eseguiamo l'operazione centrale. Per ogni riga della griglia moltiplichiamo:
 
-Il cuore dell'inferenza bayesiana risiede nella combinazione della distribuzione a priori con la verosimiglianza per ottenere la distribuzione a posteriori. Matematicamente, questo processo corrisponde alla moltiplicazione punto per punto della distribuzione a priori e della verosimiglianza, seguita da una normalizzazione per garantire che le probabilità sommino a uno.
+$$
+\text{peso non normalizzato}(\theta_i)
+=
+p(\theta_i)\,p(y\mid\theta_i).
+$$
 
 ```{r}
-# Calcoliamo la distribuzione a posteriori non normalizzata
-# Questa si ottiene moltiplicando, per ogni valore di theta,
-# la probabilità a priori per la verosimiglianza
-posteriori_non_normalizzato <- prior_informativo * verosimiglianza
-
-# Visualizziamo i valori non normalizzati
-posteriori_non_normalizzato
+peso_non_normalizzato <- prior * verosimiglianza
 ```
 
-I valori non normalizzati riflettono la plausibilità relativa di ciascun valore di $\theta$ dopo l'osservazione dei dati. Tuttavia, questi numeri non costituiscono ancora una distribuzione di probabilità valida, in quanto la loro somma non è uguale a uno. Il passo finale consiste nel normalizzare questi valori dividendoli per la loro somma totale.
+La moltiplicazione è **punto per punto**:
+
+- il prior in $\theta=0.5$ viene moltiplicato per la verosimiglianza in $\theta=0.5$;
+- il prior in $\theta=0.6$ viene moltiplicato per la verosimiglianza in $\theta=0.6$;
+- e così via.
+
+Non si moltiplica il prior in un punto per la verosimiglianza in un altro punto. Ogni valore candidato viene valutato separatamente.
 
 ```{r}
-# Calcoliamo il fattore di normalizzazione
-# Questo è semplicemente la somma di tutti i valori non normalizzati
-fattore_normalizzazione <- sum(posteriori_non_normalizzato)
-
-# Dividiamo ciascun valore per questo fattore per ottenere
-# la distribuzione a posteriori normalizzata
-posteriori <- posteriori_non_normalizzato / fattore_normalizzazione
-
-# Verifichiamo che la somma sia ora uguale a uno
-somma_posteriori <- sum(posteriori)
-```
-
-La somma della distribuzione a posteriori è `r round(somma_posteriori, 10)`, il che conferma che abbiamo ottenuto una distribuzione di probabilità valida. Possiamo ora usare questa distribuzione per fare inferenze su $\theta$, calcolare statistiche riassuntive e quantificare l'incertezza associata alla nostra stima.
-
-```{r}
-# Visualizziamo la distribuzione a posteriori
-
-dati_posteriori <- data.frame(
+tabella_aggiornamento <- tibble(
   theta = theta_griglia,
-  probabilita = posteriori
+  prior = prior,
+  verosimiglianza = verosimiglianza,
+  prodotto = peso_non_normalizzato
 )
 
-ggplot(dati_posteriori, aes(x = theta, y = probabilita)) +
-  geom_col(width = 0.08, fill = col_posterior, alpha = 0.7) +  # Blu
-  labs(
-    x = expression(theta ~ "(proporzione che giudica accettabile)"),
-    y = "Probabilità a posteriori",
-    title = "Distribuzione a posteriori",
-    subtitle = "Sintesi di conoscenza a priori ed evidenza empirica"
-  ) +
-  scale_x_continuous(breaks = theta_griglia)
+tabella_aggiornamento |>
+  mutate(
+    across(
+      c(prior, verosimiglianza, prodotto),
+      \(x) formatC(x, format = "fg", digits = 4)
+    )
+  ) |>
+  knitr::kable(
+    align = c("c", "c", "c", "c"),
+    caption = "Moltiplicazione punto per punto di prior e verosimiglianza"
+  )
 ```
 
-La distribuzione a posteriori mostra una concentrazione di probabilità nella regione tra 0.6 e 0.8, con il massimo a 0.7. Confrontata con la distribuzione a priori, la posteriori è più stretta e spostata verso destra, riflettendo l'influenza dei dati osservati che hanno fornito evidenza di una proporzione relativamente alta di risposte positive.
-
-### Statistiche riassuntive della distribuzione a posteriori
-
-Una volta ottenuta la distribuzione a posteriori, è possibile calcolare diverse statistiche che riassumono le nostre credenze aggiornate su $\theta$. Le tre statistiche più comunemente utilizzate sono la media, la varianza e la moda.
+Consideriamo due righe della tabella. Per $\theta=0.5$ il prior attribuisce un peso relativamente alto, ma i dati sono poco compatibili con quel valore. Per $\theta=0.7$, invece, il prior assegna ancora un peso apprezzabile e la verosimiglianza è elevata. Il prodotto è quindi molto più grande in $\theta=0.7$.
 
 ```{r}
-# Calcoliamo la media a posteriori
-# Questa è il valore atteso di theta secondo la distribuzione a posteriori
-# Si calcola come somma ponderata: ogni valore di theta moltiplicato
-# per la sua probabilità a posteriori
-media_posteriori <- sum(theta_griglia * posteriori)
+riga_05 <- tabella_aggiornamento |>
+  filter(theta == 0.5)
 
-# Calcoliamo la varianza a posteriori
-# Questa quantifica la dispersione della distribuzione
-# e quindi l'incertezza residua su theta
-varianza_posteriori <- sum((theta_griglia - media_posteriori)^2 * posteriori)
-
-# La deviazione standard è la radice quadrata della varianza
-sd_posteriori <- sqrt(varianza_posteriori)
-
-# Calcoliamo la moda a posteriori
-# Questo è il valore di theta con massima probabilità a posteriori
-# Viene anche chiamato "stima MAP" (Maximum A Posteriori)
-indice_massimo <- which.max(posteriori)
-moda_posteriori <- theta_griglia[indice_massimo]
+riga_07 <- tabella_aggiornamento |>
+  filter(abs(theta - 0.7) < 1e-10)
 ```
 
-La media a posteriori è `r round(media_posteriori, 3)`, indicando che la nostra migliore stima puntuale di $\theta$, nel senso del valore atteso, è circa 0.729. La moda a posteriori è `r moda_posteriori`, che rappresenta il singolo valore più plausibile secondo la distribuzione. La deviazione standard è `r round(sd_posteriori, 3)`, quantificando l'incertezza residua sulla stima. Questa deviazione standard è sostanzialmente più piccola di quella che avremmo con un prior uniforme, riflettendo il fatto che il prior informativo ha contribuito a ridurre l'incertezza.
+Per $\theta=0.5$:
 
-### Visualizzazione comparativa dell'aggiornamento bayesiano
+$$
+`r signif(riga_05$prior, 4)`
+\times
+`r signif(riga_05$verosimiglianza, 4)`
+=
+`r signif(riga_05$prodotto, 4)`.
+$$
 
-Per apprezzare il processo di aggiornamento bayesiano, è utile visualizzare simultaneamente tutte e tre le componenti: prior, verosimiglianza e posterior. Questa visualizzazione mostra come l'evidenza empirica modifichi le credenze iniziali per produrre quelle aggiornate.
+Per $\theta=0.7$:
+
+$$
+`r signif(riga_07$prior, 4)`
+\times
+`r signif(riga_07$verosimiglianza, 4)`
+=
+`r signif(riga_07$prodotto, 4)`.
+$$
+
+::: {.callout-important title="Il significato pratico della moltiplicazione"}
+Il prodotto è grande soltanto quando **entrambi** i fattori sono sufficientemente grandi.
+
+- Un valore favorito dal prior ma incompatibile con i dati riceve poco peso.
+- Un valore compatibile con i dati ma quasi escluso dal prior riceve poco peso.
+- Un valore sostenuto sia dal prior sia dai dati riceve molto peso.
+
+La moltiplicazione funziona quindi come un'intersezione quantitativa tra le due fonti di informazione.
+:::
+
+### Passo 5: normalizzare
+
+I prodotti ottenuti non sommano a uno e non sono ancora probabilità a posteriori:
 
 ```{r}
-# Prepariamo i dati per la visualizzazione comparativa
-# Normalizziamo tutte le distribuzioni per renderle visivamente confrontabili
+costante_normalizzazione <- sum(peso_non_normalizzato)
+costante_normalizzazione
+```
 
-dati_completi <- data.frame(
-  theta = rep(theta_griglia, 3),
-  densita = c(
-    prior_informativo / sum(prior_informativo),
-    verosimiglianza / sum(verosimiglianza),
-    posteriori / sum(posteriori)
+Nel modello discreto definito dalla griglia, questa somma è anche la probabilità marginale dei dati:
+
+$$
+p(y)=\sum_i p(y\mid\theta_i)p(\theta_i).
+$$
+
+La costante risponde quindi alla domanda: quanto erano complessivamente prevedibili i dati prima di conoscere quale valore di $\theta$ fosse più plausibile?
+
+Dividiamo ogni prodotto per la somma di tutti i prodotti:
+
+$$
+p(\theta_i\mid y)
+=
+\frac{
+p(\theta_i)\,p(y\mid\theta_i)
+}{
+\sum_j p(\theta_j)\,p(y\mid\theta_j)
+}.
+$$
+
+```{r}
+posterior <- peso_non_normalizzato / costante_normalizzazione
+sum(posterior)
+```
+
+La normalizzazione non cambia l'ordine o i rapporti relativi tra i valori: moltiplica tutti i pesi per la stessa costante. Il suo scopo è trasformare i pesi relativi in una distribuzione di probabilità valida.
+
+```{r}
+tabella_aggiornamento <- tabella_aggiornamento |>
+  mutate(posterior = posterior)
+
+tabella_aggiornamento |>
+  mutate(
+    across(
+      c(prior, verosimiglianza, prodotto, posterior),
+      \(x) formatC(x, format = "fg", digits = 4)
+    )
+  ) |>
+  knitr::kable(
+    align = c("c", "c", "c", "c", "c"),
+    caption = "Dal prodotto non normalizzato alla distribuzione a posteriori"
+  )
+```
+
+### I quattro passaggi in un'unica figura
+
+La figura seguente mantiene separate le scale verticali. Questo evita di confondere probabilità a priori, verosimiglianze, prodotti non normalizzati e probabilità a posteriori, che hanno significati e scale differenti.
+
+```{r}
+dati_passaggi <- bind_rows(
+  tibble(
+    theta = theta_griglia,
+    valore = prior,
+    passaggio = "1. Prior"
   ),
-  tipo = rep(
-    c("Prior", "Verosimiglianza", "Posterior"),
+  tibble(
+    theta = theta_griglia,
+    valore = verosimiglianza,
+    passaggio = "2. Verosimiglianza"
+  ),
+  tibble(
+    theta = theta_griglia,
+    valore = peso_non_normalizzato,
+    passaggio = "3. Prodotto non normalizzato"
+  ),
+  tibble(
+    theta = theta_griglia,
+    valore = posterior,
+    passaggio = "4. Posterior"
+  )
+) |>
+  mutate(
+    passaggio = factor(
+      passaggio,
+      levels = c(
+        "1. Prior",
+        "2. Verosimiglianza",
+        "3. Prodotto non normalizzato",
+        "4. Posterior"
+      )
+    )
+  )
+
+ggplot(dati_passaggi, aes(theta, valore)) +
+  geom_col(width = 0.075, fill = PRIMARY, alpha = 0.8) +
+  facet_wrap(vars(passaggio), scales = "free_y", ncol = 2) +
+  scale_x_continuous(breaks = theta_griglia) +
+  labs(
+    title = "Aggiornamento bayesiano reso visibile",
+    subtitle = "Moltiplicazione punto per punto e successiva normalizzazione",
+    x = expression(theta),
+    y = NULL
+  )
+```
+
+La terza e la quarta figura hanno la stessa forma. La normalizzazione cambia la scala verticale, non la plausibilità relativa dei diversi valori di $\theta$.
+
+## Riassumere la distribuzione a posteriori
+
+Una volta ottenuta la distribuzione a posteriori, possiamo calcolare quantità che descrivono la posizione e l'incertezza residua.
+
+```{r}
+media_posterior <- sum(theta_griglia * posterior)
+
+varianza_posterior <- sum(
+  (theta_griglia - media_posterior)^2 * posterior
+)
+
+sd_posterior <- sqrt(varianza_posterior)
+moda_posterior <- theta_griglia[which.max(posterior)]
+
+media_posterior
+sd_posterior
+moda_posterior
+```
+
+La media a posteriori è `r round(media_posterior, 3)`, la deviazione standard è `r round(sd_posterior, 3)` e la moda è `r moda_posterior`. Questi valori sono proprietà della distribuzione discreta costruita sulla griglia scelta.
+
+Possiamo anche calcolare direttamente la probabilità a posteriori di un evento, per esempio $\theta>0.5$:
+
+```{r}
+prob_theta_maggiore_05 <- sum(posterior[theta_griglia > 0.5])
+prob_theta_maggiore_05
+```
+
+Nel modello discreto adottato,
+
+$$
+P(\theta>0.5\mid y)
+=
+`r round(prob_theta_maggiore_05, 4)`.
+$$
+
+Questa probabilità è condizionata ai dati, al modello binomiale, al prior e alla griglia utilizzata.
+
+## La soluzione Beta-Binomiale
+
+L'approssimazione su griglia non è una procedura diversa dal teorema di Bayes. È un modo esplicito di eseguire lo stesso calcolo. Nel nostro esempio, il prior continuo è Beta(2, 2) e la verosimiglianza è binomiale. La coniugazione produce:
+
+$$
+\theta \mid y
+\sim
+\operatorname{Beta}(2+22,\;2+8)
+=
+\operatorname{Beta}(24,10).
+$$
+
+```{r}
+alpha_prior <- 2
+beta_prior <- 2
+
+alpha_posterior <- alpha_prior + successi
+beta_posterior <- beta_prior + prove - successi
+```
+
+La media e l'intervallo di credibilità centrale al 95% sono:
+
+```{r}
+media_beta <- alpha_posterior / (alpha_posterior + beta_posterior)
+
+intervallo_beta <- qbeta(
+  c(0.025, 0.975),
+  shape1 = alpha_posterior,
+  shape2 = beta_posterior
+)
+
+prob_beta_maggiore_05 <- pbeta(
+  0.5,
+  shape1 = alpha_posterior,
+  shape2 = beta_posterior,
+  lower.tail = FALSE
+)
+
+media_beta
+intervallo_beta
+prob_beta_maggiore_05
+```
+
+Condizionatamente al modello e al prior scelti, la distribuzione a posteriori continua ha media `r round(media_beta, 3)`, intervallo centrale al 95% da `r round(intervallo_beta[1], 3)` a `r round(intervallo_beta[2], 3)` e probabilità `r round(prob_beta_maggiore_05, 4)` di valori superiori a 0.5.
+
+### Griglia e soluzione analitica sono lo stesso aggiornamento
+
+Valutiamo la densità Beta(24, 10) negli stessi punti della griglia e normalizziamola. I pesi ottenuti coincidono, a precisione numerica, con quelli prodotti dalla moltiplicazione del prior discreto per la verosimiglianza.
+
+```{r}
+posterior_beta_sulla_griglia <- dbeta(
+  theta_griglia,
+  shape1 = alpha_posterior,
+  shape2 = beta_posterior
+)
+
+posterior_beta_sulla_griglia <-
+  posterior_beta_sulla_griglia / sum(posterior_beta_sulla_griglia)
+
+differenza_massima <- max(
+  abs(posterior - posterior_beta_sulla_griglia)
+)
+
+differenza_massima
+```
+
+La differenza massima è `r format(differenza_massima, scientific = TRUE, digits = 2)`. Non si tratta di due logiche inferenziali diverse: la soluzione Beta-Binomiale comprime in una formula analitica la stessa moltiplicazione resa visibile dalla griglia.
+
+```{r}
+confronto_griglia <- tibble(
+  theta = rep(theta_griglia, 2),
+  probabilita = c(posterior, posterior_beta_sulla_griglia),
+  metodo = rep(
+    c("Prodotto su griglia", "Beta(24, 10) valutata sulla griglia"),
     each = length(theta_griglia)
   )
 )
 
-# Convertiamo il tipo in un fattore ordinato per controllare
-# l'ordine di visualizzazione nella legenda
-dati_completi$tipo <- factor(
-  dati_completi$tipo,
-  levels = c("Prior", "Verosimiglianza", "Posterior")
-)
-
-# Creiamo il grafico comparativo usando linee anziché barre
-# per enfatizzare la continuità concettuale delle distribuzioni
-ggplot(dati_completi, aes(x = theta, y = densita, color = tipo)) +
-  geom_line(size = 1.3) +
+ggplot(confronto_griglia, aes(theta, probabilita, color = metodo)) +
+  geom_line(linewidth = 1) +
   geom_point(size = 2) +
   scale_color_manual(
     values = c(
-      "Prior" = col_prior,           # Grigio
-      "Verosimiglianza" = col_likelihood,  # Arancione
-      "Posterior" = col_posterior    # Blu
+      "Prodotto su griglia" = palette_qualitative[5],
+      "Beta(24, 10) valutata sulla griglia" = palette_qualitative[1]
     )
   ) +
+  scale_x_continuous(breaks = theta_griglia) +
   labs(
-    x = expression(theta ~ "(proporzione che giudica accettabile)"),
-    y = "Densità normalizzata",
-    title = "Aggiornamento bayesiano con metodo su griglia",
-    subtitle = "Prior (grigio), Verosimiglianza (arancione), Posterior (blu)",
-    color = "Componente"
-  ) +
-  scale_x_continuous(breaks = theta_griglia)
-```
-
-Il grafico comparativo rivela diversi aspetti importanti del processo di aggiornamento. La curva grigia del prior mostra una distribuzione relativamente simmetrica centrata sui valori intermedi. La curva arancione della verosimiglianza è fortemente concentrata attorno a 0.7, riflettendo l'evidenza empirica fornita dai ventidue successi su trenta prove. La curva blu del posterior rappresenta un compromesso tra queste due fonti di informazione. La sua posizione è spostata verso destra rispetto al prior, influenzata dall'evidenza forte fornita dai dati, ma mantiene una certa regolarizzazione dovuta al prior che previene stime estreme basate su un campione relativamente piccolo.
-
-## Il modello Beta-Binomiale: soluzione analitica continua
-
-Il metodo basato su griglia fornisce un'approssimazione discreta dell'aggiornamento bayesiano, mentre il modello Beta-Binomiale offre una soluzione analitica esatta per le distribuzioni continue. Il modello beta-binomiale si fonda sulla proprietà di coniugazione tra distribuzione beta e verosimiglianza binomiale.
-
-### Fondamenti del modello coniugato
-
-Quando la distribuzione a priori per $\theta$ è una distribuzione Beta e i dati seguono una distribuzione binomiale, la distribuzione a posteriori è ancora una distribuzione Beta con parametri aggiornati. Questa proprietà semplifica notevolmente i calcoli e fornisce un'interpretazione intuitiva dell'aggiornamento in termini di accumulo di pseudo-osservazioni.
-
-La distribuzione Beta è definita da due parametri, tradizionalmente chiamati $\alpha$ e $\beta$. Una distribuzione Beta($\alpha$, $\beta$) può essere considerata come rappresentante la conoscenza derivante dall'osservazione di $\alpha$-1 successi e $\beta$-1 insuccessi in un ipotetico studio precedente. Quando si osservano nuovi dati reali, si sommano semplicemente i conteggi osservati a questi pseudo-conteggi.
-
-```{r}
-# Definiamo i parametri della distribuzione a priori Beta
-# Scegliamo Beta(2, 2) che rappresenta una credenza moderatamente informativa
-# Questa prior è simmetrica e centrata su 0.5
-alpha_prior <- 2
-beta_prior <- 2
-
-# Calcoliamo la media e la varianza di questa prior
-# La media di una Beta(α, β) è α/(α+β)
-media_prior_beta <- alpha_prior / (alpha_prior + beta_prior)
-
-# La varianza di una Beta(α, β) è αβ/[(α+β)²(α+β+1)]
-varianza_prior_beta <- (alpha_prior * beta_prior) / 
-  ((alpha_prior + beta_prior)^2 * (alpha_prior + beta_prior + 1))
-sd_prior_beta <- sqrt(varianza_prior_beta)
-```
-
-La distribuzione a priori Beta(2, 2) ha media `r media_prior_beta` e deviazione standard `r round(sd_prior_beta, 3)`. Questa distribuzione esprime una credenza iniziale piuttosto vaga, centrata sul valore intermedio di 0.5, ma sufficientemente dispersa da permettere ai dati di influenzare in modo sostanziale la distribuzione a posteriori.
-
-### Aggiornamento dei parametri Beta
-
-L'aggiornamento del modello Beta-Binomiale segue una regola estremamente semplice. Se osserviamo $y$ successi in $n$ prove, i nuovi parametri della distribuzione a posteriori sono $\alpha + y$ e $\beta + (n - y)$. Questo aggiornamento riflette l'idea che stiamo letteralmente aggiungendo i successi osservati ai successi virtuali del prior e gli insuccessi osservati agli insuccessi virtuali del prior.
-
-```{r}
-# Applichiamo la regola di aggiornamento Beta-Binomiale
-# I dati sono gli stessi del metodo su griglia: 22 successi su 30 prove
-
-# Calcoliamo il numero di insuccessi
-insuccessi_osservati <- prove_totali - successi_osservati
-
-# Aggiorniamo il parametro alpha sommando i successi osservati
-alpha_posteriori <- alpha_prior + successi_osservati
-
-# Aggiorniamo il parametro beta sommando gli insuccessi osservati  
-beta_posteriori <- beta_prior + insuccessi_osservati
-
-# Calcoliamo le statistiche della distribuzione a posteriori
-media_posteriori_beta <- alpha_posteriori / (alpha_posteriori + beta_posteriori)
-
-varianza_posteriori_beta <- (alpha_posteriori * beta_posteriori) / 
-  ((alpha_posteriori + beta_posteriori)^2 * (alpha_posteriori + beta_posteriori + 1))
-sd_posteriori_beta <- sqrt(varianza_posteriori_beta)
-```
-
-La distribuzione a posteriori risultante è Beta(`r alpha_posteriori`, `r beta_posteriori`). La media a posteriori è `r round(media_posteriori_beta, 3)`, molto vicina alla proporzione campionaria osservata di `r round(successi_osservati/prove_totali, 3)`. La deviazione standard a posteriori è `r round(sd_posteriori_beta, 3)`, sostanzialmente ridotta rispetto al prior, a indicare la riduzione dell'incertezza derivante dall'osservazione di trenta prove.
-
-### Visualizzazione dell'aggiornamento continuo
-
-La transizione dal prior al posterior nel modello Beta-Binomiale può essere visualizzata tracciando le curve di densità delle due distribuzioni Beta. Questa visualizzazione mostra come i dati modifichino la forma, la posizione e la dispersione della distribuzione.
-
-```{r}
-# Creiamo una griglia fine di valori per theta
-# Usiamo molti più punti rispetto al metodo su griglia
-# per ottenere curve lisce e continue
-theta_continuo <- seq(from = 0, to = 1, length.out = 500)
-
-# Calcoliamo la densità Beta per il prior e il posterior
-# La funzione dbeta calcola la funzione di densità di probabilità
-densita_prior_beta <- dbeta(theta_continuo, shape1 = alpha_prior, shape2 = beta_prior)
-densita_posteriori_beta <- dbeta(
-  theta_continuo, shape1 = alpha_posteriori, shape2 = beta_posteriori)
-
-# Organizziamo i dati per la visualizzazione
-dati_beta <- data.frame(
-  theta = rep(theta_continuo, 2),
-  densita = c(densita_prior_beta, densita_posteriori_beta),
-  tipo = rep(
-    c(paste0("Prior Beta(", alpha_prior, ",", beta_prior, ")"),
-      paste0("Posterior Beta(", alpha_posteriori, ",", beta_posteriori, ")")),
-    each = length(theta_continuo)
-  )
-)
-
-# Convertiamo in fattore ordinato
-dati_beta$tipo <- factor(
-  dati_beta$tipo,
-  levels = c(
-    paste0("Prior Beta(", alpha_prior, ",", beta_prior, ")"),
-    paste0("Posterior Beta(", alpha_posteriori, ",", beta_posteriori, ")")
-  )
-)
-
-# Creiamo il grafico con linee continue
-ggplot(dati_beta, aes(x = theta, y = densita, color = tipo, linetype = tipo)) +
-  geom_line(size = 1.2) +
-  scale_color_manual(
-    values = c(
-      col_prior,    # Grigio per il prior
-      col_posterior # Blu per il posterior
-    )
-  ) +
-  scale_linetype_manual(
-    values = c("dashed", "solid")
-  ) +
-  labs(
-    title = "Aggiornamento Bayesiano: Prior e Posterior",
+    title = "Due rappresentazioni dello stesso aggiornamento",
     x = expression(theta),
-    y = "Densità di probabilità",
-    color = "Distribuzione",
-    linetype = "Distribuzione"
-  )
+    y = "Probabilità normalizzata sulla griglia",
+    color = NULL
+  ) +
+  legenda_in_alto
 ```
 
-Il grafico mostra chiaramente la trasformazione della distribuzione. La curva tratteggiata grigia del prior Beta(2,2) è relativamente piatta e simmetrica e riflette una conoscenza iniziale vaga, centrata su 0.5. La curva continua blu del posterior Beta(24,10) è più alta, più stretta e spostata verso destra, concentrandosi attorno a 0.7. Questa trasformazione riflette l'apprendimento dai dati: l'osservazione di ventidue successi su trenta prove ha fornito una forte evidenza che il valore di $\theta$ è probabilmente superiore a 0.5 e l'incertezza si è notevolmente ridotta.
+### Una griglia più fine
 
-### Interpretazione psicologica dei risultati
-
-Tornando al contesto psicologico del dilemma del carrello ferroviario, i risultati della nostra analisi bayesiana forniscono informazioni ricche e sfumate sulla distribuzione delle credenze morali nella popolazione. La media a posteriori di circa 0.71 suggerisce che, alla luce dei dati osservati e delle nostre assunzioni iniziali moderate, è plausibile che circa il 70% della popolazione generale ritenga moralmente accettabile l'azione di deviare il treno.
-
-Tuttavia, la distribuzione a posteriori completa fornisce molto più di una singola stima puntuale. L'intervallo di credibilità al 95% può essere calcolato individuando i percentili 2.5 e 97.5 della distribuzione Beta a posteriori.
+Una griglia grossolana è utile per seguire i calcoli a mano. Una griglia più fine approssima meglio la distribuzione continua:
 
 ```{r}
-# Calcoliamo l'intervallo di credibilità al 95%
-# Questo intervallo contiene il 95% della massa di probabilità a posteriori
-intervallo_credibilita <- qbeta(
-  p = c(0.025, 0.975),
-  shape1 = alpha_posteriori,
-  shape2 = beta_posteriori
+theta_fine <- seq(0, 1, length.out = 1001)
+
+prior_fine <- dbeta(theta_fine, 2, 2)
+prior_fine <- prior_fine / sum(prior_fine)
+
+likelihood_fine <- dbinom(successi, prove, theta_fine)
+
+posterior_fine <- prior_fine * likelihood_fine
+posterior_fine <- posterior_fine / sum(posterior_fine)
+
+media_fine <- sum(theta_fine * posterior_fine)
+media_fine
+```
+
+La media ottenuta con la griglia fine è `r round(media_fine, 4)`, praticamente coincidente con la media analitica `r round(media_beta, 4)`.
+
+## Seconda applicazione: riconoscimento di un'emozione
+
+Consideriamo ora un compito binario ipotetico. Un partecipante osserva dieci volti e identifica correttamente la rabbia in sette prove. Per fini didattici, adottiamo un prior Beta(4, 6), con media 0.4. Questo prior non viene presentato come una proprietà generale della letteratura: rappresenta semplicemente un'aspettativa iniziale esplicita per l'esempio.
+
+```{r}
+corrette <- 7
+prove_emozioni <- 10
+theta_emozioni <- seq(0, 1, length.out = 1001)
+
+prior_emozioni <- dbeta(theta_emozioni, 4, 6)
+prior_emozioni <- prior_emozioni / sum(prior_emozioni)
+
+likelihood_emozioni <- dbinom(
+  corrette,
+  prove_emozioni,
+  theta_emozioni
 )
 
-limite_inferiore <- intervallo_credibilita[1]
-limite_superiore <- intervallo_credibilita[2]
+peso_emozioni <- prior_emozioni * likelihood_emozioni
+posterior_emozioni <- peso_emozioni / sum(peso_emozioni)
 ```
 
-L'intervallo di credibilità al 95% si estende da `r round(limite_inferiore, 3)` a `r round(limite_superiore, 3)`. Possiamo interpretare questo risultato affermando direttamente che, sulla base dei dati osservati, c'è una probabilità del 95% che la vera proporzione θ nella popolazione sia compresa in questo intervallo. Questa interpretazione diretta e intuitiva rappresenta uno dei vantaggi fondamentali dell'approccio bayesiano rispetto agli intervalli di confidenza frequentisti che, invece, richiedono interpretazioni più contorte e controfattuali.
-
-È anche possibile calcolare le probabilità per ipotesi sostantive specifiche. Per esempio, potremmo chiederci: qual è la probabilità che la maggioranza della popolazione giudichi l'azione accettabile, ovvero che $\theta$ sia maggiore di 0.5?
+Anche in questo caso l'intero aggiornamento è contenuto in due operazioni:
 
 ```{r}
-# Calcoliamo la probabilità che theta sia maggiore di 0.5
-# Questo corrisponde all'area sotto la curva della Beta posteriore
-# a destra del valore 0.5
-prob_maggioranza <- pbeta(
-  q = 0.5,
-  shape1 = alpha_posteriori,
-  shape2 = beta_posteriori,
-  lower.tail = FALSE  # Vogliamo P(θ > 0.5), non P(θ ≤ 0.5)
-)
+peso_emozioni <- prior_emozioni * likelihood_emozioni
+posterior_emozioni <- peso_emozioni / sum(peso_emozioni)
 ```
 
-La probabilità che $\theta$ sia superiore a 0.5 è pari a `r round(prob_maggioranza, 4)`, il che indica un livello di certezza pressoché assoluto. Ciò indica che i dati forniscono una prova schiacciante del fatto che la maggior parte della popolazione giudica moralmente accettabile tale azione. Dal punto di vista della psicologia morale, questo risultato suggerisce che, quando si trovano di fronte a questo dilemma, le considerazioni utilitaristiche prevalgono sulle restrizioni deontologiche nella maggior parte delle persone.
-
-## Esercizio guidato: riconoscimento di emozioni facciali
-
-Per consolidare la comprensione dei metodi bayesiani applicati alla stima delle proporzioni, sviluppiamo ora un esercizio completo su un contesto psicologico diverso: il riconoscimento delle emozioni dalle espressioni facciali. Questa competenza fondamentale della cognizione sociale può essere studiata mediante paradigmi sperimentali in cui i partecipanti devono classificare le espressioni emotive presentate visivamente.
-
-### Contesto sperimentale e obiettivo di ricerca
-
-Supponiamo di condurre uno studio sulla capacità di riconoscere l'emozione della rabbia dalle espressioni facciali. Un partecipante osserva dieci volti che esprimono rabbia e deve decidere, per ciascuno di essi, se l'emozione espressa è la rabbia o un'altra emozione. Il partecipante risponde correttamente sette volte su dieci. Il nostro obiettivo inferenziale è stimare $\theta$, ovvero l'accuratezza effettiva del partecipante nel riconoscere la rabbia, tenendo conto sia delle prove fornite da queste dieci prove, sia delle aspettative iniziali basate sulla letteratura.
-
-La letteratura sulla psicologia delle emozioni suggerisce che la rabbia è generalmente riconosciuta con un'accuratezza moderata, solitamente inferiore rispetto a emozioni come la felicità, ma superiore rispetto a emozioni più ambigue. Traduciamo questa conoscenza qualitativa in un prior quantitativo utilizzando una distribuzione Beta(4,6). Questa distribuzione ha una media di 0.4, riflettendo l'aspettativa che l'accuratezza media sia moderata, con una deviazione standard sufficientemente ampia da permettere ai dati di modificare sostanzialmente la credenza.
-
-### Implementazione dell'analisi con griglia 
-
-Per questo esercizio utilizziamo una griglia molto più fitta rispetto all'esempio del dilemma del carrello ferroviario, con mille punti invece di undici. Questo approccio fornisce un'approssimazione più accurata della distribuzione continua sottostante e consente di calcolare statistiche riassuntive con maggiore precisione.
+Il primo comando combina, punto per punto, aspettative iniziali e compatibilità con i dati. Il secondo trasforma i prodotti in probabilità.
 
 ```{r}
-# Definiamo i dati dell'esperimento sul riconoscimento emotivo
-risposte_corrette <- 7
-prove_totali_emozioni <- 10
+media_emozioni <- sum(theta_emozioni * posterior_emozioni)
+moda_emozioni <- theta_emozioni[which.max(posterior_emozioni)]
 
-# Creiamo una griglia molto fine per theta
-# Usiamo 1000 punti equidistanti tra 0 e 1
-theta_fine <- seq(from = 0, to = 1, length.out = 1000)
+cdf_emozioni <- cumsum(posterior_emozioni)
+limite_inf_94 <- theta_emozioni[which(cdf_emozioni >= 0.03)[1]]
+limite_sup_94 <- theta_emozioni[which(cdf_emozioni >= 0.97)[1]]
 
-# Specifichiamo il prior Beta(4, 6)
-# Calcoliamo la densità per ogni punto della griglia
-prior_emozioni <- dbeta(theta_fine, shape1 = 4, shape2 = 6)
-
-# Calcoliamo la verosimiglianza binomiale
-verosimiglianza_emozioni <- dbinom(
-  x = risposte_corrette,
-  size = prove_totali_emozioni,
-  prob = theta_fine
-)
-
-# Calcoliamo la distribuzione a posteriori non normalizzata
-posteriori_emozioni_non_norm <- prior_emozioni * verosimiglianza_emozioni
-
-# Normalizziamo dividendo per la somma
-# Notiamo che con una griglia fine, la somma approssima un integrale
-posteriori_emozioni <- posteriori_emozioni_non_norm / sum(posteriori_emozioni_non_norm)
+media_emozioni
+moda_emozioni
+c(limite_inf_94, limite_sup_94)
 ```
 
-La discretizzazione fine permette di ottenere un'approssimazione molto accurata della distribuzione continua. Con mille punti, l'errore di approssimazione è trascurabile ai fini pratici. Questo approccio ibrido combina la trasparenza computazionale del metodo a griglia con l'accuratezza delle soluzioni analitiche continue.
-
-### Calcolo delle statistiche riassuntive
-
-Una volta ottenuta la distribuzione a posteriori, calcoliamo le statistiche che descrivono la nostra conoscenza aggiornata sull'accuratezza del partecipante.
+La media a posteriori è `r round(media_emozioni, 3)`, la moda è `r round(moda_emozioni, 3)` e l'intervallo centrale al 94% va approssimativamente da `r round(limite_inf_94, 3)` a `r round(limite_sup_94, 3)`. Con sole dieci prove, l'incertezza rimane ampia.
 
 ```{r}
-# Calcoliamo la media a posteriori
-media_posteriori_emozioni <- sum(theta_fine * posteriori_emozioni)
-
-# Calcoliamo la varianza e la deviazione standard a posteriori
-varianza_posteriori_emozioni <- sum(
-  (theta_fine - media_posteriori_emozioni)^2 * posteriori_emozioni
-)
-sd_posteriori_emozioni <- sqrt(varianza_posteriori_emozioni)
-
-# Identifichiamo la moda (valore con massima probabilità)
-indice_moda_emozioni <- which.max(posteriori_emozioni)
-moda_posteriori_emozioni <- theta_fine[indice_moda_emozioni]
-```
-
-La media a posteriori è `r round(media_posteriori_emozioni, 3)`, il che indica che la nostra migliore stima dell'accuratezza è circa il 59%. La moda è `r round(moda_posteriori_emozioni, 3)`, molto vicina alla media dato che la distribuzione Beta posteriore è approssimativamente simmetrica. La deviazione standard è `r round(sd_posteriori_emozioni, 3)`, riflettendo un'incertezza moderata dovuta al numero limitato di prove osservate.
-
-Per quantificare l'intervallo di valori plausibili per $\theta$, calcoliamo un intervallo di credibilità. Utilizziamo un livello del 94% per mostrare che la scelta del livello è arbitraria e dovrebbe essere guidata dalle esigenze specifiche della ricerca piuttosto che da rigide convenzioni.
-
-```{r}
-# Calcoliamo l'intervallo di credibilità al 94%
-# Utilizziamo un approccio basato su campionamento dalla distribuzione
-
-# Generiamo un campione casuale ponderato dalla distribuzione a posteriori
-set.seed(2025)  # Per riproducibilità
-n_campioni <- 10000
-
-# Campionamento con sostituzione, ponderato dalle probabilità a posteriori
-campione_theta <- sample(
-  x = theta_fine,
-  size = n_campioni,
-  replace = TRUE,
-  prob = posteriori_emozioni
-)
-
-# Calcoliamo i percentili 3% e 97% del campione
-# Questi approssimano l'intervallo di credibilità al 94%
-percentili <- quantile(campione_theta, probs = c(0.03, 0.97))
-limite_inf_94 <- percentili[1]
-limite_sup_94 <- percentili[2]
-```
-
-L'intervallo di credibilità al 94% si estende approssimativamente da `r round(limite_inf_94, 3)` a `r round(limite_sup_94, 3)`. Questo intervallo quantifica l'incertezza residua sull'accuratezza effettiva del partecipante. Con solo dieci prove, l'intervallo è relativamente ampio, il che indica che avremmo bisogno di più osservazioni per restringere ulteriormente la stima.
-
-### Visualizzazione completa dell'aggiornamento
-
-Ora creiamo una visualizzazione che mostri tutte e tre le componenti dell'inferenza bayesiana per questo esempio.
-
-```{r}
-#| fig-width: 8
-#| fig-height: 5
-# Prepariamo i dati per la visualizzazione
-# Normalizziamo tutte le distribuzioni per renderle confrontabili
-dati_visualizzazione_emozioni <- data.frame(
-  theta = rep(theta_fine, 3),
-  densita = c(
-    prior_emozioni / sum(prior_emozioni),
-    verosimiglianza_emozioni / sum(verosimiglianza_emozioni),
-    posteriori_emozioni
+dati_emozioni <- bind_rows(
+  tibble(
+    theta = theta_emozioni,
+    valore = prior_emozioni,
+    componente = "Prior Beta(4, 6)"
   ),
-  componente = rep(
-    c("Prior Beta(4,6)", "Verosimiglianza", "Posterior"),
-    each = length(theta_fine)
+  tibble(
+    theta = theta_emozioni,
+    valore = likelihood_emozioni / sum(likelihood_emozioni),
+    componente = "Verosimiglianza normalizzata per il grafico"
+  ),
+  tibble(
+    theta = theta_emozioni,
+    valore = posterior_emozioni,
+    componente = "Posterior"
   )
-)
+) |>
+  mutate(
+    componente = factor(
+      componente,
+      levels = c(
+        "Prior Beta(4, 6)",
+        "Verosimiglianza normalizzata per il grafico",
+        "Posterior"
+      )
+    )
+  )
 
-# Convertiamo in fattore ordinato
-dati_visualizzazione_emozioni$componente <- factor(
-  dati_visualizzazione_emozioni$componente,
-  levels = c("Prior Beta(4,6)", "Verosimiglianza", "Posterior")
-)
-
-# Creiamo il grafico comparativo
-ggplot(dati_visualizzazione_emozioni, aes(x = theta, y = densita, color = componente)) +
-  geom_line(size = 1.2) +
-  # Aggiungiamo una linea verticale per la media posteriori
-  geom_vline(
-    xintercept = media_posteriori_emozioni,
-    linetype = "dashed",
-    color = col_mean,  # Rosso-arancio
-    size = 0.8
-  ) +
-  # Aggiungiamo linee verticali per l'intervallo di credibilità
-  geom_vline(
-    xintercept = c(limite_inf_94, limite_sup_94),
-    linetype = "dotted",
-    color = col_interval,  # Rosa
-    size = 0.6
-  ) +
+ggplot(dati_emozioni, aes(theta, valore, color = componente)) +
+  geom_line(linewidth = 1.1) +
   scale_color_manual(
     values = c(
-      "Prior Beta(4,6)" = col_prior,      # Grigio
-      "Verosimiglianza" = col_likelihood, # Arancione
-      "Posterior" = col_posterior         # Blu
+      "Prior Beta(4, 6)" = palette_qualitative[8],
+      "Verosimiglianza normalizzata per il grafico" =
+        palette_qualitative[1],
+      "Posterior" = palette_qualitative[5]
     )
   ) +
   labs(
-    x = expression(theta ~ "(accuratezza nel riconoscimento della rabbia)"),
-    y = "Densità normalizzata",
-    title = "Aggiornamento bayesiano: riconoscimento delle emozioni facciali",
-    subtitle = paste0(
-      "Dati: ", risposte_corrette, " risposte corrette su ", 
-      prove_totali_emozioni, " prove | Media posteriori: ", 
-      round(media_posteriori_emozioni, 3)
-    ),
-    color = "Componente"
-  )
+    title = "Aggiornamento nel compito di riconoscimento",
+    subtitle = paste0(corrette, " risposte corrette su ", prove_emozioni),
+    x = expression(theta),
+    y = "Peso normalizzato",
+    color = NULL
+  ) +
+  legenda_in_alto
 ```
-
-Il grafico mostra la dinamica dell'aggiornamento bayesiano in questo contesto. Il prior Beta(4,6) è centrato su 0.4 e riflette aspettative moderate, basate sulla letteratura. La verosimiglianza mostra un picco più alto attorno a 0.7, corrispondente alla proporzione di sette risposte corrette su dieci osservate. La distribuzione a posteriori rappresenta un compromesso: è spostata verso destra rispetto al prior, riflettendo l'influenza dei dati, ma non coincide completamente con la verosimiglianza, mantenendo l'influenza regolarizzante del prior.
-
-La linea verticale tratteggiata indica la media a posteriori, mentre le linee tratteggiate più sottili delimitano l'intervallo di credibilità al 94%. Questa visualizzazione rende immediatamente evidente sia il valore centrale più plausibile sia l'intervallo di incertezza associato.
-
-### Interpretazione psicologica e implicazioni cliniche
-
-Dal punto di vista della psicologia cognitiva, questi risultati suggeriscono che il partecipante mostra un'accuratezza nel riconoscimento della rabbia leggermente superiore alle aspettative iniziali basate sulla popolazione generale. La media posteriore di circa 0.59 indica una competenza moderata, superiore al caso (che sarebbe 0.5 se ci fossero solo due categorie emotive), ma non eccezionale.
-
-L'ampiezza dell'intervallo di credibilità sottolinea la limitatezza di trarre conclusioni basandosi su solo dieci prove. In un contesto di valutazione clinica o educativa, questo risultato suggerirebbe la necessità di ulteriori osservazioni prima di formulare conclusioni definitive sulle competenze del partecipante. L'approccio bayesiano rende esplicita questa limitazione, quantificando l'incertezza residua e evitando interpretazioni eccessivamente fiduciose basate su campioni piccoli.
-
-Se osservassimo dieci prove aggiuntive in una sessione successiva, potremmo aggiornare nuovamente la distribuzione utilizzando il risultato attuale come nuovo prior. Questo processo di aggiornamento sequenziale mostra come l'approccio bayesiano faciliti l'accumulo progressivo di prove, un principio fondamentale per la ricerca cumulativa in psicologia.
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-In questo capitolo, i principi bayesiani sono stati tradotti in applicazioni concrete mediante due approcci complementari: il metodo basato su griglia, che garantisce la trasparenza computazionale, e il modello Beta-Binomiale coniugato, che assicura l'efficienza analitica. L’implementazione diretta in R ha messo in luce tre aspetti fondamentali dell’inferenza bayesiana.
+L'approssimazione su griglia rende concreto il passaggio più importante dell'inferenza bayesiana.
 
-In primo luogo, l'aggiornamento delle credenze è un processo deterministico: la combinazione della distribuzione a priori con la funzione di verosimiglianza e i dati osservati produce in modo univoco la distribuzione a posteriori. Ciò elimina ogni spazio per l'arbitrarietà del ricercatore.
+1. **Prior e verosimiglianza devono essere valutati sugli stessi valori del parametro.** Ogni riga della griglia rappresenta una possibilità distinta.
+2. **La moltiplicazione è punto per punto.** Un valore riceve un peso elevato soltanto se è sostenuto sia dal prior sia dai dati.
+3. **Il prodotto non è ancora una distribuzione di probabilità.** La divisione per la somma dei prodotti è necessaria per ottenere la posterior.
+4. **La normalizzazione non modifica i rapporti relativi.** Cambia la scala, non la forma dell'informazione combinata.
+5. **La soluzione analitica e la griglia applicano la stessa logica.** Nel modello Beta-Binomiale, la coniugazione rende disponibile una formula chiusa; la griglia mostra ciò che quella formula sta facendo.
+6. **La posterior è condizionata alle assunzioni adottate.** Un calcolo corretto non elimina le scelte relative al modello, al prior, ai dati e alla risoluzione numerica.
 
-In secondo luogo, il ruolo della distribuzione a priori è dinamico e dipende dalla quantità di informazioni contenute nei dati. Con campioni ridotti, le conoscenze iniziali influenzano in modo rilevante il risultato, mentre con un numero maggiore di osservazioni, l’informazione empirica prevale e la distribuzione a posteriori converge verso la verosimiglianza normalizzata. L’influenza della distribuzione iniziale si attenua progressivamente con l’aumentare dei dati.
+Il valore pedagogico della griglia non consiste principalmente nella sua efficienza. Consiste nel fatto che nessun passaggio rimane nascosto: per ogni valore di $\theta$ possiamo vedere il prior, la verosimiglianza, il prodotto e la probabilità a posteriori.
 
-In terzo luogo, la distribuzione a posteriori fornisce una descrizione completa dell’incertezza residua sul parametro, superando la logica delle stime puntuali tradizionali. Media, varianza, moda e intervalli di credibilità derivano tutti dalla medesima struttura probabilistica, senza richiedere approssimazioni asintotiche o ipotesi aggiuntive sulla forma dell’errore.
+## Esercizi {.unnumbered .unlisted}
 
-In questo capitolo sono state utilizzate le funzioni di base di R per rendere espliciti i passaggi computazionali e favorire una comprensione approfondita dell'aggiornamento bayesiano. Nelle applicazioni reali, tuttavia, l’inferenza viene spesso realizzata mediante pacchetti specializzati che automatizzano tali passaggi, garantendo efficienza e scalabilità. Nei capitoli successivi verranno affrontati modelli di complessità crescente che richiederanno l'impiego di metodi computazionali avanzati, come il campionamento MCMC. I principi fondamentali illustrati in questo capitolo rimangono comunque validi: specificare una struttura probabilistica per le credenze iniziali, integrare in modo sistematico l’informazione empirica e interpretare la distribuzione a posteriori come la rappresentazione più completa e coerente della conoscenza disponibile [@Goligher2024].
+### Esercizio 1 — Comprendere {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · Tempo indicativo: 15 minuti*
+
+Considera una griglia ridotta con tre valori:
+
+| $\theta$ | Prior | Verosimiglianza |
+|---:|---:|---:|
+| 0.3 | 0.20 | 0.05 |
+| 0.5 | 0.50 | 0.25 |
+| 0.7 | 0.30 | 0.50 |
+
+1. Calcola il prodotto `prior × verosimiglianza` per ciascuna riga.
+2. Somma i tre prodotti.
+3. Dividi ogni prodotto per la somma e ottieni la distribuzione a posteriori.
+4. Spiega perché $\theta=0.7$ riceve la probabilità a posteriori più alta, anche se il prior era massimo in $\theta=0.5$.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+I prodotti sono 0.010, 0.125 e 0.150. La loro somma è 0.285.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+Le probabilità a posteriori sono:
+
+$$
+\begin{aligned}
+P(\theta=0.3\mid y) &= 0.010/0.285 \approx 0.035,\\
+P(\theta=0.5\mid y) &= 0.125/0.285 \approx 0.439,\\
+P(\theta=0.7\mid y) &= 0.150/0.285 \approx 0.526.
+\end{aligned}
+$$
+
+Il prior favoriva $\theta=0.5$, ma i dati sono due volte più compatibili con $\theta=0.7$ che con $\theta=0.5$. Il prodotto combina le due informazioni. Il valore 0.7 non vince perché ha il prior più alto o la verosimiglianza più alta considerati separatamente, ma perché ottiene il prodotto più alto.
+:::
+
+### Esercizio 2 — Prevedere {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · Tempo indicativo: 10 minuti*
+
+Senza eseguire calcoli completi, prevedi che cosa accadrà nei seguenti casi.
+
+1. Il prior assegna probabilità zero a $\theta=0.7$, mentre la verosimiglianza è massima in quel punto.
+2. Il prior è quasi uniforme e la verosimiglianza è molto concentrata intorno a 0.7.
+3. Il prior è molto concentrato intorno a 0.4, ma un campione molto grande produce una verosimiglianza concentrata intorno a 0.7.
+4. Tutti i prodotti `prior × verosimiglianza` vengono moltiplicati per 100 prima della normalizzazione.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Ricorda che il prodotto con zero è zero e che la normalizzazione divide tutti i valori per la stessa somma.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+1. La probabilità a posteriori di $\theta=0.7$ rimane zero. Un prior discreto che assegna probabilità esattamente zero esclude quel valore dall'aggiornamento.
+2. La posterior avrà una forma molto simile alla verosimiglianza, perché il prior modifica poco i rapporti relativi.
+3. La posterior sarà spostata verso 0.7. Quanto il prior continuerà a influire dipende dalla sua concentrazione e dall'informazione contenuta nei dati; con molti dati, la verosimiglianza tende a dominare salvo conflitti estremi o valori esclusi dal prior.
+4. La posterior non cambia. Il fattore 100 compare sia al numeratore sia nella somma usata per normalizzare e quindi si cancella.
+:::
+
+### Esercizio 3 — Modificare {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: sì · Tempo indicativo: 20 minuti*
+
+Mantieni invariati i dati del dilemma del carrello ferroviario, ma sostituisci il prior Beta(2, 2) con:
+
+1. un prior Beta(8, 4), che favorisce valori relativamente alti di $\theta$;
+2. un prior Beta(4, 8), che favorisce valori relativamente bassi di $\theta$.
+
+Per ciascun prior:
+
+- calcola i pesi a priori sulla stessa griglia;
+- moltiplicali per la stessa verosimiglianza;
+- normalizza;
+- confronta media e moda a posteriori;
+- osserva, nella tabella, come cambia il prodotto per $\theta=0.5$ e $\theta=0.7$.
+
+Prima di eseguire il codice, scrivi quale delle due posteriori prevedi sarà più spostata verso destra.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+È sufficiente modificare i parametri in `dbeta()`:
+
+```r
+pesi_prior <- dbeta(theta_griglia, shape1 = 8, shape2 = 4)
+```
+
+oppure:
+
+```r
+pesi_prior <- dbeta(theta_griglia, shape1 = 4, shape2 = 8)
+```
+
+Poi ripeti normalizzazione, moltiplicazione e normalizzazione finale.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+La verosimiglianza è identica nei due casi, perché i dati non cambiano. Cambia invece il primo fattore del prodotto. Il prior Beta(8, 4) assegna più peso iniziale ai valori alti e produce una posterior più spostata verso destra; il prior Beta(4, 8) penalizza maggiormente tali valori e produce una posterior più spostata verso sinistra.
+
+Il confronto rende visibile che la posterior non deriva dai dati soltanto. Per ogni valore della griglia, la stessa verosimiglianza viene moltiplicata per un peso a priori diverso. Con un campione di 30 persone i dati esercitano comunque un'influenza importante, quindi la posterior non coincide semplicemente con nessuno dei due prior.
+:::
+
+### Esercizio 4 — Criticare {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · Tempo indicativo: 10 minuti*
+
+Valuta criticamente la seguente affermazione:
+
+> “Il prior e la verosimiglianza sono due distribuzioni di probabilità su $\theta$. Basta moltiplicarle e il prodotto è già la distribuzione a posteriori.”
+
+Individua almeno tre problemi e riscrivi l'affermazione in forma corretta.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Chiediti: la verosimiglianza deve sommare a uno sui valori di $\theta$? Il prodotto deve sommare a uno? Che cosa viene moltiplicato esattamente?
+:::
+
+::: {.callout-note collapse="true" title="Elementi per la risposta"}
+Il prior è una distribuzione sul parametro; la verosimiglianza, invece, è una funzione del parametro con i dati mantenuti fissi e non deve essere normalizzata rispetto a $\theta$. La moltiplicazione viene eseguita punto per punto sugli stessi valori della griglia. I prodotti risultanti sono pesi posteriori **non normalizzati** e, in generale, non sommano a uno. Solo dopo averli divisi per la loro somma si ottiene la distribuzione a posteriori.
+
+Una formulazione corretta è: “Per ciascun valore candidato di $\theta$, moltiplichiamo il peso a priori per la verosimiglianza dei dati. Normalizziamo poi tutti i prodotti dividendo per la loro somma; i valori ottenuti sono le probabilità a posteriori sulla griglia.”
+:::
+
+::: {.callout-note collapse="true" title="Informazioni sull'ambiente di sviluppo"}
+```{r}
+sessionInfo()
+```
+:::
 
 ## Bibliografia {.unnumbered .unlisted}
-

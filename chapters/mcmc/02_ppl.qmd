@@ -1,37 +1,372 @@
 # Linguaggi di programmazione probabilistica {#sec-mcmc-ppl}
 
 ::: {.callout-note appearance="minimal"}
-Nel manuale abbiamo esaminato l'algoritmo di Metropolis come soluzione computazionale generale al problema dell'inferenza bayesiana: è sempre possibile generare campioni da una distribuzione a posteriori arbitraria, anche quando non esiste una soluzione analitica. L'implementazione pratica di tale algoritmo, tuttavia, è onerosa: richiede un codice specifico per ogni modello, la calibrazione manuale delle distribuzioni di proposta e un'attenta diagnostica della convergenza. I *linguaggi di programmazione probabilistica* (PPL) nascono come risposta a queste difficoltà.
+Nel capitolo precedente abbiamo seguito passo per passo l'algoritmo di Metropolis. Per ottenere campioni dalla distribuzione a posteriori era necessario specificare una proposta, calcolare una probabilità di accettazione, decidere se muoversi e registrare ogni stato della catena.
+
+I *linguaggi di programmazione probabilistica* permettono di separare due compiti diversi:
+
+1. **costruire il modello**, cioè dichiarare quali parametri esistono, quali prior ricevono e come i dati vengono generati;
+2. **eseguire il calcolo**, cioè usare un algoritmo appropriato per produrre campioni dalla distribuzione a posteriori.
+
+Questa separazione non elimina la responsabilità del ricercatore. Il software può campionare dalla posterior definita dal modello, ma non può stabilire se quel modello rappresenti adeguatamente il fenomeno studiato.
 :::
 
 ::: {.callout-important appearance="minimal" .chapter-status}
-**Da sapere.** I linguaggi di programmazione probabilistica separano la specificazione del modello dagli algoritmi utilizzati per stimarlo. Il ricercatore dichiara prior, verosimiglianza e struttura dei parametri, mentre il sistema genera campioni dalla distribuzione a posteriori. `brms` è un’interfaccia ad alto livello che traduce le formule di R in programmi Stan.
+**Da sapere.** Un linguaggio di programmazione probabilistica consente di esprimere un modello generativo e delegare a un motore inferenziale il calcolo della distribuzione a posteriori. Stan è un linguaggio specializzato e un sistema di calcolo; `brms` è un'interfaccia ad alto livello che costruisce programmi Stan a partire da formule e specificazioni fornite in R.
 
-**Da saper fare.** Distinguere un linguaggio di programmazione probabilistica da un’interfaccia ad alto livello; riconoscere le componenti fondamentali di un modello probabilistico; spiegare quale funzione svolge Stan quando un modello viene stimato con `brms`. Nel percorso essenziale è richiesto saper leggere la struttura generale di un modello Stan, non scriverlo autonomamente.
+**Da saper fare.** Distinguere ciò che deve decidere il ricercatore da ciò che può essere delegato al software; riconoscere prior, distribuzione dei dati e parametri in una specificazione; spiegare la relazione tra `brms` e Stan. Nel percorso essenziale non è richiesto scrivere un programma Stan.
 
-**Approfondimento facoltativo.** La storia dei PPL da BUGS a Stan, il confronto con JAGS e PyMC e i dettagli degli algoritmi NUTS e Hamiltonian Monte Carlo possono essere rimandati. Chi lavora soltanto con `brms` può concentrarsi sul principio di separazione tra modello e motore inferenziale e proseguire con i capitoli applicativi.
+**Approfondimento facoltativo.** La sintassi completa di Stan, la compilazione, Hamiltonian Monte Carlo, NUTS e il confronto tra diversi linguaggi probabilistici possono essere rimandati.
 
 [Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
 :::
 
-## Che cosa sono i PPL
+## Dal campionatore al modello
 
-Il principio dei PPL prevede la separazione tra la *definizione del modello* e la sua *implementazione algoritmica*: il ricercatore specifica il modello con una sintassi simile alla notazione statistica e il sistema genera automaticamente i campioni dalla distribuzione a posteriori mediante algoritmi MCMC avanzati. In questo modo, il ricercatore diventa un "architetto di modelli" più che un "programmatore di algoritmi", libero di concentrarsi sulla formalizzazione dei costrutti teorici, come i processi di apprendimento, le strutture gerarchiche e i meccanismi decisionali, senza doversi preoccupare dei dettagli del campionamento.
+Con Metropolis abbiamo costruito direttamente un algoritmo. Per ogni nuovo modello era necessario definire almeno:
 
-Questa separazione ha anche un valore di trasparenza. A differenza di interfacce che nascondono le assunzioni dietro comandi predefiniti, un PPL richiede di dichiarare esplicitamente ogni componente del modello: prior, verosimiglianza e struttura dei parametri. In questo modo, le assunzioni restano tracciabili e l'intera analisi è pienamente riproducibile.
+- la densità bersaglio;
+- la distribuzione di proposta;
+- la regola di accettazione;
+- il ciclo iterativo;
+- le quantità diagnostiche.
 
-Va sottolineato che un PPL non è una scatola nera. I principi computazionali sono gli stessi dell'algoritmo di Metropolis — approssimazione numerica della posterior tramite campionamento iterativo, verifica della convergenza e analisi diagnostica. Il valore aggiunto sta nell'astrazione dei dettagli implementativi, che sposta l'attenzione dalla domanda tecnica ("come campionare?") a quella sostanziale ("quale modello costruire?").
+Un linguaggio di programmazione probabilistica modifica il livello al quale lavoriamo. Invece di descrivere passo per passo **come** deve muoversi una catena, descriviamo **quale distribuzione a posteriori** vogliamo rappresentare.
+
+Consideriamo ancora il modello Beta-Binomiale:
+
+$$
+\theta \sim \operatorname{Beta}(2,2),
+$$
+
+$$
+y\mid\theta \sim \operatorname{Binomiale}(n,\theta).
+$$
+
+Queste due righe specificano il modello:
+
+- il prior descrive quali valori di $\theta$ sono plausibili prima dei dati;
+- la distribuzione binomiale descrive quali dati possono essere prodotti da ciascun valore di $\theta$;
+- osservando $y$, il prodotto tra prior e verosimiglianza definisce la posterior, a meno di una costante di normalizzazione.
+
+In simboli,
+
+$$
+p(\theta\mid y)
+\propto
+p(y\mid\theta)p(\theta).
+$$
+
+Il linguaggio probabilistico riceve questa specificazione e costruisce una rappresentazione computazionale della densità bersaglio. Il motore inferenziale usa poi un algoritmo MCMC per produrre valori di $\theta$ distribuiti, approssimativamente, secondo $p(\theta\mid y)$.
+
+::: {.callout-tip appearance="minimal"}
+Il passaggio decisivo è questo:
+
+> **il modello definisce la distribuzione che vogliamo ottenere; l'algoritmo stabilisce come esplorarla numericamente.**
+
+Modello e algoritmo collaborano, ma non sono la stessa cosa.
+:::
+
+## Che cosa decide il ricercatore
+
+Il software non trasforma automaticamente una domanda psicologica in un modello statistico. Prima del calcolo, il ricercatore deve decidere:
+
+- quale sia la quantità di interesse;
+- quali variabili osservate siano rilevanti;
+- quale distribuzione descriva i dati;
+- quali dipendenze e strutture gerarchiche includere;
+- quali prior assegnare ai parametri;
+- quali dati e quali osservazioni appartengano all'analisi;
+- quali controlli predittivi e diagnostici usare.
+
+Queste decisioni definiscono la posterior bersaglio. Modificare il prior, la distribuzione dei dati o la struttura delle dipendenze significa modificare il modello e, quindi, potenzialmente la posterior.
+
+Il software può invece occuparsi di operazioni come:
+
+- tradurre il modello in una densità computabile;
+- calcolarne il logaritmo e, quando necessario, le derivate;
+- generare catene MCMC;
+- adattare alcuni parametri dell'algoritmo;
+- restituire campioni e informazioni diagnostiche.
+
+Aumentare il numero di iterazioni o di catene non cambia, in linea di principio, la distribuzione a posteriori definita dal modello. Cambia la precisione e l'affidabilità con cui cerchiamo di approssimarla.
+
+| Scelta o operazione | Chi ne è responsabile? | Cambia la posterior bersaglio? |
+|---|---|---|
+| Scegliere una likelihood binomiale | Ricercatore | Sì |
+| Specificare un prior Beta(2,2) | Ricercatore | Sì |
+| Decidere quali predittori includere | Ricercatore | Sì |
+| Generare transizioni MCMC | Motore inferenziale | No |
+| Aumentare le iterazioni | Ricercatore/software | No, ma può migliorare l'approssimazione |
+| Controllare convergenza e adeguatezza | Ricercatore con il software | Non direttamente; può mostrare che il calcolo o il modello vanno rivisti |
+
+## Un modello, tre livelli di rappresentazione
+
+È utile distinguere tre livelli.
+
+### 1. Domanda sostantiva
+
+Per esempio:
+
+> Qual è la probabilità che uno studente risponda correttamente a una domanda di un certo tipo?
+
+Questa è la domanda scientifica. Non contiene ancora un modello completo.
+
+### 2. Modello matematico
+
+Una possibile formalizzazione è:
+
+$$
+y\mid\theta \sim \operatorname{Binomiale}(n,\theta),
+\qquad
+\theta\sim\operatorname{Beta}(2,2).
+$$
+
+Ora sono dichiarati il parametro, il prior e il processo generativo dei dati.
+
+### 3. Rappresentazione computazionale
+
+Il modello viene espresso in una forma che il software può elaborare. In Stan, la stessa struttura può essere riconosciuta in tre blocchi essenziali:
+
+::: {.callout-note collapse="true" title="Lettura facoltativa di un modello Stan minimo"}
+
+```{.stan}
+data {
+  int<lower=0> n;
+  int<lower=0, upper=n> y;
+}
+parameters {
+  real<lower=0, upper=1> theta;
+}
+model {
+  theta ~ beta(2, 2);
+  y ~ binomial(n, theta);
+}
+```
+
+Non è necessario saper scrivere questo codice. È sufficiente riconoscere la struttura:
+
+- `data` contiene le quantità osservate;
+- `parameters` dichiara ciò che non conosciamo e vogliamo inferire;
+- `model` contiene il prior e la distribuzione dei dati.
+
+Le istruzioni con `~` non significano che Stan generi prima $\theta$ e poi $y$ durante la stima. Nel blocco `model` contribuiscono alla densità logaritmica che definisce la posterior bersaglio.
+:::
+
+La rappresentazione computazionale non sostituisce il ragionamento sostantivo. È la traduzione eseguibile del modello matematico scelto dal ricercatore.
+
+## Stan: specificare una densità, non programmare Metropolis
+
+Stan permette di specificare modelli probabilistici e usa metodi basati su Hamiltonian Monte Carlo, in particolare il *No-U-Turn Sampler* (NUTS), per generare campioni posteriori [@carpenter2017stan; @hoffman2014no].
+
+L'intuizione fondamentale non richiede di comprendere la meccanica di HMC. Rispetto al Metropolis elementare, Stan cerca di usare informazioni geometriche sulla densità per proporre spostamenti più lunghi e informativi. L'obiettivo rimane lo stesso: costruire una sequenza di valori che rappresenti la distribuzione a posteriori.
+
+Stan non produce una soluzione analitica. Restituisce un'approssimazione numerica sotto forma di campioni. Per questo restano necessari:
+
+- più catene;
+- controlli di convergenza;
+- valutazione dell'efficienza del campionamento;
+- ispezione degli avvisi diagnostici;
+- controlli predittivi del modello.
+
+L'automazione riguarda il calcolo, non la validità scientifica della specificazione.
 
 ## Da BUGS a Stan
 
-I PPL hanno una storia che risale agli anni '90, con capostipiti come BUGS e WinBUGS: per la prima volta, i modelli bayesiani potevano essere specificati in un linguaggio dichiarativo, delegando a un motore inferenziale la generazione dei campioni. Da questa tradizione derivano *JAGS* e, nell'ambito Python, *PyMC*.
+I linguaggi probabilistici moderni derivano da una tradizione che comprende BUGS e i sistemi successivi [@lunn2013bugs]. L'idea comune è permettere al ricercatore di descrivere il modello e delegare una parte importante dell'inferenza numerica.
 
-Stan si è imposto come standard di fatto grazie a tre componenti: un linguaggio dichiarativo per la specifica dei modelli, algoritmi di campionamento ad alte prestazioni (NUTS, un'implementazione dell'Hamiltonian Monte Carlo) e un'ottima interoperabilità con R e Python. È questa combinazione che ha reso l'inferenza bayesiana avanzata accessibile a un pubblico ben più ampio di quello degli specialisti.
+Stan si distingue dai sistemi basati prevalentemente sul campionamento di Gibbs perché usa HMC e NUTS per esplorare con maggiore efficienza molte posterior continue e ad alta dimensionalità [@carpenter2017stan; @hoffman2014no]. Questo vantaggio non rende però tutti i modelli facili da stimare: geometrie problematiche, parametrizzazioni inefficienti o prior inadeguati possono ancora produrre difficoltà.
 
-## Interfacce ad alto livello
+## Interfacce ad alto livello: il ruolo di `brms`
 
-L'uso diretto di un PPL richiede comunque una certa dimestichezza con la programmazione e con la statistica bayesiana. Per questo motivo sono state sviluppate interfacce di livello superiore, come `brms` in R (basato su Stan) e `Bambi` in Python (basato su PyMC), che adottano una sintassi simile a quella dei tradizionali pacchetti statistici. In R, ad esempio, brms specifica un modello con una formula analoga a quella di lm o lmer, ma lo stima con il motore di Stan e consente di definire prior esplicite. Chi conosce già i modelli classici può quindi avvicinarsi all'inferenza bayesiana senza dover padroneggiare i dettagli del linguaggio sottostante.
+`brms` permette di specificare numerosi modelli attraverso formule simili a quelle usate nei modelli di regressione in R. A partire dalla formula, dai dati, dalla famiglia e dai prior, `brms` genera il codice Stan e prepara i dati necessari; Stan esegue poi il campionamento [@buerkner2024brms].
+
+La relazione può essere rappresentata così:
+
+$$
+\text{domanda}
+\longrightarrow
+\text{formula e prior in `brms`}
+\longrightarrow
+\text{programma Stan}
+\longrightarrow
+\text{campioni posteriori}.
+$$
+
+`brms` non è quindi un'alternativa a Stan: è un'interfaccia che rende più semplice costruire molti modelli Stan.
+
+Questa comodità introduce una responsabilità aggiuntiva. Una sintassi breve può nascondere la quantità di assunzioni implicate. Chi usa un'interfaccia ad alto livello deve comunque comprendere:
+
+- quale distribuzione è stata scelta per l'outcome;
+- su quale scala sono definiti i parametri e i prior;
+- quali effetti sono inclusi;
+- che cosa rappresentano i campioni posteriori;
+- quali controlli sono necessari.
+
+## “Automatico” non significa “corretto”
+
+Un modello può essere compilato ed eseguito senza essere scientificamente adeguato. È possibile ottenere campioni numericamente stabili da:
+
+- una likelihood non adatta ai dati;
+- un prior implausibile;
+- un modello che omette una dipendenza importante;
+- un'interpretazione causale non sostenuta dal disegno;
+- una quantità di interesse definita male.
+
+È anche possibile specificare un modello plausibile e ottenere campioni inaffidabili perché il calcolo non ha funzionato bene.
+
+Occorre quindi distinguere due domande.
+
+### Il calcolo ha funzionato?
+
+Le catene hanno esplorato la stessa distribuzione? Il numero di campioni effettivi è sufficiente? Sono presenti divergenze o altri segnali diagnostici?
+
+### Il modello è adeguato?
+
+Le implicazioni predittive sono plausibili? Il modello riproduce gli aspetti dei dati rilevanti per la domanda? Le conclusioni sono sensibili a scelte ragionevoli del prior e della struttura?
+
+La prima domanda riguarda l'algoritmo. La seconda riguarda il modello. Una risposta positiva alla prima non garantisce una risposta positiva alla seconda.
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-Nei prossimi capitoli lavoreremo direttamente con Stan: imparando prima a *leggere* un modello semplice, per poi applicarlo ai casi più comuni della ricerca psicologica. Le interfacce ad alto livello come `brms` resteranno sullo sfondo, come naturale evoluzione una volta acquisita la logica del linguaggio sottostante.
+I linguaggi di programmazione probabilistica permettono di lavorare a un livello più vicino alla modellizzazione scientifica. Il ricercatore specifica parametri, prior e distribuzione dei dati; il motore inferenziale costruisce un'approssimazione della posterior attraverso campioni.
+
+Il vantaggio principale non è che il software “faccia Bayes da solo”, ma che lo stesso algoritmo generale possa essere applicato a molti modelli diversi senza riscrivere manualmente un campionatore per ciascuno di essi.
+
+La separazione tra modello e calcolo deve però rimanere visibile:
+
+- cambiare prior o likelihood cambia la posterior che stiamo cercando;
+- cambiare il numero di iterazioni o l'algoritmo cambia il modo in cui la approssimiamo;
+- una buona diagnostica computazionale non dimostra che il modello sia sostantivamente corretto;
+- un modello scientificamente ragionevole non garantisce che il campionamento sia riuscito.
+
+Stan automatizza una parte difficile del calcolo. `brms` automatizza parte della traduzione del modello in Stan. Nessuno dei due può sostituire la scelta, il controllo e l'interpretazione del modello da parte del ricercatore.
+
+## Esercizi {.unnumbered .unlisted}
+
+### Esercizio 1 — Comprendere {.unnumbered .unlisted}
+
+*Livello essenziale · 5–10 minuti · Codice: no*
+
+Associa ciascuna attività al soggetto che ne ha la responsabilità principale: **ricercatore**, **`brms`**, **Stan**.
+
+1. Stabilire che l'outcome debba essere modellato con una distribuzione binomiale.
+2. Tradurre una formula di regressione e i prior in un programma Stan.
+3. Generare campioni MCMC dalla posterior definita dal programma.
+4. Decidere se un predittore debba essere interpretato causalmente.
+5. Controllare se le implicazioni predittive del modello sono plausibili.
+6. Segnalare divergenze o altri problemi del campionamento.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Distingui la scelta scientifica del modello, la traduzione automatica e l'esecuzione dell'algoritmo.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+1. **Ricercatore:** la scelta della distribuzione dei dati è una decisione modellistica.
+2. **`brms`:** l'interfaccia genera il programma Stan a partire dalla specificazione ad alto livello.
+3. **Stan:** il motore inferenziale esegue il campionamento.
+4. **Ricercatore:** nessun software può ricavare un'interpretazione causale dalla sola formula.
+5. **Ricercatore con strumenti software:** il software produce grafici e simulazioni, ma la valutazione sostantiva spetta al ricercatore.
+6. **Stan:** il sistema produce le informazioni diagnostiche; il ricercatore deve leggerle e reagire in modo appropriato.
+
+L'esercizio mostra che l'automazione distribuisce i compiti, ma non trasferisce al software la responsabilità scientifica.
+:::
+
+### Esercizio 2 — Prevedere {.unnumbered .unlisted}
+
+*Livello essenziale · 5–10 minuti · Codice: no*
+
+Due ricercatori analizzano gli stessi dati con lo stesso prior e la stessa likelihood.
+
+- Il primo implementa correttamente un algoritmo Metropolis.
+- Il secondo esprime il modello in Stan e usa NUTS.
+
+Supponendo che entrambe le procedure abbiano convergito e prodotto un numero sufficiente di campioni effettivi, quale risultato ti aspetti?
+
+A. Le due posterior devono essere diverse, perché gli algoritmi sono diversi.
+
+B. Le due procedure devono approssimare la stessa posterior, anche se i singoli campioni non coincidono.
+
+C. Stan deve produrre la posterior vera, mentre Metropolis produce soltanto un'approssimazione.
+
+D. Metropolis e Stan devono generare esattamente la stessa sequenza di valori.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Chiediti che cosa determina la distribuzione bersaglio e che cosa determina il percorso seguito per esplorarla.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+La risposta corretta è **B**.
+
+La posterior bersaglio è determinata da dati, prior e likelihood, non dal particolare algoritmo usato per esplorarla. Se entrambi i metodi sono implementati correttamente e hanno convergito, devono produrre sintesi compatibili entro l'errore Monte Carlo.
+
+I singoli campioni e l'ordine con cui vengono generati non devono coincidere. Inoltre, sia Metropolis sia NUTS producono approssimazioni numeriche della stessa distribuzione; Stan non trasforma la posterior in una soluzione analitica esatta.
+:::
+
+### Esercizio 3 — Modificare {.unnumbered .unlisted}
+
+*Livello essenziale · 10 minuti · Codice: no*
+
+Considera un modello già stimato. Per ciascuna modifica indica se cambia:
+
+- **A. il modello e quindi la posterior bersaglio**;
+- **B. soltanto il modo o la precisione con cui la posterior viene approssimata**.
+
+1. Sostituire un prior $\operatorname{Normal}(0,1)$ con $\operatorname{Normal}(0,10)$.
+2. Passare da una likelihood normale a una Student-$t$.
+3. Aumentare le iterazioni da 2.000 a 8.000.
+4. Eseguire quattro catene invece di una.
+5. Aggiungere un predittore al modello.
+6. Riscrivere il campionatore usando un algoritmo diverso, mantenendo invariata la densità bersaglio.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Una modifica cambia la posterior bersaglio quando cambia uno dei fattori che la definiscono. Le impostazioni di campionamento dovrebbero invece cambiare soltanto la qualità dell'approssimazione.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+Le modifiche **1, 2 e 5** appartengono alla categoria A.
+
+- Cambiare il prior modifica $p(\theta)$.
+- Cambiare la likelihood modifica $p(y\mid\theta)$.
+- Aggiungere un predittore modifica la struttura del modello.
+
+Le modifiche **3, 4 e 6** appartengono alla categoria B, purché l'algoritmo alternativo sia corretto e abbia la stessa distribuzione bersaglio.
+
+- Più iterazioni possono ridurre l'errore Monte Carlo.
+- Più catene aiutano a diagnosticare l'esplorazione.
+- Un algoritmo diverso può essere più o meno efficiente, ma non dovrebbe cambiare la posterior definita dal modello.
+
+Se le sintesi cambiano molto aumentando le iterazioni o usando un campionatore affidabile diverso, ciò può segnalare che l'approssimazione precedente non era sufficientemente stabile.
+:::
+
+### Esercizio 4 — Criticare {.unnumbered .unlisted}
+
+*Livello essenziale · 10 minuti · Codice: no*
+
+Valuta la seguente affermazione:
+
+> «Con `brms` non è necessario conoscere il modello. È sufficiente scrivere una formula: `brms` sceglie le assunzioni appropriate, Stan calcola la posterior corretta e l'assenza di errori dimostra che il risultato è valido.»
+
+Individua almeno tre problemi e proponi una formulazione più accurata.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Distingui scelta del modello, correttezza del campionamento e adeguatezza sostantiva.
+:::
+
+::: {.callout-note collapse="true" title="Elementi per la risposta"}
+L'affermazione è errata per diverse ragioni.
+
+Primo, la formula non contiene da sola tutte le assunzioni. Occorre scegliere famiglia dell'outcome, funzioni di collegamento, prior, struttura degli effetti e trattamento dei dati.
+
+Secondo, `brms` traduce la specificazione fornita dal ricercatore; non decide se essa rappresenti correttamente il fenomeno.
+
+Terzo, Stan approssima la posterior **definita dal modello**. Non esiste una posterior “corretta” indipendentemente dalla specificazione adottata.
+
+Quarto, l'assenza di messaggi di errore non dimostra né una buona convergenza né un buon adattamento sostantivo. Servono diagnostiche e controlli predittivi.
+
+Una formulazione più accurata sarebbe:
+
+> «`brms` facilita la specificazione di molti modelli e genera il corrispondente codice Stan. Stan esegue il calcolo della posterior, ma il ricercatore rimane responsabile delle assunzioni, delle diagnostiche, dei controlli predittivi e dell'interpretazione.»
+:::
+
+## Bibliografia {.unnumbered .unlisted}

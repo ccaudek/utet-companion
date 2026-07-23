@@ -5,17 +5,17 @@ Un modello può essere stimato senza difficoltà, produrre catene MCMC ben mesco
 In questo capitolo, considereremo la specificazione del modello come un'ipotesi da verificare e, se necessario, da modificare. Esamineremo alcuni modi in cui un modello lineare può fallire: la funzione della media può essere troppo semplice, la dispersione può cambiare da un'osservazione all'altra, la distribuzione condizionata può avere code più pesanti di quelle previste o può essere stata ignorata una struttura di dipendenza. Concluderemo mostrando che anche il processo di misurazione fa parte del modello generativo. La trattazione completa dell'errore di misurazione e della varianza di metodo è sviluppata nell'@sec-measurement-error-method-appendix.
 
 ::: {.callout-important appearance="minimal" .chapter-status}
-**Da sapere.** La correttezza computazionale non garantisce l’adeguatezza scientifica del modello. Occorre distinguere la diagnostica del campionamento, la capacità del modello di riprodurre caratteristiche rilevanti dei dati e la validità dell’interpretazione sostantiva. Un modello può fallire nella funzione della media, nella dispersione, nella distribuzione condizionata, nella struttura di dipendenza o nel processo di misurazione.
+**Da sapere.** La correttezza computazionale non garantisce l’adeguatezza scientifica del modello. Inoltre, un modello associativo può descrivere o prevedere regolarità nei dati senza identificare una relazione causale e senza spiegare il meccanismo che le produce. Il significato di un coefficiente dipende dalla forma funzionale, dalle variabili condizionate, dalla popolazione, dalla misurazione e dalle altre assunzioni del modello.
 
-**Da saper fare.** Progettare controlli predittivi mirati; collegare una discrepanza osservabile alla componente del modello che potrebbe averla generata; distinguere problemi di non linearità, eteroschedasticità, code pesanti e dipendenza ignorata; proporre una revisione motivata e verificarne gli effetti; valutare se una specificazione più complessa sia identificabile e rilevante per la domanda scientifica.
+**Da saper fare.** Distinguere diagnostica del campionamento, adeguatezza predittiva, interpretazione associativa, identificazione causale e spiegazione meccanicistica; progettare controlli predittivi mirati; collegare una discrepanza alla componente del modello che potrebbe averla generata; proporre una revisione motivata e comunicare quali conclusioni restano giustificate.
 
-**Approfondimento facoltativo.** L’intero capitolo appartiene al percorso essenziale. L’appendice sull’errore di misurazione e sulla varianza di metodo approfondisce i modelli latenti e la loro implementazione computazionale e può essere rimandata fino a quando non si sia acquisita familiarità con Stan.
+**Approfondimento facoltativo.** Gli esempi computazionali mostrano come localizzare alcuni fallimenti ricorrenti. L’appendice sull’errore di misurazione e sulla varianza di metodo approfondisce i modelli latenti e può essere rimandata fino a quando non si sia acquisita familiarità con Stan.
 
 [Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
 :::
 
 ::: {.callout-note title="Obiettivi del capitolo"}
-Al termine del capitolo dovresti saper distinguere la diagnostica computazionale dal controllo dell'adeguatezza del modello; progettare controlli predittivi mirati; collegare una discrepanza osservabile alla componente del modello che potrebbe averla prodotta; spiegare perché la misurazione imperfetta può modificare le stime; valutare se una revisione sia identificabile e scientificamente rilevante.
+Al termine del capitolo dovresti saper distinguere ciò che un modello dice sulle associazioni da ciò che sarebbe necessario per una conclusione causale o meccanicistica; separare la diagnostica computazionale dal controllo dell'adeguatezza; progettare controlli predittivi mirati; spiegare perché specificazione, misurazione e condizionamento modificano il significato dei coefficienti; proporre revisioni coerenti con la discrepanza osservata.
 :::
 
 ::: {.callout-tip collapse=true title="Percorsi di lettura"}
@@ -35,20 +35,6 @@ Sono utili il workflow della regressione bayesiana (@sec-linmod-bayesian-reg), l
 here::here("code", "_common.R") |>
   source()
 
-if (!requireNamespace("pacman", quietly = TRUE)) {
-  install.packages("pacman")
-}
-
-pacman::p_load(
-  brms,
-  broom,
-  dplyr,
-  ggplot2,
-  posterior,
-  tibble,
-  tidyr
-)
-
 set.seed(1234)
 ```
 :::
@@ -61,11 +47,36 @@ Il secondo livello riguarda la capacità del modello di riprodurre le caratteris
 
 Il terzo livello riguarda la validità dell'interpretazione scientifica. Anche un modello predittivamente adeguato potrebbe non identificare la quantità che ci interessa. Il significato di un coefficiente dipende dal disegno dello studio, dalla qualità della misurazione, dalla popolazione di riferimento, dalle variabili incluse e dalle assunzioni che collegano il parametro alla domanda scientifica. Un buon $\hat R$ non dimostra che la verosimiglianza sia adeguata, un buon controllo predittivo non rende causale un'associazione e una stima precisa non garantisce che il costrutto sia stato misurato senza distorsioni.
 
+## Associazione, previsione, causalità e spiegazione
+
+Nei dati osservazionali, una regressione descrive innanzitutto una distribuzione condizionata, per esempio $p(y \mid x,z)$. Può riassumere come cambia mediamente $Y$ al variare di $X$, mantenendo fisse le variabili $Z$, e può essere utile per prevedere nuove osservazioni provenienti da condizioni simili. Queste sono funzioni scientifiche legittime, ma non equivalgono a una spiegazione del fenomeno.
+
+Una conclusione causale risponde a una domanda diversa: che cosa accadrebbe a $Y$ se intervenissimo su $X$? Per rispondere servono un estimand causale, un disegno o assunzioni di identificazione e una giustificazione delle variabili sulle quali condizionare [@hernan2020; @pearl2009causality]. Nessuna procedura bayesiana trasforma da sola una relazione osservazionale in un effetto causale: la posterior quantifica l'incertezza relativa al modello specificato e alle assunzioni che lo sostengono.
+
+La spiegazione meccanicistica pone una domanda ancora più ricca: mediante quali componenti e processi l'effetto viene prodotto? Un modello meccanicistico non si limita a riprodurre una correlazione; rappresenta una possibile organizzazione del processo generativo e produce conseguenze che possono essere messe alla prova [@povich_mechanistic_2025]. Anche un modello di questo tipo può essere sbagliato, ma rende esplicita una spiegazione confrontabile con alternative.
+
+| Obiettivo | Domanda principale | Che cosa può fornire un modello associativo? |
+|---|---|---|
+| Descrizione | Come variano insieme le quantità osservate? | Una sintesi delle associazioni condizionate |
+| Previsione | Quali osservazioni sono plausibili in casi simili? | Una distribuzione predittiva, se il contesto rimane pertinente |
+| Causalità | Che cosa cambierebbe sotto un intervento? | Non basta senza disegno e assunzioni di identificazione |
+| Meccanismo | Quale processo produce il fenomeno? | Non basta senza una rappresentazione esplicita del processo |
+
+Queste distinzioni spiegano perché il controllo del modello è necessario ma non sufficiente. Un modello che non riproduce i dati non è una base credibile per l'interpretazione; tuttavia, un modello che li riproduce bene può ancora offrire soltanto una descrizione associativa.
+
 ## Il ciclo di controllo e revisione
 
 La revisione del modello non consiste nel provare specifiche successive fino a quando non si ottiene il risultato desiderato. Si tratta di un processo documentato nel quale ogni cambiamento risponde a una discrepanza osservabile o a un'assunzione divenuta poco plausibile. Il ciclo parte dalla quantità di interesse e dalla descrizione generativa del fenomeno, prosegue con le simulazioni a priori, l'adattamento, la diagnostica e i controlli predittivi e, quando si verifica un fallimento, si tenta di localizzarlo nella funzione di media, nella dispersione, nella famiglia di distribuzione, nella struttura di dipendenza o nel processo di osservazione.
 
 La revisione dovrebbe essere mirata. Non ogni differenza tra i dati osservati e quelli replicati richiede un modello più complesso, in quanto nessun modello può riprodurre ogni dettaglio. Una discrepanza merita attenzione quando modifica la quantità di interesse, compromette le previsioni necessarie o mette in dubbio l'interpretazione proposta. Dopo ogni revisione, i controlli devono essere ripetuti per verificare che il problema sia stato effettivamente risolto e che non ne siano stati introdotti altri.
+
+## La fragilità del significato di un coefficiente
+
+Un coefficiente non è una proprietà isolata del fenomeno. È una quantità definita all'interno di una specificazione. Può cambiare quando cambia la scala delle variabili, la forma funzionale, l'insieme delle variabili condizionate, la popolazione, il modello della dispersione o il processo di misurazione. Anche il segno può cambiare senza che sia stato commesso un errore di calcolo.
+
+Questa dipendenza non rende inutili i coefficienti. Impone però di interpretarli come risposte a domande precise: *quale associazione, nella popolazione considerata, sotto quale modello e condizionatamente a quali variabili?* La stabilità rispetto a specificazioni plausibili può aumentare la fiducia in una descrizione associativa, ma non identifica da sola una direzione causale e non rivela un meccanismo.
+
+I casi che seguono mostrano diversi modi in cui una specificazione può alterare il significato delle associazioni stimate. Lo scopo non è trovare il modello “vero” mediante una procedura automatica, ma rendere visibili le assunzioni dalle quali dipende l'interpretazione.
 
 ## Segnali ricorrenti di specificazione inadeguata
 
@@ -238,12 +249,18 @@ La revisione può anche mostrare che i dati non consentono la distinzione deside
 
 ## Dal controllo del modello alla sua interpretazione
 
-Un modello predittivamente adeguato non stabilisce ancora come debba essere interpretato un coefficiente. In particolare, non trasforma automaticamente un'associazione in un effetto causale. La validità causale richiede una domanda formulata in termini di intervento, un estimand, un disegno sperimentale o delle assunzioni di identificazione e una scelta giustificata delle variabili. Il modello lineare viene ripreso dal @sec-association-prediction-causality, che chiarisce le condizioni aggiuntive necessarie per attribuire un significato causale alle stime.
+Un modello predittivamente adeguato non stabilisce ancora come debba essere interpretato un coefficiente. Nei dati osservazionali, il coefficiente rimane una descrizione dell'associazione condizionata definita dal modello. Una buona previsione mostra che tale descrizione contiene informazione utile nel dominio considerato; non stabilisce la direzione della relazione, non esclude cause comuni e non rivela il processo che genera il fenomeno.
+
+La validità causale richiede una domanda formulata in termini di intervento, un estimand, un disegno sperimentale o assunzioni di identificazione e una scelta giustificata delle variabili. Una spiegazione meccanicistica richiede inoltre un modello dei processi intermedi e previsioni capaci di discriminare tra spiegazioni alternative. Il modello lineare viene ripreso dal @sec-association-prediction-causality, che chiarisce le condizioni aggiuntive necessarie per passare dall'associazione alla causalità.
+
+Il controllo del modello conserva quindi un ruolo essenziale ma delimitato. Serve a evitare di attribuire significato a una rappresentazione incompatibile con i dati e a comprendere da quali assunzioni dipendono le stime. Non autorizza, da solo, il passaggio dalla regolarità statistica alla spiegazione scientifica.
 
 ## Errori frequenti
 
 - Confondere la convergenza delle catene con l'adeguatezza del modello.
 - Usare un solo controllo predittivo e considerarlo una convalida generale.
+- Interpretare un coefficiente come proprietà invariabile del fenomeno, indipendente dalla specificazione.
+- Passare da una buona previsione a una conclusione causale o meccanicistica.
 - Cambiare i prior quando la discrepanza riguarda la forma della media o la dipendenza.
 - Adottare automaticamente una verosimiglianza robusta senza indagare la natura delle osservazioni estreme.
 - Aggiungere parametri latenti senza verificare che il disegno li identifichi.
@@ -251,37 +268,115 @@ Un modello predittivamente adeguato non stabilisce ancora come debba essere inte
 
 ## Concetti da ricordare
 
-La diagnostica MCMC controlla il calcolo, non la validità del modello. I controlli predittivi forniscono informazioni solo sulle proprietà che esaminano. Media, dispersione, famiglia distributiva, dipendenza e misurazione sono componenti distinte della specificazione. Una revisione deve rispondere a una discrepanza osservabile e rilevante. L'identificazione dipende sia dal disegno che dai prior. Infine, un modello ben calibrato dal punto di vista predittivo non acquisisce per questo un'interpretazione causale.
-
-## Esercizi
-
-### 1. Controllo mirato della non linearità
-
-Simula una relazione cubica. Adatta un modello lineare e un modello con termini polinomiali. Costruisci un controllo che renda visibile la discrepanza lungo il predittore.
-
-### 2. Dispersione variabile
-
-Modifica la simulazione eteroschedastica affinché la dispersione diminuisca al crescere di $X$. Adatta un modello con `sigma ~ x` e interpreta il coefficiente sulla scala logaritmica.
-
-### 3. Controlli complementari
-
-Per un modello già utilizzato nel Companion, progetta tre controlli predittivi rivolti a proprietà differenti. Spiega quale fallimento sarebbe rilevato da ciascuno.
-
-### 4. Misurazione e sensibilità
-
-Scegli una variabile psicologica usata in uno dei capitoli precedenti. Descrivi quale informazione aggiuntiva sarebbe necessaria per rappresentarne esplicitamente l'errore di misura e proponi una semplice analisi di sensibilità quando tale informazione non è disponibile.
-
-### 5. Revisione documentata
-
-Scegli un'analisi già svolta. Identifica un'assunzione potenzialmente critica, proponi una statistica o un grafico predittivo e descrivi quale revisione sarebbe giustificata da un eventuale fallimento.
+La diagnostica MCMC controlla il calcolo, non la validità del modello. I controlli predittivi forniscono informazioni solo sulle proprietà che esaminano. Media, dispersione, famiglia distributiva, dipendenza e misurazione sono componenti distinte della specificazione. Un coefficiente descrive un'associazione definita da tali scelte e non possiede automaticamente un significato causale. Una revisione deve rispondere a una discrepanza osservabile e rilevante. L'identificazione dipende dal disegno, dalle assunzioni e, nei modelli debolmente identificati, anche dai prior. Una spiegazione più profonda richiede ipotesi causali o meccanicistiche che producano conseguenze controllabili.
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-La distribuzione a posteriori quantifica l'incertezza all'interno del modello scelto, ma non include automaticamente quella relativa a tutte le strutture alternative. Per questa ragione, il flusso di lavoro bayesiano non si conclude con l'adattamento del modello e la lettura dei coefficienti. È necessario un percorso di controllo che distingua i problemi di calcolo dalle discrepanze predittive e dai limiti dell'interpretazione.
+La distribuzione a posteriori quantifica l'incertezza all'interno del modello scelto, ma non include automaticamente l'incertezza relativa a tutte le strutture alternative. Per questa ragione, il flusso di lavoro bayesiano non si conclude con l'adattamento del modello e la lettura dei coefficienti. È necessario distinguere i problemi di calcolo dalle discrepanze predittive e dai limiti dell'interpretazione.
 
-Una curvatura residua invita a rivedere la funzione della media, una dispersione variabile in modo sistematico richiede un modello per la deviazione standard, code più pesanti possono motivare una diversa verosimiglianza e le osservazioni annidate o ripetute richiedono una struttura di dipendenza. Quando la misura è imperfetta, è necessario considerare anche il processo di osservazione, almeno mediante una verifica di sensibilità o un rinvio a un modello di misura più esplicito. In tutti questi casi, la domanda da porsi non è quale comando modificare, ma quale componente del modello è incompatibile con quanto osservato.
+Una curvatura residua invita a rivedere la funzione della media, una dispersione variabile richiede un modello per la deviazione standard, code più pesanti possono motivare una diversa distribuzione condizionata e le osservazioni annidate o ripetute richiedono una struttura di dipendenza. Quando la misura è imperfetta, è necessario considerare anche il processo di osservazione. In tutti questi casi, la domanda da porsi non è quale comando modificare, ma quale parte della storia generativa è incompatibile con quanto osservato.
 
-La complessità è giustificata solo quando affronta una discrepanza rilevante e quando il disegno contiene informazioni sufficienti per sostenerla. Se questa informazione manca, un'analisi di sensibilità o una conclusione più prudente possono essere preferibili a un modello apparentemente sofisticato, ma debolmente identificato. Il capitolo successivo estende la stessa cautela all'interpretazione dei coefficienti: una relazione ben stimata rimane associativa finché il disegno e le assunzioni non giustificano un significato causale.
+Il controllo può rendere una descrizione associativa più adeguata e una previsione più affidabile. Non trasforma però l'associazione in causalità e non sostituisce una spiegazione del processo. La complessità è giustificata quando affronta una discrepanza rilevante e quando il disegno contiene informazioni sufficienti per sostenerla. Se questa informazione manca, un'analisi di sensibilità o una conclusione più prudente sono preferibili a una spiegazione apparente sostenuta soprattutto dai vincoli del modello.
+
+Il capitolo successivo estende questa cautela all'interpretazione dei coefficienti: una relazione ben stimata rimane associativa finché il disegno e le assunzioni non giustificano un significato causale. I modelli meccanicistici offriranno poi un modo più ambizioso di formulare ipotesi sui processi, ma anch'essi dovranno essere controllati e confrontati con spiegazioni alternative.
+
+## Esercizi {.unnumbered .unlisted}
+
+### Esercizio 1 — Comprendere: quattro domande diverse {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 10–15 minuti*
+
+Per ciascuna affermazione indica se riguarda principalmente **calcolo**, **associazione**, **previsione**, **causalità** oppure **meccanismo**. Alcune affermazioni possono richiedere più di un'etichetta, ma devi spiegare la scelta.
+
+1. Le quattro catene hanno $\hat R=1.00$ e non presentano divergenze.
+2. A parità di età, un punteggio più alto di stress è associato a meno ore di sonno.
+3. Il modello assegna una probabilità elevata che un nuovo studente con queste caratteristiche dorma meno di sei ore.
+4. Ridurre lo stress di un punto aumenterebbe in media la durata del sonno.
+5. Lo stress altera il sonno attraverso l'attivazione fisiologica serale, che ritarda l'addormentamento.
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+Chiediti se l'affermazione riguarda il funzionamento dell'algoritmo, una regolarità osservata, dati non ancora osservati, un intervento o un processo intermedio.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+La prima affermazione riguarda il calcolo. La seconda descrive un'associazione condizionata. La terza riguarda la previsione. La quarta è causale perché formula una conseguenza di un intervento. La quinta propone un meccanismo, cioè un processo intermedio che dovrebbe produrre ulteriori previsioni verificabili. Le ultime due affermazioni non sono giustificate automaticamente dalle prime tre.
+:::
+
+### Esercizio 2 — Prevedere: la stessa associazione, storie diverse {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 10–15 minuti*
+
+In uno studio osservazionale emerge un'associazione positiva tra uso serale dello smartphone e difficoltà di addormentamento. Considera quattro possibili processi:
+
+1. l'uso dello smartphone aumenta la difficoltà di addormentamento;
+2. chi non riesce ad addormentarsi usa più a lungo lo smartphone;
+3. una terza variabile, per esempio lo stress, aumenta entrambe le quantità;
+4. l'associazione è amplificata da un errore sistematico di autovalutazione.
+
+Rispondi alle domande seguenti.
+
+1. Un modello `insonnia ~ smartphone` può distinguere queste quattro storie?
+2. Un intervallo posteriore molto stretto sulla pendenza risolve l'ambiguità?
+3. Quale tipo di informazione aggiuntiva sarebbe utile per discriminare almeno alcune spiegazioni?
+4. Perché una buona previsione dell'insonnia non identifica necessariamente il meccanismo?
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+La precisione della stima riguarda l'associazione definita dal modello; non aggiunge automaticamente informazione sulla direzione temporale, sulle cause comuni o sulla misurazione.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+La regressione semplice può rappresentare la stessa associazione sotto tutte e quattro le storie e non le distingue. Un intervallo stretto rende precisa la descrizione dell'associazione, non la sua interpretazione causale. Sarebbero utili, a seconda della domanda, misure temporali più fini, manipolazioni sperimentali, informazioni sulle cause comuni, misure oggettive del comportamento o previsioni differenti derivate da modelli meccanicistici. Un modello può prevedere bene perché sfrutta una regolarità stabile, anche se non rappresenta il processo che la produce.
+:::
+
+### Esercizio 3 — Modificare e interpretare: quanto è stabile il coefficiente? {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 15 minuti*
+
+Tre analisi degli stessi dati producono questi risultati:
+
+| Specificazione | Pendenza di $X$ |
+|---|---:|
+| $Y \sim X$ | 0.52 |
+| $Y \sim X + Z$ | 0.18 |
+| $Y \sim X + Z + I(X^2)$ | -0.04 |
+
+1. È corretto dire che una delle tre stime è necessariamente “quella vera”?
+2. Che cosa mostra la variazione del coefficiente?
+3. Quali domande devono essere chiarite prima di scegliere la specificazione?
+4. Se il terzo modello produce i migliori controlli predittivi, quale conclusione diventa più plausibile e quale conclusione rimane ingiustificata?
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+Considera il ruolo di $Z$, della curvatura, della popolazione e della domanda sostantiva. Un miglior adattamento può sostenere una descrizione più adeguata senza identificare un effetto causale.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+Le tre pendenze rispondono a domande condizionate diverse e nessuna è automaticamente la proprietà vera del fenomeno. La variazione mostra che il significato dell'associazione dipende dalle variabili incluse e dalla forma funzionale. Prima di scegliere occorre chiarire la domanda, il ruolo sostantivo di $Z$, la plausibilità della curvatura, la popolazione e, per un'interpretazione causale, la struttura causale ipotizzata. Se il terzo modello supera controlli predittivi mirati, è più plausibile che descriva meglio la relazione osservata nel dominio analizzato. Non segue che il coefficiente rappresenti un effetto causale o che la forma quadratica sia il meccanismo psicologico reale.
+:::
+
+### Esercizio 4 — Criticare, comunicare e progettare {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 15–20 minuti*
+
+Valuta il seguente resoconto:
+
+> Il modello bayesiano converge perfettamente, riproduce bene la distribuzione dei dati e stima una pendenza positiva con probabilità 0.99. Abbiamo quindi dimostrato che $X$ causa $Y$ e identificato il meccanismo responsabile. L'ampiezza della pendenza descrive quanto il processo funziona in ogni individuo.
+
+1. Individua almeno cinque problemi.
+2. Riscrivi il resoconto limitandoti alle conclusioni sostenute da uno studio osservazionale.
+3. Proponi un passo successivo che possa avvicinare l'analisi a una conclusione causale.
+4. Proponi una previsione che un modello meccanicistico dovrebbe produrre oltre alla semplice associazione tra $X$ e $Y$.
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+Distingui convergenza, adeguatezza predittiva, probabilità sul coefficiente, associazione, causalità, meccanismo e generalizzazione all'individuo.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+La convergenza riguarda il calcolo; il controllo predittivo riguarda soltanto le proprietà esaminate; la probabilità 0.99 è condizionata al modello; una pendenza positiva in dati osservazionali descrive un'associazione e non dimostra causalità; un coefficiente non identifica un meccanismo; una relazione media non descrive necessariamente ogni individuo.
+
+Una formulazione appropriata potrebbe essere: “Nel campione e sotto la specificazione adottata, valori maggiori di $X$ sono associati a valori maggiori di $Y$. La posterior assegna elevata probabilità a una pendenza positiva e i controlli eseguiti non hanno evidenziato le discrepanze considerate. Il risultato rimane associativo e dipende dalla misurazione, dalle variabili incluse e dalla forma del modello.”
+
+Per avanzare verso la causalità servono, secondo la domanda, un intervento, un disegno longitudinale informativo o assunzioni di identificazione esplicite. Un modello meccanicistico dovrebbe inoltre prevedere conseguenze più specifiche, per esempio la sequenza temporale, il comportamento di una variabile mediatrice o il pattern prodotto da una manipolazione selettiva del processo ipotizzato.
+:::
 
 ::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
 
