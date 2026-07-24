@@ -1,0 +1,501 @@
+# Sorpresa e incertezza: il linguaggio della previsione probabilistica {#sec-entropy-shannon-information}
+
+Un modello probabilistico non si limita a indicare quale esito considera più plausibile. Distribuisce la propria fiducia tra tutti gli esiti possibili. Quando un dato viene osservato, possiamo quindi domandarci quanto il modello fosse preparato a incontrarlo.
+
+Questo capitolo introduce il linguaggio minimo necessario per formulare tale domanda. La **sorpresa** riguarda un evento osservato; l'**entropia** descrive invece quanta sorpresa ci aspettiamo, in media, prima di osservare l'esito. La distinzione è importante: una distribuzione può essere molto sicura e avere bassa entropia, ma essere comunque una pessima previsione se concentra la probabilità sull'esito sbagliato.
+
+Il capitolo non presenta ancora una procedura completa per confrontare modelli. Costruisce il primo passaggio concettuale verso tale obiettivo: comprendere perché la qualità di una previsione probabilistica dipenda dalla probabilità assegnata a ciò che accade effettivamente.
+
+## Orientamento {.unnumbered .unlisted}
+
+Il percorso essenziale segue quattro passaggi:
+
+1. una previsione probabilistica assegna probabilità agli eventi;
+2. un evento poco probabile produce molta sorpresa;
+3. l'entropia è la sorpresa media attesa sotto una distribuzione;
+4. il *log-score* usa la stessa logica per valutare una previsione dopo l'osservazione.
+
+Al termine del capitolo il lettore dovrebbe saper distinguere l'incertezza di una distribuzione dalla qualità della previsione, interpretare sorpresa ed entropia e spiegare perché una previsione molto sicura viene penalizzata fortemente quando sbaglia.
+
+::: {.callout-important appearance="minimal" .chapter-status}
+**Da sapere.** La sorpresa di Shannon associata a un evento è $-\log p(y)$: quanto minore è la probabilità assegnata all'evento, tanto maggiore è la sorpresa. L'entropia è la sorpresa media attesa prima dell'osservazione. Essa descrive quanto una distribuzione è incerta, non quanto sia corretta. Il *log-score* valuta invece la probabilità assegnata al dato che si è effettivamente osservato.
+
+**Da saper fare.** Interpretare e confrontare la sorpresa di eventi con probabilità differenti; calcolare l'entropia di semplici distribuzioni discrete; distinguere una distribuzione incerta da una previsione inaccurata; spiegare perché una previsione prudente può ricevere un punteggio migliore di una previsione molto sicura ma sbagliata.
+
+**Approfondimento facoltativo.** La stima *plug-in* dell'entropia, l'entropia differenziale, la codifica di Huffman e le applicazioni psicologiche della sorpresa possono essere rimandate. Sono utili estensioni, ma non sono necessarie per comprendere il passaggio dall'incertezza alla valutazione predittiva.
+
+[Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
+:::
+
+::: {.callout-tip collapse="true" title="Prerequisiti"}
+Sono sufficienti le nozioni di base sulle distribuzioni di probabilità, sul valore atteso e sui logaritmi. Un'introduzione più ampia alla teoria dell'informazione è offerta da @stone2022information; qui useremo soltanto il formalismo necessario alla valutazione delle previsioni probabilistiche.
+:::
+
+::: {.callout-caution collapse="true" title="Preparazione del notebook"}
+```{r}
+#| output: false
+
+here::here("code", "_common.R") |>
+  source()
+
+entropy_discrete <- function(p, base = 2) {
+  stopifnot(all(p >= 0), abs(sum(p) - 1) < 1e-8)
+  p_positive <- p[p > 0]
+  -sum(p_positive * log(p_positive, base = base))
+}
+
+surprise <- function(p, base = 2) {
+  stopifnot(all(p > 0), all(p <= 1))
+  -log(p, base = base)
+}
+```
+:::
+
+## Una previsione è una distribuzione
+
+Supponiamo di dover prevedere la risposta a una domanda con quattro alternative. Dire semplicemente «la risposta sarà A» nasconde quanta fiducia attribuiamo alla previsione. Le distribuzioni
+
+$$
+Q_1=(0.40,0.30,0.20,0.10)
+$$
+
+e
+
+$$
+Q_2=(0.97,0.01,0.01,0.01)
+$$
+
+indicano entrambe A come esito più probabile, ma esprimono gradi di fiducia molto diversi. La seconda distribuzione rischia molto di più: se si osserva un'altra risposta, il modello aveva assegnato a quell'evento una probabilità quasi nulla.
+
+Questa è una differenza fondamentale tra previsioni puntuali e previsioni probabilistiche. Una previsione probabilistica dichiara non soltanto che cosa il modello si aspetta, ma anche quanto è disposto a essere sorpreso dalle alternative.
+
+## Informazione di un evento: la sorpresa
+
+Consideriamo un evento $y$ al quale una distribuzione predittiva assegna probabilità $p(y)$. L'informazione di Shannon, o **sorpresa**, è
+
+$$
+I(y)=-\log_2 p(y).
+$$ {#eq-shannon-surprise}
+
+Con il logaritmo in base 2 la sorpresa è espressa in **bit**. Alcuni valori aiutano a costruire l'intuizione:
+
+| Probabilità assegnata | Sorpresa |
+|---:|---:|
+| $1$ | $0$ bit |
+| $1/2$ | $1$ bit |
+| $1/4$ | $2$ bit |
+| $1/8$ | $3$ bit |
+
+Un evento certo non produce informazione nuova. Dimezzare la probabilità aggiunge invece un bit di sorpresa.
+
+```{r}
+#| label: fig-prob-surprise
+#| fig-cap: "La sorpresa aumenta rapidamente quando diminuisce la probabilità assegnata all'evento osservato."
+
+p_grid <- seq(0.001, 1, length.out = 1000)
+
+data.frame(
+  probability = p_grid,
+  surprise_bits = surprise(p_grid)
+) |>
+  ggplot(aes(x = probability, y = surprise_bits)) +
+  geom_line(linewidth = 1) +
+  labs(
+    x = "Probabilità assegnata all'evento",
+    y = "Sorpresa, -log2 p(y) [bit]"
+  )
+```
+
+La crescita non è lineare. Passare da una probabilità di $0.50$ a $0.25$ aggiunge un bit; anche passare da $0.02$ a $0.01$ aggiunge un bit. Il logaritmo misura quindi differenze **moltiplicative** nelle probabilità.
+
+::: {.callout-note collapse="true" title="Perché il logaritmo?"}
+Il logaritmo rende additiva l'informazione di eventi indipendenti. Se
+
+$$
+p(a,b)=p(a)p(b),
+$$
+
+allora
+
+$$
+-\log p(a,b)
+=
+-\log p(a)-\log p(b).
+$$
+
+La sorpresa di una sequenza può quindi essere ottenuta sommando i contributi delle singole osservazioni. Questa proprietà consentirà, nei capitoli successivi, di aggregare i punteggi predittivi di molti dati.
+:::
+
+## Dalla sorpresa all'entropia
+
+La sorpresa può essere calcolata soltanto dopo aver specificato quale evento considerare. Prima dell'osservazione non sappiamo quale esito si verificherà. Possiamo però calcolare quanta sorpresa ci aspettiamo **in media**, ponderando la sorpresa di ciascun esito per la sua probabilità.
+
+Per una variabile discreta $Y$ con distribuzione $p(y)$, l'entropia è
+
+$$
+H(Y)
+=
+\mathbb E_p[-\log_2p(Y)]
+=
+-\sum_{y\in\mathcal Y}p(y)\log_2p(y).
+$$ {#eq-entropy-def}
+
+L'entropia risponde dunque alla domanda:
+
+> Prima di osservare il dato, quanta sorpresa ci aspettiamo sotto questa distribuzione?
+
+Una distribuzione uniforme ha entropia elevata perché nessun esito è favorito. Una distribuzione concentrata ha entropia bassa perché quasi tutta la probabilità è assegnata a pochi esiti.
+
+### Tre distribuzioni con incertezza diversa
+
+Consideriamo nuovamente una domanda con quattro alternative.
+
+```{r}
+#| label: entropy-mcq-example
+
+p_uniform <- c(A = .25, B = .25, C = .25, D = .25)
+p_moderate <- c(A = .55, B = .15, C = .15, D = .15)
+p_concentrated <- c(A = .90, B = .04, C = .03, D = .03)
+
+entropy_summary <- data.frame(
+  distribuzione = c("Uniforme", "Moderatamente concentrata", "Molto concentrata"),
+  entropy_bits = c(
+    entropy_discrete(p_uniform),
+    entropy_discrete(p_moderate),
+    entropy_discrete(p_concentrated)
+  )
+)
+
+entropy_summary$equivalent_options <- 2^entropy_summary$entropy_bits
+entropy_summary$entropy_bits <- round(entropy_summary$entropy_bits, 3)
+entropy_summary$equivalent_options <- round(entropy_summary$equivalent_options, 3)
+entropy_summary
+```
+
+L'entropia della distribuzione uniforme è
+
+$$
+H(Y)=\log_2 4=2\text{ bit}.
+$$
+
+L'incertezza equivale a quella di una scelta tra quattro alternative equiprobabili. Nelle altre distribuzioni l'entropia diminuisce perché A riceve una probabilità crescente.
+
+```{r}
+#| label: fig-entropy-distributions
+#| fig-cap: "Distribuzioni più concentrate hanno entropia minore. Questo non implica ancora che siano previsioni migliori."
+
+rbind(
+  data.frame(distribuzione = "Uniforme", risposta = names(p_uniform), probability = p_uniform),
+  data.frame(distribuzione = "Moderatamente concentrata", risposta = names(p_moderate), probability = p_moderate),
+  data.frame(distribuzione = "Molto concentrata", risposta = names(p_concentrated), probability = p_concentrated)
+) |>
+  ggplot(aes(x = risposta, y = probability)) +
+  geom_col() +
+  facet_wrap(~ distribuzione) +
+  labs(x = "Risposta", y = "Probabilità")
+```
+
+La quantità $2^{H(Y)}$ può essere interpretata come il numero di alternative equiprobabili che produrrebbero la stessa entropia. È un modo intuitivo per tradurre i bit in una misura di diversità effettiva degli esiti.
+
+## Incertezza non significa accuratezza
+
+L'entropia è una proprietà della distribuzione considerata. Non richiede di sapere quale esito si osserverà e non stabilisce se la distribuzione rappresenti bene il fenomeno.
+
+Supponiamo che due modelli prevedano la risposta a una domanda con due alternative:
+
+$$
+Q_{\text{prudente}}(A,B)=(0.60,0.40),
+$$
+
+$$
+Q_{\text{sicuro}}(A,B)=(0.99,0.01).
+$$
+
+Il secondo modello ha entropia minore: è quasi certo che la risposta sarà A. Ma immaginiamo che venga osservata B. La sorpresa prodotta dai due modelli è:
+
+```{r}
+#| label: entropy-versus-score
+
+comparison <- data.frame(
+  modello = c("Prudente", "Molto sicuro"),
+  entropy_bits = c(
+    entropy_discrete(c(.60, .40)),
+    entropy_discrete(c(.99, .01))
+  ),
+  probability_observed_B = c(.40, .01),
+  surprise_observed_B = surprise(c(.40, .01))
+)
+
+comparison$entropy_bits <- round(comparison$entropy_bits, 3)
+comparison$probability_observed_B <- round(comparison$probability_observed_B, 3)
+comparison$surprise_observed_B <- round(comparison$surprise_observed_B, 3)
+comparison
+```
+
+Il modello molto sicuro era meno incerto, ma assegna una probabilità molto più bassa al dato osservato. Produce quindi molta più sorpresa.
+
+::: {.callout-important title="Distinzione fondamentale"}
+**Bassa entropia** significa che la distribuzione è concentrata.
+
+**Buona previsione** significa che la distribuzione assegna probabilità elevata agli eventi che si verificano.
+
+Una distribuzione concentrata sull'esito sbagliato ha bassa entropia e pessima qualità predittiva.
+:::
+
+Questa distinzione impedisce di equiparare sicurezza e conoscenza. Una previsione può essere molto precisa nel senso di essere concentrata, ma inaccurata nel senso di essere concentrata nel posto sbagliato.
+
+## Dopo l'osservazione: il log-score
+
+Per valutare una previsione dopo aver osservato $y$, si può usare il **log-score**:
+
+$$
+S(Q,y)=\log Q(y).
+$$
+
+Poiché $\log Q(y)\leq 0$, un punteggio più vicino a zero è migliore. La quantità negativa,
+
+$$
+-\log Q(y),
+$$
+
+è esattamente la sorpresa del dato sotto la distribuzione predittiva $Q$.
+
+Il log-score premia i modelli che assegnano probabilità elevata al dato osservato e penalizza fortemente le previsioni molto sicure che falliscono. Per questo motivo non valuta soltanto quale evento aveva probabilità massima: prende in considerazione l'intera distribuzione predittiva.
+
+| Momento | Quantità | Domanda |
+|---|---|---|
+| Prima dell'osservazione | Entropia $H(Q)$ | Quanto è incerta la distribuzione? |
+| Dopo l'osservazione | Sorpresa $-\log Q(y)$ | Quanto era inatteso il dato per il modello? |
+| Dopo l'osservazione | Log-score $\log Q(y)$ | Quanta probabilità era stata assegnata al dato? |
+
+### Perché non basta l'accuratezza
+
+Consideriamo due previsioni per un esito binario che viene osservato come successo:
+
+- modello 1: $Q_1(Y=1)=0.51$;
+- modello 2: $Q_2(Y=1)=0.95$.
+
+Entrambi classificano correttamente l'esito se si usa la soglia $0.50$. L'accuratezza li considera equivalenti. Il log-score, invece, riconosce che il secondo modello aveva formulato una previsione probabilistica molto più informativa.
+
+Se però l'esito fosse stato un insuccesso, il secondo modello riceverebbe una penalizzazione molto maggiore. Il log-score ricompensa quindi la fiducia soltanto quando è giustificata dagli eventi osservati.
+
+::: {.callout-note title="Il ponte verso i capitoli successivi"}
+Questo capitolo distingue l'incertezza di una distribuzione dalla sorpresa prodotta da un dato. Il prossimo passo sarà confrontare due distribuzioni e domandarsi quanta sorpresa aggiuntiva produca l'uso di una distribuzione approssimata. Questa domanda conduce all'entropia incrociata e alla divergenza di Kullback--Leibler in @sec-kullback-leibler-divergence.
+
+La valutazione fuori campione verrà introdotta soltanto in seguito. Per ora è sufficiente trattenere l'idea fondamentale: una previsione probabilistica viene criticata osservando quanta probabilità aveva assegnato a ciò che è realmente accaduto.
+:::
+
+## Approfondimenti facoltativi
+
+::: {.callout-note collapse="true" title="Stimare l'entropia da frequenze campionarie"}
+L'entropia è una proprietà di una distribuzione. Se la distribuzione è ignota, una stima elementare sostituisce le probabilità con le frequenze relative:
+
+$$
+\widehat p(y)=\frac{n_y}{n},
+\qquad
+\widehat H(Y)
+=-\sum_y\widehat p(y)\log_2\widehat p(y).
+$$
+
+```{r}
+#| label: entropy-plugin-example
+
+x <- c(1, 2, 3, 3, 3, 3, 2, 1, 3, 3, 2, 1, 1, 4, 4, 3, 1, 2)
+
+p_hat <- prop.table(table(x))
+
+plugin_summary <- data.frame(
+  categoria = names(p_hat),
+  frequenza = as.integer(table(x)),
+  p_hat = round(as.numeric(p_hat), 3)
+)
+
+plugin_summary
+entropy_discrete(as.numeric(p_hat))
+```
+
+Questa stima *plug-in* tratta le frequenze osservate come probabilità vere. Con campioni piccoli e molte categorie tende a essere fragile: gli esiti non osservati ricevono probabilità zero, anche se potrebbero comparire in futuro. Il problema illustra una difficoltà generale, ma la trattazione dell'ottimismo *in-sample* e della validazione fuori campione è rinviata ai capitoli successivi.
+:::
+
+::: {.callout-note collapse="true" title="Variabili continue ed entropia differenziale"}
+Per una variabile continua si definisce l'entropia differenziale:
+
+$$
+H(Y)=-\int p(y)\log p(y)\,dy.
+$$
+
+La formula ricorda il caso discreto, ma il valore può essere negativo e cambia con l'unità di misura. Non va quindi interpretato come il numero medio assoluto di bit necessari a identificare esattamente un valore continuo.
+
+Per una distribuzione normale,
+
+$$
+H\{\mathcal N(\mu,\sigma^2)\}
+=
+\frac{1}{2}\log(2\pi e\sigma^2).
+$$
+
+L'entropia aumenta con la dispersione e non dipende dalla media. Nei capitoli successivi saranno soprattutto le differenze tra punteggi predittivi e distribuzioni a fornire quantità confrontabili.
+:::
+
+::: {.callout-note collapse="true" title="Codifica efficiente e interpretazione operativa"}
+Nella teoria della comunicazione, l'entropia rappresenta il limite inferiore della lunghezza media di una codifica senza perdita. I simboli frequenti ricevono codici brevi; quelli rari, codici più lunghi. La sorpresa $-\log_2p(y)$ può essere letta come una lunghezza ideale del codice assegnato all'evento.
+
+La metafora sarà utile nel capitolo successivo: usare una distribuzione predittiva inadeguata equivale ad adottare una codifica inefficiente e a pagare, in media, un costo informativo aggiuntivo.
+:::
+
+::: {.callout-note collapse="true" title="Sorpresa informazionale e sorpresa psicologica"}
+La sorpresa di Shannon riguarda una distribuzione di probabilità. Può essere usata come componente di un modello psicologico quando si ipotizza che le risposte dipendano dalla violazione delle aspettative. Studi classici sul ruolo delle aspettative nelle reazioni affettive sono compatibili con questa possibilità, per esempio @spector1956expectations.
+
+Tuttavia,
+
+$$
+-\log p(\text{evento})
+$$
+
+non è, da sola, una teoria completa della sorpresa soggettiva. Valenza, rilevanza personale, conoscenza delle probabilità, storia individuale e contesto possono modificare la risposta. La sorpresa informazionale è una quantità formale; la sua relazione con un costrutto psicologico deve essere specificata e verificata empiricamente.
+:::
+
+## Esercizi {.unnumbered .unlisted}
+
+### Esercizio 1 — Comprendere sorpresa ed entropia {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 10 minuti*
+
+Una distribuzione assegna probabilità $(0.50,0.25,0.25)$ agli esiti A, B e C.
+
+1. Quale esito produrrebbe meno sorpresa?
+2. Quanti bit di sorpresa produrrebbero A e B?
+3. L'entropia è la sorpresa di A, di B oppure una quantità diversa?
+4. Che cosa cambierebbe se la distribuzione diventasse uniforme?
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Usa $-\log_2p(y)$ per i singoli eventi. L'entropia è una media ponderata prima dell'osservazione.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+A produce meno sorpresa perché ha probabilità maggiore. La sua sorpresa è
+
+$$
+-\log_2(0.50)=1\text{ bit}.
+$$
+
+Per B,
+
+$$
+-\log_2(0.25)=2\text{ bit}.
+$$
+
+L'entropia non coincide con la sorpresa di un singolo esito: è la media delle sorprese possibili, ponderata per le rispettive probabilità. Rendendo uniforme la distribuzione, ogni evento diventerebbe ugualmente imprevedibile e l'entropia aumenterebbe fino a $\log_2 3$ bit.
+:::
+
+### Esercizio 2 — Prevedere il costo dell'eccessiva sicurezza {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 10 minuti*
+
+Due modelli prevedono un esito binario:
+
+$$
+Q_1(A,B)=(0.70,0.30),
+\qquad
+Q_2(A,B)=(0.99,0.01).
+$$
+
+Senza calcolare valori esatti, rispondi:
+
+1. quale modello ha entropia minore?
+2. quale modello riceve il log-score migliore se si osserva A?
+3. quale riceve la penalizzazione maggiore se si osserva B?
+4. perché queste risposte non sono contraddittorie?
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Distingui la concentrazione della distribuzione dalla probabilità assegnata all'esito osservato.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+$Q_2$ ha entropia minore perché è molto più concentrato. Se si osserva A, $Q_2$ ottiene il log-score migliore perché assegna ad A probabilità $0.99$. Se si osserva B, viene invece penalizzato molto più severamente perché aveva assegnato all'esito soltanto $0.01$.
+
+Non vi è contraddizione: l'entropia misura quanto il modello sia incerto prima dell'osservazione; il log-score misura quanto fosse appropriata la probabilità assegnata all'esito che si è verificato.
+:::
+
+### Esercizio 3 — Modificare una previsione probabilistica {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 10–15 minuti*
+
+Un ricercatore prevede l'esito di un trattamento con la distribuzione
+
+$$
+Q(\text{migliora},\text{invariato},\text{peggiora})=(0.80,0.15,0.05).
+$$
+
+Ritiene però che i dati disponibili siano fragili e che il campione successivo possa provenire da una popolazione leggermente diversa.
+
+1. Proponi una distribuzione più prudente, mantenendo “migliora” come esito più probabile.
+2. Come cambierebbe l'entropia?
+3. In quale caso la previsione prudente sarebbe avvantaggiata dal log-score?
+4. Rendere la previsione più prudente risolve automaticamente il problema della generalizzazione?
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Sposta una parte della probabilità dall'esito dominante agli altri esiti, senza cambiare l'ordine delle probabilità.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+Una possibilità è
+
+$$
+Q'(\text{migliora},\text{invariato},\text{peggiora})=(0.60,0.25,0.15).
+$$
+
+La nuova distribuzione è meno concentrata e ha entropia maggiore. Sarebbe avvantaggiata se si osservasse “invariato” o “peggiora”, perché assegna a tali esiti probabilità superiori. Se si osservasse “migliora”, la distribuzione originale riceverebbe invece un log-score migliore.
+
+La prudenza non risolve da sola la generalizzazione. Può evitare previsioni eccessivamente concentrate, ma resta necessario stabilire se il nuovo campione rappresenti lo stesso bersaglio predittivo e se la distribuzione sia stata valutata su dati pertinenti.
+:::
+
+### Esercizio 4 — Criticare e comunicare {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 15 minuti*
+
+Un resoconto afferma:
+
+> Il modello 1 ha entropia inferiore al modello 2. È quindi più accurato, contiene più informazione sul fenomeno e probabilmente rappresenta meglio il meccanismo psicologico. Inoltre, poiché assegna il 98% di probabilità all'esito A, possiamo considerare A praticamente certo.
+
+Individua almeno quattro problemi e proponi una formulazione più appropriata.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Distingui entropia, log-score, dati futuri, calibrazione e interpretazione meccanicistica.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+Un'entropia inferiore indica soltanto che la distribuzione è più concentrata. Non dimostra che sia accurata: occorre osservare quali eventi si verificano e quanta probabilità il modello assegna loro. Una probabilità del 98% è una previsione molto forte, non una certezza; se A non si verifica, il modello riceverà una penalizzazione elevata. Anche buoni punteggi predittivi non dimostrano automaticamente che il modello rappresenti il vero meccanismo psicologico, perché modelli processualmente diversi possono produrre previsioni simili.
+
+Una formulazione più appropriata potrebbe essere:
+
+> Il modello 1 esprime una previsione più concentrata e assegna il 98% di probabilità ad A. La qualità di questa previsione deve essere valutata verificando, su dati pertinenti non usati per costruirla, se gli eventi ai quali attribuisce alta probabilità si verificano con frequenza compatibile. Anche un eventuale vantaggio predittivo non identificherebbe da solo il meccanismo psicologico sottostante.
+:::
+
+## Riflessioni conclusive {.unnumbered .unlisted}
+
+Una previsione probabilistica espone il modello alla critica perché rende esplicita la probabilità assegnata a ogni esito. Dopo l'osservazione, la sorpresa
+
+$$
+-\log p(y)
+$$
+
+quantifica quanto il dato fosse inatteso. Prima dell'osservazione, l'entropia
+
+$$
+H(Y)=\mathbb E_p[-\log p(Y)]
+$$
+
+quantifica la sorpresa media attesa sotto la distribuzione.
+
+La distinzione decisiva è che l'entropia misura **incertezza**, non **accuratezza**. Una distribuzione molto concentrata può essere informativa quando è concentrata sugli esiti giusti, ma disastrosa quando è concentrata su quelli sbagliati. Il log-score rende operativa questa idea premiando la probabilità assegnata a ciò che accade effettivamente.
+
+Il capitolo successivo sposterà l'attenzione da una singola distribuzione al confronto tra due distribuzioni. La domanda non sarà più soltanto «quanta sorpresa ci aspettiamo?», ma «quanta sorpresa aggiuntiva produciamo usando una distribuzione approssimata?». Questo passaggio conduce all'entropia incrociata e alla divergenza di Kullback--Leibler.
+
+::: {.callout-note collapse="true" title="Informazioni sull'ambiente di sviluppo"}
+```{r}
+sessionInfo()
+```
+:::
+
+## Bibliografia {.unnumbered .unlisted}

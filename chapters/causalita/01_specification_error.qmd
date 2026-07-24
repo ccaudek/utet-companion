@@ -1,0 +1,376 @@
+# Dal bias da variabile omessa al problema dell'identificazione {#sec-omitted-variable}
+
+Nella parte *Modelli* abbiamo incontrato l'errore di specificazione come minaccia alla validità di un modello (@sec-model-misspecification) e abbiamo distinto tre obiettivi che condividono la stessa formula statistica ma richiedono criteri di validità diversi: la descrizione, la previsione e la stima di un effetto (@sec-association-prediction-causality).
+
+Questo capitolo riprende il caso più istruttivo, quello della variabile omessa, e lo usa come ponte verso il ragionamento causale. Il caso è istruttivo perché possiede una proprietà rara: esiste una formula chiusa che indica *esattamente* quanto vale la distorsione. Conoscerla ci permette di avere una visione quantitativa del problema.
+
+Ma è istruttivo soprattutto per il motivo opposto. Le stesse associazioni osservate possono derivare da strutture causali completamente diverse; in particolare, un confondente e un mediatore possono generare la stessa distribuzione congiunta, pur richiedendo interpretazioni opposte dell'aggiustamento. In uno dei due casi, parlare di "distorsione" è semplicemente sbagliato. È questo scarto tra ciò che l'algebra calcola e ciò che vorremmo sapere che apre la sezione: per decidere quali variabili includere in un modello, infatti, non basta la statistica, ma serve un linguaggio in cui formulare ipotesi causali esplicite.
+
+::: {.callout-important appearance="minimal" .chapter-status}
+**Da sapere.** Nel modello lineare considerato, il bias da variabile omessa nasce quando la variabile esclusa influenza l’esito ed è correlata con il predittore incluso; nella forma standardizzata, la distorsione è $\gamma_2\rho_{12}$. Tuttavia, la correlazione con predittore ed esito non basta a stabilire se una variabile debba essere controllata: occorre bloccare adeguatamente i percorsi di confondimento, mentre condizionare su un mediatore cambia l’*estimand* e condizionare su un collider può introdurre distorsione. La scelta delle covariate richiede quindi ipotesi causali e un problema di identificazione, non soltanto criteri statistici.
+
+**Da saper fare.** Usare la formula del bias da variabile omessa per prevederne segno ed entità; riconoscere le due condizioni che lo producono; distinguere confondenti, mediatori e collider; spiegare perché la stessa operazione di aggiustamento possa essere necessaria, possa cambiare la domanda o possa essere dannosa; formulare prima l’effetto causale di interesse e solo successivamente scegliere le variabili e il modello statistico.
+
+**Approfondimento facoltativo.** La derivazione algebrica completa della formula, la costruzione della mappa simulata e l’implementazione delle tre strutture causali possono essere rimandate in una prima lettura. Nel percorso essenziale è sufficiente comprendere la formula, interpretare gli esempi e riconoscere perché i soli dati osservati non determinino quale insieme di covariate sia appropriato.
+
+[Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
+:::
+
+## Panoramica del capitolo {.unnumbered .unlisted}
+
+* La formula del bias da variabile omessa e le due condizioni che lo generano.
+* Una mappa simulata: come segno ed entità della distorsione dipendono dai parametri.
+* Il limite decisivo: confondente, mediatore e collider generano dati indistinguibili, ma richiedono decisioni opposte.
+* Perché questo obbliga a passare dal linguaggio della distorsione a quello dell'identificazione.
+
+::: {.callout-tip collapse=true}
+## Prerequisiti
+
+- La regressione multipla e l'interpretazione dei coefficienti parziali (parte *Modelli*).
+- La distinzione tra associazione, previsione ed effetto causale (@sec-association-prediction-causality).
+- La discussione sugli errori di specificazione come minacce alla validità del modello (@sec-model-misspecification).
+:::
+
+::: {.callout-caution collapse=true title="Preparazione del Notebook"}
+
+```{r}
+#| output: false
+here::here("code", "_common.R") |> 
+  source()
+```
+:::
+
+## Il problema in forma minima
+
+Supponiamo che il processo generatore dei dati sia
+
+$$
+Y=\beta_0+\beta_1X_1+\beta_2X_2+\varepsilon,
+\qquad \mathbb{E}[\varepsilon\mid X_1,X_2]=0,
+$$
+ma che nel modello si ometta $X_2$ e si stimi soltanto
+
+$$
+Y=\alpha_0+\alpha_1X_1+u .
+$$
+
+In generale, in questo modello lineare lo stimatore $\hat\alpha_1$ non converge a $\beta_1$. Converge invece a
+
+$$
+\boxed{\;
+\operatorname{plim}\hat\alpha_1
+=\beta_1+\beta_2\,\underbrace{\frac{\operatorname{Cov}(X_1,X_2)}{\operatorname{Var}(X_1)}}_{\textstyle \delta}\;}
+$$
+dove $\delta$ è il coefficiente della regressione di $X_2$ su $X_1$. La distorsione vale dunque $\beta_2\delta$: nella versione standardizzata, con $\gamma_1,\gamma_2$ coefficienti standardizzati e $\rho_{12}=\operatorname{Corr}(X_1,X_2)$, essa assume la forma particolarmente leggibile
+
+$$
+\operatorname{plim}\hat\alpha^{(z)}_1-\gamma_1
+=\gamma_2\,\rho_{12},
+$$
+
+dove $\hat\alpha^{(z)}_1$ è il coefficiente della regressione semplice tra le variabili standardizzate.
+
+Ne derivano immediatamente le due condizioni congiunte del bias: la variabile omessa deve avere un effetto proprio su $Y$ ($\beta_2\neq0$) **e** deve essere correlata con il predittore incluso ($\rho_{12}\neq0$). Se una sola delle due condizioni viene meno, la distorsione si annulla: in questo modello lineare, omettere una variabile irrilevante per $Y$ non provoca bias sul coefficiente di $X_1$, così come omettere una variabile che influenza $Y$ ma che non è correlata con $X_1$. La randomizzazione rende il trattamento indipendente, per disegno, dalle caratteristiche pre-trattamento: nella popolazione indotta dal meccanismo di assegnazione, il termine di correlazione è quindi nullo. In un singolo campione la correlazione osservata può non essere esattamente zero.
+
+::: {.callout-note collapse=true title="Derivazione della formula"}
+
+È preferibile lavorare con variabili standardizzate, senza perdere in generalità. Poniamo
+
+$$
+Z_1=\frac{X_1-\mu_1}{\sigma_1},\qquad 
+Z_2=\frac{X_2-\mu_2}{\sigma_2},\qquad
+Z_Y=\frac{Y-\mu_Y}{\sigma_Y},
+$$
+così che $\operatorname{Var}(Z_1)=\operatorname{Var}(Z_2)=1$ e $\operatorname{Cov}(Z_1,Z_2)=\rho_{12}$. Il modello vero standardizzato è
+
+$$
+Z_Y=\gamma_1 Z_1+\gamma_2 Z_2+\varepsilon_z,
+\qquad
+\gamma_1=\beta_1\frac{\sigma_1}{\sigma_Y},\quad
+\gamma_2=\beta_2\frac{\sigma_2}{\sigma_Y}.
+$$
+
+**Stima con la variabile omessa.** Regredendo $Z_Y$ sul solo $Z_1$, lo stimatore dei minimi quadrati è
+
+$$
+\hat\alpha^{(z)}_1=\frac{\operatorname{Cov}(Z_1,Z_Y)}{\operatorname{Var}(Z_1)}=\operatorname{Cov}(Z_1,Z_Y),
+$$
+
+poiché il denominatore vale 1. Sostituendo l'espressione del modello vero:
+
+$$
+\begin{aligned}
+\operatorname{Cov}(Z_1,Z_Y)
+&=\operatorname{Cov}\!\big(Z_1,\;\gamma_1Z_1+\gamma_2Z_2+\varepsilon_z\big)\\[2pt]
+&=\gamma_1\underbrace{\operatorname{Var}(Z_1)}_{=1}
++\gamma_2\underbrace{\operatorname{Cov}(Z_1,Z_2)}_{=\rho_{12}}
++\underbrace{\operatorname{Cov}(Z_1,\varepsilon_z)}_{=0}
+=\gamma_1+\gamma_2\rho_{12}.
+\end{aligned}
+$$
+
+Il coefficiente univariato non isola l'effetto standardizzato di $Z_1$, ma vi somma il termine $\gamma_2\rho_{12}$, che veicola l'influenza della variabile omessa attraverso la sua correlazione con il predittore incluso.
+
+**Ritorno alla scala originale.** Da $\hat\alpha^{(z)}_1=(\sigma_1/\sigma_Y)\hat\alpha_1$ e dalle definizioni di $\gamma_1,\gamma_2$ si ottiene
+
+$$
+\frac{\sigma_1}{\sigma_Y}\hat\alpha_1
+=\beta_1\frac{\sigma_1}{\sigma_Y}
++\beta_2\frac{\sigma_2}{\sigma_Y}\rho_{12}.
+$$
+
+Moltiplicando per $\sigma_Y/\sigma_1$ e ricordando che $\rho_{12}=\operatorname{Cov}(X_1,X_2)/(\sigma_1\sigma_2)$ si arriva alla forma non standardizzata riportata sopra.
+:::
+
+## Vedere la distorsione: una mappa
+
+La formula $\beta_2\rho_{12}$ prevede che il bias cambi segno attraversando gli assi $\rho_{12}=0$ e $\beta_2=0$ e che aumenti di valore assoluto allontanandosi da entrambi. Verifichiamo la cosa tramite simulazione, calcolando lo scarto $\hat\alpha_1-\beta_1$ su una griglia di valori.
+
+```{r}
+#| label: fig-mappa-bias
+#| fig-cap: "Distorsione del coefficiente di $X_1$ al variare della correlazione tra i predittori e dell'effetto della variabile omessa. Le zone chiare lungo gli assi sono le regioni in cui una delle due condizioni del bias non è soddisfatta."
+#| message: false
+set.seed(1)
+n <- 3000
+beta1 <- 1
+
+griglia <- expand.grid(
+  rho = seq(-0.9, 0.9, length.out = 19),
+  b2  = seq(-1.5, 1.5, length.out = 19)
+)
+
+sim_bias <- function(rho, beta2) {
+  X1 <- rnorm(n)
+  X2 <- rho * X1 + sqrt(1 - rho^2) * rnorm(n)
+  Y  <- beta1 * X1 + beta2 * X2 + rnorm(n)
+  unname(coef(lm(Y ~ X1))[2] - beta1)
+}
+
+griglia$bias <- mapply(sim_bias, griglia$rho, griglia$b2)
+
+ggplot(griglia, aes(x = rho, y = b2, fill = bias)) +
+  geom_tile() +
+  scale_fill_gradient2(
+    midpoint = 0,
+    low  = "#B2182B",
+    mid  = "#F7F7F7",
+    high = "#2166AC"
+  ) +
+  labs(
+    x = expression(rho[12]),
+    y = expression(beta[2]),
+    fill = "Distorsione"
+  )
+```
+
+La mappa conferma la previsione analitica. Il bias è positivo quando $\beta_2$ e $\rho_{12}$ hanno lo stesso segno e negativo quando hanno segni opposti; si annulla lungo gli assi e raggiunge i valori estremi agli angoli. Le lievi irregolarità sono rumore Monte Carlo. In pratica, basta che *una* delle due quantità sia prossima a zero perché il problema sia trascurabile, ma quando entrambe sono lontane da zero, il coefficiente stimato può non solo essere impreciso, ma anche di segno opposto rispetto a quello reale.
+
+Fin qui, abbiamo un risultato tecnico solido. Il passo successivo è chiedersi cosa ci permette di fare.
+
+## Perché la formula non basta
+
+La formula quantifica la differenza tra $\operatorname{plim}\hat\alpha_1$ e $\beta_1$. Tuttavia, per poterla utilizzare, dobbiamo già conoscere due informazioni che i dati non contengono: quale sia il "modello vero" e quale coefficiente rappresenti la quantità che vogliamo stimare. Questa non è una difficoltà marginale. È il problema centrale.
+
+Consideriamo tre situazioni in cui la terza variabile $X_2$ è correlata sia con $X_1$ sia con $Y$, ma con ruoli causali diversi:
+
+- **confondente**: $X_2$ è una causa comune, $X_1 \leftarrow X_2 \rightarrow Y$;
+- **mediatore**: $X_2$ si trova sul percorso causale, $X_1 \rightarrow X_2 \rightarrow Y$;
+- **collider**: $X_2$ è un effetto comune, $X_1 \rightarrow X_2 \leftarrow Y$.
+
+Simuliamo i tre casi imponendo lo stesso effetto causale diretto di $X_1$ su $Y$, pari a $0.5$.
+
+```{r}
+#| label: tre-strutture
+set.seed(2026)
+n <- 20000
+a <- 0.8
+
+# (a) Confondente: X2 causa sia X1 sia Y
+X2_a <- rnorm(n)
+X1_a <- a * X2_a + sqrt(1 - a^2) * rnorm(n)
+Y_a  <- 0.5 * X1_a + a * X2_a + rnorm(n)
+
+# (b) Mediatore: X1 causa X2, che a sua volta causa Y
+X1_b <- rnorm(n)
+X2_b <- a * X1_b + sqrt(1 - a^2) * rnorm(n)
+Y_b  <- 0.5 * X1_b + a * X2_b + rnorm(n)
+
+# (c) Collider: X1 e Y causano entrambi X2
+X1_c <- rnorm(n)
+Y_c  <- 0.5 * X1_c + rnorm(n)
+X2_c <- a * X1_c + a * Y_c + rnorm(n)
+
+b_semplice <- function(y, x1) unname(coef(lm(y ~ x1))[2])
+b_aggiust  <- function(y, x1, x2) unname(coef(lm(y ~ x1 + x2))[2])
+
+data.frame(
+  struttura = c("Confondente", "Mediatore", "Collider"),
+  senza_X2 = c(
+    b_semplice(Y_a, X1_a),
+    b_semplice(Y_b, X1_b),
+    b_semplice(Y_c, X1_c)
+  ),
+  con_X2 = c(
+    b_aggiust(Y_a, X1_a, X2_a),
+    b_aggiust(Y_b, X1_b, X2_b),
+    b_aggiust(Y_c, X1_c, X2_c)
+  )
+) |>
+  dplyr::mutate(dplyr::across(where(is.numeric), \(x) round(x, 3)))
+```
+
+Osserviamo prima i primi due casi. I numeri sono **gli stessi**: senza $X_2$ il coefficiente vale circa $1.14$, con $X_2$ vale circa $0.5$. Non si tratta di una coincidenza numerica: nei due casi la matrice di covarianza congiunta di $(X_1,X_2,Y)$ è identica nei due casi per costruzione. La distribuzione congiunta osservata, considerata da sola, non può distinguere i due scenari, perché essi generano la stessa distribuzione. Per distinguerli servono informazioni ulteriori: conoscenze temporali e sostantive, interventi, assunzioni causali o altri dati che non siano contenuti nella sola matrice di covarianza.
+
+Eppure la conclusione che ne traiamo è opposta:
+
+- nel caso del **confondente**, il coefficiente senza $X_2$ è distorto e quello aggiustato stima l'effetto causale: l'aggiustamento è **necessario**;
+- nel caso del **mediatore**, il coefficiente senza $X_2$ stima l'effetto *totale* di $X_1$ su $Y$, mentre quello aggiustato stima l'effetto *diretto*, date le assunzioni del semplice sistema lineare simulato. Nessuno dei due è intrinsecamente distorto: rispondono a domande diverse. In questo caso, la parola *distorsione* è fuori luogo; ciò che cambia è l'**estimand**.
+
+Il terzo caso ribalta ulteriormente la situazione. Con il **collider**, il coefficiente senza $X_2$ recupera correttamente l'effetto causale $0.5$, mentre l'aggiustamento lo distorce. Condizionare su un effetto comune crea un'associazione tra le sue cause che nella popolazione non esisteva: aggiustare è **dannoso**.
+
+La stessa operazione tecnica, "includere la terza variabile nel modello", può dunque essere necessaria, può cambiare l'effetto che si sta stimando oppure può introdurre distorsione, a seconda della struttura causale. Tale struttura non è determinata dalla sola distribuzione osservata.
+
+::: {.callout-warning title="La conseguenza pratica"}
+Da ciò deriva una regola controintuitiva, ma essenziale, che ritroveremo formalizzata nel capitolo sui DAG: **controllare più variabili non è più prudente**. La pratica diffusa di inserire in un modello tutte le covariate disponibili "per essere conservativi" non ha alcuna giustificazione causale e, in presenza di collider o dei loro discendenti, introduce distorsioni laddove non ce n'erano.
+:::
+
+## Dal bias all'identificazione
+
+Cosa manca, dunque, per uscire da questa situazione di stallo? Due strumenti che i prossimi due capitoli introducono nell'ordine in cui sono necessari.
+
+Il primo è un linguaggio che ci permette di esprimere **che cosa** vogliamo stimare, prima e indipendentemente da come lo stimeremo. Il quadro dei potenziali esiti (@sec-causality-propedeutics) definisce l'effetto causale come il confronto tra mondi alternativi per la stessa unità e chiarisce perché il contrasto osservato tra i gruppi non corrisponda, in generale, a tale confronto. È anche il quadro in cui si comprende perché la randomizzazione risolva il problema dell'assegnazione: non perché elimina le variabili omesse, ma perché rende il trattamento indipendente dalle caratteristiche pre-trattamento. In termini della formula di partenza, il valore popolazionale di $\rho_{12}$ è nullo per il meccanismo di assegnazione, pur potendo risultare diverso da zero per caso in un singolo campione.
+
+Il secondo è un linguaggio per rappresentare le ipotesi causali e derivare quali variabili includere. I grafi orientati aciclici (@sec-eda-causality) forniscono criteri espliciti per distinguere i confondenti, i mediatori, i collider e i discendenti e per stabilire quale insieme di aggiustamento renda identificabile l'effetto di interesse.
+
+L'ordine del ragionamento, anticipato nell'introduzione a questa parte, acquista ora un significato preciso: si parte dalla domanda causale, si definisce l'estimand, si dichiarano le ipotesi causali, si verifica l'identificazione e *solo alla fine* si sceglie il modello statistico. La formula del bias da variabile omessa non rappresenta l'ultimo passo di questo percorso, ma la dimostrazione quantitativamente ineccepibile che tale percorso è necessario.
+
+## Riflessioni conclusive {.unnumbered .unlisted}
+
+Il bias da variabile omessa mostra che la validità di una stima di regressione dipende da assunzioni riguardanti ciò che il modello *non* contiene. La formula $\beta_2\rho_{12}$ ne fornisce la misura esatta e la simulazione ne chiarisce segno ed entità.
+
+Il limite della formula, però, è più interessante del suo contenuto. Applicata meccanicamente, suggerisce che ogni variabile correlata al predittore e all'esito debba essere inclusa nel modello. La simulazione delle tre strutture causali mostra che questa regola è errata: nel caso del mediatore, l'inclusione modifica la domanda anziché correggere una distorsione; nel caso del collider, invece, la introduce. Poiché le tre strutture possono generare dati identici, nessun criterio puramente statistico può guidare la scelta.
+
+È questa la ragione per cui l'inferenza causale non è un'estensione tecnica della regressione, ma un modo diverso di impostare il problema: prima si dichiara ciò che si vuole stimare e le ipotesi causali che si è disposti a difendere, poi si stabilisce se i dati a disposizione permettono di identificare tale quantità e, infine, si procede con la stima.
+
+## Esercizi {.unnumbered .unlisted}
+
+### Esercizio 1 — Comprendere: leggere la formula del bias {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 10 minuti*
+
+Supponi che il vero coefficiente standardizzato di $X_1$ sia $\gamma_1=0.20$. Per ciascuno dei casi seguenti, calcola il termine di bias $\gamma_2\rho_{12}$ e il coefficiente atteso nel modello che omette $X_2$.
+
+| Caso | $\gamma_2$ | $\rho_{12}$ |
+|---|---:|---:|
+| A | 0.80 | 0.50 |
+| B | 0.80 | -0.50 |
+| C | 0.00 | 0.70 |
+| D | -0.60 | -0.50 |
+
+Indica inoltre in quali casi il segno del coefficiente osservato è diverso dal segno del vero effetto di $X_1$. Infine, spiega quale fattore della formula viene reso nullo dalla randomizzazione del trattamento e quale può restare diverso da zero.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Usa
+
+$$
+\operatorname{plim}\hat\alpha^{(z)}_1
+=\gamma_1+\gamma_2\rho_{12}.
+$$
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+- **A:** bias $=0.80\times0.50=0.40$; coefficiente atteso $=0.20+0.40=0.60$.
+- **B:** bias $=0.80\times(-0.50)=-0.40$; coefficiente atteso $=0.20-0.40=-0.20$. Il segno viene invertito.
+- **C:** bias $=0$; coefficiente atteso $=0.20$. Se la variabile omessa non influenza $Y$, la sua correlazione con $X_1$ non produce questo bias.
+- **D:** bias $=(-0.60)\times(-0.50)=0.30$; coefficiente atteso $=0.50$.
+
+Il punto non è che la variabile omessa debba essere semplicemente “correlata con tutto”: servono congiuntamente una relazione con l'esito e una correlazione con il predittore incluso. La randomizzazione non elimina l'effetto della variabile omessa sull'esito, quindi $\gamma_2$ può restare diverso da zero; rende invece il trattamento indipendente dalle caratteristiche pre-trattamento, annullando il termine popolazionale $\rho_{12}$.
+:::
+
+### Esercizio 2 — Prevedere: aggiustare oppure no? {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 10 minuti*
+
+Per ciascuna struttura, indica quale coefficiente risponde alla domanda specificata.
+
+1. $X_2$ è una causa comune di $X_1$ e $Y$. Si vuole stimare l'effetto totale di $X_1$ su $Y$.
+2. $X_2$ è un mediatore tra $X_1$ e $Y$. Si vuole stimare l'effetto totale di $X_1$ su $Y$.
+3. $X_2$ è un mediatore tra $X_1$ e $Y$. Si vuole stimare l'effetto diretto non mediato da $X_2$.
+4. $X_2$ è un collider causato da $X_1$ e $Y$. Si vuole stimare l'effetto totale di $X_1$ su $Y$.
+
+Scegli, per ciascun caso, tra il coefficiente del modello `Y ~ X1` e quello del modello `Y ~ X1 + X2`.
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+1. **Confondente:** occorre aggiustare; si usa `Y ~ X1 + X2`, assumendo che $X_2$ sia sufficiente a bloccare il percorso di confondimento.
+2. **Mediatore, effetto totale:** non si condiziona sul mediatore; si usa `Y ~ X1` nel semplice sistema simulato.
+3. **Mediatore, effetto diretto:** si condiziona sul mediatore; si usa `Y ~ X1 + X2`, date le assunzioni richieste per interpretare causalmente il coefficiente.
+4. **Collider:** non si condiziona sul collider; nel semplice grafo si usa `Y ~ X1`.
+
+La scelta non dipende dalla forza delle correlazioni osservate, ma dall'effetto causale che si vuole identificare e dal ruolo causale attribuito a $X_2$.
+:::
+
+### Esercizio 3 — Modificare: effetto diretto ed effetto totale {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: facoltativo · 15 minuti*
+
+Nel caso del mediatore, poni a zero l'effetto diretto di $X_1$ su $Y$, mantenendo il percorso
+
+$$
+X_1\longrightarrow X_2\longrightarrow Y.
+$$
+
+Con i coefficienti della simulazione, quale valore prevedi per:
+
+1. l'effetto diretto;
+2. l'effetto indiretto;
+3. l'effetto totale;
+4. il coefficiente di `X1` nel modello `Y ~ X1`;
+5. il coefficiente di `X1` nel modello `Y ~ X1 + X2`?
+
+Puoi poi verificare la previsione sostituendo `0.5 * X1_b` con `0 * X1_b` nel codice.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Nel sistema lineare senza interazioni, l'effetto indiretto è il prodotto dei coefficienti lungo il percorso mediato.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+Il coefficiente del percorso $X_1\rightarrow X_2$ è $0.8$ e quello del percorso $X_2\rightarrow Y$ è anch'esso $0.8$.
+
+- effetto diretto: $0$;
+- effetto indiretto: $0.8\times0.8=0.64$;
+- effetto totale: $0+0.64=0.64$;
+- nel modello `Y ~ X1`, il coefficiente tende a circa $0.64$;
+- nel modello `Y ~ X1 + X2`, il coefficiente di `X1` tende a circa $0$.
+
+I due modelli non sono in conflitto: stimano due quantità causali differenti. La scelta appropriata dipende dalla domanda scientifica.
+:::
+
+### Esercizio 4 — Criticare: “controllare tutto” {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 10 minuti*
+
+Uno studio osservazionale conclude:
+
+> Abbiamo controllato per tutte le variabili demografiche e cliniche disponibili; la stima ottenuta è quindi conservativa e più vicina al vero effetto del trattamento.
+
+Individua almeno tre problemi nell'affermazione e proponi una formulazione metodologicamente più corretta.
+
+::: {.callout-note collapse="true" title="Elementi per la risposta"}
+Una buona risposta dovrebbe osservare che:
+
+- la disponibilità di una covariata non stabilisce che debba essere inclusa;
+- un mediatore può cambiare l'oggetto della stima, passando dall'effetto totale a un effetto diretto;
+- un collider, o un suo discendente, può introdurre un'associazione spuria;
+- l'aggettivo “conservativa” non ha un significato causale generale;
+- la scelta dell'insieme di aggiustamento richiede un estimand esplicito e assunzioni causali difendibili.
+
+Una formulazione più appropriata potrebbe essere: “Abbiamo definito l'effetto causale di interesse e scelto le covariate sulla base di un modello causale dichiarato. La validità della stima dipende dalla plausibilità di tali assunzioni e dall'assenza di confondimento residuo rilevante”.
+:::
+
+::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+```{r}
+sessionInfo()
+```
+:::
+
+## Bibliografia {.unnumbered .unlisted}

@@ -1,0 +1,437 @@
+# Dalla descrizione alla spiegazione: che cosa richiede un modello del processo {#sec-bayes-stat-models}
+
+Una regolarità statistica può essere stabile, replicabile e utile per prevedere senza dirci ancora **come** il fenomeno venga prodotto. Se l'obiettivo scientifico è comprendere il funzionamento di un sistema psicologico, dobbiamo formulare un'ipotesi più impegnativa: quali stati sono coinvolti, quali informazioni li modificano, secondo quale regola cambiano e in che modo producono le osservazioni.
+
+Questo capitolo introduce il problema epistemologico dell'intera Parte. Non insegna ancora a programmare un modello dinamico. Stabilisce invece che cosa significa trasformare una spiegazione verbale in una congettura formale che possa essere simulata, confrontata con alternative e messa in difficoltà dai dati.
+
+::: {.callout-important appearance="minimal" .chapter-status}
+**Da sapere.** Descrivere un'associazione, prevedere un esito, identificare l'effetto di un intervento e spiegare un processo sono obiettivi differenti. Un modello del processo specifica stati, input, trasformazioni e un collegamento con le osservazioni. La presenza di equazioni, variabili latenti o parametri con nomi psicologici non rende però automaticamente il modello meccanicistico.
+
+**Da saper fare.** Distinguere le diverse ambizioni di un modello; riconoscere gli elementi di una teoria eseguibile; separare processo latente e modello osservazionale; indicare quali dati o manipolazioni potrebbero distinguere modelli rivali; valutare con cautela una pretesa esplicativa.
+
+**Approfondimento facoltativo.** Le implementazioni in R e Stan, le diagnostiche del campionamento e le procedure di recupero dei parametri verranno mostrate nei capitoli successivi. Nel percorso essenziale è sufficiente comprenderne la funzione scientifica.
+
+[Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
+:::
+
+::: {.callout-note title="Obiettivi del capitolo"}
+Al termine del capitolo dovresti essere in grado di:
+
+- distinguere descrizione, previsione, inferenza causale e spiegazione del processo;
+- spiegare perché un modello probabilistico può essere generativo senza essere meccanicistico;
+- riconoscere stato, input, regola di aggiornamento e modello osservazionale;
+- comprendere il problema dell'equivalenza osservazionale;
+- distinguere buon adattamento, buona previsione e sostegno a un meccanismo;
+- descrivere il percorso con cui una teoria verbale viene resa controllabile empiricamente.
+:::
+
+::: {.callout-tip collapse=true title="Prerequisiti"}
+- La Parte **Modelli**, in particolare la distinzione tra associazione e previsione.
+- La Parte **Causalità**, in particolare la distinzione tra identificare un effetto e spiegare il meccanismo che lo produce.
+- Il capitolo conclusivo della Parte **Estensioni**, che ha introdotto la differenza tra modello statico e modello dinamico.
+:::
+
+## Il problema scientifico
+
+Una regressione può mostrare che lo stress è associato a una minore probabilità di scelta salutare. Un modello predittivo può usare stress, reddito e abitudini precedenti per anticipare con buona accuratezza la scelta successiva. Un disegno causale può permetterci di stimare che cosa accadrebbe intervenendo sullo stress.
+
+Questi risultati sono importanti, ma non rispondono ancora necessariamente alla domanda:
+
+> Attraverso quale processo lo stress modifica la scelta?
+
+Potrebbero essere coinvolti, per esempio, l'apprendimento del valore delle alternative, l'attenzione agli esiti immediati, il controllo inibitorio o la rappresentazione dei costi futuri. Questi processi possono produrre associazioni aggregate simili, ma suggerire interventi differenti.
+
+La spiegazione richiede quindi un passaggio ulteriore: formulare un'ipotesi sul sistema che genera il comportamento e ricavarne conseguenze osservabili.
+
+::: {.callout-important title="Il messaggio della Parte"}
+Misurare un'associazione non equivale a comprendere un fenomeno. Per aspirare a una spiegazione dobbiamo specificare un possibile processo generativo, mostrare quali osservazioni esso rende plausibili e progettare condizioni nelle quali possa fallire rispetto ad alternative credibili.
+:::
+
+## Quattro domande, quattro ambizioni
+
+La stessa ricerca può contenere domande diverse. Confonderle porta ad attribuire al modello più di quanto esso possa sostenere.
+
+| Obiettivo | Domanda | Risultato tipico | Che cosa non segue automaticamente |
+|---|---|---|---|
+| **Descrizione** | Quali regolarità sono presenti nei dati? | Medie, associazioni, distribuzioni condizionate | La direzione causale o il processo sottostante |
+| **Previsione** | Che cosa osserveremo in un caso nuovo? | Distribuzione predittiva | Che il modello utilizzi il meccanismo reale |
+| **Inferenza causale** | Che cosa accadrebbe intervenendo? | Effetto di un intervento ben definito | Come l'intervento produca l'effetto |
+| **Spiegazione processuale** | Quale organizzazione di stati e trasformazioni genera il fenomeno? | Modello del processo e predizioni discriminanti | Che il meccanismo sia stato dimostrato una volta per tutte |
+
+Non si tratta di una gerarchia in cui soltanto l'ultima domanda sarebbe scientifica. Una descrizione accurata può essere l'obiettivo appropriato; una previsione può essere decisiva per una scelta pratica; un effetto causale può guidare un intervento anche quando il meccanismo resta incerto.
+
+Il punto è più semplice: **la conclusione deve corrispondere alla domanda e alle assunzioni del modello**.
+
+## Che cosa rende una teoria eseguibile
+
+Una teoria verbale può affermare che le persone modificano le proprie aspettative quando ricevono un esito inatteso. Per trasformarla in un modello dobbiamo precisare almeno sei elementi.
+
+### 1. Il fenomeno da spiegare
+
+Occorre delimitare quali regolarità devono essere generate. Per esempio:
+
+- l'adattamento graduale a un cambiamento dell'ambiente;
+- la maggiore influenza degli esiti inattesi;
+- la persistenza di una scelta dopo un rinforzo;
+- le differenze tra apprendimento iniziale ed estinzione.
+
+Un modello non spiega «il comportamento» in generale. Spiega, al massimo, un insieme definito di pattern in condizioni specifiche.
+
+### 2. Gli stati del sistema
+
+Uno stato rappresenta una proprietà del sistema necessaria per determinare la sua evoluzione futura. Può essere, per esempio, il valore attribuito a un'opzione, una credenza sull'ambiente o un livello di attivazione.
+
+Indichiamolo con $z_t$. Lo stato non è necessariamente osservato direttamente. La sua interpretazione dipende dalla teoria e dal modo in cui viene collegato ai dati.
+
+### 3. Gli input
+
+Gli input sono gli eventi o le informazioni che possono modificare lo stato: un rinforzo, un errore, un segnale sociale, una conseguenza dell'azione o un cambiamento del contesto. Li indichiamo con $u_t$.
+
+### 4. La regola di trasformazione
+
+Il nucleo del modello specifica come lo stato cambia:
+
+$$
+z_{t+1}=f(z_t,u_t;\theta_{\text{processo}}).
+$$
+
+La funzione $f$ rappresenta l'ipotesi sul processo. I parametri $\theta_{\text{processo}}$ regolano aspetti come velocità, sensibilità, persistenza o decadimento.
+
+### 5. Le condizioni iniziali
+
+Un processo dinamico deve iniziare da qualche parte. Lo stato iniziale $z_1$ può essere fissato, stimato o descritto da una distribuzione. Questa scelta può influire molto sulle prime osservazioni e deve essere motivata.
+
+### 6. Il modello osservazionale
+
+Lo stato non coincide con la risposta registrata. Occorre specificare come produce le osservazioni:
+
+$$
+y_t \sim p(y_t\mid z_t,\theta_{\text{osservazione}}).
+$$
+
+Una credenza latente può produrre una scelta binaria, un tempo di risposta o un punteggio continuo. Errori di misura, rumore decisionale e bias di risposta appartengono al modello osservazionale, non necessariamente al processo psicologico.
+
+::: {.callout-note title="Anatomia minima di un modello del processo"}
+Un modello processuale completo contiene almeno:
+
+$$
+\text{condizione iniziale}
++\text{input}
++\text{regola di trasformazione}
++\text{modello osservazionale}.
+$$
+
+Se manca uno di questi elementi, può risultare impossibile simulare il comportamento previsto o collegare in modo univoco la teoria ai dati.
+:::
+
+## Generativo non significa necessariamente meccanicistico
+
+In statistica, un modello è detto **generativo** quando specifica come simulare dati a partire da parametri e assunzioni. Per esempio,
+
+$$
+Y_i\sim\operatorname{Normal}(\mu,\sigma)
+$$
+
+è generativo: fissati $\mu$ e $\sigma$, possiamo produrre nuove osservazioni.
+
+Il termine *generativo* può però essere usato anche in un senso teorico più impegnativo: il modello cerca di rappresentare il processo che produce il fenomeno. I due significati non vanno confusi.
+
+| Senso probabilistico | Senso processuale o meccanicistico |
+|---|---|
+| Specifica una distribuzione dei dati | Specifica componenti e trasformazioni del sistema |
+| Permette di simulare osservazioni | Cerca di spiegare perché le osservazioni assumono quella struttura |
+| Può essere puramente descrittivo | Richiede un'interpretazione sostantiva controllabile |
+| È necessario per l'inferenza bayesiana | Richiede evidenze ulteriori rispetto al calcolo corretto |
+
+Un modello dinamico con uno stato latente compie un passo verso la rappresentazione del processo, ma non è automaticamente una spiegazione psicologica. Lo stato potrebbe essere una costruzione matematica utile senza corrispondere a un'entità o operazione identificabile nel sistema studiato.
+
+## Quando una pretesa meccanicistica diventa credibile
+
+Non esiste un singolo test capace di dimostrare un meccanismo. La credibilità nasce dalla convergenza di più elementi.
+
+### Corrispondenza teorica
+
+Gli stati e le trasformazioni devono derivare da una teoria sostantiva. Non basta aggiungere un parametro perché migliora l'adattamento e assegnargli successivamente un nome psicologico.
+
+### Conseguenze generative
+
+Il modello deve produrre i pattern che pretende di spiegare. La simulazione permette di chiedere:
+
+- quali traiettorie sono possibili;
+- quali sono impossibili;
+- come cambiano quando varia un parametro;
+- quali aspetti delle osservazioni possono informare quel parametro.
+
+### Predizioni discriminanti
+
+Una teoria è più informativa quando produce una previsione differente da quella di un'alternativa plausibile. Prevedere un fatto già compatibile con molti modelli offre poco potere discriminante.
+
+### Manipolazioni informative
+
+Quando possibile, il disegno dovrebbe intervenire sugli input o sulle condizioni che i modelli trattano diversamente. La domanda non è soltanto «il modello si adatta?», ma:
+
+> Che cosa dovrebbe accadere in una condizione costruita appositamente per separare le spiegazioni rivali?
+
+### Modello di misura plausibile
+
+La risposta osservata deve essere collegata in modo credibile allo stato ipotizzato. Se questo collegamento è sbagliato, i parametri del processo possono assorbire errori di misura o strategie di risposta.
+
+### Generalizzazione mirata
+
+Il modello dovrebbe continuare a funzionare nei casi ai quali la teoria pretende di applicarsi: nuove prove, nuovi individui, nuovi compiti o nuove condizioni. La popolazione e il dominio di generalizzazione devono essere dichiarati.
+
+::: {.callout-warning title="Il nome del parametro non è evidenza"}
+Chiamare un parametro *tasso di apprendimento*, *sensibilità alla ricompensa* o *controllo cognitivo* non dimostra che esso misuri quel costrutto. L'interpretazione richiede che il parametro produca conseguenze coerenti, sia informato dal disegno, sia distinguibile da altri parametri e risponda alle manipolazioni pertinenti [@McElreath_rethinking].
+:::
+
+## Equivalenza osservazionale: lo stesso dato, processi diversi
+
+Consideriamo due ipotesi sulla crescita di una risposta nel tempo.
+
+Un modello lineare assume:
+
+$$
+y_t=a+bt.
+$$
+
+Un modello asintotico assume:
+
+$$
+y_t=L-(L-y_0)e^{-kt}.
+$$
+
+In una breve finestra temporale, con osservazioni rumorose, le due curve possono essere quasi indistinguibili. Entrambe possono adattarsi bene ai dati, pur implicando evoluzioni future differenti: il modello lineare continua a crescere, mentre quello asintotico rallenta avvicinandosi a un limite.
+
+Questo è un caso di **equivalenza osservazionale locale**. I dati disponibili non contengono abbastanza informazione per distinguere i processi.
+
+La soluzione non consiste necessariamente nell'utilizzare un algoritmo più sofisticato. Può essere necessario:
+
+- osservare il processo più a lungo;
+- aumentare la frequenza delle misure;
+- modificare gli input;
+- introdurre una condizione in cui i modelli divergano;
+- misurare un'ulteriore conseguenza prevista soltanto da uno dei modelli.
+
+::: {.callout-important title="Una lezione sul disegno"}
+Quando due modelli producono gli stessi dati nelle condizioni osservate, il problema non è soltanto statistico. È un problema di informazione fornita dal disegno. Una buona ricerca non si limita a raccogliere più dati dello stesso tipo: cerca dati capaci di distinguere le ipotesi.
+:::
+
+## Adattamento, previsione e spiegazione
+
+Questi criteri sono collegati, ma non equivalenti.
+
+### Adattamento
+
+L'adattamento riguarda la capacità del modello di riprodurre i dati usati per stimarlo. Un cattivo adattamento segnala che il modello manca aspetti importanti del fenomeno. Un buon adattamento è necessario, ma poco discriminante quando molti modelli flessibili possono riprodurre gli stessi pattern [@roberts2000persuasive].
+
+### Previsione
+
+La previsione riguarda osservazioni non utilizzate nella stima. Può riferirsi a nuove prove degli stessi partecipanti, nuovi individui o condizioni differenti. La generalizzazione predittiva protegge dal sovradattamento e mostra che il modello ha colto regolarità stabili.
+
+Tuttavia, un modello può prevedere bene sfruttando regolarità che non corrispondono al processo reale. Una rete predittiva, una regressione flessibile e un modello processuale possono ottenere prestazioni simili pur offrendo interpretazioni molto diverse.
+
+### Spiegazione
+
+La spiegazione richiede che la struttura del modello rappresenti un'ipotesi sul funzionamento del sistema e che tale ipotesi venga confrontata con alternative. Una buona spiegazione deve rendere intelligibili almeno:
+
+- gli stati ipotizzati;
+- le trasformazioni che li collegano;
+- il modo in cui producono il comportamento;
+- le condizioni nelle quali il modello dovrebbe fallire;
+- le differenze rispetto a spiegazioni rivali.
+
+| Evidenza | Che cosa sostiene | Che cosa non garantisce |
+|---|---|---|
+| Diagnostiche MCMC adeguate | Il calcolo approssima in modo affidabile la posterior specificata | Che il modello scientifico sia corretto |
+| Buon controllo predittivo | Il modello riproduce proprietà considerate dei dati | Che il processo latente sia quello reale |
+| Buona previsione fuori campione | Il modello generalizza nel dominio valutato | Che l'interpretazione meccanicistica sia corretta |
+| Recupero dei parametri | Il disegno simulato può informare i parametri | Che i parametri abbiano il significato psicologico assegnato |
+| Vantaggio su un modello rivale | Tra le alternative considerate, una è meglio sostenuta | Che non esistano alternative migliori non considerate |
+| Risposta prevista a una manipolazione | Il modello supera una prova teoricamente mirata | Una dimostrazione definitiva del meccanismo |
+
+## Il ruolo dell'inferenza bayesiana
+
+L'approccio bayesiano è particolarmente utile per i modelli processuali perché consente di:
+
+- rappresentare l'incertezza sugli stati e sui parametri;
+- incorporare vincoli teorici mediante distribuzioni a priori;
+- stimare congiuntamente processo e modello osservazionale;
+- propagare l'incertezza fino alle previsioni;
+- confrontare conseguenze di modelli alternativi;
+- costruire modelli gerarchici per individui e popolazioni.
+
+Ma l'inferenza bayesiana non trasforma automaticamente una specificazione in una spiegazione. La posterior è condizionata al modello:
+
+$$
+p(\theta,\mathbf z\mid\mathbf y,M).
+$$
+
+Essa descrive l'incertezza su parametri e stati **assumendo il modello $M$**. Se $M$ omette un processo importante, confonde processo e misura o non è distinguibile da un'alternativa, la posterior può essere numericamente precisa e teoricamente fuorviante.
+
+::: {.callout-caution title="Precisione condizionata"}
+Una distribuzione a posteriori stretta non dimostra che abbiamo compreso il fenomeno. Dimostra che, date la specificazione, le prior e i dati, alcuni valori dei parametri sono molto più compatibili di altri. La validità dell'interpretazione dipende anche dalla qualità del modello e del disegno.
+:::
+
+## Dalla teoria verbale alla prova empirica
+
+Nei capitoli successivi useremo un workflow ricorrente.
+
+**1. Delimitare il fenomeno**  
+*Quale pattern deve essere spiegato e in quale dominio?*
+
+**2. Formulare modelli rivali**  
+*Quali processi alternativi potrebbero produrre lo stesso fenomeno?*
+
+**3. Formalizzare gli elementi del processo**  
+*Quali sono gli stati, gli input, le condizioni iniziali e le regole di trasformazione?*
+
+**4. Simulare prima di stimare**  
+*Che cosa produce il modello? Quali parametri generano pattern distinguibili? Quali dati non potrebbe mai produrre?*
+
+**5. Collegare stati e osservazioni**  
+*Quale modello di scelta o di misura trasforma lo stato latente nella risposta registrata?*
+
+**6. Progettare osservazioni informative**  
+*Quali condizioni amplificano le differenze tra modelli rivali?*
+
+**7. Stimare e quantificare l'incertezza**  
+*Quali valori degli stati e dei parametri sono plausibili date le assunzioni e i dati?*
+
+**8. Controllare le conseguenze del modello**  
+*Il modello riproduce le proprietà dinamiche rilevanti e generalizza nel dominio dichiarato?*
+
+**9. Rivedere la teoria**  
+*Il fallimento non richiede sempre un modello più complesso. Può richiedere una diversa rappresentazione del processo, una migliore misura o un disegno più informativo.*
+
+::: {.callout-note title="La logica della Parte"}
+I capitoli successivi svilupperanno progressivamente questo percorso:
+
+1. nel @sec-dynamic-models-goal-updating trasformeremo una teoria verbale in un primo modello dinamico;
+2. nel capitolo su Rescorla--Wagner useremo modelli rivali per mettere alla prova un'interpretazione processuale;
+3. nel capitolo sull'eterogeneità chiederemo se lo stesso processo e gli stessi parametri descrivano tutti gli individui;
+4. nel capitolo sulla decisione collegheremo previsioni pertinenti all'intervento, conseguenze e preferenze.
+:::
+
+## Errori frequenti
+
+::: {.callout-caution}
+- Considerare una correlazione stabile come spiegazione del fenomeno.
+- Confondere la capacità di prevedere con l'identificazione del processo reale.
+- Chiamare *meccanicistico* qualsiasi modello con stati latenti o equazioni ricorsive.
+- Attribuire significato psicologico a un parametro soltanto in base al suo nome.
+- Valutare un modello senza formulare alternative plausibili.
+- Cercare di distinguere modelli con dati che essi prevedono nello stesso modo.
+- Ignorare il modello osservazionale e attribuire al processo tutto il rumore delle risposte.
+- Pensare che un risultato computazionalmente stabile sia necessariamente teoricamente valido.
+- Aggiungere complessità dopo ogni fallimento senza chiedersi quale assunzione sia stata smentita.
+- Trattare un modello utile come una descrizione completa e definitiva della mente.
+:::
+
+## Riflessioni conclusive
+
+Il passaggio dalla descrizione alla spiegazione non consiste nell'abbandonare la statistica in favore di equazioni cognitive. Un modello del processo rimane un modello probabilistico: deve rappresentare l'incertezza, il rumore e il collegamento tra quantità latenti e osservazioni.
+
+Il cambiamento riguarda la struttura della domanda. Una regressione riassume come varia una distribuzione condizionata. Un modello processuale propone come stati e informazioni si trasformino e producano il comportamento. Questa proposta diventa scientificamente utile quando genera conseguenze precise, si espone al confronto con alternative e suggerisce dati o interventi capaci di metterla in difficoltà.
+
+La formalizzazione non certifica una spiegazione. Rende una spiegazione **criticabile**. È questa la sua funzione epistemologica principale: trasformare un racconto plausibile in una congettura eseguibile, della quale possiamo studiare le conseguenze, i limiti e i fallimenti.
+
+Nel @sec-dynamic-models-goal-updating applicheremo questa logica a un primo caso semplice. Partiremo da un'ipotesi verbale sulla revisione degli obiettivi e mostreremo come diventi una regola dinamica capace di generare traiettorie osservabili [@hayes2019role; @knight2023tutorial].
+
+## Concetti da ricordare
+
+1. Associazione, previsione, effetto causale e spiegazione processuale sono obiettivi differenti.
+2. Un modello probabilistico può essere generativo senza rappresentare un meccanismo psicologico.
+3. Un modello del processo specifica stati, input, trasformazioni, condizioni iniziali e modello osservazionale.
+4. Il modello osservazionale non è un dettaglio: determina come il processo latente può essere appreso dai dati.
+5. Processi differenti possono essere osservazionalmente equivalenti.
+6. Un buon adattamento è necessario ma non sufficiente per sostenere una spiegazione.
+7. Una buona previsione non identifica automaticamente il meccanismo reale.
+8. Le predizioni discriminanti e le manipolazioni informative sono più utili delle conferme generiche.
+9. La posterior quantifica l'incertezza condizionata alla specificazione del modello.
+10. Formalizzare una teoria significa renderla simulabile, confrontabile e criticabile.
+
+## Esercizi {.unnumbered .unlisted}
+
+### 1. Comprendere: quattro domande diverse {.unnumbered .unlisted}
+
+Uno studio osserva che gli studenti che dormono di più ottengono punteggi di memoria più elevati. Per ciascuna delle seguenti domande, indica se riguarda descrizione, previsione, causalità o spiegazione processuale.
+
+1. Di quanto differisce mediamente il punteggio tra studenti con durate di sonno differenti?
+2. Quale punteggio prevediamo per un nuovo studente?
+3. Che cosa accadrebbe al punteggio se aumentassimo il sonno di un'ora?
+4. Attraverso quali cambiamenti neurocognitivi il sonno modifica la memoria?
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+Chiediti se la domanda riguarda una regolarità osservata, un caso futuro, un intervento oppure il processo che collega intervento ed esito.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+1. **Descrizione:** riassume un'associazione nei dati.
+2. **Previsione:** riguarda un caso non ancora osservato.
+3. **Causalità:** richiede una quantità definita rispetto a un intervento sul sonno.
+4. **Spiegazione processuale:** richiede un'ipotesi sulle trasformazioni che producono l'effetto.
+
+Le quattro domande possono appartenere allo stesso programma di ricerca, ma non ricevono risposta dallo stesso coefficiente.
+:::
+
+### 2. Prevedere: modelli osservazionalmente simili {.unnumbered .unlisted}
+
+Due modelli descrivono il miglioramento con la pratica. Il modello A prevede una crescita lineare; il modello B una crescita rapida iniziale che rallenta verso un limite. Le prime cinque misure sono quasi identiche nei due modelli.
+
+Prevedi che cosa accadrebbe:
+
+- prolungando la pratica per altre trenta sessioni;
+- interrompendo la pratica e riprendendola dopo una settimana;
+- aumentando improvvisamente la difficoltà del compito.
+
+Quale di queste osservazioni potrebbe essere più utile per distinguere i modelli? Quale informazione ulteriore dovrebbe essere specificata prima di rispondere con sicurezza?
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+Non cercare soltanto più precisione nelle prime cinque misure. Cerca condizioni nelle quali le strutture dei due modelli producano traiettorie diverse.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+Il prolungamento è direttamente informativo: il modello lineare continua a crescere, mentre quello asintotico rallenta. Le altre due manipolazioni possono essere ancora più discriminanti, ma soltanto se i modelli specificano come rappresentano dimenticanza e cambiamento di difficoltà. Il punto epistemologico è che una teoria non può essere messa alla prova su conseguenze che non ha formalizzato.
+:::
+
+### 3. Progettare: rendere eseguibile una spiegazione {.unnumbered .unlisted}
+
+Una teoria verbale afferma: «Dopo un insuccesso, la fiducia diminuisce; il sostegno sociale attenua questa diminuzione; una fiducia più alta aumenta la probabilità di riprovare».
+
+Indica:
+
+- lo stato latente;
+- gli input rilevanti;
+- una possibile regola qualitativa di aggiornamento;
+- il modello osservazionale;
+- una manipolazione capace di distinguere questa teoria da una spiegazione secondo cui il sostegno sociale influenza direttamente la risposta, senza modificare la fiducia.
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+Separa ciò che cambia nel tempo da ciò che viene osservato. Poi chiediti in quale momento le due teorie prevedono risposte differenti.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+Lo stato può essere la fiducia $z_t$; gli input sono l'esito e il sostegno ricevuto. Una regola possibile riduce $z_t$ dopo un insuccesso, con una riduzione minore quando il sostegno è presente. Il modello osservazionale collega $z_t$ alla probabilità di riprovare.
+
+Per distinguere le teorie si può rimuovere il sostegno nella prova successiva. Se il sostegno ha modificato la fiducia, il suo effetto dovrebbe persistere almeno temporaneamente; se ha agito soltanto direttamente sulla risposta, l'effetto dovrebbe scomparire quando il sostegno non è più presente.
+:::
+
+### 4. Criticare e comunicare: che cosa dimostra un buon modello? {.unnumbered .unlisted}
+
+Un articolo conclude:
+
+> Il nostro modello dinamico converge senza problemi, predice meglio della regressione e il parametro $\alpha$ è associato a una scala di impulsività. Abbiamo quindi dimostrato che $\alpha$ misura il meccanismo cerebrale dell'apprendimento impulsivo.
+
+Individua almeno quattro passaggi non giustificati e riscrivi la conclusione in forma epistemologicamente più appropriata.
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+Distingui affidabilità computazionale, previsione, validità del parametro e identificazione del meccanismo.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+La convergenza riguarda il calcolo, non la correttezza teorica. Il vantaggio predittivo mostra che il modello generalizza meglio della regressione considerata, non che il processo sia quello reale. L'associazione con la scala non dimostra che i due strumenti misurino lo stesso costrutto. Infine, non viene fornita evidenza diretta su un meccanismo cerebrale.
+
+Una conclusione più appropriata è: «Nel dominio valutato, il modello dinamico ha mostrato una capacità predittiva superiore alla regressione di confronto. Le differenze posteriori in $\alpha$ erano associate ai punteggi di impulsività, un risultato coerente con l'interpretazione proposta ma non sufficiente a identificarla. Manipolazioni mirate, modelli rivali e misure indipendenti sono necessari per valutare se $\alpha$ rappresenti uno specifico processo di apprendimento».
+:::
+
+## Bibliografia {.unnumbered .unlisted}

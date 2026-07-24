@@ -1,0 +1,671 @@
+# Generalizzare a che cosa? Dalle osservazioni ai nuovi studi {#sec-generalizzazione}
+
+::: {.callout-note appearance="minimal"}
+Nel capitolo precedente abbiamo visto come stimare la qualità predittiva fuori campione mediante ELPD e LOO (@sec-div-kl-lppd-elpd). Rimane però una domanda che precede qualunque calcolo: **quale tipo di dato futuro vogliamo prevedere?**
+
+Lasciare fuori un trial di una persona già osservata, una persona intera, un compito oppure uno studio non produce quattro versioni tecniche della stessa analisi. Produce quattro domande scientifiche differenti. Questo capitolo mostra come rendere esplicito il bersaglio della generalizzazione e come costruire una validazione coerente con esso [@vehtari2017practical; @yarkoni2022generalizability].
+:::
+
+::: {.callout-important appearance="minimal" .chapter-status}
+**Da sapere.** La generalizzazione non è una proprietà unica e assoluta del modello. Dipende dall'unità esclusa, dalle informazioni disponibili al momento della previsione e dalla popolazione o dal contesto che i dati futuri rappresentano. Una LOO per osservazioni può valutare bene nuovi trial delle stesse persone e, nello stesso tempo, essere poco informativa sulla previsione di persone mai osservate.
+
+**Da saper fare.** Formulare il bersaglio predittivo; scegliere l'unità da lasciare fuori; distinguere previsione di nuove osservazioni, nuove persone, nuovi compiti e nuovi studi; spiegare quali informazioni il modello può utilizzare nel test; comunicare senza estendere la conclusione oltre la validazione effettivamente condotta.
+
+**Approfondimento facoltativo.** La $K$-fold raggruppata con `brms`, la simulazione cross-task basata su Rescorla--Wagner e il calcolo delle log-densità individuali mostrano come la logica possa essere implementata. Non è necessario padroneggiarne tutti i dettagli computazionali per comprendere il problema.
+
+[Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
+:::
+
+### Panoramica del capitolo {.unnumbered .unlisted}
+
+Al termine del capitolo dovresti essere in grado di rispondere a cinque domande:
+
+1. Quale unità futura rappresenta la previsione?
+2. Che cosa sarà già noto quando la previsione verrà formulata?
+3. Quale unità deve essere esclusa dalla stima per imitare quella situazione?
+4. Quali cambiamenti di compito, popolazione o contesto potrebbero rendere fragile la previsione?
+5. Che cosa sostiene una buona validazione e che cosa lascia ancora indeterminato?
+
+::: {.callout-tip collapse="true" title="Prerequisiti"}
+Sono richiesti i concetti di distribuzione predittiva, log-score, ELPD e LOO. Sono utili il capitolo sui modelli multilivello (@sec-multilevel), il modello di Rescorla--Wagner (@sec-dynamic-models-rescorla-wagner) e la discussione dell'eterogeneità individuale (@sec-formal-models-developments).
+:::
+
+::: {.callout-caution collapse="true" title="Preparazione del notebook"}
+```{r}
+#| output: false
+here::here("code", "_common.R") |>
+  base::source()
+
+# In questo capitolo tutte le funzioni potenzialmente ambigue sono chiamate
+# con il namespace esplicito. Disattiviamo quindi gli active binding creati
+# da conflicted, che possono interferire con chiamate interne dei backend Stan.
+if (".conflicts" %in% base::search()) {
+  base::detach(".conflicts", character.only = TRUE)
+}
+
+base::options(brms.backend = "cmdstanr")
+
+cmdstan_cache_dir <- here::here("_model_cache", "generalizzazione")
+cmdstan_output_dir <- here::here("_cmdstan_output", "generalizzazione")
+base::dir.create(cmdstan_cache_dir, recursive = TRUE, showWarnings = FALSE)
+base::dir.create(cmdstan_output_dir, recursive = TRUE, showWarnings = FALSE)
+
+# Mantiene il file Stan e l'eseguibile in una directory persistente. Questo
+# evita ricompilazioni non necessarie durante k-fold o in sessioni successive.
+base::options(cmdstanr_write_stan_file_dir = cmdstan_cache_dir)
+
+# Controllo preliminare: fallisce con un messaggio informativo se CmdStan o la
+# toolchain non sono configurati. Non installa né modifica nulla.
+cmdstanr::check_cmdstan_toolchain(fix = FALSE, quiet = TRUE)
+cmdstan_version <- cmdstanr::cmdstan_version()
+
+lme4::sleepstudy |>
+  base::as.data.frame() -> sleepstudy
+sleepstudy$Subject <- base::factor(sleepstudy$Subject)
+
+base::set.seed(20260720)
+
+# Per il rendering privilegiamo la robustezza: le catene sono eseguite una alla
+# volta. Il numero di catene resta quattro.
+n_parallel_chains <- 1L
+```
+:::
+
+## La generalizzazione è una domanda, non una garanzia di qualità
+
+Dire che un modello "generalizza" è incompleto. Occorre specificare almeno:
+
+- **a quale unità** si riferiscono i dati futuri;
+- **quali informazioni** saranno disponibili su quella unità;
+- **da quale popolazione e contesto** essa proviene;
+- **quale proprietà predittiva** verrà valutata.
+
+Consideriamo dati ripetuti indicizzati come $y_{ist}$, dove $i$ identifica la persona, $s$ il contesto o lo studio e $t$ l'occasione di misura. Possiamo voler prevedere:
+
+- un nuovo $t$ per una persona e un contesto già osservati;
+- una nuova persona $i$ nello stesso contesto;
+- la stessa persona in un nuovo compito o contesto;
+- un nuovo studio, sito, periodo storico o popolazione.
+
+Questi bersagli non formano una catena di insiemi letteralmente inclusi l'uno nell'altro. Cambiano dimensioni diverse del problema predittivo.
+
+| Bersaglio | Esempio | Informazione eventualmente disponibile | Unità da escludere |
+|---|---|---|---|
+| Nuova osservazione | Un altro trial di Mario nello stesso compito | Altri trial di Mario | Singola osservazione o blocco temporale appropriato |
+| Nuova persona | Il primo comportamento di Lucia | Dati di altre persone, nessun dato di Lucia | Persona intera |
+| Nuovo compito o contesto | Mario in un paradigma differente | Dati di Mario nel compito originale | Compito, sessione o dominio rilevante |
+| Nuovo studio o popolazione | Un nuovo laboratorio o paese | Studi precedenti | Studio, sito, coorte o periodo intero |
+
+::: {.callout-important title="Principio di corrispondenza"}
+L'unità esclusa dalla stima deve imitare l'unità futura alla quale si vuole generalizzare. La procedura di validazione è quindi parte della definizione della domanda scientifica, non una scelta tecnica successiva.
+:::
+
+### L'evidenza non si trasferisce automaticamente
+
+Una buona previsione di nuovi trial non garantisce la previsione di nuove persone. Una buona previsione di nuove persone nello stesso compito non garantisce il trasporto a un compito differente. Una replica in un altro laboratorio non dimostra che un parametro individuale sia stabile nella stessa persona.
+
+Non è però necessario "superare" questi bersagli in un ordine fisso. Si può progettare direttamente una validazione cross-study o cross-task. Il punto è diverso:
+
+> L'evidenza ottenuta per un bersaglio non autorizza automaticamente conclusioni sugli altri bersagli.
+
+## Che cosa conosce il modello al momento della previsione?
+
+La stessa unità lasciata fuori può ancora corrispondere a domande differenti. Per una persona nuova, per esempio, potremmo disporre:
+
+1. di nessuna osservazione individuale;
+2. di poche osservazioni iniziali usate per calibrare la previsione;
+3. di misure provenienti da un altro compito;
+4. di covariate cliniche o demografiche.
+
+Le quattro situazioni producono distribuzioni predittive diverse. Una previsione veramente *out-of-sample* deve usare soltanto informazioni che sarebbero disponibili nel contesto di impiego reale.
+
+::: {.callout-warning title="Perdita di informazione"}
+Se la procedura di validazione lascia nel training dati che non sarebbero disponibili al momento dell'applicazione, la prestazione stimata è ottimistica rispetto all'uso dichiarato. Questo fenomeno è spesso chiamato *information leakage*.
+:::
+
+Nei dati temporali si presenta un problema analogo. Lasciare fuori casualmente un trial può consentire al modello di utilizzare osservazioni successive per prevedere un evento precedente. Se la domanda riguarda la previsione in avanti, occorre lasciare fuori blocchi futuri, non osservazioni casuali.
+
+## Nuove osservazioni e nuove persone
+
+I dati `sleepstudy` descrivono i tempi di reazione di 18 partecipanti durante più giorni di privazione del sonno [@belenky2003patterns]. Confrontiamo due modelli:
+
+- un modello a pooling completo, che descrive una sola traiettoria media;
+- un modello multilivello, che rappresenta anche differenze tra partecipanti.
+
+La domanda non è semplicemente quale modello sia "migliore". Vogliamo mostrare che il confronto cambia significato quando cambia l'unità esclusa.
+
+### Lasciare fuori una singola osservazione
+
+Con la LOO pointwise, il modello multilivello può prevedere un'osservazione esclusa di Mario utilizzando gli altri giorni osservati di Mario. Gli effetti individuali sono quindi informati dai dati della stessa persona.
+
+La procedura risponde alla domanda:
+
+> Quanto bene prevediamo un'altra osservazione di una persona già parzialmente conosciuta?
+
+Non risponde alla domanda:
+
+> Quanto bene prevediamo una persona per la quale non possediamo ancora alcun dato?
+
+### Lasciare fuori persone intere
+
+Per imitare la seconda situazione, tutti i dati di ciascuna persona devono appartenere allo stesso fold. Quando una persona è esclusa, il modello multilivello non può utilizzare il suo effetto individuale stimato. Deve costruire la previsione dalla distribuzione di popolazione degli effetti.
+
+::: {.callout-note title="Il risultato non è predeterminato"}
+Passando dalla LOO per osservazioni alla validazione per persone, il vantaggio del modello multilivello può ridursi, aumentare o cambiare segno. Dipende da quanto l'eterogeneità è regolare, da quanto sono informati i parametri di popolazione e da come è definito il punteggio. Il punto didattico non è prevedere necessariamente un certo vincitore, ma riconoscere che i due confronti valutano compiti differenti.
+:::
+
+::: {.callout-note collapse="true" title="Approfondimento computazionale: LOO e K-fold raggruppata"}
+Il seguente codice mostra la struttura dell'analisi. La $K$-fold raggruppata assegna tutti i dati della stessa persona allo stesso fold, così che nessuna informazione della persona esclusa rimanga nel training.
+
+```{r}
+#| label: fit-sleep-generalization
+#| results: hide
+
+common_priors <- c(
+  brms::prior("normal(300, 100)", class = "Intercept"),
+  brms::prior("normal(0, 30)", class = "b"),
+  brms::prior("exponential(0.02)", class = "sigma")
+)
+
+m_pool <- brms::brm(
+  formula = Reaction ~ 1 + Days,
+  data = sleepstudy,
+  family = gaussian(),
+  prior = common_priors,
+  backend = "cmdstanr",
+  seed = 20260720,
+  chains = 4,
+  cores = n_parallel_chains,
+  iter = 2000,
+  warmup = 1000,
+  refresh = 0,
+  silent = 0,
+  output_dir = cmdstan_output_dir,
+  file = base::file.path(cmdstan_cache_dir, "sleep_pool"),
+  file_refit = "on_change"
+)
+
+m_partial <- brms::brm(
+  formula = Reaction ~ 1 + Days + (1 + Days | Subject),
+  data = sleepstudy,
+  family = gaussian(),
+  prior = c(
+    common_priors,
+    brms::prior("exponential(0.02)", class = "sd"),
+    brms::prior("lkj(2)", class = "cor")
+  ),
+  backend = "cmdstanr",
+  seed = 20260720,
+  chains = 4,
+  cores = n_parallel_chains,
+  iter = 2000,
+  warmup = 1000,
+  refresh = 0,
+  silent = 0,
+  output_dir = cmdstan_output_dir,
+  control = list(adapt_delta = 0.95),
+  file = base::file.path(cmdstan_cache_dir, "sleep_partial"),
+  file_refit = "on_change"
+)
+```
+
+```{r}
+#| label: loo-observation-generalization
+loo_pool <- loo::loo(m_pool)
+loo_partial <- loo::loo(m_partial)
+
+loo::loo_compare(
+  loo_pool, loo_partial
+)
+```
+
+```{r}
+#| label: vettore-di-fold-raggruppati
+#| results: hide
+
+base::set.seed(20260720)
+
+subject_folds <- loo::kfold_split_grouped(
+  K = 6,
+  x = sleepstudy$Subject
+)
+
+folds_per_subject <- base::tapply(
+  subject_folds,
+  sleepstudy$Subject,
+  function(x) base::length(base::unique(x))
+)
+
+base::stopifnot(base::all(folds_per_subject == 1L))
+```
+
+
+```{r}
+#| label: grouped-kfold-generalization
+#| results: hide
+
+# brms costruisce direttamente fold raggruppati: tutte le osservazioni dello
+# stesso partecipante rimangono nello stesso fold. joint = "group" calcola il
+# log-score congiunto della sequenza della persona esclusa.
+kf_pool <- brms::kfold(
+  m_pool,
+  K = 6,
+  folds = subject_folds,
+  joint = FALSE,
+  chains = 2,
+  cores = 1,
+  iter = 1500,
+  warmup = 750,
+  backend = "cmdstanr",
+  refresh = 0,
+  silent = 0,
+  output_dir = cmdstan_output_dir
+)
+
+kf_partial <- brms::kfold(
+  m_partial,
+  K = 6,
+  folds = subject_folds,
+  joint = FALSE,
+  chains = 2,
+  cores = 1,
+  iter = 1500,
+  warmup = 750,
+  backend = "cmdstanr",
+  refresh = 0,
+  silent = 0,
+  output_dir = cmdstan_output_dir,
+  control = list(adapt_delta = 0.95)
+)
+```
+
+```{r}
+#| label: compare-grouped-kfold
+loo::loo_compare(
+  kf_pool, kf_partial
+)
+```
+
+Il confronto numerico va interpretato insieme all'incertezza. Non è informativo confrontare direttamente il valore assoluto ottenuto con la LOO pointwise e quello ottenuto con la $K$-fold raggruppata: cambiano i dati disponibili durante la stima e il compito predittivo simulato. È invece informativo confrontare i modelli **entro la stessa procedura di validazione**.
+:::
+
+### Che cosa impara il modello multilivello su una persona nuova?
+
+Per una persona già osservata, la previsione combina parametri di popolazione e informazioni individuali. Per una persona completamente nuova, la previsione integra invece sugli effetti possibili nella popolazione:
+
+
+$$
+\tilde b_{\text{nuovo}}
+\sim
+p(b_{\text{nuovo}}\mid y).
+$$
+
+Questa distribuzione è più ampia della previsione della sola traiettoria media perché rappresenta anche la variabilità tra persone. Il modello non sa ancora *chi* sarà la nuova persona; sa soltanto quali persone sono plausibili secondo la popolazione appresa.
+
+Il partial pooling migliora quindi la generalizzazione solo quando la struttura gerarchica appresa contiene informazione trasportabile. Non crea informazione individuale prima che l'individuo venga osservato.
+
+## Nuovi compiti e nuovi contesti
+
+Un parametro individuale stimato in un compito può essere descritto come caratteristica della persona soltanto se conserva valore predittivo oltre il compito che lo ha prodotto.
+
+Supponiamo di stimare il tasso di apprendimento $\alpha_i$ di ogni persona nel Compito A mediante il modello di Rescorla--Wagner. Nel Compito B possiamo confrontare:
+
+- una previsione **idiografica**, che usa l'informazione individuale ottenuta nel Compito A;
+- una previsione **nomotetica**, che usa soltanto la distribuzione o la media della popolazione.
+
+Se la previsione idiografica assegna sistematicamente probabilità maggiori alle scelte del Compito B, allora $\hat\alpha_i$ contiene informazione trasportabile sulla persona. Il risultato non dimostra ancora che $\hat\alpha_i$ sia un tratto universale o che rappresenti il vero meccanismo psicologico.
+
+### Tre controlli distinti
+
+Prima di interpretare una validazione cross-task occorre distinguere:
+
+1. **Recuperabilità nel compito originale.** I dati del Compito A informano davvero $\hat\alpha_i$?
+2. **Trasporto predittivo.** L'informazione su $\hat\alpha_i$ migliora la previsione nel Compito B?
+3. **Validità del costrutto.** Il parametro si collega coerentemente ad altre misure e manipolazioni previste dalla teoria?
+
+Un parametro non recuperabile non può generalizzare in modo informativo. Un parametro recuperabile può essere specifico del compito. Un parametro che generalizza può ancora essere una rappresentazione utile senza coincidere con un tratto naturale o con il vero meccanismo.
+
+::: {.callout-note collapse="true" title="Approfondimento computazionale: una simulazione cross-task"}
+La simulazione seguente confronta due mondi:
+
+- **informazione stabile:** lo stesso $\hat\alpha_i$ governa i due compiti;
+- **informazione specifica:** i valori nei due compiti sono indipendenti, pur provenendo dalla stessa popolazione.
+
+Per isolare il problema manteniamo nota la sensibilità di scelta $\tau$ e stimiamo $\hat\alpha$ su una griglia. In un'analisi completa useremmo la posterior congiunta e propagheremmo tutta l'incertezza.
+
+```{r}
+#| label: rw-cross-task-functions
+sim_rw <- function(
+  alpha,
+  tau,
+  n_trials,
+  reward_prob = c(A = 0.8, B = 0.2)
+) {
+  value <- c(A = 0.5, B = 0.5)
+  choice_a <- base::integer(n_trials)
+  reward <- base::integer(n_trials)
+
+  for (trial in base::seq_len(n_trials)) {
+    probability_a <- stats::plogis(tau * (value["A"] - value["B"]))
+    chosen_a <- base::as.integer(stats::runif(1) < probability_a)
+    option <- if (chosen_a == 1L) "A" else "B"
+    outcome <- base::as.integer(
+      stats::runif(1) < reward_prob[[option]]
+    )
+
+    choice_a[trial] <- chosen_a
+    reward[trial] <- outcome
+    value[option] <- value[option] + alpha * (outcome - value[option])
+  }
+
+  tibble::tibble(choice_a = choice_a, reward = reward)
+}
+
+rw_log_score <- function(alpha, tau, data) {
+  value <- c(A = 0.5, B = 0.5)
+  score <- 0
+
+  for (trial in base::seq_len(base::nrow(data))) {
+    probability_a <- stats::plogis(tau * (value["A"] - value["B"]))
+    probability_observed <- if (data$choice_a[trial] == 1L) {
+      probability_a
+    } else {
+      1 - probability_a
+    }
+
+    score <- score + base::log(base::pmax(probability_observed, 1e-12))
+    option <- if (data$choice_a[trial] == 1L) "A" else "B"
+    value[option] <- value[option] +
+      alpha * (data$reward[trial] - value[option])
+  }
+
+  score
+}
+
+alpha_grid <- seq(0.02, 0.98, by = 0.02)
+
+estimate_alpha <- function(data, tau) {
+  scores <- base::vapply(
+    alpha_grid,
+    rw_log_score,
+    base::numeric(1),
+    tau = tau,
+    data = data
+  )
+  alpha_grid[base::which.max(scores)]
+}
+```
+
+```{r}
+#| label: rw-cross-task-simulation
+n_people <- 30
+n_trials <- 120
+tau_true <- 3
+
+alpha_a <- stats::rbeta(n_people, 2, 4)
+task_a <- base::lapply(
+  alpha_a,
+  sim_rw,
+  tau = tau_true,
+  n_trials = n_trials
+)
+alpha_hat_a <- base::vapply(
+  task_a,
+  estimate_alpha,
+  base::numeric(1),
+  tau = tau_true
+)
+
+alpha_b_stable <- alpha_a
+alpha_b_specific <- stats::rbeta(n_people, 2, 4)
+
+task_b_stable <- base::lapply(
+  alpha_b_stable,
+  sim_rw,
+  tau = tau_true,
+  n_trials = n_trials
+)
+task_b_specific <- base::lapply(
+  alpha_b_specific,
+  sim_rw,
+  tau = tau_true,
+  n_trials = n_trials
+)
+
+added_log_score <- function(task_b, alpha_individual, alpha_population, tau) {
+  individual <- base::mapply(
+    function(data, alpha) rw_log_score(alpha, tau, data),
+    task_b,
+    alpha_individual
+  )
+  population <- base::vapply(
+    task_b,
+    function(data) rw_log_score(alpha_population, tau, data),
+    base::numeric(1)
+  )
+  individual - population
+}
+
+cross_task_results <- dplyr::bind_rows(
+  tibble::tibble(
+    scenario = "Informazione stabile",
+    delta_log_score = added_log_score(
+      task_b_stable,
+      alpha_hat_a,
+      base::mean(alpha_hat_a),
+      tau_true
+    )
+  ),
+  tibble::tibble(
+    scenario = "Informazione specifica",
+    delta_log_score = added_log_score(
+      task_b_specific,
+      alpha_hat_a,
+      base::mean(alpha_hat_a),
+      tau_true
+    )
+  )
+)
+```
+
+```{r}
+#| label: fig-rw-cross-task
+#| fig-cap: "Valore predittivo aggiunto dell'informazione individuale ottenuta nel Compito A. Valori positivi indicano una previsione del Compito B migliore rispetto all'uso della sola media di popolazione."
+ggplot2::ggplot(
+  cross_task_results,
+  ggplot2::aes(x = scenario, y = delta_log_score)
+) +
+  ggplot2::geom_hline(yintercept = 0, linetype = "dashed") +
+  ggplot2::geom_boxplot(width = 0.4, outlier.shape = NA) +
+  ggplot2::geom_jitter(width = 0.08, alpha = 0.55) +
+  ggplot2::labs(
+    x = NULL,
+    y = base::expression(Delta * " log-score: individuo - popolazione")
+  )
+```
+
+La simulazione dimostra la logica, non una proprietà universale di $\hat\alpha$. Il risultato dipende da numero di trial, recuperabilità, modello di scelta, somiglianza dei compiti e distribuzione delle persone.
+:::
+
+## Nuovi studi, popolazioni e periodi
+
+La generalizzazione cross-study chiede se la prestazione del modello si conserva quando cambiano una o più condizioni che definivano i dati originali:
+
+- campione e criteri di inclusione;
+- laboratorio o sito clinico;
+- lingua e cultura;
+- strumenti di misura;
+- protocollo e implementazione;
+- periodo storico;
+- prevalenza degli esiti e distribuzione dei predittori.
+
+Il nuovo studio può essere trattato come unità esclusa in una validazione *leave-one-study-out*. Nei modelli gerarchici, la distribuzione predittiva per uno studio nuovo integra l'incertezza sugli effetti di popolazione e la variabilità tra studi.
+
+Tuttavia, la validazione esterna non è soltanto una versione più grande della cross-validation. Richiede che la raccolta indipendente riproduca in modo trasparente:
+
+- il modello specificato;
+- la procedura di misura;
+- il bersaglio predittivo;
+- la regola con cui verrà calcolato il punteggio.
+
+Le repliche preregistrate e i progetti multi-lab rendono più difficile adattare retrospettivamente il modello al nuovo campione. Non garantiscono da soli l'assenza di differenze sostantive tra contesti, ma rendono tali differenze osservabili e discutibili.
+
+### Prestazione media e variazione della prestazione
+
+Una media cross-study può nascondere un problema importante. Un modello potrebbe mantenere una buona prestazione media, ma funzionare molto bene in alcuni siti e male in altri.
+
+La domanda completa non è soltanto:
+
+> Qual è il log-score medio nei nuovi studi?
+
+È anche:
+
+> Quanto varia la prestazione tra studi, e quali caratteristiche spiegano tale variazione?
+
+Questo trasforma la generalizzazione da presupposto universale a oggetto dell'inferenza.
+
+## Che cosa sostiene una buona generalizzazione?
+
+Una validazione riuscita sostiene una conclusione circoscritta:
+
+> Il modello ha catturato informazione predittiva che si trasferisce al bersaglio, al contesto e alla procedura di valutazione specificati.
+
+Non dimostra automaticamente che:
+
+- il modello sia vero;
+- il meccanismo psicologico sia stato identificato;
+- i parametri corrispondano a tratti naturali;
+- la relazione sia causale;
+- la prestazione si conserverà in ogni popolazione;
+- il modello sia utile per una decisione concreta.
+
+Una superiorità predittiva cross-task o cross-study è evidenza importante perché espone il modello a un cambiamento reale delle condizioni. Rimane però evidenza relativa a una classe di alternative e a una specifica forma di trasporto.
+
+::: {.callout-important title="Generalizzare senza universalizzare"}
+La conclusione scientificamente forte non è "il modello funziona ovunque", ma: **dove, per chi, in quali condizioni e con quale incertezza il modello mantiene valore predittivo?**
+:::
+
+## Progettare la validazione prima dell'analisi
+
+Prima di raccogliere o dividere i dati conviene compilare una breve scheda.
+
+| Domanda | Esempio di risposta |
+|---|---|
+| Qual è l'unità futura? | Una persona mai osservata |
+| Quali dati saranno disponibili? | Età e misura iniziale, nessun trial del compito |
+| Quale unità deve restare interamente fuori? | Partecipante |
+| Quali cambiamenti sono plausibili? | Sito clinico e prevalenza differenti |
+| Quale proprietà verrà valutata? | Log-score della sequenza completa |
+| Quale confronto è rilevante? | Modello processuale contro benchmark semplice |
+| Quale conclusione sarà autorizzata? | Previsione di nuove persone nello stesso tipo di sito |
+
+Questa scheda impedisce che il bersaglio venga ridefinito dopo aver osservato quale validazione produce il risultato più favorevole.
+
+## Esercizi {.unnumbered .unlisted}
+
+### Esercizio 1 — Scegliere l'unità da lasciare fuori {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 10–15 minuti*
+
+Per ciascuna domanda indica quale unità dovrebbe essere esclusa dalla stima.
+
+1. Prevedere il prossimo trial di una persona già osservata.
+2. Prevedere il comportamento iniziale di un nuovo paziente.
+3. Verificare se un parametro stimato in un compito di apprendimento aiuta a prevedere un compito decisionale.
+4. Stimare la prestazione in un nuovo laboratorio.
+5. Prevedere il mese successivo in una serie temporale clinica.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Chiediti quali dati sarebbero realmente disponibili nel momento in cui la previsione deve essere formulata.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+1 richiede di escludere la nuova osservazione, conservando le precedenti della stessa persona. 2 richiede di escludere la persona intera. 3 richiede di separare i compiti: il modello può essere calibrato sul primo, ma il secondo deve rimanere fuori. 4 richiede di escludere il laboratorio o lo studio intero. 5 richiede un blocco temporale futuro: una divisione casuale dei giorni permetterebbe di usare il futuro per prevedere il passato.
+:::
+
+### Esercizio 2 — Prevedere l'ottimismo della LOO pointwise {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 10–15 minuti*
+
+Uno studio raccoglie 200 trial per ciascuno di 40 partecipanti. Il modello contiene un parametro individuale molto flessibile. La LOO per singolo trial mostra una prestazione eccellente.
+
+1. Per quale bersaglio questa valutazione è pertinente?
+2. Perché può essere ottimistica rispetto alla previsione di un partecipante nuovo?
+3. L'aumento da 20 a 200 trial per persona aumenta o riduce il divario tra le due domande?
+4. Quale validazione useresti per un'applicazione clinica a pazienti mai osservati?
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Con la LOO pointwise il modello conserva quasi tutti i dati della persona il cui trial viene predetto.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+La LOO per trial valuta nuove osservazioni di persone già conosciute. È ottimistica per nuove persone perché il parametro individuale è stimato sugli altri trial dello stesso partecipante. Aumentando il numero di trial cresce l'informazione disponibile sulla persona e può quindi crescere il divario rispetto alla situazione in cui non esiste alcun dato individuale. Per nuovi pazienti occorre una validazione raggruppata per persona, eventualmente seguita da una validazione in un sito clinico indipendente.
+:::
+
+### Esercizio 3 — Progettare la validazione di un marcatore individuale {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 15–20 minuti*
+
+Un parametro $\hat\alpha_i$ stimato in un compito di apprendimento viene proposto come marcatore della risposta a una terapia.
+
+Progetta una sequenza di controlli che distingua:
+
+1. recuperabilità del parametro;
+2. stabilità nello stesso compito;
+3. generalizzazione a un compito differente;
+4. capacità prognostica per la terapia;
+5. trasporto a un nuovo centro clinico.
+
+Per ogni passaggio indica che cosa deve essere lasciato fuori e quale conclusione sarebbe autorizzata da un risultato positivo.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Non saltare dalla stima nel compito originale alla conclusione clinica. Ogni passaggio richiede un bersaglio e dati di test differenti.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+La recuperabilità richiede dati simulati con parametri noti. La stabilità nello stesso compito richiede sessioni o blocchi indipendenti della stessa persona. La generalizzazione cross-task richiede che il secondo compito non contribuisca alla stima del parametro usato per prevederlo. La capacità prognostica richiede esiti terapeutici futuri non utilizzati nella costruzione del marcatore e un confronto con benchmark clinici. Il trasporto richiede un nuovo centro mantenuto interamente fuori. Ogni risultato positivo estende il campo di validità, ma nessuno dimostra da solo che $\hat\alpha$ sia un tratto naturale o la causa della risposta terapeutica.
+:::
+
+### Esercizio 4 — Criticare e comunicare {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 15 minuti*
+
+Un articolo conclude:
+
+> Il nostro modello generalizza agli individui ed è pronto per l'impiego clinico. Ha ottenuto l'ELPD più alta nella LOO-CV condotta su 8.000 trial appartenenti a 40 partecipanti. Il parametro individuale può quindi essere considerato un tratto stabile e un marcatore prognostico.
+
+Individua almeno cinque problemi e riscrivi la conclusione in forma proporzionata all'evidenza.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Considera l'unità lasciata fuori, l'informazione individuale presente nel training, il confronto tra modelli, la stabilità cross-task, la validazione clinica e il significato psicologico del parametro.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+La LOO per trial valuta principalmente nuove osservazioni delle stesse persone, non persone nuove. La prima posizione in un confronto ELPD è relativa ai modelli candidati e non garantisce adeguatezza assoluta. La procedura non dimostra stabilità cross-sessione o cross-task, capacità prognostica, trasporto a nuovi centri, causalità o validità del parametro come tratto.
+
+Una conclusione appropriata potrebbe essere:
+
+> Tra i modelli confrontati, il modello proposto ha mostrato la maggiore prestazione stimata nel prevedere trial esclusi di partecipanti già osservati. Il risultato sostiene la generalizzazione a nuove osservazioni nello stesso compito, ma non valuta ancora partecipanti nuovi, stabilità cross-task o utilità prognostica. Queste conclusioni richiedono validazioni raggruppate, longitudinali ed esterne specificamente progettate.
+:::
+
+## Riflessioni conclusive {.unnumbered .unlisted}
+
+L'ELPD non possiede un significato indipendente dalla procedura che produce i dati di test. Lasciare fuori osservazioni, persone, compiti o studi cambia ciò che il modello deve prevedere e quali informazioni può utilizzare.
+
+La scelta dell'unità esclusa è quindi una scelta teorica. Una validazione ben progettata deve rendere coerenti:
+
+1. il bersaglio predittivo;
+2. le informazioni disponibili nel futuro scenario d'uso;
+3. l'unità mantenuta fuori dalla stima;
+4. il punteggio con cui viene valutata la previsione;
+5. la portata della conclusione.
+
+Una buona prestazione su un nuovo bersaglio sostiene che il modello ha catturato regolarità trasportabili a quel bersaglio. Non dimostra automaticamente verità, causalità o validità meccanicistica. Il contributo epistemologico della validazione è più disciplinato: costringe il ricercatore a dichiarare **dove** il modello pretende di funzionare e a sottoporre quella pretesa a un test coerente.
+
+::: {.callout-note collapse="true" title="Informazioni sull'ambiente di sviluppo"}
+```{r}
+sessionInfo()
+```
+:::
+
+## Bibliografia {.unnumbered .unlisted}

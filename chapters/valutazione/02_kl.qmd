@@ -1,0 +1,624 @@
+# Dalla sorpresa al confronto: entropia incrociata e divergenza KL {#sec-kullback-leibler-divergence}
+
+Nel capitolo precedente abbiamo considerato una singola distribuzione predittiva. La sorpresa misura quanto fosse inatteso un evento osservato; l'entropia misura invece quanta sorpresa ci aspettiamo, in media, sotto quella distribuzione.
+
+Ora introduciamo una seconda distribuzione. Una, che indicheremo con $P$, rappresenta la distribuzione sconosciuta delle osservazioni relative al bersaglio predittivo di interesse. L'altra, $Q$, è la distribuzione proposta dal modello. La domanda diventa:
+
+> Quanta sorpresa aggiuntiva produciamo quando usiamo $Q$ per prevedere osservazioni distribuite secondo $P$?
+
+L'**entropia incrociata** quantifica la sorpresa media prodotta da $Q$. La **divergenza di Kullback--Leibler** isola la parte di tale sorpresa dovuta alla differenza tra $P$ e $Q$. Questo passaggio fornisce il fondamento teorico della valutazione predittiva, ma non ancora la sua soluzione operativa: nella ricerca reale $P$ non è conosciuta.
+
+## Orientamento {.unnumbered .unlisted}
+
+Il percorso essenziale segue quattro passaggi:
+
+1. l'entropia descrive la sorpresa media sotto $P$;
+2. l'entropia incrociata descrive la sorpresa media prodotta da $Q$ su osservazioni distribuite secondo $P$;
+3. la KL è la sorpresa aggiuntiva dovuta all'uso di $Q$;
+4. minimizzare la KL equivale a massimizzare il log-score atteso.
+
+Al termine del capitolo il lettore dovrebbe saper distinguere entropia, entropia incrociata e KL; interpretare la direzione $D_{\mathrm{KL}}(P\parallel Q)$; spiegare l'asimmetria della KL e comprendere perché un vantaggio predittivo non identifica automaticamente il modello vero o il meccanismo reale.
+
+::: {.callout-important appearance="minimal" .chapter-status}
+**Da sapere.** L'entropia incrociata $H(P,Q)$ è la sorpresa media che si ottiene quando le osservazioni seguono $P$ ma vengono valutate con $Q$. La divergenza $D_{\mathrm{KL}}(P\parallel Q)$ è la differenza $H(P,Q)-H(P)$: quantifica quindi l'eccesso di sorpresa dovuto all'approssimazione. È non negativa e asimmetrica.
+
+**Da saper fare.** Distinguere le tre quantità; leggere correttamente la direzione della KL; prevedere quali errori probabilistici verranno penalizzati maggiormente; spiegare perché minimizzare la KL equivale a massimizzare il log-score atteso; formulare conclusioni predittive senza trasformarle in affermazioni di verità causale o meccanicistica.
+
+**Approfondimento facoltativo.** La decomposizione numerica dei contributi alla KL, la dimostrazione della non negatività, i casi di supporto incompatibile, le densità continue e la conversione tra bit e nat possono essere rimandati.
+
+[Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
+:::
+
+::: {.callout-tip collapse="true" title="Prerequisiti"}
+Sono necessarie le nozioni di sorpresa, entropia e log-score introdotte nel capitolo precedente. Per un’introduzione più ampia alla teoria dell’informazione si veda @stone2022information. È utile ricordare che un evento al quale viene assegnata poca probabilità produce un valore elevato di $-\log q(y)$.
+:::
+
+::: {.callout-caution collapse="true" title="Preparazione del notebook"}
+```{r}
+#| output: false
+
+here::here("code", "_common.R") |>
+  source()
+
+check_probability <- function(p) {
+  stopifnot(is.numeric(p), all(is.finite(p)), all(p >= 0), sum(p) > 0)
+  p / sum(p)
+}
+
+entropy_discrete <- function(p, base = 2) {
+  p <- check_probability(p)
+  positive <- p > 0
+  -sum(p[positive] * log(p[positive], base = base))
+}
+
+cross_entropy <- function(p, q, base = 2) {
+  p <- check_probability(p)
+  q <- check_probability(q)
+  stopifnot(length(p) == length(q))
+
+  if (any(p > 0 & q == 0)) {
+    return(Inf)
+  }
+
+  positive <- p > 0
+  -sum(p[positive] * log(q[positive], base = base))
+}
+
+kl_divergence <- function(p, q, base = 2) {
+  cross_entropy(p, q, base = base) - entropy_discrete(p, base = base)
+}
+```
+:::
+
+## Dal valutare una distribuzione al confrontarne due
+
+Nel capitolo precedente abbiamo scritto l'entropia di $P$ come
+
+$$
+H(P)
+=
+\mathbb E_P[-\log P(Y)].
+$$ {#eq-kl-entropy}
+
+Questa espressione usa $P$ due volte:
+
+- $P$ determina quanto spesso si presentano i diversi esiti;
+- $P$ assegna anche la probabilità con cui quegli stessi esiti vengono valutati.
+
+Nel confronto tra un fenomeno e un modello, i due ruoli non coincidono più. Le osservazioni sono distribuite secondo $P$, ma il modello assegna loro le probabilità contenute in $Q$.
+
+È importante interpretare $P$ con cautela. In questo capitolo $P$ non indica necessariamente il meccanismo causale o psicologico completo. Indica la distribuzione delle osservazioni per uno specifico bersaglio predittivo: per esempio, le risposte di una certa popolazione, in un certo compito e in determinate condizioni. Processi differenti possono produrre distribuzioni osservazionali simili.
+
+## Entropia incrociata: la sorpresa prodotta dal modello
+
+L'**entropia incrociata** di $P$ rispetto a $Q$ è
+
+$$
+H(P,Q)
+=
+\mathbb E_P[-\log Q(Y)].
+$$ {#eq-cross-entropy}
+
+Nel caso discreto,
+
+$$
+H(P,Q)
+=
+-\sum_y p(y)\log q(y).
+$$
+
+La formula contiene due distribuzioni con funzioni diverse:
+
+- $p(y)$ stabilisce quanto spesso ciascun evento entra nella media;
+- $q(y)$ stabilisce quanta sorpresa il modello produce quando quell'evento si verifica.
+
+L'entropia incrociata risponde quindi alla domanda:
+
+> Quanta sorpresa produce in media la distribuzione $Q$ su osservazioni distribuite secondo $P$?
+
+### Un primo confronto
+
+Supponiamo che le risposte corrette a un insieme di prove siano distribuite come
+
+$$
+P(A,B)=(0.90,0.10).
+$$
+
+Confrontiamo due previsioni:
+
+$$
+Q_1(A,B)=(0.90,0.10),
+\qquad
+Q_2(A,B)=(0.50,0.50).
+$$
+
+```{r}
+#| label: cross-entropy-first-comparison
+
+p <- c(A = .90, B = .10)
+q_matching <- c(A = .90, B = .10)
+q_uniform <- c(A = .50, B = .50)
+
+data.frame(
+  distribuzione = c("Q1: coincide con P", "Q2: uniforme"),
+  entropy_P = entropy_discrete(p),
+  cross_entropy = c(
+    cross_entropy(p, q_matching),
+    cross_entropy(p, q_uniform)
+  )
+) |>
+  transform(
+    entropy_P = round(entropy_P, 3),
+    cross_entropy = round(cross_entropy, 3)
+  )
+```
+
+La distribuzione uniforme non commette un errore estremo su un singolo evento, ma ignora una regolarità importante: A si verifica molto più spesso di B. Per questa ragione produce, in media, più sorpresa.
+
+## Divergenza KL: la sorpresa aggiuntiva
+
+L'entropia incrociata contiene due componenti:
+
+1. l'incertezza che sarebbe presente anche usando $P$;
+2. il costo aggiuntivo prodotto dall'uso di $Q$.
+
+La divergenza di Kullback--Leibler separa la seconda componente:
+
+$$
+D_{\mathrm{KL}}(P\parallel Q)
+=
+H(P,Q)-H(P).
+$$ {#eq-kl-cross-minus-entropy}
+
+Equivalentemente,
+
+$$
+D_{\mathrm{KL}}(P\parallel Q)
+=
+\sum_y p(y)\log\frac{p(y)}{q(y)}.
+$$ {#eq-kl-definition}
+
+La lettura più utile è:
+
+> $D_{\mathrm{KL}}(P\parallel Q)$ è la sorpresa media aggiuntiva che si paga usando $Q$ invece di $P$ per prevedere osservazioni distribuite secondo $P$.
+
+| Quantità | Formula | Domanda |
+|---|---|---|
+| Entropia | $H(P)=\mathbb E_P[-\log P(Y)]$ | Quanta incertezza possiede $P$? |
+| Entropia incrociata | $H(P,Q)=\mathbb E_P[-\log Q(Y)]$ | Quanta sorpresa produce $Q$ su dati distribuiti secondo $P$? |
+| Divergenza KL | $H(P,Q)-H(P)$ | Quanta sorpresa aggiuntiva dipende dalla differenza tra $P$ e $Q$? |
+
+::: {.callout-important title="La KL non misura l'incertezza di P"}
+Due fenomeni possono avere la stessa entropia ma essere approssimati con accuratezza molto diversa da uno stesso modello. La KL non descrive quanta variabilità o incertezza sia presente nel fenomeno: descrive il costo dell'approssimazione $Q$ rispetto al bersaglio $P$.
+:::
+
+### Un esempio con tre esiti
+
+Consideriamo
+
+$$
+P=(0.50,0.30,0.20)
+$$
+
+e due modelli:
+
+$$
+Q_A=(0.40,0.40,0.20),
+\qquad
+Q_B=(0.49,0.31,0.20).
+$$
+
+```{r}
+#| label: kl-three-outcomes
+
+p <- c(A = .50, B = .30, C = .20)
+q_a <- c(A = .40, B = .40, C = .20)
+q_b <- c(A = .49, B = .31, C = .20)
+
+data.frame(
+  modello = c("QA", "QB"),
+  cross_entropy_bits = c(
+    cross_entropy(p, q_a),
+    cross_entropy(p, q_b)
+  ),
+  kl_bits = c(
+    kl_divergence(p, q_a),
+    kl_divergence(p, q_b)
+  )
+) |>
+  transform(
+    cross_entropy_bits = round(cross_entropy_bits, 4),
+    kl_bits = round(kl_bits, 4)
+  )
+```
+
+$Q_B$ è più simile a $P$ e produce meno sorpresa aggiuntiva. Questo non significa che $Q_B$ sia il modello vero in senso assoluto. Significa soltanto che, per questo bersaglio predittivo e tra questi candidati, assegna probabilità più appropriate agli esiti.
+
+## Perché la KL è direzionale
+
+La KL non è simmetrica:
+
+$$
+D_{\mathrm{KL}}(P\parallel Q)
+\neq
+D_{\mathrm{KL}}(Q\parallel P).
+$$
+
+Non si tratta di un difetto. Le due espressioni formulano domande differenti.
+
+- $D_{\mathrm{KL}}(P\parallel Q)$: quale costo si paga usando $Q$ per eventi distribuiti secondo $P$?
+- $D_{\mathrm{KL}}(Q\parallel P)$: quale costo si paga usando $P$ per eventi distribuiti secondo $Q$?
+
+Scambiare le distribuzioni modifica sia la frequenza con cui gli eventi vengono ponderati sia la distribuzione usata per valutarli.
+
+```{r}
+#| label: kl-direction-example
+
+p <- c(A = .90, B = .10)
+q <- c(A = .50, B = .50)
+
+data.frame(
+  domanda = c(
+    "Usare Q quando gli eventi seguono P",
+    "Usare P quando gli eventi seguono Q"
+  ),
+  kl_bits = c(
+    kl_divergence(p, q),
+    kl_divergence(q, p)
+  )
+) |>
+  transform(kl_bits = round(kl_bits, 3))
+```
+
+Nel primo caso $Q$ è troppo poco informativa rispetto a una distribuzione molto concentrata. Nel secondo caso $P$ assegna probabilità molto bassa a B, ma B si verifica spesso sotto $Q$. La seconda situazione può quindi risultare più costosa.
+
+::: {.callout-note collapse="true" title="Perché la KL non è una distanza matematica?"}
+Una distanza deve essere simmetrica e soddisfare la disuguaglianza triangolare. La KL non possiede queste proprietà. È più appropriato chiamarla **divergenza**: una misura direzionale del costo di usare una distribuzione al posto di un'altra.
+:::
+
+## Gli errori non hanno tutti lo stesso costo
+
+La KL attribuisce un peso particolare agli eventi che si verificano spesso sotto $P$. Se $Q$ assegna poca probabilità a tali eventi, il costo è elevato perché l'errore viene pagato ripetutamente.
+
+Al contrario, un errore su un evento molto raro contribuisce meno alla media, purché il modello non gli assegni probabilità esattamente zero. Questo spiega perché la KL non possa essere interpretata come una semplice distanza geometrica tra vettori di probabilità: conta non soltanto quanto differiscono le probabilità, ma anche **dove** si trovano le differenze rispetto alla distribuzione di riferimento.
+
+### Un esempio psicologico
+
+Supponiamo, soltanto a scopo illustrativo, che la distribuzione delle risposte emotive in una specifica popolazione e procedura sia
+
+$$
+P(\text{bassa},\text{media},\text{alta})=(0.30,0.45,0.25).
+$$
+
+Due modelli producono le previsioni marginali
+
+$$
+Q_A=(0.36,0.39,0.25),
+\qquad
+Q_B=(0.31,0.44,0.25).
+$$
+
+```{r}
+#| label: kl-emotional-response
+#| fig-cap: "Esempio illustrativo: QB assegna probabilità più vicine a P, ma il vantaggio non identifica il processo che genera le risposte."
+
+p <- c(Bassa = .30, Media = .45, Alta = .25)
+q_a <- c(Bassa = .36, Media = .39, Alta = .25)
+q_b <- c(Bassa = .31, Media = .44, Alta = .25)
+
+comparison <- data.frame(
+  modello = c("QA", "QB"),
+  kl_bits = c(
+    kl_divergence(p, q_a),
+    kl_divergence(p, q_b)
+  )
+)
+comparison$kl_bits <- round(comparison$kl_bits, 4)
+comparison
+
+rbind(
+  data.frame(distribuzione = "P", risposta = names(p), probability = as.numeric(p)),
+  data.frame(distribuzione = "QA", risposta = names(q_a), probability = as.numeric(q_a)),
+  data.frame(distribuzione = "QB", risposta = names(q_b), probability = as.numeric(q_b))
+) |>
+  ggplot(aes(x = risposta, y = probability)) +
+  geom_col() +
+  facet_wrap(~ distribuzione) +
+  labs(x = "Categoria di risposta", y = "Probabilità")
+```
+
+$Q_B$ produce un costo informazionale minore. La conclusione appropriata è circoscritta:
+
+> Per la distribuzione ipotizzata e per questo bersaglio predittivo, $Q_B$ rappresenta meglio le frequenze degli esiti rispetto a $Q_A$.
+
+Non possiamo concludere che le variabili o i processi rappresentati da $Q_B$ siano causalmente corretti. Due modelli psicologicamente differenti potrebbero produrre le stesse probabilità marginali.
+
+## Dalla KL al log-score atteso
+
+La relazione decisiva per la valutazione dei modelli emerge sviluppando la definizione:
+
+$$
+D_{\mathrm{KL}}(P\parallel Q)
+=
+\mathbb E_P[\log P(Y)]
+-
+\mathbb E_P[\log Q(Y)].
+$$
+
+Il primo termine dipende soltanto da $P$. Quando confrontiamo più modelli rispetto allo stesso bersaglio predittivo, esso è una costante comune. L'unica quantità che cambia è
+
+$$
+\mathbb E_P[\log Q(Y)],
+$$
+
+ossia il **log-score atteso** del modello.
+
+Ne segue che
+
+$$
+\arg\min_Q D_{\mathrm{KL}}(P\parallel Q)
+=
+\arg\max_Q \mathbb E_P[\log Q(Y)].
+$$ {#eq-kl-expected-log-score}
+
+Questa non è un'analogia: è un'identità matematica. Un modello riduce la KL precisamente quando assegna, in media, maggiore densità o probabilità alle osservazioni che provengono da $P$.
+
+Per due modelli $Q_1$ e $Q_2$,
+
+$$
+D_{\mathrm{KL}}(P\parallel Q_1)
+-
+D_{\mathrm{KL}}(P\parallel Q_2)
+=
+\mathbb E_P[\log Q_2(Y)]
+-
+\mathbb E_P[\log Q_1(Y)].
+$$
+
+La componente sconosciuta che dipende soltanto da $P$ scompare dal confronto. Resta però un problema fondamentale: anche il valore atteso sotto $P$ è sconosciuto, perché non possediamo accesso illimitato a nuove osservazioni generate dal bersaglio di interesse.
+
+::: {.callout-important title="Il confine di questo capitolo"}
+La KL fornisce il criterio teorico: preferire, tra i candidati, il modello con log-score atteso più alto. Non fornisce ancora il metodo con cui stimare quel log-score usando un campione finito. Il prossimo capitolo affronterà precisamente questo problema mediante valutazione fuori campione, ELPD e LOO [@vehtari2017practical].
+:::
+
+## Che cosa non dimostra una KL minore
+
+Supponiamo che $Q_2$ abbia una KL minore di $Q_1$. Possiamo concludere che, rispetto allo stesso $P$ e allo stesso bersaglio predittivo, $Q_2$ assegna probabilità mediamente migliori agli eventi.
+
+Non possiamo concludere automaticamente che:
+
+- $Q_2$ sia vero;
+- la sua struttura causale sia corretta;
+- i suoi parametri corrispondano a processi psicologici reali;
+- il vantaggio si mantenga in un'altra popolazione o in un altro compito;
+- $Q_2$ sia adeguato in senso assoluto;
+- nessun modello non considerato possa essere migliore.
+
+La KL ordina modelli rispetto a una distribuzione e a un bersaglio predittivo. La sua interpretazione è quindi sempre **comparativa e contestuale**.
+
+::: {.callout-warning title="Migliore tra i candidati non significa adeguato"}
+Se tutti i modelli omettono la stessa regolarità importante, uno di essi può avere la KL minore e rimanere comunque una rappresentazione povera del fenomeno. La valutazione comparativa deve essere accompagnata da controlli predittivi, analisi delle discrepanze e ragionamento sostantivo.
+:::
+
+## Approfondimenti facoltativi
+
+::: {.callout-note collapse="true" title="Perché la KL è non negativa?"}
+La disuguaglianza di Gibbs implica
+
+$$
+D_{\mathrm{KL}}(P\parallel Q)\geq 0,
+$$
+
+con uguaglianza quando $P=Q$ quasi ovunque. Informazionalmente, se $P$ fosse conosciuta, essa fornirebbe il sistema ottimale per assegnare probabilità agli eventi che genera. Una distribuzione differente non può produrre, in media, una sorpresa minore.
+
+La non negatività riguarda la somma complessiva. I contributi dei singoli esiti
+
+$$
+p(y)\log\frac{p(y)}{q(y)}
+$$
+
+possono essere positivi o negativi.
+:::
+
+::: {.callout-note collapse="true" title="Quando la KL diventa infinita"}
+Se esiste un evento per il quale
+
+$$
+p(y)>0
+\qquad\text{e}\qquad
+q(y)=0,
+$$
+
+allora
+
+$$
+D_{\mathrm{KL}}(P\parallel Q)=\infty.
+$$
+
+Il modello dichiara impossibile un evento che può verificarsi. Quando quell'evento appare, il log-score è $\log 0=-\infty$ e la sorpresa è infinita. Questo risultato mostra il rischio delle previsioni che escludono rigidamente eventi plausibili.
+:::
+
+::: {.callout-note collapse="true" title="Distribuzioni continue"}
+Per una variabile continua,
+
+$$
+D_{\mathrm{KL}}(P\parallel Q)
+=
+\int p(y)\log\frac{p(y)}{q(y)}\,dy.
+$$
+
+$p(y)$ e $q(y)$ sono densità, non probabilità puntuali. La log-densità dipende dall'unità di misura, ma la KL tra due densità trasformate coerentemente rimane invariata rispetto a trasformazioni invertibili.
+:::
+
+::: {.callout-note collapse="true" title="Bit e nat"}
+Con il logaritmo in base 2, entropia e KL sono misurate in bit. Nella statistica computazionale si usa quasi sempre il logaritmo naturale e l'unità è il nat:
+
+$$
+1\text{ nat}=\log_2(e)\approx1.443\text{ bit}.
+$$
+
+Cambiare base modifica la scala numerica, non l'ordinamento dei modelli.
+:::
+
+## Esercizi {.unnumbered .unlisted}
+
+### Esercizio 1 — Comprendere le tre quantità {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 10–15 minuti*
+
+Considera
+
+$$
+P=(0.70,0.20,0.10)
+$$
+
+e un modello
+
+$$
+Q=(0.50,0.30,0.20).
+$$
+
+Associa ciascuna domanda alla quantità appropriata: $H(P)$, $H(P,Q)$ oppure $D_{\mathrm{KL}}(P\parallel Q)$.
+
+1. Quanta incertezza possiede la distribuzione delle osservazioni?
+2. Quanta sorpresa produce in media il modello $Q$?
+3. Quanta parte di questa sorpresa è aggiuntiva rispetto all'incertezza di $P$?
+4. Quale quantità cambierebbe se sostituissimo $Q$ con un altro modello, lasciando invariata $P$?
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Chiediti quale distribuzione compare all'interno del logaritmo e quale distribuzione stabilisce i pesi della media.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+1. $H(P)$ descrive l'incertezza della distribuzione di riferimento.
+2. $H(P,Q)$ è la sorpresa media prodotta da $Q$ su osservazioni distribuite secondo $P$.
+3. $D_{\mathrm{KL}}(P\parallel Q)=H(P,Q)-H(P)$ isola la sorpresa aggiuntiva.
+4. Cambiano $H(P,Q)$ e la KL; $H(P)$ rimane invariata perché dipende soltanto da $P$.
+:::
+
+### Esercizio 2 — Interpretare l'asimmetria {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 10–15 minuti*
+
+Considera
+
+$$
+P=(0.95,0.05),
+\qquad
+Q=(0.50,0.50).
+$$
+
+Senza calcolare esattamente le due divergenze, spiega perché
+
+$$
+D_{\mathrm{KL}}(P\parallel Q)
+$$
+
+e
+
+$$
+D_{\mathrm{KL}}(Q\parallel P)
+$$
+
+rispondono a domande diverse. In quale direzione il secondo esito riceve maggiore peso nella media? Perché questo può rendere diversa la penalizzazione?
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+La distribuzione a sinistra del simbolo $\parallel$ stabilisce quanto spesso ciascun esito viene ponderato.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+In $D_{\mathrm{KL}}(P\parallel Q)$ il secondo esito pesa soltanto $0.05$, perché è raro sotto $P$. In $D_{\mathrm{KL}}(Q\parallel P)$ pesa invece $0.50$, ma la distribuzione usata per valutarlo, $P$, gli assegna soltanto $0.05$. Un errore che si verifica spesso e al quale viene assegnata poca probabilità produce una penalizzazione elevata. L'asimmetria deriva quindi dal cambiamento della domanda predittiva, non da un'anomalia della misura.
+:::
+
+### Esercizio 3 — Prevedere il costo dell'eccessiva sicurezza {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 10–15 minuti*
+
+La distribuzione di riferimento è
+
+$$
+P=(0.60,0.30,0.10).
+$$
+
+Confronta qualitativamente:
+
+$$
+Q_A=(0.55,0.30,0.15)
+$$
+
+e
+
+$$
+Q_B=(0.90,0.09,0.01).
+$$
+
+1. Quale modello sembra più vicino a $P$?
+2. Quale modello rischia una penalizzazione particolarmente forte sul terzo esito?
+3. Perché il fatto che il primo esito sia il più probabile sotto tutte le distribuzioni non è sufficiente per confrontare i modelli?
+4. Che cosa valuta la KL che l'accuratezza della categoria più probabile ignora?
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Considera tutte le probabilità, non soltanto quale categoria occupa il primo posto.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+$Q_A$ è complessivamente più vicino a $P$. $Q_B$ assegna soltanto $0.01$ al terzo esito, che sotto $P$ compare nel 10% dei casi: ogni sua occorrenza produce quindi molta sorpresa. Tutte le distribuzioni sceglierebbero il primo esito come previsione puntuale, perciò potrebbero avere la stessa accuratezza di classificazione. La KL utilizza invece l'intera distribuzione e penalizza la fiducia mal calibrata assegnata anche agli esiti non dominanti.
+:::
+
+### Esercizio 4 — Criticare e comunicare {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 15 minuti*
+
+Un ricercatore scrive:
+
+> Il modello B ha una KL inferiore al modello A. Abbiamo quindi dimostrato che B è il modello vero, che i suoi parametri rappresentano i reali meccanismi psicologici e che generalizzerà a qualunque nuova popolazione. Non è necessario considerare altri modelli.
+
+Individua almeno quattro problemi e proponi una conclusione più appropriata.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Considera il carattere comparativo della KL, il bersaglio predittivo, i modelli non esaminati, la causalità e la generalizzazione.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+Una KL inferiore indica che B assegna probabilità mediamente migliori rispetto ad A per la distribuzione e il bersaglio considerati. Non dimostra che B sia vero, né che i suoi parametri corrispondano a meccanismi reali. La KL non garantisce che il vantaggio si mantenga in altre popolazioni o compiti e non esclude l'esistenza di modelli migliori non considerati.
+
+Una formulazione più appropriata potrebbe essere:
+
+> Rispetto al bersaglio predittivo considerato e tra i due modelli candidati, B produce una minore perdita informativa attesa. Questo risultato sostiene la sua superiorità predittiva comparativa, ma la validità del meccanismo, l'interpretazione dei parametri e la generalizzazione richiedono controlli ulteriori e disegni pertinenti.
+:::
+
+## Riflessioni conclusive {.unnumbered .unlisted}
+
+L'entropia incrociata
+
+$$
+H(P,Q)=\mathbb E_P[-\log Q(Y)]
+$$
+
+quantifica la sorpresa media prodotta da un modello $Q$ su osservazioni distribuite secondo $P$. La divergenza
+
+$$
+D_{\mathrm{KL}}(P\parallel Q)=H(P,Q)-H(P)
+$$
+
+isola la sorpresa aggiuntiva dovuta all'approssimazione.
+
+La direzione della KL è parte della domanda: la distribuzione a sinistra determina quali eventi vengono osservati e con quale frequenza; quella a destra determina le probabilità con cui vengono valutati. Per questo motivo la KL è asimmetrica e non è una distanza matematica.
+
+Il risultato teorico decisivo è
+
+$$
+\arg\min_Q D_{\mathrm{KL}}(P\parallel Q)
+=
+\arg\max_Q\mathbb E_P[\log Q(Y)].
+$$
+
+Confrontare modelli mediante la KL equivale quindi a confrontarli mediante il log-score atteso. Ma $P$ è sconosciuta e non possiamo osservare un numero illimitato di dati futuri. Il capitolo successivo affronterà il problema operativo: come stimare la capacità predittiva attesa usando un campione finito, distinguendo adattamento nel campione e previsione fuori campione.
+
+::: {.callout-note collapse="true" title="Informazioni sull'ambiente di sviluppo"}
+```{r}
+sessionInfo()
+```
+:::
+
+## Bibliografia {.unnumbered .unlisted}

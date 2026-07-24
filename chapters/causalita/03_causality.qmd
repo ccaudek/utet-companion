@@ -1,0 +1,347 @@
+# Identificare effetti causali nei dati osservazionali {#sec-eda-causality}
+
+::: {.callout-note appearance="minimal"}
+Nel @sec-causality-propedeutics abbiamo definito un effetto causale come confronto tra esiti potenziali sotto interventi alternativi. Ora affrontiamo la domanda successiva:
+
+> Quando disponiamo soltanto di dati osservazionali, quali assunzioni permettono di collegare quel confronto a quantità osservabili?
+
+Questo è il problema dell'**identificazione**. I DAG (*Directed Acyclic Graphs*) forniscono un linguaggio per rappresentare le ipotesi causali, derivarne le conseguenze e stabilire quali variabili debbano — o non debbano — essere condizionate. Regressione, matching e pesatura entrano soltanto dopo: sono modi diversi per stimare un effetto già identificato sotto le stesse assunzioni.
+
+Il capitolo non propone una procedura automatica per “estrarre causalità” dai dati. Mostra invece come trasformare una teoria causale in decisioni analitiche trasparenti e come riconoscere ciò che rimane non identificabile.
+:::
+
+::: {.callout-important appearance="minimal" .chapter-status}
+**Da sapere.** Un DAG rappresenta ipotesi sul processo generativo, non correlazioni scoperte automaticamente nei dati. Catene, cause comuni e collider reagiscono in modo diverso al condizionamento. Il criterio backdoor aiuta a scegliere un insieme di aggiustamento per l'effetto totale. Regressione, matching e pesatura non eliminano il confondimento non misurato e non rendono plausibili le assunzioni che li precedono.
+
+**Da saper fare.** Leggere semplici DAG; distinguere percorsi causali e backdoor; riconoscere mediatori, cause comuni e collider; scegliere un insieme di aggiustamento coerente con l'estimand; spiegare perché una variabile predittiva non è necessariamente una variabile da controllare; distinguere identificazione e stima; comunicare i limiti causali di un'analisi osservazionale.
+
+**Approfondimento facoltativo.** d-separation formale, equivalenza di Markov, variabili strumentali, propensity score e analisi di sensibilità possono essere approfonditi successivamente. Nel percorso essenziale conta comprendere la logica dei percorsi e dell'aggiustamento.
+
+[Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
+:::
+
+::: {.callout-tip title="Take-home"}
+- Un DAG rende visibili le assunzioni che una regressione lascia implicite.
+- Controllare una variabile può rimuovere bias, cambiare l'estimand oppure introdurre bias: dipende dal suo ruolo causale.
+- I metodi statistici stimano un effetto identificato; non sostituiscono teoria, disegno e misurazione.
+:::
+
+## Dalla domanda causale al modello causale
+
+Supponiamo di voler stimare l'effetto dell'uso intensivo dei social media ($X$) sui sintomi depressivi ($Y$). Una regressione di $Y$ su $X$ descrive l'associazione osservata, ma lascia aperte diverse possibilità:
+
+- $X$ influenza $Y$;
+- $Y$ influenza $X$;
+- una causa comune influenza entrambe;
+- la selezione del campione crea l'associazione;
+- più processi operano contemporaneamente.
+
+Per decidere quali confronti siano informativi dobbiamo rappresentare queste ipotesi prima di scegliere le covariate. Un DAG è un modello qualitativo della struttura causale:
+
+- i **nodi** rappresentano variabili;
+- le **frecce** rappresentano effetti causali diretti rispetto al sistema di variabili incluso;
+- l'assenza di una freccia è un'assunzione sostantiva;
+- “aciclico” significa che, alla scala temporale rappresentata, non esistono cicli diretti. Processi di feedback possono essere rappresentati introducendo più tempi.
+
+Un DAG non dimostra che le frecce siano vere. Serve a dichiarare con precisione ciò che si assume e a dedurre quali dati o disegni sarebbero informativi.
+
+## Tre configurazioni fondamentali
+
+Le regole di aggiustamento derivano da tre configurazioni elementari.
+
+### Catena: un percorso causale mediato
+
+$$
+X \rightarrow M \rightarrow Y
+$$
+
+$M$ trasmette parte o tutto l'effetto di $X$ su $Y$.
+
+- Senza condizionare su $M$, il percorso contribuisce all'effetto totale.
+- Condizionando su $M$, il percorso viene bloccato.
+
+Controllare il mediatore non “migliora” genericamente il modello: cambia la domanda. Se l'interesse è l'effetto totale, in genere non si aggiusta per $M$. Se l'interesse è un effetto diretto, occorre definire con precisione quale effetto diretto e assumere condizioni aggiuntive.
+
+### Biforcazione: una causa comune
+
+$$
+X \leftarrow C \rightarrow Y
+$$
+
+$C$ è una causa comune di esposizione ed esito. Il percorso
+
+$$
+X \leftarrow C \rightarrow Y
+$$
+
+entra in $X$ attraverso una freccia e produce un'associazione non causale tra $X$ e $Y$. Condizionare su $C$ blocca questo percorso backdoor.
+
+### Collider: un effetto comune
+
+$$
+X \rightarrow S \leftarrow Y
+$$
+
+$S$ è un effetto comune di $X$ e $Y$.
+
+- Senza condizionare su $S$, il percorso è chiuso.
+- Condizionando su $S$, o su un suo discendente, il percorso può aprirsi e creare un'associazione artificiale.
+
+Questo è il motivo per cui “controllare tutto” non è una strategia prudente. Una variabile può essere fortemente predittiva dell'esito e, allo stesso tempo, essere dannosa per l'identificazione causale.
+
+| Struttura | Percorso senza condizionamento | Effetto del condizionamento sul nodo centrale |
+|---|---|---|
+| $X\rightarrow M\rightarrow Y$ | aperto e causale | blocca parte dell'effetto causale |
+| $X\leftarrow C\rightarrow Y$ | aperto e non causale | blocca il confondimento |
+| $X\rightarrow S\leftarrow Y$ | chiuso | apre un'associazione non causale |
+
+## Discendenti e variabili post-trattamento
+
+“Discendente” non è una quarta configurazione elementare: indica una variabile raggiungibile seguendo le frecce da un'altra variabile. I discendenti sono importanti perché:
+
+- un discendente del trattamento può essere un mediatore o una conseguenza successiva;
+- un discendente di un collider può trasmettere il bias di selezione;
+- aggiustare per variabili post-trattamento può eliminare parte dell'effetto totale o introdurre nuove distorsioni.
+
+Per stimare l'effetto totale di $X$ su $Y$, l'insieme di aggiustamento viene normalmente costruito usando variabili pre-trattamento che bloccano i percorsi backdoor, evitando mediatori, collider e loro discendenti problematici.
+
+## Moderazione ed eterogeneità dell'effetto
+
+La moderazione — o modificazione dell'effetto — risponde a una domanda diversa:
+
+> L'effetto di $X$ su $Y$ cambia al variare di $W$?
+
+Non è una quarta struttura analoga a catena, biforcazione e collider, né nei DAG standard si rappresenta con una freccia che punta a un'altra freccia. $W$ può essere incluso come causa di $Y$ e la dipendenza dell'effetto da $W$ viene specificata nel modello strutturale, per esempio mediante un'interazione.
+
+Il ruolo di $W$ nell'aggiustamento dipende dal resto del DAG. Una variabile può essere contemporaneamente modificatore dell'effetto e confondente, oppure modificatore senza essere confondente. “Moderatore” descrive l'eterogeneità dell'effetto; non determina da solo se la variabile debba essere controllata.
+
+## Percorsi, d-separation e backdoor
+
+Un **percorso** è una sequenza di archi che collega due nodi, ignorando temporaneamente la direzione con cui viene attraversato. Per stimare l'effetto di $X$ su $Y$ dobbiamo distinguere:
+
+- **percorsi causali**, che iniziano con una freccia uscente da $X$;
+- **percorsi backdoor**, che entrano in $X$ attraverso una freccia e trasmettono associazione non causale.
+
+Un insieme di variabili $L$ identifica l'effetto totale mediante aggiustamento se, in una versione semplice del criterio backdoor:
+
+1. blocca tutti i percorsi backdoor tra $X$ e $Y$;
+2. non contiene discendenti di $X$ che alterino l'effetto di interesse;
+3. lascia aperti i percorsi causali che definiscono l'effetto totale.
+
+### Un esempio unificante
+
+Consideriamo il seguente sistema:
+
+$$
+C\rightarrow X,\qquad
+C\rightarrow Y,\qquad
+X\rightarrow M\rightarrow Y,\qquad
+X\rightarrow S\leftarrow Y.
+$$
+
+Dove:
+
+- $X$: uso intensivo dei social media;
+- $Y$: sintomi depressivi;
+- $C$: solitudine preesistente;
+- $M$: qualità del sonno successiva all'esposizione;
+- $S$: inclusione in un servizio clinico, influenzata sia da uso intenso sia da depressione.
+
+Per stimare l'effetto totale di $X$ su $Y$:
+
+- **aggiustare per $C$**, perché blocca il percorso backdoor $X\leftarrow C\rightarrow Y$;
+- **non aggiustare per $M$**, perché è sul percorso causale da includere nell'effetto totale;
+- **non aggiustare per $S$**, perché è un collider;
+- evitare di limitare l'analisi ai soli utenti del servizio se tale selezione equivale a condizionare su $S$.
+
+La lista delle variabili da includere non viene quindi ricavata dal valore-$p$, dalla correlazione con $Y$ o dall'aumento di $R^2$. Deriva dall'estimand e dal modello causale.
+
+## Il paradosso di Simpson come problema di aggregazione
+
+Il paradosso di Simpson mostra quanto possa essere fragile un'associazione marginale. Consideriamo questi dati ipotetici:
+
+| Rischio iniziale | Trattati con esito | Non trattati con esito |
+|---|---:|---:|
+| Basso | $1/10=10\%$ | $18/90=20\%$ |
+| Alto | $72/90=80\%$ | $9/10=90\%$ |
+| Totale | $73/100=73\%$ | $27/100=27\%$ |
+
+All'interno di entrambi gli strati, il trattamento è associato a dieci punti percentuali in meno di esito. Nel dato aggregato, tuttavia, i trattati sembrano avere un rischio molto maggiore, perché quasi tutti appartengono allo strato ad alto rischio.
+
+Il fenomeno non implica che l'analisi stratificata sia sempre quella causale. La scelta tra effetto marginale e condizionato dipende dal DAG e dall'estimand. L'esempio mostra però che l'associazione aggregata non possiede un significato stabile indipendente dalla composizione dei gruppi.
+
+## Dai DAG ai dati: che cosa può essere verificato?
+
+Un DAG implica, sotto le assunzioni del modello, determinate indipendenze condizionali. Se i dati contraddicono chiaramente una di queste implicazioni, il modello causale viene messo in difficoltà.
+
+Il contrario non vale: trovare le indipendenze previste non dimostra che il DAG sia vero. Strutture causali differenti possono implicare la stessa distribuzione osservata, variabili importanti possono non essere misurate e i test possono avere potenza limitata. I dati possono criticare alcune conseguenze del modello; non generano automaticamente la direzione causale.
+
+Questo distingue un DAG da una semplice illustrazione. Esso:
+
+- rende pubbliche le assunzioni;
+- produce conseguenze controllabili;
+- guida la misurazione e il disegno;
+- mostra quali conclusioni dipendono da ipotesi non verificabili con i dati disponibili.
+
+## Identificazione e stima sono operazioni diverse
+
+Una volta individuato un insieme di aggiustamento, diverse procedure possono stimare lo stesso estimand.
+
+| Procedura | Idea | Limite fondamentale |
+|---|---|---|
+| Stratificazione o regressione | confrontare esposti e non esposti a parità delle covariate | dipende da specificazione funzionale, overlap e confondenti misurati |
+| Matching | costruire gruppi osservazionalmente comparabili | non bilancia confondenti non misurati e può ridurre il supporto |
+| Pesatura / propensity score | creare una pseudo-popolazione bilanciata sulle covariate osservate | pesi instabili con scarsa positività; stesso rischio di confondimento non misurato |
+| G-computation | modellare gli esiti sotto ciascun trattamento e mediare sulla popolazione | dipende dal modello dell'esito e dalle stesse assunzioni causali |
+
+Questi metodi non costituiscono quattro giustificazioni diverse della causalità. Se usano lo stesso insieme di covariate, condividono essenzialmente le stesse assunzioni di exchangeability condizionale, consistenza e positività. Differiscono nel modo in cui implementano il confronto e nella sensibilità a specificazioni e supporto empirico.
+
+### La regressione dopo il DAG
+
+Una regressione può essere usata causalmente quando:
+
+1. l'estimand è definito;
+2. il DAG giustifica un insieme di aggiustamento;
+3. i confondenti rilevanti sono misurati adeguatamente;
+4. vi è sufficiente overlap;
+5. la forma funzionale permette di stimare correttamente la quantità desiderata.
+
+Il coefficiente di $X$ non coincide sempre con l'effetto marginale di interesse, soprattutto con non linearità, interazioni e modelli non lineari. In questi casi è spesso preferibile ottenere predizioni controfattuali sotto $X=1$ e $X=0$ e poi mediare le differenze nella popolazione target.
+
+## Strategie di disegno e assunzioni
+
+Non esiste una procedura statistica che renda equivalenti tutti i disegni. Ciascuna strategia identifica un effetto grazie a una particolare fonte di variazione e a specifiche assunzioni.
+
+- **Esperimenti randomizzati:** usano l'assegnazione casuale per giustificare l'exchangeability.
+- **Esperimenti naturali e quasi-esperimenti:** sfruttano discontinuità, cambiamenti istituzionali o variazioni esterne la cui interpretazione richiede assunzioni specifiche.
+- **Studi osservazionali con aggiustamento:** assumono che l'insieme misurato blocchi tutti i percorsi backdoor rilevanti.
+- **Variabili strumentali:** usano una fonte di variazione di $X$ che deve essere rilevante, indipendente dai confondenti dell'esito e priva di un percorso diretto verso $Y$; spesso identificano un estimand diverso dall'ATE.
+
+Più che una graduatoria automatica, è utile chiedersi: **quale variazione rende informativo il confronto e quali assunzioni la trasformano in evidenza causale?**
+
+## Causalità e spiegazione meccanicistica
+
+Identificare un effetto causale risponde alla domanda “che cosa cambierebbe intervenendo?”. Non equivale ancora a spiegare in dettaglio **come** il cambiamento venga prodotto.
+
+Un DAG può rappresentare mediatori e direzioni causali, ma spesso rimane un modello strutturale relativamente grossolano. Una spiegazione meccanicistica richiede componenti, dinamiche e previsioni capaci di discriminare processi alternativi. Questo è particolarmente importante per il progetto complessivo del Companion: passare dalle associazioni a effetti causali è un progresso, ma la comprensione psicologica più profonda richiede modelli generativi dei processi.
+
+L'approccio bayesiano è utile per quantificare l'incertezza in questi modelli, integrare informazioni pregresse e confrontare previsioni. Non rende però causale una regressione associativa né sostituisce le assunzioni di identificazione.
+
+## Esercizi {.unnumbered .unlisted}
+
+### Esercizio 1 — Comprendere: leggere i ruoli causali {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 10 minuti*
+
+Per ciascuna struttura, indica se il nodo centrale deve essere aggiustato per stimare l'effetto totale di $X$ su $Y$ e spiega perché:
+
+1. $X\leftarrow C\rightarrow Y$;
+2. $X\rightarrow M\rightarrow Y$;
+3. $X\rightarrow S\leftarrow Y$;
+4. $X\rightarrow S\leftarrow Y\rightarrow D$, con analisi limitata alle persone con $S=1$.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Chiediti se il percorso è causale o backdoor e se il condizionamento lo chiude oppure lo apre.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+Si aggiusta per $C$, perché blocca una causa comune. Non si aggiusta per $M$ se l'interesse è l'effetto totale, perché si eliminerebbe parte del percorso causale. Non si aggiusta per $S$, perché è un collider. Limitare il campione a $S=1$ equivale a condizionare sul collider e può introdurre associazione tra $X$ e $Y$; la presenza di $D$ non risolve il problema.
+:::
+
+### Esercizio 2 — Prevedere: quale coefficiente cambia significato? {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 10 minuti*
+
+Si stimano tre regressioni per l'effetto di $X$ su $Y$:
+
+- Modello A: $Y\sim X$;
+- Modello B: $Y\sim X+C$;
+- Modello C: $Y\sim X+C+M$.
+
+Il DAG è $C\rightarrow X$, $C\rightarrow Y$, $X\rightarrow M\rightarrow Y$ e $X\rightarrow Y$.
+
+1. Quale modello è coerente con l'effetto totale?
+2. Che cosa cerca di rappresentare il coefficiente di $X$ nel Modello C?
+3. Perché il fatto che il Modello C abbia un $R^2$ maggiore non lo rende preferibile per l'effetto totale?
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Aggiungere $M$ blocca un percorso che appartiene all'effetto totale.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+Il Modello B è coerente con l'effetto totale: aggiusta per il confondente $C$ e lascia aperto il percorso mediato. Nel Modello C il coefficiente di $X$ tenta di rappresentare un effetto diretto condizionato a $M$, sotto assunzioni ulteriori. Il maggiore $R^2$ riguarda la previsione dell'esito, non la corrispondenza con l'estimand causale.
+:::
+
+### Esercizio 3 — Modificare: dal DAG alla strategia di analisi {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 15 minuti*
+
+Un ricercatore vuole stimare l'effetto dell'attività fisica ($X$) sul benessere ($Y$). Ha misurato età ($A$), salute iniziale ($H$), perdita di peso successiva ($M$) e partecipazione volontaria allo studio ($S$). Assume:
+
+$$
+A\rightarrow X,\quad A\rightarrow Y,\quad
+H\rightarrow X,\quad H\rightarrow Y,\quad
+X\rightarrow M\rightarrow Y,\quad
+X\rightarrow S\leftarrow Y.
+$$
+
+1. Proponi un insieme di aggiustamento per l'effetto totale.
+2. Quali variabili non dovrebbero essere incluse?
+3. Matching, regressione e pesatura eliminerebbero il bias dovuto a una variabile socioeconomica non misurata che causa sia $X$ sia $Y$?
+4. Che cosa dovrà essere comunicato come limite?
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+L'insieme deve bloccare le cause comuni pre-trattamento, non i percorsi causali o i collider.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+Un insieme plausibile è $\{A,H\}$. Non si dovrebbe aggiustare per $M$ se interessa l'effetto totale, né per $S$, che è un collider. Nessuno dei tre metodi elimina il confondimento dovuto a una causa comune non misurata; cambiano il modo di stimare l'effetto sotto le covariate osservate, non le assunzioni di identificazione. Il resoconto deve dichiarare che l'interpretazione causale dipende dall'assenza di confondimento residuo e dalla qualità delle misure.
+:::
+
+### Esercizio 4 — Criticare: “il DAG è confermato” {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 15 minuti*
+
+Valuta questa conclusione:
+
+> “Le indipendenze condizionali previste dal DAG sono risultate compatibili con i dati. Abbiamo quindi confermato il modello causale. Dopo matching, i gruppi sono bilanciati e il coefficiente bayesiano dimostra il meccanismo psicologico.”
+
+Individua almeno cinque problemi e riscrivi la conclusione.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Distingui compatibilità, identificazione, bilanciamento osservato, effetto causale e meccanismo.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+Le indipendenze compatibili non provano il DAG: modelli diversi possono avere le stesse implicazioni osservazionali e possono esistere variabili non misurate. Il matching bilancia soltanto le covariate osservate e non garantisce positività o assenza di confondimento residuo. Il coefficiente quantifica l'effetto sotto modello e assunzioni, non dimostra un meccanismo. Una conclusione appropriata è: “I dati non contraddicono le implicazioni esaminate del DAG e il matching ha migliorato il bilanciamento delle covariate osservate. La stima causale rimane condizionata alle assunzioni di assenza di confondimento non misurato, consistenza, positività e adeguata specificazione; il meccanismo richiede evidenze ulteriori”.
+:::
+
+## Riflessioni conclusive {.unnumbered .unlisted}
+
+Nei dati osservazionali, la causalità non emerge dalla complessità del modello né dalla precisione del coefficiente. Deriva da una sequenza disciplinata:
+
+1. definire l'effetto;
+2. rappresentare le assunzioni causali;
+3. stabilire se esse identificano l'effetto;
+4. scegliere una procedura di stima coerente;
+5. comunicare ciò che dipende dai dati e ciò che dipende dalle assunzioni.
+
+I DAG rendono visibile questa logica. Mostrano perché alcune covariate devono essere incluse, perché altre cambiano la domanda e perché altre ancora introducono bias. Regressione, matching e pesatura possono implementare un confronto causale soltanto dopo che tale confronto è stato giustificato.
+
+La conclusione della Parte è quindi duplice. Da una parte, la regressione rimane uno strumento utile per riassumere associazioni e, sotto assunzioni esplicite, stimare effetti causali. Dall'altra, né una buona regressione né un DAG esauriscono la spiegazione psicologica: comprendere i fenomeni richiede modelli meccanicistici capaci di generare e discriminare previsioni sostantive.
+
+## Il messaggio per chi usa la regressione
+
+::: {.callout-note}
+Prima di aggiungere una covariata, chiedersi:
+
+1. quale effetto voglio stimare?
+2. quale ruolo causale attribuisco alla variabile?
+3. quale percorso viene aperto o chiuso dal condizionamento?
+4. quali assunzioni non sono verificabili nei dati?
+5. il coefficiente ottenuto coincide davvero con l'estimand sostantivo?
+
+Questa disciplina evita l'“insalata causale”: una regressione ricca di variabili ma priva di una domanda causale coerente [@McElreath_rethinking].
+:::
+
+## Bibliografia {.unnumbered .unlisted}

@@ -1,0 +1,328 @@
+# Definire un effetto causale: interventi, controfattuali ed estimand {#sec-causality-propedeutics}
+
+::: {.callout-note appearance="minimal"}
+Nel capitolo precedente abbiamo visto che una regressione può essere calcolata correttamente e, tuttavia, fornire una risposta causalmente fuorviante. Il problema non nasce soltanto dall'omissione di una variabile o da una forma funzionale inadeguata: nasce prima ancora, quando non è chiaro **quale confronto causale** si intende rappresentare.
+
+Questo capitolo introduce il linguaggio necessario per formulare quel confronto. Il suo obiettivo non è scegliere una tecnica statistica, ma definire con precisione l'intervento, gli esiti potenziali, la popolazione e la quantità causale di interesse. Il capitolo successivo (@sec-eda-causality) affronterà un problema diverso: stabilire se, e sotto quali assunzioni, tale quantità possa essere identificata usando dati osservazionali.
+
+La distinzione è fondamentale:
+
+1. prima si definisce **che cosa** si vuole conoscere;
+2. poi si stabilisce **quali assunzioni** collegano quella quantità ai dati;
+3. soltanto alla fine si sceglie **come stimarla**.
+
+L'impostazione segue il quadro dei potenziali esiti presentato, tra gli altri, da @hernan2020.
+:::
+
+::: {.callout-important appearance="minimal" .chapter-status}
+**Da sapere.** Un effetto causale confronta esiti potenziali prodotti da interventi alternativi sulla stessa popolazione. L'associazione osservata tra persone esposte e non esposte non coincide, in generale, con tale confronto. L'effetto individuale non è direttamente osservabile; si possono invece definire effetti medi di popolazione. Consistenza, assenza di interferenza, positività ed exchangeability precisano quando il confronto possiede un significato causale e quando può essere collegato ai dati.
+
+**Da saper fare.** Trasformare una domanda generica in una domanda causale ben definita; distinguere esito osservato ed esiti potenziali; formulare l'effetto causale medio; spiegare il problema fondamentale dell'inferenza causale; distinguere associazione, effetto causale e bias di selezione; interpretare il ruolo della randomizzazione; scegliere una scala dell'effetto coerente con la domanda sostantiva.
+
+**Approfondimento facoltativo.** La decomposizione formale dell'associazione, gli effetti medi in sottopopolazioni e il confronto tra scale additive e moltiplicative possono essere rimandati in una prima lettura.
+
+[Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
+:::
+
+::: {.callout-tip title="Take-home"}
+- La causalità non è una proprietà di un coefficiente: è una proprietà di un **confronto tra interventi**.
+- I dati mostrano ciò che è accaduto; l'effetto causale richiede anche ciò che sarebbe accaduto sotto un'alternativa.
+- La randomizzazione non crea l'effetto: rende osservabili gruppi che, in media, rappresentano i due scenari controfattuali.
+:::
+
+## Dall'associazione alla domanda di intervento
+
+Consideriamo l'associazione tra durata del sonno e ansia. Una regressione può descrivere come l'ansia media vari tra persone che dormono quantità diverse. Questa descrizione non risponde automaticamente alla domanda:
+
+> Come cambierebbe l'ansia se intervenissimo sulla durata del sonno?
+
+La differenza non è linguistica. Il confronto osservazionale mette a confronto **persone diverse**, che possono differire per stress, salute, condizioni lavorative e molte altre caratteristiche. La domanda causale confronta invece **interventi alternativi** applicati alla stessa popolazione di riferimento.
+
+Per formulare una domanda causale occorre precisare almeno:
+
+- **l'intervento o esposizione:** che cosa significa, operativamente, ricevere il trattamento?
+- **l'alternativa:** rispetto a quale condizione viene definito l'effetto?
+- **l'esito:** quale variabile viene misurata e in quale momento?
+- **la popolazione:** per quali persone si desidera l'inferenza?
+- **l'orizzonte temporale:** quando dovrebbe manifestarsi l'effetto?
+
+“Effetto del sonno sull'ansia” è quindi troppo vago. Una domanda più precisa potrebbe essere:
+
+> Negli studenti universitari con meno di sei ore abituali di sonno, quale sarebbe la differenza media nell'ansia di stato, misurata dopo quattro settimane, tra un intervento che aumenta il sonno a sette ore per notte e il mantenimento delle abitudini correnti?
+
+La precisione della domanda non è un dettaglio editoriale: determina quali esiti potenziali, quale disegno e quale analisi abbiano senso.
+
+## Esiti potenziali e confronto controfattuale
+
+Indichiamo con $A$ un trattamento binario:
+
+- $A=1$: l'individuo riceve il trattamento;
+- $A=0$: l'individuo riceve la condizione di confronto.
+
+Per ogni individuo $i$ immaginiamo due esiti potenziali:
+
+- $Y_i(1)$: l'esito che si osserverebbe sotto il trattamento;
+- $Y_i(0)$: l'esito che si osserverebbe sotto il controllo.
+
+L'effetto causale individuale è
+
+$$
+\tau_i = Y_i(1)-Y_i(0).
+$$
+
+Questa definizione rende esplicito il significato dell'effetto: non è una differenza tra due persone, ma una differenza tra due scenari alternativi per la stessa persona.
+
+### Il problema fondamentale dell'inferenza causale
+
+Per ogni individuo osserviamo un solo esito:
+
+$$
+Y_i = A_iY_i(1)+(1-A_i)Y_i(0).
+$$
+
+Se $A_i=1$, osserviamo $Y_i(1)$ ma non $Y_i(0)$; se $A_i=0$, accade il contrario. I due esiti potenziali non sono simultaneamente osservabili. Per questo l'effetto causale individuale non può essere ricostruito direttamente dai dati.
+
+L'inferenza causale cerca quindi di apprendere proprietà della **distribuzione** degli effetti, usando gruppi di individui e assunzioni che rendano i confronti informativi.
+
+## L'effetto causale medio
+
+Una quantità centrale è l'effetto causale medio nella popolazione, spesso indicato come ACE o ATE:
+
+$$
+\operatorname{ACE}
+=
+E\left[Y(1)-Y(0)\right]
+=
+E\left[Y(1)\right]-E\left[Y(0)\right].
+$$
+
+Esso confronta due popolazioni controfattuali:
+
+1. la popolazione se tutti ricevessero il trattamento;
+2. la stessa popolazione se nessuno lo ricevesse.
+
+L'ACE non afferma che tutte le persone rispondano allo stesso modo. Un effetto medio pari a zero può nascondere effetti positivi per alcuni individui e negativi per altri. Per questo la quantità media è spesso un punto di partenza, non una descrizione completa dell'eterogeneità individuale.
+
+::: {.callout-note title="Altri estimand"}
+La domanda può riguardare popolazioni diverse. Per esempio:
+
+- **ATE/ACE:** effetto medio nell'intera popolazione;
+- **ATT:** effetto medio tra le persone che hanno ricevuto il trattamento;
+- **ATC:** effetto medio tra le persone che non lo hanno ricevuto.
+
+Queste quantità possono differire quando gli effetti sono eterogenei. Dire semplicemente “l'effetto” senza specificare la popolazione target lascia quindi incompleta la domanda causale.
+:::
+
+## Associazione osservata ed effetto causale
+
+Nei dati possiamo calcolare la differenza osservata:
+
+$$
+E(Y\mid A=1)-E(Y\mid A=0).
+$$
+
+Questa è un'associazione tra gruppi realmente trattati e non trattati. Non è, in generale,
+
+$$
+E\left[Y(1)\right]-E\left[Y(0)\right].
+$$
+
+La differenza osservata combina due componenti:
+
+1. l'effetto causale del trattamento;
+2. le differenze preesistenti tra le persone che finiscono nei due gruppi.
+
+Per renderlo esplicito, l'associazione può essere scritta come
+
+$$
+\underbrace{E(Y\mid A=1)-E(Y\mid A=0)}_{\text{associazione osservata}}
+=
+\underbrace{E\left[Y(1)-Y(0)\mid A=1\right]}_{\text{effetto tra i trattati}}
++
+\underbrace{E\left[Y(0)\mid A=1\right]-E\left[Y(0)\mid A=0\right]}_{\text{bias di selezione}}.
+$$
+
+Il secondo termine chiede se, **anche in assenza del trattamento**, i due gruppi avrebbero avuto esiti medi differenti. Nei dati osservazionali questa possibilità è spesso plausibile: chi riceve un trattamento, sceglie un comportamento o subisce un'esposizione può essere sistematicamente diverso da chi non lo fa.
+
+### Un esempio concettuale
+
+Supponiamo che un intervento psicologico venga offerto soprattutto agli studenti con ansia iniziale elevata. Dopo il trattamento, il gruppo trattato può mostrare ansia media più alta del gruppo non trattato anche se l'intervento riduce realmente l'ansia. Il confronto grezzo mescola:
+
+- il beneficio dell'intervento;
+- il maggiore rischio iniziale delle persone trattate.
+
+Una regressione può quantificare con precisione la differenza osservata, ma non può stabilire da sola quale parte derivi dall'intervento e quale dalla selezione.
+
+## Perché la randomizzazione è decisiva
+
+In un esperimento randomizzato, l'assegnazione $A$ è indipendente dagli esiti potenziali **in aspettativa**:
+
+$$
+A \perp \!\!\! \perp \{Y(1),Y(0)\}.
+$$
+
+Di conseguenza, i gruppi trattato e controllo rappresentano, in media, la stessa popolazione prima dell'intervento. Il bias di selezione è nullo in aspettativa e la differenza tra le medie osservate stima l'ACE.
+
+La randomizzazione non garantisce che ogni singolo campione sia perfettamente bilanciato, né risolve automaticamente problemi di mancata aderenza, abbandono, interferenza o misurazione. Fornisce però una giustificazione progettuale alla comparabilità dei gruppi che manca nei confronti osservazionali non controllati.
+
+::: {.callout-warning title="La randomizzazione non sostituisce la definizione dell'intervento"}
+Anche un esperimento randomizzato è difficile da interpretare se “trattamento” indica versioni molto diverse, se l'esito di una persona dipende dal trattamento assegnato ad altre persone o se la popolazione target non è definita. Il disegno risolve il problema dell'assegnazione, non quello del significato sostantivo della domanda.
+:::
+
+## Le condizioni che danno significato al confronto
+
+### Consistenza
+
+Se un individuo riceve realmente il trattamento $A=a$, l'esito osservato deve corrispondere all'esito potenziale sotto quel trattamento:
+
+$$
+A_i=a \quad \Rightarrow \quad Y_i=Y_i(a).
+$$
+
+La consistenza richiede che il trattamento sia sufficientemente ben definito. Se “terapia cognitiva” comprende protocolli, intensità e livelli di aderenza radicalmente differenti, $Y(1)$ può non designare un unico scenario coerente.
+
+### Assenza di interferenza
+
+Il trattamento assegnato a una persona non dovrebbe modificare l'esito di un'altra, almeno entro l'unità di analisi adottata. Questa assunzione può essere poco plausibile per interventi di gruppo, reti sociali, classi scolastiche o comunità.
+
+### Exchangeability
+
+L'exchangeability esprime la comparabilità dei gruppi rispetto agli esiti potenziali. Negli esperimenti randomizzati è giustificata dal disegno; nei dati osservazionali può essere assunta soltanto **condizionatamente** a un insieme adeguato di variabili pre-trattamento:
+
+$$
+\{Y(1),Y(0)\}\perp\!\!\!\perp A\mid L.
+$$
+
+Il capitolo successivo mostrerà come un DAG aiuti a motivare la scelta di $L$.
+
+### Positività
+
+Per ogni configurazione rilevante delle covariate deve essere possibile osservare entrambe le condizioni:
+
+$$
+0<P(A=1\mid L=l)<1.
+$$
+
+Se, per esempio, tutti gli studenti con una certa caratteristica ricevono necessariamente il trattamento, i dati non contengono un gruppo di confronto per quella sottopopolazione. Nessun modello statistico può creare informazione dove manca completamente il supporto empirico.
+
+## La scala è parte della domanda causale
+
+Per un esito binario, lo stesso confronto può essere espresso su scale diverse. Se
+
+$$
+p_1=P\{Y(1)=1\},
+\qquad
+p_0=P\{Y(0)=1\},
+$$
+
+possiamo definire:
+
+| Misura | Definizione | Domanda sostantiva |
+|---|---:|---|
+| Differenza di rischi | $p_1-p_0$ | Quanti casi in più o in meno produce l'intervento? |
+| Rapporto di rischi | $p_1/p_0$ | Di quante volte cambia il rischio? |
+| Odds ratio | $\dfrac{p_1/(1-p_1)}{p_0/(1-p_0)}$ | Di quanto cambiano le odds? |
+
+Se $p_1=0.20$ e $p_0=0.10$, la differenza di rischi è $0.10$, il rapporto di rischi è $2$ e l'odds ratio è circa $2.25$. Non sono tre effetti differenti: sono tre rappresentazioni dello stesso confronto controfattuale. La scelta della scala influenza però interpretazione, trasportabilità e comunicazione.
+
+## Dalla definizione all'identificazione
+
+A questo punto sappiamo definire l'oggetto causale, ma non abbiamo ancora stabilito se possa essere ricavato dai dati disponibili. Questo passaggio si chiama **identificazione**.
+
+È utile mantenere separate tre operazioni:
+
+1. **definizione:** quale estimand risponde alla domanda?
+2. **identificazione:** quali assunzioni permettono di esprimerlo mediante quantità osservabili?
+3. **stima:** quale metodo numerico quantifica quelle quantità e la loro incertezza?
+
+La regressione, il matching e la pesatura appartengono soprattutto al terzo passaggio. Non possono compensare una domanda indefinita o un effetto non identificato.
+
+## Esercizi {.unnumbered .unlisted}
+
+### Esercizio 1 — Comprendere: costruire il confronto causale {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 10 minuti*
+
+Un gruppo di ricercatori domanda: “Qual è l'effetto dei social media sulla depressione?”. Trasforma questa frase in una domanda causale specificando:
+
+1. intervento;
+2. condizione alternativa;
+3. esito e momento della misurazione;
+4. popolazione target;
+5. estimand.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Evita espressioni vaghe come “usare molto”. Immagina un intervento che, almeno in linea di principio, potrebbe essere assegnato.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+Una possibile formulazione è: “Negli studenti universitari che usano i social media per almeno quattro ore al giorno, quale sarebbe la differenza media nel punteggio depressivo dopo otto settimane tra un intervento che limita l'uso a un'ora al giorno e il mantenimento dell'uso abituale?”. L'estimand è l'ACE nella popolazione definita. Altre formulazioni sono possibili, ma devono specificare chiaramente i due interventi, l'esito, il tempo e la popolazione.
+:::
+
+### Esercizio 2 — Prevedere: associazione o effetto? {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 10 minuti*
+
+Un programma di sostegno viene offerto soprattutto agli studenti con maggiore disagio iniziale. Alla fine del semestre, il gruppo che ha partecipato presenta un disagio medio superiore a quello dei non partecipanti.
+
+Per ciascuna conclusione, indica se è giustificata:
+
+1. il programma ha aumentato il disagio;
+2. i partecipanti e i non partecipanti erano exchangeable;
+3. la differenza osservata può contenere bias di selezione;
+4. per conoscere l'effetto servirebbe il confronto con ciò che sarebbe accaduto agli stessi partecipanti senza programma.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Chiediti se i due gruppi avrebbero avuto lo stesso esito medio in assenza del programma.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+La conclusione 1 non è giustificata. La 2 è implausibile, perché l'accesso dipende dal disagio iniziale. La 3 è corretta. Anche la 4 è corretta: il controfattuale non osservato è il centro del problema. Il programma potrebbe essere utile, inutile o dannoso; il confronto grezzo non permette di distinguerlo dalla selezione.
+:::
+
+### Esercizio 3 — Modificare: cambiare estimand e scala {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 10 minuti*
+
+In una popolazione, il rischio potenziale di ricaduta è $0.30$ sotto il trattamento e $0.40$ sotto il controllo.
+
+1. Calcola differenza di rischi e rapporto di rischi.
+2. Interpreta entrambe le quantità.
+3. Spiega perché “riduzione del 10%” è ambiguo.
+4. Come cambierebbe la domanda se l'interesse riguardasse soltanto le persone che nella pratica ricevono il trattamento?
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Distingui punti percentuali e riduzione relativa. Nell'ultima domanda cambia la popolazione dell'estimand.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+La differenza di rischi è $0.30-0.40=-0.10$: dieci ricadute in meno ogni cento persone. Il rapporto di rischi è $0.30/0.40=0.75$: il rischio sotto trattamento è il 75% di quello sotto controllo, cioè una riduzione relativa del 25%. “Riduzione del 10%” può indicare erroneamente sia dieci punti percentuali sia una riduzione relativa del 10%. Limitando l'interesse alle persone trattate, l'estimand diventa l'ATT.
+:::
+
+### Esercizio 4 — Criticare: il coefficiente come effetto causale {.unnumbered .unlisted}
+
+*Livello essenziale · Codice: no · 15 minuti*
+
+Valuta questa affermazione:
+
+> “Abbiamo stimato una regressione bayesiana molto precisa e il coefficiente del trattamento è negativo con probabilità posteriore 0.99. Possiamo quindi concludere che il trattamento riduce causalmente l'esito.”
+
+Individua almeno quattro passaggi mancanti e riscrivi la conclusione in forma appropriata.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Distingui definizione, identificazione, stima e validità del modello.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+La precisione posteriore riguarda il modello specificato, non giustifica da sola la causalità. Mancano almeno: definizione dell'intervento e dell'estimand; giustificazione dell'exchangeability; controllo della positività; plausibilità di consistenza e assenza di interferenza; adeguatezza della misurazione e della forma del modello. Una formulazione corretta è: “Nel modello associativo specificato, il coefficiente del trattamento è con alta probabilità negativo. Un'interpretazione causale richiede ulteriori assunzioni sul disegno e sul processo di assegnazione, che devono essere dichiarate e difese separatamente”.
+:::
+
+## Riflessioni conclusive
+
+Un effetto causale non è sinonimo di differenza osservata, coefficiente di regressione o risultato statisticamente convincente. È un confronto tra esiti potenziali sotto interventi alternativi, riferito a una popolazione e a una scala definite.
+
+Il quadro controfattuale obbliga a formulare domande più precise e rende visibile il problema fondamentale: per ogni individuo osserviamo soltanto uno dei mondi rilevanti. La randomizzazione consente di usare gruppi differenti per rappresentare, in media, i due scenari. Nei dati osservazionali, invece, la comparabilità deve essere giustificata mediante ipotesi causali esplicite.
+
+Il prossimo capitolo affronta esattamente questo problema. I DAG verranno utilizzati per rappresentare le ipotesi, distinguere percorsi causali e non causali e stabilire quali aggiustamenti potrebbero identificare l'effetto definito qui.
+
+## Bibliografia {.unnumbered .unlisted}

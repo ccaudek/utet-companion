@@ -1,0 +1,1031 @@
+# Lo stesso meccanismo per tutti? Eterogeneità e generalizzazione {#sec-formal-models-developments}
+
+::: {.callout-note appearance="minimal"}
+Nel capitolo su Rescorla--Wagner abbiamo visto che un modello processuale può essere messo alla prova confrontandolo con spiegazioni rivali. Resta però una domanda ulteriore: **lo stesso processo, con gli stessi parametri, può descrivere tutte le persone?**
+
+Una media di popolazione può riassumere il comportamento collettivo senza rappresentare bene alcun individuo. All'estremo opposto, stimare ogni persona separatamente può trasformare il rumore in differenze psicologiche apparenti. I modelli gerarchici cercano una via intermedia: descrivono simultaneamente ciò che le persone condividono, ciò per cui differiscono e ciò che ancora non conosciamo.
+
+In questo capitolo il modello dinamico degli obiettivi viene riutilizzato deliberatamente come caso semplice. Lo scopo non è introdurre un nuovo meccanismo, ma isolare la domanda sulla **struttura della popolazione**.
+:::
+
+::: {.callout-note title="Obiettivi del capitolo"}
+Al termine del capitolo dovresti essere in grado di:
+
+- distinguere il processo medio dal processo di un individuo;
+- separare eterogeneità tra persone e incertezza sulle singole persone;
+- comprendere le ipotesi espresse da complete pooling, no pooling e partial pooling;
+- interpretare lo shrinkage senza considerarlo una correzione arbitraria;
+- distinguere previsioni per persone osservate e persone nuove;
+- riconoscere la differenza tra variazioni quantitative degli stessi parametri e strategie qualitativamente differenti;
+- capire perché un parametro individuale non diventa automaticamente un tratto psicologico;
+- scegliere l'unità di validazione coerente con la generalizzazione desiderata.
+:::
+
+::: {.callout-tip collapse=true title="Percorsi di lettura"}
+**Percorso essenziale.** Segui le sezioni concettuali, le figure e gli esercizi. È sufficiente per comprendere il significato dell'eterogeneità nei modelli processuali.
+
+**Percorso applicativo.** Apri gli approfondimenti per osservare come il modello gerarchico viene simulato, stimato e usato per generare previsioni.
+
+**Percorso computazionale.** Esamina la parametrizzazione non centrata e il programma Stan. Questi dettagli mostrano come l'analisi possa essere realizzata, ma non costituiscono l'obiettivo didattico principale.
+:::
+
+::: {.callout-tip collapse=true title="Prerequisiti"}
+- Il modello dinamico degli obiettivi sviluppato in @sec-dynamic-models-goal-updating.
+- La distinzione tra teoria processuale e modello osservazionale.
+- Il significato generale del partial pooling introdotto nella Parte **Modelli**.
+:::
+
+::: {.callout-caution collapse=true title="Preparazione del Notebook"}
+
+```{r}
+#| label: setup-goal-heterogeneity
+#| include: false
+
+here::here("code", "_common.R") |>
+  source()
+
+conflicts_prefer(dplyr::count)
+
+set.seed(8061)
+```
+:::
+
+## Dal processo medio alla popolazione dei processi
+
+La regola individuale rimane:
+
+$$
+G_{s,t}
+=
+G_{s,t-1}
++
+\alpha_s\left(P_{s,t-1}-G_{s,t-1}\right)
++
+\beta_s.
+$$
+
+Per la persona $s$:
+
+- $G_{s,t}$ è lo stato previsto al trial $t$;
+- $P_{s,t-1}-G_{s,t-1}$ è la discrepanza precedente;
+- $\alpha_s$ regola la sensibilità alla discrepanza;
+- $\beta_s$ rappresenta una deriva sistematica non spiegata dalla discrepanza.
+
+Nel modello più semplice avevamo imposto:
+
+$$
+\alpha_s=\alpha,
+\qquad
+\beta_s=\beta
+$$
+
+per tutte le persone. Questa non è soltanto una scelta parsimoniosa: è un'ipotesi sulla popolazione. Afferma che ogni partecipante segue la stessa dinamica e che le differenze osservate derivano soltanto dagli input e dal rumore.
+
+Il passaggio a parametri individuali modifica quindi l'oggetto dell'inferenza. Non chiediamo più soltanto:
+
+> Qual è la sensibilità media alla discrepanza?
+
+Chiediamo anche:
+
+> Quanto differiscono le persone, quanto sappiamo di ciascuna e fino a che punto possiamo generalizzare a una persona nuova?
+
+::: {.callout-important title="Una media non è un individuo"}
+Il valore medio di un parametro processuale descrive il centro di una popolazione modellata. Non implica che una persona concreta possieda quel valore, né che la dinamica media coincida con la traiettoria di qualcuno.
+
+L'eterogeneità è quindi parte della domanda scientifica, non soltanto una complicazione statistica.
+:::
+
+## Tre ipotesi sulla popolazione
+
+### Complete pooling
+
+Nel complete pooling tutti condividono gli stessi parametri:
+
+$$
+\alpha_s=\alpha,
+\qquad
+\beta_s=\beta.
+$$
+
+Tutte le osservazioni informano una sola coppia di valori. Il modello è stabile e parsimonioso, ma può nascondere differenze persistenti tra persone.
+
+### No pooling
+
+Nel no pooling ogni persona viene stimata separatamente:
+
+$$
+\alpha_s,\beta_s
+\quad\text{indipendenti tra persone.}
+$$
+
+Questa strategia lascia massima libertà individuale, ma usa soltanto i trial della singola persona. Quando le sequenze sono brevi, valori estremi possono riflettere soprattutto rumore, condizioni iniziali particolari o compensazioni tra parametri.
+
+### Partial pooling
+
+Nel partial pooling i parametri individuali sono descritti da distribuzioni di popolazione:
+
+$$
+\operatorname{logit}(\alpha_s)
+\sim
+\operatorname{Normal}(\mu_\alpha,\tau_\alpha),
+$$
+
+$$
+\beta_s
+\sim
+\operatorname{Normal}(\mu_\beta,\tau_\beta).
+$$
+
+I dati della persona informano i suoi parametri, mentre i dati delle altre persone informano la distribuzione da cui tali parametri sono generati. Le due fonti di informazione vengono combinate.
+
+| Strategia | Ipotesi sostantiva | Vantaggio | Rischio |
+|---|---|---|---|
+| Complete pooling | le persone condividono gli stessi parametri | stime stabili | nasconde eterogeneità |
+| No pooling | ogni persona costituisce un caso separato | massima flessibilità | trasforma facilmente rumore in differenze |
+| Partial pooling | le persone differiscono entro una popolazione comune | equilibrio tra stabilità e specificità | impone una particolare forma alla popolazione |
+
+Il partial pooling non afferma che le persone siano uguali. Afferma che le loro differenze possono essere comprese mediante una struttura condivisa.
+
+## Eterogeneità e incertezza
+
+Queste due idee rispondono a domande differenti.
+
+- **Eterogeneità:** quanto differiscono realmente i parametri tra le persone nella popolazione modellata?
+- **Incertezza individuale:** quanto precisamente conosciamo il parametro di una persona specifica?
+
+Una persona può avere un intervallo posteriore ampio anche quando l'eterogeneità della popolazione è piccola. Viceversa, una popolazione può essere molto eterogenea e ogni parametro individuale può essere stimato con grande precisione se ogni partecipante fornisce molti dati informativi.
+
+::: {.callout-important title="Non leggere l'eterogeneità dai soli punti individuali"}
+La dispersione delle stime separate combina almeno quattro componenti:
+
+1. differenze reali tra persone;
+2. incertezza dovuta a sequenze brevi;
+3. differenze negli input sperimentati;
+4. compensazioni tra parametri del modello.
+
+Per questo la variabilità delle stime no pooling non costituisce una misura diretta della variabilità psicologica.
+:::
+
+## Che cosa esprime il modello gerarchico
+
+La distribuzione di popolazione introduce due livelli di quantità.
+
+### Posizione della popolazione
+
+- $\operatorname{logit}^{-1}(\mu_\alpha)$ descrive un valore tipico di $\alpha$;
+- $\mu_\beta$ descrive la deriva media.
+
+### Dispersione della popolazione
+
+- $\tau_\alpha$ descrive l'eterogeneità di $\alpha$ sulla scala logit;
+- $\tau_\beta$ descrive l'eterogeneità di $\beta$ sulla scala originale.
+
+Una posterior di $\tau_\beta$ concentrata vicino a zero indica che il modello rileva poca eterogeneità nella deriva. Non dimostra che tutte le persone siano identiche. Con pochi trial, infatti, una dispersione piccola e una dispersione moderata potrebbero essere difficili da distinguere.
+
+Inoltre, $\tau_\alpha$ non è la deviazione standard di $\alpha$ sulla scala $0$--$1$. La trasformazione logistica è non lineare: la stessa dispersione sulla scala logit produce conseguenze differenti a seconda della posizione di $\mu_\alpha$.
+
+## Shrinkage: che cosa significa
+
+Nel modello gerarchico le stime individuali tendono a essere meno estreme delle stime separate. Questo fenomeno è chiamato *shrinkage*.
+
+Lo shrinkage non viene applicato dopo la stima. Deriva dal modello congiunto:
+
+- una persona con molti trial informativi può essere descritta soprattutto dai propri dati;
+- una persona con pochi dati o una sequenza ambigua viene informata maggiormente dalla popolazione;
+- un valore estremo sostenuto da dati forti può restare estremo;
+- un valore estremo sostenuto debolmente viene regolarizzato maggiormente.
+
+::: {.callout-note title="Shrinkage non significa normalizzare le persone"}
+Il modello non corregge le persone affinché assomiglino alla media. Esprime il fatto che, quando le informazioni individuali sono limitate, non possiamo sapere se una stima estrema rappresenti una caratteristica persistente o una fluttuazione campionaria.
+
+La contrazione riguarda la nostra inferenza, non la persona.
+:::
+
+## Un caso di studio
+
+Il dataset, tratto dall'esempio didattico di @knight2023tutorial, contiene 60 partecipanti: 30 nella condizione *approach* e 30 nella condizione *avoidance*, con 10 trial per persona.
+
+```{r}
+#| label: load-goal-data-heterogeneity
+
+goal_data <- rio::import(here::here("data", "goal_data.csv")) |>
+  as_tibble() |>
+  mutate(
+    subject = as.integer(factor(subject)),
+    condition = factor(condition, levels = c("approach", "avoidance")),
+    condition_id = as.integer(condition)
+  ) |>
+  arrange(subject, trial) |>
+  mutate(row_id = row_number())
+
+subject_structure <- goal_data |>
+  distinct(subject, condition, condition_id) |>
+  arrange(subject)
+
+stopifnot(
+  nrow(subject_structure) == n_distinct(goal_data$subject),
+  all(
+    goal_data |>
+      group_by(subject) |>
+      summarise(ok = all(trial == seq_len(n())), .groups = "drop") |>
+      pull(ok)
+  )
+)
+
+goal_data |>
+  count(condition, name = "osservazioni") |>
+  left_join(
+    subject_structure |>
+      count(condition, name = "partecipanti"),
+    by = "condition"
+  )
+```
+
+Con soli nove aggiornamenti informativi per persona, una stima completamente separata è particolarmente fragile. Il dataset è quindi utile per mostrare perché il problema non possa essere risolto semplicemente assegnando due parametri liberi a ogni partecipante.
+
+### Un benchmark senza condivisione
+
+Le stime seguenti vengono ottenute separatamente per ciascuna persona. Non costituiscono il modello inferenziale finale: rendono visibile quanto possano apparire diverse le persone quando nessuna informazione viene condivisa.
+
+::: {.callout-note collapse=true title="Approfondimento applicativo: stime no pooling"}
+
+```{r}
+#| label: no-pooling-goal-estimates
+
+predict_goal_path <- function(goal, performance, alpha, beta) {
+  mu <- numeric(length(goal))
+  mu[1] <- goal[1]
+
+  if (length(goal) > 1) {
+    for (t in 2:length(goal)) {
+      mu[t] <- mu[t - 1] +
+        alpha * (performance[t - 1] - mu[t - 1]) +
+        beta
+    }
+  }
+
+  mu
+}
+
+estimate_no_pool_subject <- function(goal, performance) {
+  objective <- function(theta) {
+    alpha <- plogis(theta[1])
+    beta <- theta[2]
+    mu <- predict_goal_path(goal, performance, alpha, beta)
+    sum((goal[-1] - mu[-1])^2)
+  }
+
+  estimate <- optim(
+    par = c(qlogis(0.50), 0),
+    fn = objective,
+    method = "BFGS"
+  )
+
+  tibble(
+    alpha_no_pool = plogis(estimate$par[1]),
+    beta_no_pool = estimate$par[2],
+    residual_ss = estimate$value
+  )
+}
+
+no_pool_estimates <- goal_data |>
+  group_by(subject, condition) |>
+  group_modify(
+    ~ estimate_no_pool_subject(
+      goal = .x$goal,
+      performance = .x$performance
+    )
+  ) |>
+  ungroup()
+```
+
+```{r}
+#| label: fig-no-pooling-goal-estimates
+#| fig-cap: "Stime separate dei parametri per ciascun partecipante. La dispersione comprende differenze reali, incertezza e compensazioni tra parametri."
+#| fig-width: 8
+#| fig-height: 5.5
+#| echo: false
+
+no_pool_estimates |>
+  ggplot(aes(x = alpha_no_pool, y = beta_no_pool, shape = condition)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_point(size = 2.3) +
+  labs(
+    x = expression(hat(alpha)["no pooling"]),
+    y = expression(hat(beta)["no pooling"]),
+    shape = "Condizione"
+  )
+```
+:::
+
+Il grafico non mostra direttamente “tipi di persone”. Mostra stime prodotte da sequenze brevi entro una particolare specificazione.
+
+## Una dimostrazione del modello gerarchico
+
+Usiamo una parametrizzazione non centrata:
+
+$$
+z_{\alpha,s},z_{\beta,s}\sim\operatorname{Normal}(0,1),
+$$
+
+$$
+\operatorname{logit}(\alpha_s)
+=
+\mu_\alpha+\tau_\alpha z_{\alpha,s},
+$$
+
+$$
+\beta_s
+=
+\mu_\beta+\tau_\beta z_{\beta,s}.
+$$
+
+Questa scrittura separa la posizione della popolazione, la dispersione e la deviazione standardizzata di ciascun individuo. È una strategia computazionale utile; non aggiunge, da sola, contenuto psicologico alla teoria.
+
+### Prima dei dati: popolazioni e traiettorie plausibili
+
+I prior gerarchici devono essere valutati su due livelli:
+
+1. quali popolazioni di parametri rendono plausibili;
+2. quali traiettorie individuali vengono generate da tali popolazioni.
+
+::: {.callout-note collapse=true title="Approfondimento applicativo: controllo predittivo a priori"}
+
+```{r}
+#| label: prior-predictive-goal-hierarchical
+
+simulate_goal_path <- function(
+    performance,
+    initial_goal,
+    alpha,
+    beta,
+    sigma = 0
+) {
+  n_trials <- length(performance)
+  state <- numeric(n_trials)
+  observed <- numeric(n_trials)
+
+  state[1] <- initial_goal
+  observed[1] <- initial_goal
+
+  if (n_trials > 1) {
+    for (t in 2:n_trials) {
+      state[t] <- state[t - 1] +
+        alpha * (performance[t - 1] - state[t - 1]) +
+        beta
+      observed[t] <- rnorm(1, state[t], sigma)
+    }
+  }
+
+  tibble(
+    trial = seq_len(n_trials),
+    state = state,
+    observed = observed
+  )
+}
+
+n_prior_populations <- 80
+
+prior_population_draws <- tibble(
+  draw = seq_len(n_prior_populations),
+  mu_alpha_logit = rnorm(n_prior_populations, 0, 1),
+  tau_alpha_logit = abs(rnorm(n_prior_populations, 0, 0.75)),
+  mu_beta = rnorm(n_prior_populations, 0, 0.25),
+  tau_beta = abs(rnorm(n_prior_populations, 0, 0.25)),
+  sigma = abs(rnorm(n_prior_populations, 0, 0.75)),
+  z_alpha = rnorm(n_prior_populations),
+  z_beta = rnorm(n_prior_populations)
+) |>
+  mutate(
+    alpha = plogis(mu_alpha_logit + tau_alpha_logit * z_alpha),
+    beta = mu_beta + tau_beta * z_beta
+  )
+
+reference_subject <- goal_data |>
+  filter(subject == 1)
+
+prior_hierarchical_paths <- prior_population_draws |>
+  mutate(
+    simulation = purrr::pmap(
+      list(alpha, beta, sigma),
+      ~ simulate_goal_path(
+        performance = reference_subject$performance,
+        initial_goal = reference_subject$goal[1],
+        alpha = ..1,
+        beta = ..2,
+        sigma = ..3
+      )
+    )
+  ) |>
+  select(draw, alpha, beta, simulation) |>
+  tidyr::unnest(simulation)
+```
+
+```{r}
+#| label: fig-prior-predictive-goal-hierarchical
+#| fig-cap: "Traiettorie individuali generate da popolazioni simulate dai prior gerarchici. Il controllo riguarda contemporaneamente parametri e conseguenze dinamiche."
+#| fig-width: 8
+#| fig-height: 5
+#| echo: false
+
+prior_hierarchical_paths |>
+  ggplot(aes(x = trial, y = observed, group = draw)) +
+  geom_line(alpha = 0.18) +
+  geom_hline(yintercept = c(0, 10), linetype = "dashed") +
+  labs(x = "Trial", y = "Obiettivo simulato")
+```
+:::
+
+### Implementazione e stima
+
+Il programma seguente realizza il modello. Per comprendere il capitolo non è necessario seguire ogni istruzione: è sufficiente riconoscere la corrispondenza tra distribuzioni di popolazione, parametri individuali, dinamica e modello osservazionale.
+
+::: {.callout-note collapse=true title="Approfondimento computazionale: modello gerarchico in Stan"}
+
+```{r}
+#| label: stan-code-goal-hierarchical
+
+stan_code_goal_hierarchical <- "
+data {
+  int<lower=1> Ntotal;
+  int<lower=1> Nsubj;
+  array[Ntotal] int<lower=1, upper=Nsubj> subject;
+  array[Ntotal] int<lower=1> trial;
+  vector[Ntotal] goal;
+  vector[Ntotal] performance;
+}
+
+parameters {
+  real mu_alpha_logit;
+  real<lower=0> tau_alpha_logit;
+  vector[Nsubj] z_alpha;
+
+  real mu_beta;
+  real<lower=0> tau_beta;
+  vector[Nsubj] z_beta;
+
+  real<lower=0> sigma;
+}
+
+transformed parameters {
+  vector[Nsubj] alpha_logit =
+    mu_alpha_logit + tau_alpha_logit * z_alpha;
+  vector<lower=0, upper=1>[Nsubj] alpha = inv_logit(alpha_logit);
+  vector[Nsubj] beta = mu_beta + tau_beta * z_beta;
+  vector[Ntotal] mu;
+
+  for (i in 1:Ntotal) {
+    if (trial[i] == 1) {
+      mu[i] = goal[i];
+    } else {
+      int s = subject[i];
+      mu[i] = mu[i - 1]
+              + alpha[s] * (performance[i - 1] - mu[i - 1])
+              + beta[s];
+    }
+  }
+}
+
+model {
+  mu_alpha_logit ~ normal(0, 1);
+  tau_alpha_logit ~ normal(0, 0.75);
+  z_alpha ~ std_normal();
+
+  mu_beta ~ normal(0, 0.25);
+  tau_beta ~ normal(0, 0.25);
+  z_beta ~ std_normal();
+
+  sigma ~ normal(0, 0.75);
+
+  for (i in 1:Ntotal) {
+    if (trial[i] > 1) {
+      goal[i] ~ normal(mu[i], sigma);
+    }
+  }
+}
+
+generated quantities {
+  real<lower=0, upper=1> alpha_typical = inv_logit(mu_alpha_logit);
+  vector[Ntotal] y_rep;
+
+  for (i in 1:Ntotal) {
+    if (trial[i] == 1) {
+      y_rep[i] = goal[i];
+    } else {
+      y_rep[i] = normal_rng(mu[i], sigma);
+    }
+  }
+}
+"
+```
+
+```{r}
+#| label: stan-data-goal-hierarchical
+
+make_goal_stan_data <- function(data) {
+  data <- data |>
+    arrange(subject, trial)
+
+  list(
+    Ntotal = nrow(data),
+    Nsubj = n_distinct(data$subject),
+    subject = data$subject,
+    trial = data$trial,
+    goal = data$goal,
+    performance = data$performance
+  )
+}
+
+stan_data_goal_hierarchical <- make_goal_stan_data(goal_data)
+```
+
+```{r}
+#| label: fit-goal-hierarchical
+#| output: false
+#| cache: true
+
+model_goal_hierarchical <- cmdstanr::cmdstan_model(
+  cmdstanr::write_stan_file(stan_code_goal_hierarchical)
+)
+
+fit_goal_hierarchical <- model_goal_hierarchical$sample(
+  data = stan_data_goal_hierarchical,
+  seed = 8061,
+  chains = 4,
+  parallel_chains = min(4, parallel::detectCores(logical = FALSE)),
+  iter_warmup = 1500,
+  iter_sampling = 2000,
+  adapt_delta = 0.95,
+  refresh = 500
+)
+```
+
+```{r}
+#| label: summary-goal-hierarchical
+
+fit_goal_hierarchical$summary(
+  variables = c(
+    "alpha_typical",
+    "mu_beta",
+    "tau_alpha_logit",
+    "tau_beta",
+    "sigma"
+  )
+) |>
+  select(variable, mean, median, sd, q5, q95, rhat, ess_bulk, ess_tail)
+```
+:::
+
+La convergenza del campionatore risponde alla domanda se la posterior sia stata esplorata adeguatamente. Non stabilisce se la distribuzione gerarchica sia una buona descrizione della popolazione o se i parametri possiedano il significato psicologico attribuito loro.
+
+## Dalla popolazione alle persone
+
+La posterior permette di distinguere tre oggetti:
+
+1. la posizione della popolazione;
+2. la dispersione tra persone;
+3. l'incertezza sui parametri di ciascuna persona.
+
+::: {.callout-note collapse=true title="Approfondimento applicativo: posterior individuali e shrinkage"}
+
+```{r}
+#| label: posterior-individual-goal-hierarchical
+
+individual_alpha <- fit_goal_hierarchical |>
+  spread_draws(alpha[subject]) |>
+  median_qi(alpha, .width = 0.90) |>
+  rename(
+    alpha_lower = .lower,
+    alpha_upper = .upper
+  )
+
+individual_beta <- fit_goal_hierarchical |>
+  spread_draws(beta[subject]) |>
+  median_qi(beta, .width = 0.90) |>
+  rename(
+    beta_lower = .lower,
+    beta_upper = .upper
+  )
+
+individual_goal_parameters <- individual_alpha |>
+  select(subject, alpha, alpha_lower, alpha_upper) |>
+  left_join(
+    individual_beta |>
+      select(subject, beta, beta_lower, beta_upper),
+    by = "subject"
+  ) |>
+  left_join(subject_structure, by = "subject")
+```
+
+```{r}
+#| label: fig-individual-alpha-goal-hierarchical
+#| fig-cap: "Posterior individuali di alpha. La larghezza degli intervalli descrive l'incertezza sulla persona; non deve essere confusa con la dispersione della popolazione."
+#| fig-width: 9
+#| fig-height: 9
+#| echo: false
+
+individual_goal_parameters |>
+  arrange(alpha) |>
+  mutate(subject_order = row_number()) |>
+  ggplot(aes(y = subject_order, x = alpha, shape = condition)) +
+  geom_errorbarh(aes(xmin = alpha_lower, xmax = alpha_upper), height = 0) +
+  geom_point() +
+  labs(
+    x = expression(alpha[s]),
+    y = "Partecipanti ordinati",
+    shape = "Condizione"
+  )
+```
+
+```{r}
+#| label: shrinkage-data-goal-hierarchical
+
+shrinkage_goal <- no_pool_estimates |>
+  left_join(
+    individual_goal_parameters |>
+      select(subject, alpha_hier = alpha, beta_hier = beta),
+    by = "subject"
+  ) |>
+  select(
+    subject,
+    condition,
+    alpha_no_pool,
+    alpha_hier,
+    beta_no_pool,
+    beta_hier
+  ) |>
+  pivot_longer(
+    cols = c(alpha_no_pool, alpha_hier, beta_no_pool, beta_hier),
+    names_to = c("parameter", "model"),
+    names_pattern = "(alpha|beta)_(no_pool|hier)",
+    values_to = "estimate"
+  ) |>
+  pivot_wider(names_from = model, values_from = estimate)
+```
+
+```{r}
+#| label: fig-shrinkage-goal-hierarchical
+#| fig-cap: "Confronto tra stime separate e centri posteriori gerarchici. Le stime estreme e debolmente informative tendono a essere maggiormente regolarizzate."
+#| fig-width: 9
+#| fig-height: 5
+#| echo: false
+
+shrinkage_goal |>
+  ggplot(aes(x = no_pool, y = hier, shape = condition)) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
+  geom_point(size = 2.2) +
+  facet_wrap(~parameter, scales = "free") +
+  labs(
+    x = "Stima separata",
+    y = "Stima gerarchica",
+    shape = "Condizione"
+  )
+```
+:::
+
+Ordinare le persone usando soltanto le mediane posteriori può produrre classificazioni troppo nette. Due partecipanti con centri differenti ma intervalli ampi non costituiscono necessariamente due profili psicologici distinti.
+
+## Una persona osservata e una persona nuova
+
+Le due previsioni rispondono a domande diverse.
+
+### Persona già osservata
+
+Per una persona inclusa nel campione, la previsione utilizza la sua posterior di $\alpha_s$ e $\beta_s$. La distribuzione beneficia dei suoi trial e del partial pooling.
+
+### Persona nuova
+
+Per una persona mai osservata dobbiamo generare nuovi parametri dalla popolazione:
+
+$$
+\alpha_{\text{new}}
+=
+\operatorname{logit}^{-1}
+\left(
+\mu_\alpha+\tau_\alpha z_{\alpha,\text{new}}
+\right),
+$$
+
+$$
+\beta_{\text{new}}
+=
+\mu_\beta+\tau_\beta z_{\beta,\text{new}}.
+$$
+
+La previsione per la persona nuova include quindi due fonti di incertezza:
+
+1. incertezza sulla popolazione;
+2. eterogeneità tra possibili persone.
+
+::: {.callout-note collapse=true title="Approfondimento applicativo: simulare una persona nuova"}
+
+```{r}
+#| label: predict-new-person-goal-hierarchical
+
+hyper_draws_goal <- fit_goal_hierarchical$draws(
+  c(
+    "mu_alpha_logit",
+    "tau_alpha_logit",
+    "mu_beta",
+    "tau_beta",
+    "sigma"
+  )
+) |>
+  posterior::as_draws_df() |>
+  as_tibble() |>
+  slice_sample(n = 200) |>
+  mutate(
+    alpha_new = plogis(
+      mu_alpha_logit + tau_alpha_logit * rnorm(n())
+    ),
+    beta_new = mu_beta + tau_beta * rnorm(n())
+  )
+
+new_performance <- c(5, 6, 7, 7, 5, 4, 6, 7, 8, 8)
+
+new_person_paths <- hyper_draws_goal |>
+  mutate(
+    simulation = purrr::pmap(
+      list(alpha_new, beta_new, sigma),
+      ~ simulate_goal_path(
+        performance = new_performance,
+        initial_goal = 5,
+        alpha = ..1,
+        beta = ..2,
+        sigma = ..3
+      )
+    )
+  ) |>
+  select(.draw, simulation) |>
+  tidyr::unnest(simulation)
+```
+
+```{r}
+#| label: fig-new-person-goal-hierarchical
+#| fig-cap: "Distribuzione predittiva di traiettorie per persone nuove estratte dalla popolazione modellata."
+#| fig-width: 8
+#| fig-height: 5
+#| echo: false
+
+new_person_paths |>
+  ggplot(aes(x = trial, y = observed, group = .draw)) +
+  geom_line(alpha = 0.12) +
+  labs(x = "Trial", y = "Obiettivo previsto per una persona nuova")
+```
+:::
+
+Una buona previsione per partecipanti già osservati non garantisce una buona generalizzazione a nuovi individui. Nel primo caso il modello ha già appreso qualcosa su ciascuna persona; nel secondo deve affidarsi interamente alla struttura di popolazione.
+
+## Differenze tra condizioni
+
+Le condizioni *approach* e *avoidance* possono essere rappresentate mediante distribuzioni con posizioni differenti:
+
+$$
+\operatorname{logit}(\alpha_s)
+\sim
+\operatorname{Normal}(\mu_{\alpha,c[s]},\tau_\alpha),
+$$
+
+$$
+\beta_s
+\sim
+\operatorname{Normal}(\mu_{\beta,c[s]},\tau_\beta).
+$$
+
+Questa specificazione permette di formulare contrasti come:
+
+$$
+\Delta_\alpha
+=
+\operatorname{logit}^{-1}(\mu_{\alpha,\text{avoidance}})
+-
+\operatorname{logit}^{-1}(\mu_{\alpha,\text{approach}}),
+$$
+
+$$
+\Delta_\beta
+=
+\mu_{\beta,\text{avoidance}}
+-
+\mu_{\beta,\text{approach}}.
+$$
+
+Il modello non deve limitarsi a chiedere se i gruppi differiscano. Deve chiarire **in quale componente del processo** si ipotizza la differenza e quali pattern temporali dovrebbero derivarne.
+
+::: {.callout-warning title="Differenza tra condizioni ed effetto causale"}
+Una differenza tra distribuzioni di parametri riceve un'interpretazione causale soltanto se il disegno identifica l'effetto della condizione e le altre assunzioni causali sono plausibili.
+
+La gerarchia quantifica la differenza. Non crea l'identificazione causale.
+:::
+
+Inoltre, una differenza tra parametri processuali non è automaticamente più “profonda” di una differenza tra medie osservate. La sua interpretazione dipende dalla validità della regola dinamica, dalla recuperabilità dei parametri e dalla capacità di escludere processi alternativi.
+
+## Differenze quantitative o strategie differenti?
+
+Il modello gerarchico descritto finora assume che tutte le persone seguano la stessa regola e differiscano soltanto nei valori di $\alpha_s$ e $\beta_s$.
+
+Questa è una tesi forte. Potrebbe essere falsa in almeno tre modi:
+
+1. alcune persone potrebbero usare regole di aggiornamento differenti;
+2. la stessa persona potrebbe cambiare strategia nel corso del compito;
+3. una variabile non osservata potrebbe produrre sottogruppi distinti.
+
+Una distribuzione unimodale di parametri non rappresenta naturalmente strategie qualitative. Se metà delle persone aggiorna soprattutto dopo i successi e metà soprattutto dopo i fallimenti, una media gerarchica può descrivere una persona “intermedia” che in realtà non esiste.
+
+::: {.callout-important title="Un parametro individuale non è ancora un tratto"}
+Per interpretare $\alpha_s$ come una caratteristica psicologica stabile servirebbero almeno:
+
+- recuperabilità sufficiente;
+- stabilità attraverso sessioni o compiti pertinenti;
+- validazione rispetto a misure esterne;
+- robustezza a specificazioni alternative;
+- evidenza che il parametro non stia assorbendo un processo omesso;
+- capacità di prevedere nuovi dati della stessa persona.
+
+La semplice presenza di variabilità tra stime non soddisfa questi requisiti.
+:::
+
+## Recuperabilità e disegno
+
+Con dieci trial per persona, $\alpha_s$ e $\beta_s$ possono essere difficili da distinguere. Entrambi modificano la traiettoria e possono compensarsi: una sensibilità maggiore alla discrepanza può, in alcune sequenze, essere controbilanciata da una deriva differente.
+
+Un controllo di recuperabilità gerarchico dovrebbe chiedere:
+
+- le posizioni e le dispersioni di popolazione vengono recuperate?
+- gli intervalli individuali hanno copertura adeguata?
+- quali persone o quali regioni dei parametri sono scarsamente informate?
+- gli errori di recupero di $\alpha_s$ e $\beta_s$ sono correlati?
+- il partial pooling migliora l'inferenza o nasconde una specificazione inadeguata?
+
+La soluzione non consiste sempre in un modello più complesso. Spesso occorre un disegno più informativo: più trial, sequenze di discrepanze più varie, manipolazioni che separino le conseguenze dei parametri o misure ripetute in contesti differenti.
+
+## A quale popolazione vogliamo generalizzare?
+
+La validazione deve lasciare fuori l'unità corrispondente all'enunciato che intendiamo formulare.
+
+- **Futuri trial della stessa persona:** si stimano i parametri sui trial iniziali e si prevedono quelli successivi.
+- **Una persona nuova della stessa popolazione:** si lasciano fuori interi individui.
+- **Una nuova condizione o un nuovo contesto:** si lascia fuori il livello pertinente.
+- **Una nuova popolazione:** servono dati e assunzioni che colleghino esplicitamente le popolazioni.
+
+Lasciare fuori un singolo trial non verifica automaticamente la capacità di generalizzare a una persona nuova, perché i parametri di quella persona sono già stati informati dagli altri suoi trial.
+
+::: {.callout-note title="La generalizzazione è parte dell'ipotesi"}
+Dire che un modello “predice bene” è incompleto. Occorre specificare:
+
+- che cosa viene previsto;
+- per chi;
+- in quale contesto;
+- con quali informazioni già disponibili;
+- rispetto a quale modello rivale.
+:::
+
+## Limiti della specificazione
+
+Il modello gerarchico rappresenta differenze quantitative tra persone, ma conserva assunzioni forti:
+
+- $\alpha_s$ e $\beta_s$ sono costanti nel tempo;
+- la popolazione è unimodale;
+- $\alpha_s$ e $\beta_s$ sono indipendenti a livello di popolazione;
+- la variabilità residua è uguale per tutti;
+- le condizioni modificano la posizione delle distribuzioni, non la regola di aggiornamento;
+- le persone differiscono lungo gli stessi parametri;
+- la prestazione è trattata come input esterno;
+- la stessa scala osservazionale è appropriata per tutti.
+
+Queste assunzioni possono essere estese mediante correlazioni tra parametri, modelli di mistura, stati nascosti, parametri variabili nel tempo o regole processuali differenti. Ogni estensione, tuttavia, deve rispondere a un problema empirico riconoscibile. Aggiungere flessibilità senza previsioni discriminanti può rendere il modello più adattabile ma meno interpretabile.
+
+## Errori frequenti
+
+- Trattare la dispersione delle stime separate come eterogeneità vera.
+- Presentare mediane individuali senza intervalli di incertezza.
+- Descrivere lo shrinkage come una correzione arbitraria verso la media.
+- Interpretare $\tau_\alpha$ sulla scala logit come deviazione standard di $\alpha$ sulla scala $0$--$1$.
+- Classificare le persone usando parametri scarsamente recuperabili.
+- Chiamare un parametro “tratto” soltanto perché varia tra persone.
+- Usare previsioni condizionate a persone osservate come prova di generalizzazione a persone nuove.
+- Applicare la validazione a singoli trial ignorando la struttura gerarchica.
+- Interpretare differenze tra condizioni come causali senza considerare il disegno.
+- Concludere che tutti condividano lo stesso meccanismo perché il modello gerarchico converge.
+
+## Riflessioni conclusive {.unnumbered .unlisted}
+
+Il passaggio dal parametro comune ai parametri individuali non consiste semplicemente nell'aggiungere coefficienti. Cambia la domanda scientifica. Vogliamo conoscere simultaneamente:
+
+- ciò che le persone condividono;
+- quanto differiscono;
+- quanto sappiamo di ciascuna;
+- come generalizzare a persone non ancora osservate.
+
+Il no pooling rende visibili le differenze, ma può confondere eterogeneità e rumore. Il complete pooling stabilizza le stime, ma può nascondere differenze sistematiche. Il partial pooling combina informazione individuale e informazione di popolazione, producendo una rappresentazione più prudente delle differenze.
+
+Questa soluzione rimane però condizionata a un'ipotesi importante: tutte le persone seguono la stessa regola processuale e differiscono soltanto nei suoi parametri. Un buon modello gerarchico non dimostra tale ipotesi. Deve essere confrontato con possibilità più severe: strategie differenti, cambiamenti nel tempo, processi omessi e popolazioni multimodali.
+
+Il messaggio epistemologico è quindi duplice:
+
+1. una media di popolazione non descrive automaticamente l'individuo;
+2. una distribuzione di parametri individuali non dimostra automaticamente l'esistenza di tratti psicologici stabili.
+
+Il capitolo successivo compirà un ulteriore passaggio: dalla previsione dei comportamenti alla scelta di un'azione, mostrando che comprendere una dinamica e quantificarne l'eterogeneità non basta ancora per decidere che cosa fare.
+
+## Concetti da ricordare
+
+1. Complete pooling, no pooling e partial pooling esprimono ipotesi differenti sulla popolazione.
+2. Eterogeneità e incertezza individuale sono quantità diverse.
+3. Lo shrinkage riguarda l'inferenza, non una normalizzazione delle persone.
+4. Il valore medio di un parametro non coincide necessariamente con il parametro di una persona concreta.
+5. La previsione per una persona nuova include l'eterogeneità della popolazione.
+6. La variabilità tra parametri non trasforma automaticamente i parametri in tratti psicologici.
+7. Un modello gerarchico standard rappresenta differenze quantitative entro una regola condivisa.
+8. Strategie qualitative possono richiedere modelli rivali, miscele o dinamiche variabili nel tempo.
+9. La recuperabilità dipende dal modello e dal disegno.
+10. L'unità lasciata fuori nella validazione deve corrispondere alla generalizzazione desiderata.
+
+## Esercizi {.unnumbered .unlisted}
+
+### 1. Comprendere: eterogeneità o incertezza? {.unnumbered .unlisted}
+
+Considera due studi.
+
+- Nello studio A ogni partecipante completa 500 trial. Le posterior individuali sono strette e i valori stimati di $\alpha_s$ sono molto dispersi.
+- Nello studio B ogni partecipante completa 5 trial. Le posterior individuali sono ampie e i loro centri sono vicini.
+
+Che cosa suggeriscono i due studi su eterogeneità e incertezza? Quale conclusione non sarebbe giustificata?
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+Separa la larghezza delle posterior individuali dalla dispersione della distribuzione di popolazione.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+Lo studio A fornisce evidenza compatibile con eterogeneità sostanziale e buona precisione individuale: molte osservazioni permettono di distinguere con maggiore credibilità differenze persistenti da fluttuazioni campionarie.
+
+Lo studio B indica soprattutto scarsa informazione individuale. Centri vicini non dimostrano che le persone siano simili, perché il partial pooling può contrarre stime molto incerte verso la popolazione. Non sarebbe quindi giustificato concludere che nello studio B tutte le persone condividano lo stesso valore di $\alpha$.
+:::
+
+### 2. Prevedere: chi subisce maggiore shrinkage? {.unnumbered .unlisted}
+
+Tre partecipanti hanno la stessa stima no pooling estrema di $\alpha$.
+
+- A ha 100 trial coerenti con quel valore.
+- B ha 10 trial molto rumorosi.
+- C ha 10 trial, ma una sequenza che distingue chiaramente $\alpha$ da $\beta$.
+
+Ordina qualitativamente i tre partecipanti dal maggiore al minore shrinkage atteso e spiega il criterio.
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+La contrazione dipende dall'informazione, non soltanto dalla distanza dalla media.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+B dovrebbe subire la contrazione maggiore: ha pochi trial e una sequenza rumorosa, quindi il valore estremo è sostenuto debolmente. C dovrebbe essere meno regolarizzato di B, perché i suoi trial sono più informativi sul parametro specifico. A dovrebbe subire la contrazione minore, poiché molti trial coerenti forniscono forte evidenza individuale.
+
+L'ordine preciso dipende dalla distribuzione stimata e dai prior, ma il principio è che un'estremità sostenuta da dati informativi non viene automaticamente cancellata.
+:::
+
+### 3. Progettare: parametri differenti o strategie differenti? {.unnumbered .unlisted}
+
+Immagina che metà dei partecipanti aggiorni l'obiettivo soprattutto dopo un fallimento, mentre l'altra metà lo aggiorni soprattutto dopo un successo. Un modello con un solo $\alpha_s$ per persona può rappresentare adeguatamente questo fenomeno?
+
+Proponi:
+
+1. una modifica teorica del modello;
+2. una manipolazione o sequenza di trial che distingua le due strategie;
+3. un pattern dei dati che renderebbe poco plausibile una singola distribuzione unimodale di $\alpha_s$.
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+Considera due sensibilità separate, una per discrepanze positive e una per discrepanze negative.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+Una possibilità è introdurre $\alpha_s^+$ e $\alpha_s^-$, applicati rispettivamente a discrepanze positive e negative. Il disegno dovrebbe presentare a ciascuna persona entrambe le tipologie di discrepanza in numero sufficiente e in ordine informativo.
+
+Due cluster distinti -- uno con $\alpha^+\gg\alpha^-$ e uno con $\alpha^-\gg\alpha^+$ -- sarebbero difficili da rappresentare mediante una sola distribuzione unimodale dello stesso parametro. Il confronto rilevante non sarebbe soltanto tra fit, ma tra previsioni dei modelli sulle risposte successive a successi e fallimenti.
+:::
+
+### 4. Criticare e comunicare: dal parametro al tratto {.unnumbered .unlisted}
+
+Un articolo conclude:
+
+> “Il modello gerarchico converge e mostra notevole variabilità individuale in $\alpha$. Abbiamo quindi identificato un tratto stabile di flessibilità personale. Le persone con valori bassi sono poco adattive e il modello permette di prevedere il comportamento di qualunque nuovo individuo.”
+
+Individua almeno quattro passaggi non giustificati e riscrivi una conclusione più prudente.
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+Distingui calcolo, eterogeneità, validità del costrutto e generalizzazione.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+La convergenza riguarda il calcolo, non la validità teorica. La variabilità di $\alpha_s$ è condizionata alla specificazione e non dimostra che $\alpha$ sia un tratto stabile. L'etichetta “flessibilità” richiede validazione esterna e stabilità. Un valore basso non può essere definito “poco adattivo” senza considerare il compito e le conseguenze del comportamento. Infine, la capacità di descrivere le persone osservate non dimostra generalizzazione a qualunque nuovo individuo o popolazione.
+
+Una conclusione più prudente potrebbe essere:
+
+> Nel modello considerato, i dati sono compatibili con differenze tra partecipanti nella sensibilità alla discrepanza. L'entità delle differenze e le stime individuali rimangono incerte e dipendono dalla regola di aggiornamento assunta. Studi con più trial, validazione temporale, confronto con modelli rivali e misure esterne sono necessari prima di interpretare $\alpha$ come una caratteristica stabile o di generalizzare a nuove popolazioni.
+:::
+
+::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+```{r}
+sessionInfo()
+```
+:::
+
+## Bibliografia {.unnumbered .unlisted}
