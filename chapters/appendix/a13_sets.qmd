@@ -1,40 +1,162 @@
 # Insiemi e operazioni insiemistiche {#sec-apx-sets}
 
-## Concetto fondamentale di insieme
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+here::here("code", "_common.R") |>
+  source()
 
-La moderna teoria degli insiemi trae origine dalla definizione proposta da Georg Cantor:
+# ---------------------------------------------------------------
+# Geometria condivisa per i diagrammi di Eulero-Venn di questa
+# appendice. Le regioni sono ottenute valutando l'appartenenza ai
+# cerchi su una griglia fitta: in questo modo qualunque combinazione
+# booleana (unione, intersezione, differenza, complemento) viene
+# ombreggiata correttamente senza ricorrere a librerie esterne.
+# ---------------------------------------------------------------
+
+.XMAX <- 10
+.YMAX <- 6.5
+.RR <- 2.2
+.CA <- c(4.0, 3.2)
+.CB <- c(6.0, 3.2)
+.PASSO <- 0.03
+
+.griglia_venn <- function(centro_a, centro_b, raggio_a, raggio_b) {
+  g <- expand.grid(
+    x = seq(0, .XMAX, by = .PASSO),
+    y = seq(0, .YMAX, by = .PASSO)
+  )
+  g$inA <- (g$x - centro_a[1])^2 + (g$y - centro_a[2])^2 <= raggio_a^2
+  g$inB <- (g$x - centro_b[1])^2 + (g$y - centro_b[2])^2 <= raggio_b^2
+  g
+}
+
+.cerchio <- function(centro, raggio, gruppo) {
+  th <- seq(0, 2 * pi, length.out = 400)
+  data.frame(
+    x = centro[1] + raggio * cos(th),
+    y = centro[2] + raggio * sin(th),
+    gruppo = gruppo
+  )
+}
+
+.venn_gg <- function(regioni, bordi, etichette = NULL, ncol = 2) {
+  p <- ggplot() +
+    geom_raster(
+      data = regioni,
+      aes(x = x, y = y, fill = dentro),
+      alpha = 0.35
+    ) +
+    scale_fill_manual(
+      values = c(`TRUE` = PRIMARY, `FALSE` = "transparent"),
+      guide = "none"
+    ) +
+    geom_path(
+      data = bordi,
+      aes(x = x, y = y, group = interaction(pannello, gruppo)),
+      colour = TEXT_MED,
+      linewidth = 0.5
+    ) +
+    annotate(
+      "rect",
+      xmin = 0, xmax = .XMAX, ymin = 0, ymax = .YMAX,
+      fill = NA, colour = TEXT_LIGHT, linewidth = 0.4
+    ) +
+    facet_wrap(~pannello, ncol = ncol, labeller = label_parsed) +
+    coord_fixed(
+      xlim = c(-0.3, .XMAX + 0.3),
+      ylim = c(-0.3, .YMAX + 0.3),
+      expand = FALSE
+    ) +
+    theme_void(base_family = modern_sans, base_size = 12) +
+    theme(
+      strip.text = element_text(
+        size = 12, colour = TEXT_DARK, margin = margin(b = 6)
+      ),
+      panel.spacing = grid::unit(0.9, "lines")
+    )
+  if (!is.null(etichette)) {
+    p <- p + geom_text(
+      data = etichette,
+      aes(x = x, y = y, label = testo),
+      colour = TEXT_DARK, size = 4.3, inherit.aes = FALSE
+    )
+  }
+  p
+}
+
+# Assembla regioni, bordi ed etichette per una lista nominata di
+# maschere logiche definite sulla stessa griglia.
+.componi_pannelli <- function(griglia, maschere, centro_a, centro_b,
+                              raggio_a, raggio_b, con_etichette = TRUE) {
+  nomi <- names(maschere)
+  regioni <- do.call(rbind, lapply(nomi, function(nm) {
+    d <- griglia[, c("x", "y")]
+    d$dentro <- maschere[[nm]]
+    d$pannello <- factor(nm, levels = nomi)
+    d
+  }))
+  bordi <- do.call(rbind, lapply(nomi, function(nm) {
+    b <- rbind(
+      .cerchio(centro_a, raggio_a, "A"),
+      .cerchio(centro_b, raggio_b, "B")
+    )
+    b$pannello <- factor(nm, levels = nomi)
+    b
+  }))
+  etichette <- NULL
+  if (con_etichette) {
+    etichette <- do.call(rbind, lapply(nomi, function(nm) {
+      data.frame(
+        x = c(centro_a[1] - raggio_a + 0.55, centro_b[1] + raggio_b - 0.55),
+        y = rep(centro_a[2] + raggio_a - 0.55, 2),
+        testo = c("A", "B"),
+        pannello = factor(nm, levels = nomi)
+      )
+    }))
+  }
+  list(regioni = regioni, bordi = bordi, etichette = etichette)
+}
+```
+
+Gli insiemi sono il linguaggio in cui è scritta la teoria della probabilità. Uno **spazio campionario** non è altro che l'insieme di tutti i risultati possibili di un esperimento, e un **evento** è un suo sottoinsieme. Di conseguenza, ogni operazione insiemistica corrisponde a un'operazione logica sugli eventi: l'unione traduce la congiunzione «oppure», l'intersezione traduce «e», il complemento traduce «non». Le regole di calcolo della probabilità — regola della somma, regola del prodotto, teorema della probabilità totale — sono la controparte quantitativa di queste operazioni.
+
+Questa appendice richiama le nozioni insiemistiche necessarie per seguire la notazione usata nei capitoli sulla probabilità e sull'inferenza bayesiana. Non è un percorso da studiare linearmente: è materiale di consultazione, da aprire quando un capitolo introduce un simbolo che non risulta familiare. L'ultima sezione mostra esplicitamente come le nozioni presentate si traducano nel linguaggio degli eventi.
+
+## Che cos'è un insieme
+
+La moderna teoria degli insiemi trae origine dalla definizione proposta da Georg Cantor nel 1895:
 
 > Per insieme si intende una collezione di oggetti determinati e ben distinti della nostra intuizione o del nostro pensiero, concepiti come un tutto unico.
 
-Sebbene la natura degli elementi possa essere arbitraria, il requisito essenziale è la possibilità di decidere univocamente se un dato oggetto appartiene o meno a un insieme. Formalmente, per ogni elemento $x$ e ogni insieme $A$, vale esattamente una delle due condizioni: $x \in A$ oppure $x \notin A$.
+La natura degli elementi è arbitraria: possono essere numeri, persone, risposte a un questionario o esiti di un esperimento. Il requisito essenziale è un altro, e sarà quello che conta per la probabilità: deve essere possibile decidere **univocamente** se un dato oggetto appartiene o meno all'insieme. Formalmente, per ogni elemento $x$ e ogni insieme $A$ vale esattamente una delle due condizioni: $x \in A$ oppure $x \notin A$.
 
-Due insiemi $A$ e $B$ sono detti **uguali** ($A = B$) se contengono gli stessi elementi, indipendentemente dall'ordine o da ripetizioni. Ad esempio:
+Due insiemi $A$ e $B$ sono **uguali** ($A = B$) se contengono gli stessi elementi. Né l'ordine né le ripetizioni hanno alcun ruolo:
 
 $$
 \{1, 2, 3\} = \{3, 1, 2\} = \{1, 3, 2\} = \{1, 1, 1, 2, 3, 3, 3\}.
 $$
 
-Se gli insiemi non condividono gli stessi elementi, si dice che sono **diversi** ($A \neq B$).
+Questo è il motivo per cui, nell'implementazione in R, un vettore diventa un insieme solo dopo aver eliminato i duplicati. Se gli insiemi non contengono gli stessi elementi, si dice che sono **diversi** ($A \neq B$).
+
+Un ruolo particolare spetta all'**insieme vuoto** $\emptyset$, privo di elementi. Nel linguaggio degli eventi rappresenta l'evento impossibile, quello a cui si assegna probabilità zero.
 
 ## Notazione e sottoinsiemi
 
-Gli insiemi sono generalmente indicati con lettere maiuscole ($A, B, C, \dots$), mentre gli elementi con lettere minuscole ($a, b, c, \dots$). Un insieme finito può essere descritto in **forma tabulare**, elencando i suoi elementi tra parentesi graffe:
+Gli insiemi si indicano di norma con lettere maiuscole ($A, B, C, \dots$) e gli elementi con lettere minuscole ($a, b, c, \dots$). Un insieme finito può essere descritto in **forma tabulare**, elencandone gli elementi tra parentesi graffe:
 
 $$
 A = \{a_1, a_2, \dots, a_n\}.
 $$
 
-Quando gli elementi sono caratterizzati da una proprietà $P(x)$, si utilizza la **notazione per comprensione**:
+Quando gli elementi sono caratterizzati da una proprietà $P(x)$ si usa invece la **notazione per comprensione**:
 
 $$
 A = \{x \mid P(x)\},
 $$
 
-che si legge "l'insieme degli $x$ tali che vale $P(x)$". Ad esempio, l'insieme dei punti sulla parabola $y = x^2 + 1$ si scrive:
-
-$$
-A = \{(x, y) \mid y = x^2 + 1\}.
-$$
+che si legge «l'insieme degli $x$ tali che vale $P(x)$». Per esempio, l'insieme dei punti della parabola $y = x^2 + 1$ si scrive $A = \{(x, y) \mid y = x^2 + 1\}$. È la stessa notazione che si incontra quando un evento viene definito da una condizione sui dati, come $\{x \mid x > 30\}$ per «punteggio superiore a 30».
 
 ### Relazioni di inclusione
 
@@ -42,7 +164,7 @@ Dati due insiemi $A$ e $B$:
 
 - $A$ è **sottoinsieme** di $B$ ($A \subseteq B$) se ogni elemento di $A$ appartiene anche a $B$:
   $$
-  A \subseteq B \iff \forall x (x \in A \implies x \in B).
+  A \subseteq B \iff \forall x\,(x \in A \implies x \in B);
   $$
 
 - $A$ è **sottoinsieme proprio** di $B$ ($A \subset B$) se $A \subseteq B$ ed esiste almeno un elemento di $B$ che non appartiene ad $A$:
@@ -50,59 +172,78 @@ Dati due insiemi $A$ e $B$:
   A \subset B \iff (A \subseteq B) \land (\exists y \in B \mid y \notin A).
   $$
 
-L'**insieme delle parti** (o insieme potenza) di un insieme $A$, denotato con $\mathcal{P}(A)$, è l'insieme di tutti i sottoinsiemi di $A$, inclusi l'insieme vuoto $\emptyset$ e $A$ stesso. Per $A = \{a, b, c\}$:
+L'inclusione ha una lettura probabilistica immediata: se $A \subseteq B$, allora il verificarsi di $A$ implica il verificarsi di $B$, e quindi $P(A) \leq P(B)$.
+
+Due insiemi si dicono **disgiunti** quando non hanno elementi in comune, cioè $A \cap B = \emptyset$. Nel linguaggio degli eventi si parla di eventi **mutuamente esclusivi**: non possono verificarsi entrambi.
+
+### Insieme delle parti
+
+L'**insieme delle parti** (o insieme potenza) di $A$, denotato $\mathcal{P}(A)$, è l'insieme di tutti i sottoinsiemi di $A$, incluso l'insieme vuoto e $A$ stesso. Per $A = \{a, b, c\}$:
 
 $$
 \mathcal{P}(A) = \{\emptyset, \{a\}, \{b\}, \{c\}, \{a,b\}, \{a,c\}, \{b,c\}, \{a,b,c\}\}.
 $$
 
+In generale $|\mathcal{P}(A)| = 2^{|A|}$: ogni elemento può essere incluso o escluso, e le scelte sono indipendenti. Quando lo spazio campionario è finito, l'insieme delle parti è precisamente la collezione di tutti gli eventi possibili, cioè l'oggetto su cui la funzione di probabilità è definita.
+
 ## Rappresentazione grafica: diagrammi di Eulero-Venn
 
-I diagrammi di Venn (sviluppati da John Venn sulla base di idee precedenti di Eulero e Leibniz) forniscono una rappresentazione visiva intuitiva delle relazioni tra insiemi. Gli insiemi sono raffigurati come regioni chiuse del piano, tipicamente cerchi o ellissi, all'interno di un rettangolo che rappresenta l'insieme universo. Le relazioni di appartenenza, intersezione e unione diventano immediatamente evidenti attraverso l'ombreggiatura delle aree corrispondenti.
+I diagrammi di Venn — sviluppati da John Venn a partire da idee di Eulero e Leibniz — forniscono una rappresentazione visiva delle relazioni tra insiemi. Gli insiemi sono raffigurati come regioni chiuse del piano, tipicamente cerchi, all'interno di un rettangolo che rappresenta l'insieme universo $U$. Appartenenza, inclusione e sovrapposizione diventano immediatamente leggibili.
 
-![Diagrammi di Venn.](../../figures/sets-venn-diagrams.png)
-
-## Implementazione in R
-
-### Appartenenza e costruzione di insiemi
-
-In R, un insieme è tipicamente rappresentato come un vettore. La funzione `unique()` garantisce che ogni elemento compaia una sola volta, rispettando la definizione insiemistica.
+Vale la pena tenere presente una distinzione: nei **diagrammi di Venn** in senso stretto tutte le regioni logicamente possibili sono disegnate, anche quando risultano vuote; nei **diagrammi di Eulero** si disegnano invece solo le regioni effettivamente non vuote. Il primo pannello della figura seguente è quindi un diagramma di Eulero, gli altri due sono diagrammi di Venn.
 
 ```{r}
-# Costruzione di un insieme
-Set1 <- c(1, 2)
-print(Set1)
+#| echo: false
+#| label: fig-venn-relazioni
+#| fig-cap: "Tre configurazioni possibili per due insiemi. A sinistra l'inclusione, al centro due insiemi disgiunti (eventi mutuamente esclusivi), a destra il caso generale di due insiemi che si sovrappongono parzialmente."
+#| fig-alt: "Tre rettangoli affiancati che rappresentano l'insieme universo. Nel primo un cerchio piccolo è interamente contenuto in un cerchio più grande; nel secondo due cerchi separati non si toccano; nel terzo due cerchi si sovrappongono parzialmente."
+#| fig-width: 9
+#| fig-height: 3.2
 
-# Da una lista con ripetizioni a un insieme
-my_list <- c(1, 2, 3, 4, 1, 2)
-my_set <- unique(my_list)
-print(my_set)
-```
+.config <- list(
+  list(
+    nome = "subseteq(A, B)",
+    ca = c(5.0, 3.2), cb = c(5.0, 3.2), ra = 1.15, rb = 2.35
+  ),
+  list(
+    nome = "intersect(A, B) == emptyset",
+    ca = c(3.0, 3.2), cb = c(7.0, 3.2), ra = 1.75, rb = 1.75
+  ),
+  list(
+    nome = "intersect(A, B) != emptyset",
+    ca = .CA, cb = .CB, ra = .RR, rb = .RR
+  )
+)
+.nomi <- vapply(.config, function(z) z$nome, character(1))
 
-L'operatore `%in%` verifica l'appartenenza di un elemento a un insieme:
+.regioni <- do.call(rbind, lapply(.config, function(z) {
+  g <- .griglia_venn(z$ca, z$cb, z$ra, z$rb)
+  data.frame(
+    x = g$x, y = g$y,
+    dentro = g$inA | g$inB,
+    pannello = factor(z$nome, levels = .nomi)
+  )
+}))
 
-```{r}
-my_set <- c(1, 3, 5)
-print(1 %in% my_set)   # TRUE
-print(2 %in% my_set)   # FALSE
-print(!(4 %in% my_set)) # TRUE (non appartenenza)
-```
+.bordi <- do.call(rbind, lapply(.config, function(z) {
+  b <- rbind(
+    .cerchio(z$ca, z$ra, "A"),
+    .cerchio(z$cb, z$rb, "B")
+  )
+  b$pannello <- factor(z$nome, levels = .nomi)
+  b
+}))
 
-### Relazioni tra insiemi
+.etichette <- do.call(rbind, lapply(.config, function(z) {
+  data.frame(
+    x = c(z$ca[1], z$cb[1] + z$rb - 0.5),
+    y = c(z$ca[2], z$cb[2] + z$rb - 0.45),
+    testo = c("A", "B"),
+    pannello = factor(z$nome, levels = .nomi)
+  )
+}))
 
-Definito un universo di riferimento (ad esempio, i numeri interi da 0 a 10), è possibile esaminare relazioni di inclusione e disgiunzione.
-
-```{r}
-Univ <- 0:10
-Pari <- Univ[Univ %% 2 == 0]  # {0, 2, 4, 6, 8, 10}
-Dispari <- Univ[Univ %% 2 == 1] # {1, 3, 5, 7, 9}
-Sottoinsieme <- c(4, 6)
-Vuoto <- Univ[Univ > 10]       # numeric(0)
-
-# Verifica relazioni
-print(all(Sottoinsieme %in% Pari))        # TRUE: Sottoinsieme ⊆ Pari
-print(all(Pari %in% Univ))                # TRUE: Pari ⊆ Univ
-print(length(intersect(Pari, Dispari)) == 0) # TRUE: insiemi disgiunti
+.venn_gg(.regioni, .bordi, .etichette, ncol = 3)
 ```
 
 ## Operazioni insiemistiche fondamentali
@@ -124,129 +265,318 @@ print(length(intersect(Pari, Dispari)) == 0) # TRUE: insiemi disgiunti
    A \setminus B = \{x \mid x \in A \land x \notin B\}
    $$
 
-4. **Complementare** (rispetto a un universo $U$):
+4. **Complementare** rispetto a un universo $U$:
    $$
    A^c = U \setminus A = \{x \in U \mid x \notin A\}
    $$
 
-### Implementazione in R
+Si noti che la differenza si può sempre riscrivere come intersezione con un complementare, $A \setminus B = A \cap B^c$: è la forma usata nella figura che segue, perché rende esplicito che «in $A$ ma non in $B$» è la congiunzione di due condizioni.
 
 ```{r}
-S1 <- seq(1, 10, by = 3)  # {1, 4, 7, 10}
-S2 <- 1:6                 # {1, 2, 3, 4, 5, 6}
+#| echo: false
+#| label: fig-venn-operazioni
+#| fig-cap: "Le quattro operazioni fondamentali. La regione ombreggiata individua, in ciascun pannello, l'insieme risultante; il rettangolo rappresenta l'universo $U$. La differenza $A \\setminus B$ è mostrata nella forma equivalente $A \\cap B^c$."
+#| fig-alt: "Quattro diagrammi di Venn con due cerchi sovrapposti. Nel primo è ombreggiata l'intera area dei due cerchi, nel secondo solo la zona di sovrapposizione, nel terzo la parte del primo cerchio esterna al secondo, nel quarto tutta l'area del rettangolo esterna al primo cerchio."
+#| fig-width: 8
+#| fig-height: 5.4
 
-# Intersezione
-intersect(S1, S2)         # {1, 4}
+.g <- .griglia_venn(.CA, .CB, .RR, .RR)
+.maschere <- list(
+  `union(A, B)` = .g$inA | .g$inB,
+  `intersect(A, B)` = .g$inA & .g$inB,
+  `intersect(A, B^c)` = .g$inA & !.g$inB,
+  `A^c` = !.g$inA
+)
+.p <- .componi_pannelli(.g, .maschere, .CA, .CB, .RR, .RR)
+.venn_gg(.p$regioni, .p$bordi, .p$etichette, ncol = 2)
+```
 
-# Unione
-union(S1, S2)             # {1, 2, 3, 4, 5, 6, 7, 10}
+La corrispondenza con il linguaggio degli eventi si riassume così:
 
-# Differenza
-setdiff(S2, S1)           # {2, 3, 5, 6}
-setdiff(S1, S2)           # {7, 10}
+| Operazione insiemistica | Lettura logica | Lettura probabilistica |
+|---|---|---|
+| $A \cup B$ | $A$ **oppure** $B$ (almeno uno) | si verifica almeno uno dei due eventi |
+| $A \cap B$ | $A$ **e** $B$ | si verificano entrambi |
+| $A^c$ | **non** $A$ | l'evento non si verifica: $P(A^c) = 1 - P(A)$ |
+| $A \setminus B$ | $A$ ma non $B$ | si verifica $A$ e contemporaneamente non $B$ |
+| $A \cap B = \emptyset$ | $A$ e $B$ incompatibili | eventi mutuamente esclusivi |
 
-# Complementare (rispetto a 0:20)
-S <- seq(0, 20, by = 2)   # numeri pari
-S_complement <- setdiff(0:20, S) # numeri dispari
-setequal(union(S, S_complement), 0:20) # TRUE
+### Implementazione in R
+
+In R un insieme è tipicamente rappresentato come un vettore. La funzione `unique()` garantisce che ogni elemento compaia una sola volta, rispettando la definizione insiemistica.
+
+```{r}
+# Da un vettore con ripetizioni a un insieme
+valori <- c(1, 2, 3, 4, 1, 2)
+unique(valori)
+```
+
+L'operatore `%in%` verifica l'appartenenza:
+
+```{r}
+mio_insieme <- c(1, 3, 5)
+
+1 %in% mio_insieme # TRUE:  1 appartiene
+2 %in% mio_insieme # FALSE: 2 non appartiene
+!(4 %in% mio_insieme) # TRUE:  4 non appartiene
+```
+
+Definito un universo di riferimento, si possono verificare inclusione e disgiunzione:
+
+```{r}
+universo <- 0:10
+pari <- universo[universo %% 2 == 0] # {0, 2, 4, 6, 8, 10}
+dispari <- universo[universo %% 2 == 1] # {1, 3, 5, 7, 9}
+sottoinsieme <- c(4, 6)
+
+all(sottoinsieme %in% pari) # TRUE: sottoinsieme ⊆ pari
+length(intersect(pari, dispari)) == 0 # TRUE: insiemi disgiunti
+```
+
+Le quattro operazioni fondamentali hanno funzioni dedicate:
+
+```{r}
+S1 <- seq(1, 10, by = 3) # {1, 4, 7, 10}
+S2 <- 1:6 # {1, 2, 3, 4, 5, 6}
+
+intersect(S1, S2) # elementi comuni
+union(S1, S2) # elementi di almeno uno dei due
+setdiff(S1, S2) # in S1 ma non in S2
+setdiff(S2, S1) # in S2 ma non in S1
+```
+
+L'ordine in cui R restituisce gli elementi dipende dall'implementazione e non ha alcun significato insiemistico: per confrontare due insiemi si usa `setequal()`, non `identical()`.
+
+```{r}
+setequal(union(S1, S2), union(S2, S1)) # TRUE: l'unione è commutativa
+identical(union(S1, S2), union(S2, S1)) # FALSE: cambia solo l'ordine
+```
+
+Il complementare richiede di esplicitare l'universo, che in R non è mai implicito:
+
+```{r}
+universo <- 0:20
+S <- seq(0, 20, by = 2) # numeri pari
+S_compl <- setdiff(universo, S) # numeri dispari
+
+setequal(union(S, S_compl), universo) # TRUE: S ∪ Sᶜ = U
+length(intersect(S, S_compl)) == 0 # TRUE: S ∩ Sᶜ = ∅
 ```
 
 ### Differenza simmetrica
 
-La differenza simmetrica, denotata con $A \triangle B$, è definita come:
+La **differenza simmetrica** $A \triangle B$ raccoglie gli elementi che appartengono a uno solo dei due insiemi:
+
 $$
 A \triangle B = (A \setminus B) \cup (B \setminus A) = (A \cup B) \setminus (A \cap B).
 $$
 
+Nel linguaggio degli eventi corrisponde all'«oppure esclusivo»: si verifica esattamente uno dei due.
+
 ```{r}
-sym_diff <- union(setdiff(S1, S2), setdiff(S2, S1))
-# Equivalente: setdiff(union(S1, S2), intersect(S1, S2))
+diff_simm <- union(setdiff(S1, S2), setdiff(S2, S1))
+diff_simm
+
+# Formulazione equivalente
+setequal(diff_simm, setdiff(union(S1, S2), intersect(S1, S2)))
 ```
 
 ### Leggi di De Morgan
 
-Le due leggi fondamentali che collegano unione, intersezione e complementazione:
+Le due leggi di De Morgan collegano unione, intersezione e complementazione:
 
 $$
-(A \cup B)^c = A^c \cap B^c, \quad
+(A \cup B)^c = A^c \cap B^c, \qquad
 (A \cap B)^c = A^c \cup B^c.
 $$
 
-Queste identità sono facilmente visualizzabili mediante diagrammi di Venn.
+A parole: «non si verifica né $A$ né $B$» equivale a «non si verifica $A$ **e** non si verifica $B$»; «non si verificano entrambi» equivale a «manca almeno uno dei due». La seconda formulazione è quella che si usa quando conviene calcolare la probabilità dell'evento complementare invece di quella dell'evento di interesse — una strategia ricorrente, per esempio, nei problemi in cui si chiede la probabilità che si verifichi «almeno un» esito di un certo tipo.
 
-![Leggi di De Morgan.](../../figures/demorgan.png)
+Le due identità si leggono direttamente dai diagrammi: nella figura seguente, le colonne centrale e destra ombreggiano la stessa regione.
+
+```{r}
+#| echo: false
+#| label: fig-demorgan
+#| fig-cap: "Le leggi di De Morgan. In ciascuna riga i pannelli centrale e destro individuano la stessa regione, il che verifica graficamente le due identità $(A \\cup B)^c = A^c \\cap B^c$ e $(A \\cap B)^c = A^c \\cup B^c$."
+#| fig-alt: "Sei diagrammi di Venn disposti su due righe e tre colonne. Nella prima riga sono ombreggiate l'unione dei due cerchi, la regione esterna a entrambi e di nuovo la regione esterna a entrambi. Nella seconda riga sono ombreggiate la sovrapposizione dei cerchi, tutta l'area tranne la sovrapposizione e di nuovo tutta l'area tranne la sovrapposizione."
+#| fig-width: 9.5
+#| fig-height: 5.6
+
+.g <- .griglia_venn(.CA, .CB, .RR, .RR)
+.maschere <- list(
+  `union(A, B)` = .g$inA | .g$inB,
+  `group("(", union(A, B), ")")^c` = !(.g$inA | .g$inB),
+  `intersect(A^c, B^c)` = (!.g$inA) & (!.g$inB),
+  `intersect(A, B)` = .g$inA & .g$inB,
+  `group("(", intersect(A, B), ")")^c` = !(.g$inA & .g$inB),
+  `union(A^c, B^c)` = (!.g$inA) | (!.g$inB)
+)
+.p <- .componi_pannelli(.g, .maschere, .CA, .CB, .RR, .RR,
+  con_etichette = FALSE
+)
+.venn_gg(.p$regioni, .p$bordi, ncol = 3)
+```
+
+La verifica numerica in R è immediata:
+
+```{r}
+A <- c(1, 2, 3, 4)
+B <- c(3, 4, 5, 6)
+U <- 1:8
+
+compl <- function(X) setdiff(U, X)
+
+setequal(compl(union(A, B)), intersect(compl(A), compl(B)))
+setequal(compl(intersect(A, B)), union(compl(A), compl(B)))
+```
+
+## Cardinalità e principio di inclusione-esclusione
+
+La **cardinalità** di un insieme finito $A$, indicata con $|A|$ o $\#(A)$, è il numero dei suoi elementi distinti.
+
+Per l'unione di due insiemi la cardinalità **non** è in generale la somma delle cardinalità: gli elementi comuni verrebbero contati due volte. Vale invece il **principio di inclusione-esclusione**:
+
+$$
+|A \cup B| = |A| + |B| - |A \cap B|.
+$$
+
+Questa è la controparte insiemistica della regola della somma della probabilità, $P(A \cup B) = P(A) + P(B) - P(A \cap B)$, che si semplifica in $P(A) + P(B)$ solo quando gli eventi sono mutuamente esclusivi, cioè quando $A \cap B = \emptyset$.
+
+```{r}
+A <- c(1, 2, 3, 4)
+B <- c(3, 4, 5, 6)
+
+length(union(A, B)) # cardinalità dell'unione
+length(A) + length(B) - length(intersect(A, B)) # stesso risultato
+```
 
 ## Coppie ordinate e prodotto cartesiano
 
-Una **coppia ordinata** $(a, b)$ è un'entità in cui l'ordine degli elementi è significativo: $(a, b) \neq (b, a)$ a meno che $a = b$. Il **prodotto cartesiano** di due insiemi $A$ e $B$ è l'insieme di tutte le possibili coppie ordinate:
+Una **coppia ordinata** $(a, b)$ è un'entità in cui l'ordine è significativo: $(a, b) \neq (b, a)$ a meno che $a = b$. È la differenza cruciale rispetto all'insieme $\{a, b\}$, per il quale l'ordine è irrilevante.
+
+Il **prodotto cartesiano** di $A$ e $B$ è l'insieme di tutte le coppie ordinate:
 
 $$
 A \times B = \{(a, b) \mid a \in A,\ b \in B\}.
 $$
 
-Esempio: $\{1, 2\} \times \{a, b, c\} = \{(1,a), (1,b), (1,c), (2,a), (2,b), (2,c)\}$.
+Per esempio, $\{1, 2\} \times \{a, b, c\} = \{(1,a), (1,b), (1,c), (2,a), (2,b), (2,c)\}$.
 
-### Implementazione in R
+La cardinalità segue una regola moltiplicativa,
+
+$$
+|A \times B| = |A| \cdot |B|,
+$$
+
+che si generalizza a $n$ insiemi: $|A_1 \times \dots \times A_n| = |A_1| \cdot \ldots \cdot |A_n|$. In particolare, la $k$-esima **potenza cartesiana** $A^k = A \times \dots \times A$ ha cardinalità $|A^k| = |A|^k$.
+
+Il prodotto cartesiano è il modo naturale di costruire lo spazio campionario di un esperimento composto da più prove: lo spazio dei risultati di tre lanci di una moneta è la terza potenza cartesiana di $\{\text{testa}, \text{croce}\}$.
 
 ```{r}
-A <- c("a", "b", "c")
-S <- 1:3
-cartesian_product <- expand.grid(A, S)
-print(cartesian_product)
-nrow(cartesian_product) # Cardinalità: |A| × |S| = 3 × 3 = 9
+moneta <- c("testa", "croce")
+
+# Spazio campionario di tre lanci: 2³ = 8 risultati possibili
+tre_lanci <- expand.grid(
+  lancio_1 = moneta,
+  lancio_2 = moneta,
+  lancio_3 = moneta
+)
+
+nrow(tre_lanci) # cardinalità
+head(tre_lanci, 4)
 ```
 
-Il concetto si estende a $n$-uple ordinate (o tuple) e a prodotti cartesiani di $n$ insiemi, che corrispondono a array multidimensionali.
+La crescita è esponenziale nel numero di prove: è il motivo per cui, oltre pochi passi, l'enumerazione esplicita dello spazio campionario diventa impraticabile e occorre ragionare con le regole del calcolo combinatorio (@sec-apx-combinatorics) o con metodi di simulazione.
+
+## Dagli insiemi agli eventi: partizioni e probabilità totale
+
+Le nozioni introdotte finora convergono in un'unica struttura, che è quella su cui poggiano il teorema della probabilità totale e il teorema di Bayes.
+
+Una famiglia di insiemi $A_1, A_2, \dots, A_k$ costituisce una **partizione** dell'universo $U$ se soddisfa due condizioni:
+
+- gli insiemi sono a due a due disgiunti, $A_i \cap A_j = \emptyset$ per $i \neq j$;
+- la loro unione esaurisce l'universo, $\bigcup_{i=1}^k A_i = U$.
+
+Nel linguaggio degli eventi: le alternative sono mutuamente esclusive ed esaustive, cioè si verifica una e una sola di esse. Il caso più semplice di partizione è la coppia $\{A, A^c\}$.
+
+Un qualunque altro evento $B$ viene allora scomposto dalla partizione in $k$ pezzi disgiunti, $B = \bigcup_{i=1}^k (B \cap A_i)$, come mostra @fig-partizione.
 
 ```{r}
-# Potenza cartesiana: A × A × A
-A <- c("Head", "Tail")
-p3 <- expand.grid(A, A, A) # 2³ = 8 combinazioni
+#| echo: false
+#| label: fig-partizione
+#| fig-cap: "Una partizione dell'universo in quattro insiemi disgiunti la cui unione è $U$. L'evento $B$ viene scomposto nelle quattro porzioni disgiunte $B \\cap A_i$: sommandone le probabilità si ottiene $P(B)$, che è il contenuto del teorema della probabilità totale."
+#| fig-alt: "Un rettangolo diviso in quattro bande verticali di ampiezza diversa, etichettate da A1 ad A4. Un cerchio etichettato B, disegnato al centro, attraversa tutte e quattro le bande, risultando così suddiviso in quattro porzioni."
+#| fig-width: 6.5
+#| fig-height: 4.2
+
+.tagli <- c(0, 2.5, 5.0, 7.2, 10.0)
+.bande <- data.frame(
+  xmin = .tagli[-5],
+  xmax = .tagli[-1],
+  ymin = 0,
+  ymax = .YMAX,
+  etichetta = paste0("A[", 1:4, "]")
+)
+.bande$xmid <- (.bande$xmin + .bande$xmax) / 2
+
+.cerchio_b <- .cerchio(c(5.0, 3.6), 2.0, "B")
+
+ggplot() +
+  geom_rect(
+    data = .bande,
+    aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+    fill = "#f2f5f7", colour = TEXT_LIGHT, linewidth = 0.4
+  ) +
+  geom_text(
+    data = .bande,
+    aes(x = xmid, y = 0.55, label = etichetta),
+    parse = TRUE, colour = TEXT_MED, size = 4.3
+  ) +
+  geom_polygon(
+    data = .cerchio_b,
+    aes(x = x, y = y),
+    fill = PRIMARY, alpha = 0.30
+  ) +
+  geom_path(
+    data = .cerchio_b,
+    aes(x = x, y = y),
+    colour = TEXT_MED, linewidth = 0.6
+  ) +
+  annotate(
+    "text",
+    x = 5.0, y = 3.6, label = "B",
+    colour = TEXT_DARK, size = 4.6
+  ) +
+  coord_fixed(
+    xlim = c(-0.2, .XMAX + 0.2),
+    ylim = c(-0.2, .YMAX + 0.2),
+    expand = FALSE
+  ) +
+  theme_void(base_family = modern_sans, base_size = 12)
 ```
 
-## Cardinalità di un insieme
-
-La **cardinalità** di un insieme finito $A$, indicata con $|A|$, $\#(A)$ o $\mathrm{card}(A)$, rappresenta il numero di elementi distinti contenuti nell'insieme. Questa nozione quantitativa è fondamentale per descrivere la dimensione di un insieme e per calcolare la dimensione di insiemi costruiti attraverso operazioni insiemistiche.
-
-### Proprietà della cardinalità
-
-Per il prodotto cartesiano di due insiemi, la cardinalità segue una regola moltiplicativa:
+Poiché i pezzi sono disgiunti, le loro probabilità si sommano:
 
 $$
-|A \times B| = |A| \cdot |B|.
+P(B) = \sum_{i=1}^k P(B \cap A_i) = \sum_{i=1}^k P(B \mid A_i)\, P(A_i).
 $$
 
-Questa proprietà si generalizza al prodotto cartesiano di $n$ insiemi:
+È il **teorema della probabilità totale**, e costituisce il denominatore del teorema di Bayes. Tutto ciò che serve per giustificarlo è quanto visto in questa appendice: una partizione, l'additività su insiemi disgiunti e la scomposizione di un insieme mediante intersezioni.
 
-$$
-|A_1 \times A_2 \times \dots \times A_n| = |A_1| \cdot |A_2| \cdot \dots \cdot |A_n|.
-$$
+## Sintesi
 
-In particolare, la $k$-esima **potenza cartesiana** di un insieme $A$, definita come $A^k = A \times A \times \dots \times A$ ($k$ volte), ha cardinalità:
+| Concetto | Notazione | Lettura in termini di eventi |
+|---|---|---|
+| Appartenenza | $x \in A$ | l'esito $x$ realizza l'evento $A$ |
+| Inclusione | $A \subseteq B$ | $A$ implica $B$, quindi $P(A) \le P(B)$ |
+| Insieme vuoto | $\emptyset$ | evento impossibile |
+| Universo | $U$ | evento certo |
+| Unione | $A \cup B$ | almeno uno dei due |
+| Intersezione | $A \cap B$ | entrambi |
+| Complementare | $A^c$ | non $A$; $P(A^c) = 1 - P(A)$ |
+| Differenza | $A \setminus B = A \cap B^c$ | $A$ ma non $B$ |
+| Disgiunzione | $A \cap B = \emptyset$ | eventi mutuamente esclusivi |
+| Partizione | $\{A_1, \dots, A_k\}$ | alternative esclusive ed esaustive |
+| Prodotto cartesiano | $A \times B$ | spazio campionario di prove combinate |
 
-$$
-|A^k| = |A|^k.
-$$
-
-### Implementazione in R
-
-La seguente implementazione in R illustra il calcolo della cardinalità per la terza potenza cartesiana di un insieme:
-
-```{r}
-# Definizione dell'insieme di partenza
-A <- c("Head", "Tail")
-
-# Costruzione della terza potenza cartesiana A × A × A
-p3 <- expand.grid(A, A, A)
-
-# Output dei risultati
-cat("L'insieme A³ è costituito da", nrow(p3), "elementi:\n")
-print(p3)
-```
-
-L'esecuzione di questo codice produce:
-
-- cardinalità: $|A|^3 = 2^3 = 8$ elementi;
-- enumerazione esplicita di tutte le possibili terne ordinate di risultati (ad esempio, `("Head", "Head", "Head")`, `("Head", "Head", "Tail")`, ecc.).
-
-Questo esempio dimostra come la proprietà moltiplicativa della cardinalità si traduca in una crescita esponenziale del numero di elementi nel prodotto cartesiano, un concetto cruciale in probabilità, combinatoria e nella *data science*.
+Le funzioni R corrispondenti sono `%in%`, `unique()`, `intersect()`, `union()`, `setdiff()` e `setequal()`; il prodotto cartesiano si costruisce con `expand.grid()`. Va ricordato che in R l'universo non è mai implicito: il complementare va sempre calcolato rispetto a un insieme di riferimento dichiarato esplicitamente.

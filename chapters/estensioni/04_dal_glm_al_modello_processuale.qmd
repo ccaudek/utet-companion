@@ -1,30 +1,10 @@
 # Dal GLM statico al modello dinamico: un ponte verso i modelli processuali {#sec-ar1}
 
+::: {.callout-note appearance="minimal"}
 I capitoli precedenti hanno mostrato come descrivere una risposta binaria mediante una distribuzione Bernoulli e un predittore lineare collegato alla probabilità attraverso il logit. Questa struttura è sufficiente quando la domanda riguarda una probabilità media condizionata ai predittori. Diventa invece incompleta quando l'ordine delle risposte contiene informazione: una scelta può dipendere da ciò che è accaduto poco prima, uno stato emotivo può persistere nel tempo e l'esperienza accumulata può modificare le decisioni successive.
 
 Questo capitolo introduce il passaggio da un GLM statico a un modello dinamico con stato latente. L'obiettivo non è offrire una trattazione generale delle serie temporali, ma mostrare come una probabilità osservabile possa diventare l'uscita di una struttura che evolve nel tempo. Il capitolo conclude la Parte *Estensioni* e prepara la Parte successiva, dedicata ai modelli meccanicistici. Il passaggio è importante, ma non automatico: rappresentare una dinamica non equivale ancora a spiegare il meccanismo psicologico che la produce.
-
-## Orientamento {.unnumbered .unlisted}
-
-Una regressione logistica risponde a una domanda del tipo:
-
-$$
-\Pr(Y_{it}=1\mid x_{it}).
-$$
-
-Il modello descrive come la probabilità di risposta vari al cambiare dei predittori. Se le osservazioni sono ripetute, possiamo aggiungere intercette o pendenze individuali, ma la struttura rimane essenzialmente statica: una volta condizionato sui parametri e sui predittori, il modello non attribuisce un ruolo specifico alla sequenza temporale.
-
-Un modello dinamico formula una domanda ulteriore. Suppone che tra i predittori osservati e la risposta esista uno stato interno che cambia nel tempo:
-
-$$
-\text{input}_{it}
-\longrightarrow
-\text{stato}_{it}
-\longrightarrow
-\Pr(Y_{it}=1).
-$$
-
-Nel seguito useremo un processo autoregressivo di primo ordine come esempio minimo. I modelli AR(1) sono un punto di partenza classico per rappresentare persistenza e dipendenza temporale [@chatfield2019analysis]. Non interpreteremo però automaticamente lo stato latente come attenzione, motivazione o fiducia. Esso è anzitutto un costrutto statistico: descrive una componente persistente non osservata. Per trasformarlo in una variabile psicologica occorrono una teoria sostantiva, manipolazioni o misure pertinenti e previsioni capaci di distinguere spiegazioni alternative.
+:::
 
 ::: {.callout-important appearance="minimal" .chapter-status}
 **Da sapere.** Un GLM statico descrive come la probabilità media di una risposta binaria varia con i predittori, ma non rappresenta necessariamente l’ordine delle osservazioni. Quando la sequenza contiene informazione, si può introdurre uno stato latente che evolve nel tempo. Nel modello AR(1), $\phi$ descrive la persistenza dello stato e $\sigma_z$ la nuova variabilità introdotta a ogni passo. Questo rende il modello dinamico, non automaticamente meccanicistico: collegare lo stato ad attenzione, fiducia o apprendimento richiede una regola teorica di aggiornamento e verifiche ulteriori.
@@ -54,6 +34,28 @@ if (!requireNamespace("cmdstanr", quietly = TRUE)) {
 set.seed(2026)
 ```
 :::
+
+## Il valore aggiunto di un modello dinamico
+
+Una regressione logistica risponde a una domanda del tipo:
+
+$$
+\Pr(Y_{it}=1\mid x_{it}).
+$$
+
+Il modello descrive come la probabilità di risposta vari al cambiare dei predittori. Se le osservazioni sono ripetute, possiamo aggiungere intercette o pendenze individuali, ma la struttura rimane essenzialmente statica: una volta condizionato sui parametri e sui predittori, il modello non attribuisce un ruolo specifico alla sequenza temporale.
+
+Un modello dinamico formula una domanda ulteriore. Suppone che tra i predittori osservati e la risposta esista uno stato interno che cambia nel tempo:
+
+$$
+\text{input}_{it}
+\longrightarrow
+\text{stato}_{it}
+\longrightarrow
+\Pr(Y_{it}=1).
+$$
+
+Nel seguito useremo un processo autoregressivo di primo ordine come esempio minimo. I modelli AR(1) sono un punto di partenza classico per rappresentare persistenza e dipendenza temporale [@chatfield2019analysis]. Non interpreteremo però automaticamente lo stato latente come attenzione, motivazione o fiducia. Esso è anzitutto un costrutto statistico: descrive una componente persistente non osservata. Per trasformarlo in una variabile psicologica occorrono una teoria sostantiva, manipolazioni o misure pertinenti e previsioni capaci di distinguere spiegazioni alternative.
 
 ## Che cosa non vede un GLM statico
 
@@ -184,6 +186,11 @@ glimpse(binary_data)
 La figura seguente mostra alcune traiettorie. La probabilità varia sia quando cambia il predittore sia perché lo stato latente conserva memoria del passato.
 
 ```{r}
+#| label: fig-processual-latent-trajectories
+#| fig-cap: "Probabilità latente e risposte binarie osservate per sei individui simulati. Le linee mostrano l'evoluzione della probabilità di successo nel tempo, mentre i punti indicano gli esiti osservati in ciascuna prova."
+#| fig-alt: "Sei pannelli mostrano, per altrettanti individui, una linea temporale della probabilità latente e punti binari corrispondenti alle risposte osservate."
+#| fig-width: 8.5
+#| fig-height: 8
 binary_data |>
   filter(id <= 6) |>
   ggplot(aes(trial, p)) +
@@ -284,6 +291,11 @@ fit_state_prior <- state_model$sample(
 Per giudicare i prior consideriamo la proporzione complessiva di risposte positive e il tasso di cambiamento tra risposte consecutive.
 
 ```{r}
+#| label: fig-processual-prior-predictive-checks
+#| fig-cap: "Controlli predittivi a priori del modello dinamico. I due pannelli mostrano le distribuzioni della proporzione complessiva di successi e del tasso di cambiamento tra risposte consecutive generate prima di osservare i dati."
+#| fig-alt: "Due pannelli con curve di densità mostrano la distribuzione predittiva a priori della proporzione di risposte uguali a uno e del tasso di cambiamento tra risposte consecutive."
+#| fig-width: 9
+#| fig-height: 4.8
 switch_rate <- function(y, prev) {
   idx <- which(prev > 0)
   mean(y[idx] != y[prev[idx]])
@@ -424,6 +436,11 @@ replicated_stats <- bind_rows(
 ```
 
 ```{r}
+#| label: fig-processual-posterior-predictive-comparison
+#| fig-cap: "Confronto predittivo a posteriori tra il GLM gerarchico statico e il modello dinamico. Le densità rappresentano le statistiche replicate dai due modelli; le linee tratteggiate indicano i valori osservati per la proporzione di successi e il tasso di cambiamento."
+#| fig-alt: "Due pannelli confrontano le distribuzioni predittive posteriori del GLM statico e del modello dinamico per la proporzione di successi e il tasso di cambiamento, con linee verticali sui valori osservati."
+#| fig-width: 9
+#| fig-height: 5
 replicated_stats |>
   pivot_longer(
     cols = c(proportion_one, switch_rate),
@@ -485,7 +502,7 @@ Lo stato autoregressivo rimane tuttavia una rappresentazione generale. Esso segn
 
 ### Esercizio 1 — Comprendere: che cosa vede il modello? {.unnumbered .unlisted}
 
-*Livello essenziale · 10 minuti · Codice: no*
+*10 minuti · Codice: no*
 
 Considera le due sequenze:
 
@@ -513,7 +530,7 @@ La differenza è irrilevante se la domanda riguarda soltanto la proporzione medi
 
 ### Esercizio 2 — Prevedere: interpretare i parametri dinamici {.unnumbered .unlisted}
 
-*Livello essenziale · 10 minuti · Codice: no*
+*10 minuti · Codice: no*
 
 Confronta quattro scenari:
 
@@ -538,7 +555,7 @@ Con $\phi$ positivo e vicino a 1 lo stato è molto persistente: valori elevati o
 
 ### Esercizio 3 — Modificare: da dinamico a meccanicistico {.unnumbered .unlisted}
 
-*Livello essenziale · 15 minuti · Codice: no*
+*15 minuti · Codice: no*
 
 Uno studio trova che un modello AR(1) riproduce bene la persistenza delle risposte in un compito di apprendimento. I ricercatori chiamano $z_t$ “aspettativa di ricompensa”.
 
@@ -563,7 +580,7 @@ Serve inoltre una previsione discriminante. Per esempio, dopo un cambiamento imp
 
 ### Esercizio 4 — Criticare: che cosa dimostra un migliore adattamento? {.unnumbered .unlisted}
 
-*Livello essenziale · 10–15 minuti · Codice: no*
+*10–15 minuti · Codice: no*
 
 Uno studente conclude:
 

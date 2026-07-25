@@ -1,5 +1,6 @@
 # Dalla formula al programma: formule R, matrice del modello e Stan {#sec-linar-models-brms}
 
+::: {.callout-note appearance="minimal"}
 Nei capitoli precedenti abbiamo formalizzato il modello lineare in termini di distribuzioni probabilistiche, affidandone l'adattamento numerico alle funzioni del pacchetto `brms`. Per lo studente o il ricercatore, tuttavia, una formula sintattica espressa nella forma
 
 ```r
@@ -20,6 +21,7 @@ $$
 $$
 
 L'obiettivo di questo approfondimento non è suggerire di sostituire sistematicamente le funzioni di `brms` con il codice Stan, operazione che risulterebbe inefficiente nella pratica quotidiana. Lo scopo è piuttosto quello di rendere esplicito e trasparente il contenuto semantico della formula, decodificando ciò che il software costruisce automaticamente dietro le quinte. Solo acquisendo questa consapevolezza, il ricercatore può comprendere appieno quali decisioni computazionali vengono delegate all'algoritmo e quali scelte metodologiche rimangono, in ultima istanza, sotto la sua diretta responsabilità scientifica.
+:::
 
 ::: {.callout-important appearance="minimal" .chapter-status}
 **Da sapere.** Formula R, matrice del modello e programma Stan sono rappresentazioni, a diversi livelli di astrazione, dello stesso modello generativo. In una regressione multipla, ciascun coefficiente descrive l’associazione con l’esito mantenendo costanti gli altri predittori inclusi nel modello.
@@ -158,7 +160,8 @@ Prima di procedere all'inferenza congiunta, esaminiamo graficamente come le vari
 
 ```{r}
 #| label: fig-stress-predictors
-#| fig-cap: "Associazioni bivariate marginali tra lo stress e i due predittori simulati. Ciascun pannello mostra una retta di regressione lineare semplice, non ancora condizionata alla presenza dell'altra variabile."
+#| fig-cap: "Associazioni bivariate marginali tra lo stress percepito e i due predittori simulati. Ciascun pannello mostra una retta di regressione lineare semplice, prima di condizionare rispetto alla presenza dell'altra variabile."
+#| fig-alt: "Due diagrammi a dispersione affiancati. Il primo mostra lo stress rispetto all'affetto negativo, con una tendenza crescente; il secondo mostra lo stress rispetto al sonno centrato, con una tendenza decrescente."
 #| fig-width: 8
 #| fig-height: 4.5
 
@@ -726,7 +729,11 @@ Per una trattazione metodologica approfondita del workflow e delle diagnostiche 
 Un controllo predittivo a posteriori (*posterior predictive check*, PPC) essenziale consiste nel confrontare la distribuzione dei dati osservati con quella delle repliche simulate dal modello. Possiamo visualizzare questa verifica formale con entrambi gli approcci:
 
 ```{r}
-#| label: ppc-brms-multiple
+#| label: fig-ppc-brms-multiple
+#| fig-cap: "Controllo predittivo a posteriori del modello di regressione multipla stimato con `brms`. La densità osservata dello stress è confrontata con le densità di 50 dataset replicati dalla distribuzione predittiva a posteriori."
+#| fig-alt: "Grafico di densità con la distribuzione osservata dello stress evidenziata e cinquanta densità replicate sovrapposte, generate dal modello brms."
+#| fig-width: 8
+#| fig-height: 5.5
 
 pp_check(
   fit_multiple_brms,
@@ -738,7 +745,11 @@ pp_check(
 Nel caso del modello Stan diretto, utilizziamo le funzionalità del pacchetto `posterior` per estrarre la matrice delle repliche dal blocco `generated quantities` e passarla agli strumenti grafici di `bayesplot`:
 
 ```{r}
-#| label: ppc-stan-multiple
+#| label: fig-ppc-stan-multiple
+#| fig-cap: "Controllo predittivo a posteriori dello stesso modello implementato direttamente in Stan. La densità osservata dello stress è confrontata con 50 repliche estratte da `y_rep`, consentendo di verificare la coerenza predittiva dell'implementazione."
+#| fig-alt: "Grafico di densità con la distribuzione osservata dello stress e cinquanta distribuzioni replicate sovrapposte, ottenute dal modello scritto direttamente in Stan."
+#| fig-width: 8
+#| fig-height: 5.5
 #| message: false
 # Estrazione dei draws come matrice bidimensionale (draws x osservazioni)
 y_rep_stan <- fit_multiple_stan$draws(
@@ -785,19 +796,6 @@ La formula rende immediatamente leggibile l'architettura delle nostre ipotesi. L
 Oltre agli aspetti puramente computazionali, il passaggio alla regressione multipla ha fatto emergere un principio interpretativo cruciale: in un modello lineare, nessun coefficiente vive in isolamento. Ogni parametro descrive un'associazione condizionata alla presenza degli altri termini inclusi nel predittore lineare. Di conseguenza, l'entità e persino il segno di un effetto possono mutare radicalmente al variare della specificazione complessiva. Questa dipendenza non costituisce un difetto del modello, ma segnala che il significato del coefficiente è inseparabile dalla domanda, dalla codifica e dall'insieme dei predittori.
 
 Nei capitoli che seguono applicheremo la stessa grammatica generativa per mostrare come la stima di una singola media, il confronto tra due o più gruppi e i tradizionali modelli di ANOVA non siano altro che casi particolari del modello lineare. La matrice del modello cambierà per adattarsi a nuovi disegni sperimentali, ma il workflow bayesiano rimarrà lo stesso.
-
-### Concetti da ricordare
-
-1. La formula R descrive la struttura del predittore lineare.
-2. L'intercetta è inclusa per impostazione predefinita.
-3. Ogni termine della formula genera una o più colonne della matrice del modello.
-4. Il prodotto $\mathbf{X}\boldsymbol{\beta}$ produce i valori medi attesi.
-5. In regressione multipla, i coefficienti sono associazioni condizionate agli altri predittori inclusi.
-6. Formula, famiglia e prior sono componenti distinte della specificazione.
-7. `brms` traduce la specificazione in codice Stan.
-8. Stan diretto offre maggiore flessibilità, ma richiede più controlli.
-9. Risultati compatibili richiedono dati, modello e prior compatibili.
-10. La scelta del livello di astrazione deve dipendere dalla domanda, non dal prestigio dello strumento.
 
 ## Esercizi {.unnumbered .unlisted}
 

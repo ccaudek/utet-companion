@@ -1,10 +1,12 @@
 # Regressione logistica: dal predittore lineare alla probabilità {#sec-reg-logistic-stan}
 
+::: {.callout-note appearance="minimal"}
 La regressione logistica è utile quando la variabile risposta può assumere soltanto due valori: per esempio risposta corretta o errata, presenza o assenza di un sintomo, scelta A o scelta B. In questi casi la domanda non riguarda una media su una scala continua, ma la *probabilità* che si verifichi uno dei due esiti.
 
 La regressione lineare gaussiana non è, in generale, una scelta adeguata per un esito binario: tratta la risposta come continua e può produrre valori inferiori a 0 o superiori a 1. Un modello lineare della probabilità può talvolta essere utile come approssimazione descrittiva, ma non rappresenta direttamente la struttura Bernoulli dei dati. La regressione logistica risolve il problema in tre passaggi: descrive l'esito con una distribuzione di Bernoulli, costruisce un predittore lineare e lo trasforma in una probabilità mediante il link logit.
 
 Questo capitolo introduce l'architettura dei modelli lineari generalizzati a partire da questa idea intuitiva. Il caso Bernoulli-logit verrà poi seguito attraverso l'intero flusso di lavoro bayesiano: formulazione generativa, scelta dei prior, controllo predittivo a priori, stima, diagnostica, interpretazione e controllo predittivo a posteriori. Nei capitoli successivi, la stessa struttura verrà riutilizzata per proporzioni e conteggi.
+:::
 
 ::: {.callout-important appearance="minimal" .chapter-status}
 **Da sapere.** La regressione logistica descrive come cambia la probabilità di un esito binario. Il modello combina una distribuzione Bernoulli, un predittore lineare e il link logit. La linearità riguarda i log-odds, non direttamente le probabilità: per questo probabilità, odds e log-odds devono essere distinti con cura.
@@ -150,6 +152,11 @@ glimpse(logistic_data)
 Una prima rappresentazione può raggruppare il predittore in intervalli e mostrare la proporzione di risposte corrette osservate. Questo grafico è descrittivo e serve a comprendere i dati, ma non sostituisce il modello probabilistico.
 
 ```{r}
+#| label: fig-logistic-observed-proportions
+#| fig-cap: "Proporzione osservata di risposte corrette per intervalli della preparazione standardizzata. La dimensione dei punti rappresenta il numero di osservazioni in ciascun intervallo; il grafico è descrittivo e precede la specificazione del modello logistico."
+#| fig-alt: "Diagramma a punti della proporzione di risposte corrette rispetto alla preparazione standardizzata. I punti tendono a salire da sinistra verso destra e hanno dimensioni diverse in base al numero di osservazioni."
+#| fig-width: 7.5
+#| fig-height: 5
 observed_bins <- logistic_data |>
   mutate(bin = cut(preparation, breaks = quantile(preparation, probs = seq(0, 1, 0.1)),
                    include.lowest = TRUE)) |>
@@ -273,6 +280,11 @@ fit_logistic_prior <- brm(
 Possiamo esaminare la distribuzione della proporzione complessiva di risposte corrette generata dal prior:
 
 ```{r}
+#| label: fig-logistic-prior-predictive-mean
+#| fig-cap: "Controllo predittivo a priori della proporzione complessiva di risposte corrette. La statistica osservata è confrontata con quelle ottenute da 100 dataset simulati esclusivamente dai prior."
+#| fig-alt: "Distribuzione delle proporzioni medie di successo generate dal modello a priori, con la proporzione osservata indicata come riferimento."
+#| fig-width: 7.5
+#| fig-height: 5
 pp_check(fit_logistic_prior, type = "stat", stat = "mean", ndraws = 100)
 ```
 
@@ -305,6 +317,11 @@ summary(fit_logistic)
 Prima di interpretare la posterior è necessario verificare il campionamento. I valori di $\widehat R$, le dimensioni campionarie effettive, le catene e l'eventuale presenza di divergenze riguardano l'affidabilità del calcolo, non l'adeguatezza scientifica del modello.
 
 ```{r}
+#| label: fig-logistic-mcmc-diagnostics
+#| fig-cap: "Diagnostica grafica del campionamento MCMC per il modello logistico. Le distribuzioni marginali e i tracciati delle catene consentono di valutare mescolamento, stazionarietà e coerenza tra le catene."
+#| fig-alt: "Pannelli diagnostici MCMC con distribuzioni posteriori e tracciati delle catene per i parametri del modello logistico."
+#| fig-width: 9
+#| fig-height: 7
 plot(fit_logistic)
 ```
 
@@ -386,6 +403,11 @@ L'odds ratio per il passaggio da $-1$ a $1$ corrisponde a $\exp(2\beta)$, perch�
 Per rappresentare l'incertezza sulla probabilità media costruiamo una griglia di valori del predittore e utilizziamo la funzione `posterior_epred()`. Questa funzione restituisce la probabilità attesa di successo. Non genera nuove risposte binarie.
 
 ```{r}
+#| label: fig-logistic-posterior-probability-curve
+#| fig-cap: "Probabilità a posteriori di risposta corretta in funzione della preparazione standardizzata. La linea rappresenta la mediana della probabilità attesa, la fascia il relativo intervallo di credibilità al 95% e i punti le proporzioni osservate per intervalli del predittore."
+#| fig-alt: "Curva logistica crescente con una fascia di incertezza. Sono sovrapposti punti che rappresentano le proporzioni osservate di risposte corrette a diversi livelli di preparazione."
+#| fig-width: 8
+#| fig-height: 5.5
 prediction_grid <- tibble(
   preparation = seq(-3, 3, length.out = 121)
 )
@@ -434,12 +456,22 @@ A ogni valore del predittore, una nuova risposta resta 0 oppure 1. La curva desc
 Un primo controllo confronta la proporzione complessiva osservata con quella delle repliche posteriori:
 
 ```{r}
+#| label: fig-logistic-posterior-predictive-mean
+#| fig-cap: "Controllo predittivo a posteriori della proporzione complessiva di risposte corrette. La proporzione osservata è confrontata con quelle prodotte da 100 repliche generate dalla distribuzione predittiva a posteriori."
+#| fig-alt: "Distribuzione delle proporzioni medie di successo simulate dalla distribuzione predittiva a posteriori, con il valore osservato indicato come riferimento."
+#| fig-width: 7.5
+#| fig-height: 5
 pp_check(fit_logistic, type = "stat", stat = "mean", ndraws = 100)
 ```
 
 Tale controllo può però risultare soddisfacente anche se il modello non rappresenta bene la relazione con il predittore. Per questo motivo, è consigliabile confrontare, per intervalli di preparazione, le proporzioni osservate con quelle previste.
 
 ```{r}
+#| label: fig-logistic-binned-posterior-check
+#| fig-cap: "Controllo predittivo a posteriori condizionato al livello di preparazione. Per ciascun intervallo del predittore, i punti mostrano le proporzioni osservate, mentre la linea e la fascia rappresentano rispettivamente la mediana e l'intervallo di credibilità al 95% delle probabilità previste."
+#| fig-alt: "Grafico della probabilità prevista rispetto alla preparazione standardizzata, con fascia di incertezza e punti osservati per intervalli del predittore."
+#| fig-width: 8
+#| fig-height: 5.5
 posterior_probabilities <- posterior_epred(fit_logistic)
 
 bin_index <- as.integer(
@@ -514,7 +546,7 @@ Anche l'interpretazione causale richiede cautela. Il coefficiente logistico desc
 
 Infine, una regressione logistica rimane un modello della distribuzione condizionata della risposta. Può descrivere e prevedere come cambia una probabilità, ma non specifica necessariamente il processo psicologico che produce le scelte o le risposte nel tempo. Questa distinzione sarà centrale nel capitolo conclusivo della parte.
 
-## Errori interpretativi ricorrenti
+## Errori interpretativi comuni
 
 **Confondere probabilità e odds.** Un odds ratio pari a 2 non implica che la probabilità raddoppi. Il cambiamento sulla scala della probabilità dipende dal rischio di base.
 
@@ -539,7 +571,7 @@ Il capitolo fornisce la struttura di base dei GLM. Una probabilità di successo 
 
 ### Esercizio 1 — Comprendere l'architettura del GLM {.unnumbered .unlisted}
 
-*Livello essenziale · Codice: no · 10 minuti*
+*Codice: no · 10 minuti*
 
 Considera il modello
 
@@ -575,7 +607,7 @@ Il modello è lineare sulla scala dei log-odds, perché $\operatorname{logit}(p_
 
 ### Esercizio 2 — Prevedere l'effetto del livello di base {.unnumbered .unlisted}
 
-*Livello essenziale · Codice: no · 10–15 minuti*
+*Codice: no · 10–15 minuti*
 
 In due popolazioni, un incremento unitario di $x$ ha lo stesso coefficiente:
 
@@ -618,7 +650,7 @@ Il coefficiente è costante sulla scala dei log-odds e l'odds ratio è costante 
 
 ### Esercizio 3 — Modificare la codifica e interpretare i coefficienti {.unnumbered .unlisted}
 
-*Livello essenziale · Codice: no · 10 minuti*
+*Codice: no · 10 minuti*
 
 Un modello usa un predittore standardizzato:
 
@@ -651,7 +683,7 @@ La relazione tra predittore e probabilità non cambia: cambia soltanto il punto 
 
 ### Esercizio 4 — Criticare e comunicare {.unnumbered .unlisted}
 
-*Livello essenziale · Codice: no · 15 minuti*
+*Codice: no · 15 minuti*
 
 Un articolo riporta:
 

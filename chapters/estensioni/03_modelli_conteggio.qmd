@@ -1,12 +1,11 @@
 # Dati di conteggio: Poisson e sovradispersione {#sec-poisson-model}
 
-La regressione di Poisson estende il modello lineare generalizzato agli outcome che rappresentano conteggi: numero di errori, episodi sintomatici, accessi a un servizio o eventi osservati in un intervallo definito. La struttura del modello rimane quella già incontrata nella regressione logistica. Cambiano la distribuzione osservazionale e la funzione di collegamento.
+::: {.callout-note appearance="minimal"}
+La regressione di Poisson rappresenta il punto di riferimento, nell'ambito dei modelli lineari generalizzati (GLM), per l'analisi di variabili dipendenti che assumono la forma di conteggi — quali il numero di errori, episodi sintomatici, accessi a un servizio o, più in generale, occorrenze osservate in un intervallo definito (spaziale o temporale). L'architettura del GLM ricalca quella già incontrata per la regressione logistica; la sostanziale differenza risiede nella scelta della distribuzione condizionata (Poisson, anziché Bernoulliana/Binomiale) e della funzione di collegamento (logaritmica, anziché logit).
 
-Il modello di Poisson è semplice e spesso utile, ma impone una relazione precisa tra media e variabilità. Per questo motivo costituisce anche un buon esempio del workflow di revisione: si specifica il modello, se ne controllano le implicazioni predittive e, quando risulta troppo rigido, si considera una distribuzione più flessibile, come la binomiale negativa.
+La popolarità del modello di Poisson deriva dalla sua semplicità e dalla sua ampia applicabilità; tuttavia, esso impone una relazione stringente tra media e varianza, nota come *equidispersione* ($\mathbb{E}[Y_i] = \mathbb{V}[Y_i] = \lambda_i$). Questa rigidità lo rende perfetto per illustrare il workflow di revisione del modello: dopo la specificazione iniziale, se ne verificano le implicazioni predittive; laddove il vincolo risulti eccessivamente restrittivo (ovvero, in presenza di sovradispersione), si può ripiegare su alternative più flessibili, come il modello a binomiale negativa.
 
-## Orientamento {.unnumbered .unlisted}
-
-Nel modello lineare gaussiano l'outcome può assumere valori continui e la sua media è collegata direttamente al predittore lineare. Nel modello di Poisson l'outcome assume valori interi non negativi e il valore atteso deve essere positivo. Il link logaritmico consente di rispettare questo vincolo:
+A differenza del modello gaussiano, dove l'outcome è continuo e il legame con il predittore lineare è tipicamente di tipo identità, nel modello di Poisson l'outcome è un intero non negativo e il suo valore atteso $\lambda_i$ deve essere strettamente positivo. Il collegamento logaritmico soddisfa tale vincolo, trasformando il predittore lineare $\eta_i$ (che varia su tutto l'asse reale) nel tasso atteso $\lambda_i$ (definito sull'intervallo positivo):
 
 $$
 Y_i \sim \operatorname{Poisson}(\lambda_i),
@@ -17,6 +16,7 @@ Y_i \sim \operatorname{Poisson}(\lambda_i),
 $$
 
 Al termine del capitolo il lettore dovrebbe saper distinguere un conteggio da un tasso, leggere l'architettura del GLM di Poisson, interpretare i coefficienti sulla scala moltiplicativa, comprendere la funzione dell'offset e riconoscere i segnali che rendono il modello di Poisson troppo rigido.
+:::
 
 ::: {.callout-important appearance="minimal" .chapter-status}
 **Da sapere.** I dati di conteggio assumono valori interi non negativi e richiedono una distribuzione coerente con questa struttura. Nel modello di Poisson, il logaritmo del conteggio atteso è espresso come funzione lineare dei predittori. I coefficienti hanno quindi un’interpretazione moltiplicativa: $\exp(\beta)$ rappresenta il rapporto tra conteggi attesi, a parità delle altre condizioni. Quando le unità hanno esposizioni differenti, un *offset* permette di modellare un tasso anziché il conteggio complessivo.
@@ -207,6 +207,11 @@ poisson_priors <- c(
 Le implicazioni dei prior sono più facili da valutare sulla scala dei dati. Adattiamo il modello senza usare la verosimiglianza dei conteggi osservati e generiamo dati dalla distribuzione predittiva a priori:
 
 ```{r}
+#| label: fig-count-prior-predictive-trajectories
+#| fig-cap: "Traiettorie annuali simulate dalla distribuzione predittiva a priori del modello di Poisson. Ogni linea rappresenta una possibile sequenza di conteggi generata prima di condizionare sui dati osservati."
+#| fig-alt: "Molte linee semitrasparenti mostrano possibili andamenti annuali dei conteggi simulati a priori; le traiettorie variano ampiamente tra anni e simulazioni."
+#| fig-width: 8.5
+#| fig-height: 5.5
 fit_poisson_prior <- brm(
   events ~ 0 + Intercept + year_c,
   data = shooting_counts,
@@ -260,6 +265,11 @@ summary(fit_poisson)
 Prima dell'interpretazione controlliamo che il campionamento sia affidabile:
 
 ```{r}
+#| label: fig-count-poisson-mcmc-diagnostics
+#| fig-cap: "Diagnostica grafica del campionamento MCMC per il modello di Poisson. Le densità marginali e i tracciati delle catene permettono di valutare mescolamento, stazionarietà e coerenza tra le catene."
+#| fig-alt: "Pannelli diagnostici MCMC con densità posteriori e tracciati delle catene per i parametri del modello di Poisson."
+#| fig-width: 9
+#| fig-height: 7
 plot(fit_poisson)
 ```
 
@@ -300,6 +310,11 @@ $$
 Questa percentuale è costante nel modello, mentre la variazione assoluta non lo è. Se il conteggio atteso cresce, la stessa variazione percentuale corrisponde a un numero assoluto di eventi sempre maggiore. Per comunicare il risultato è quindi utile mostrare le predizioni annuali, non soltanto l'IRR.
 
 ```{r}
+#| label: fig-count-poisson-expected-counts
+#| fig-cap: "Conteggio annuale atteso secondo il modello di Poisson. La linea mostra la mediana a posteriori di $\\lambda$, la fascia il relativo intervallo di credibilità al 95% e i punti i conteggi osservati."
+#| fig-alt: "Serie temporale dei conteggi annuali osservati con una linea centrale per il conteggio medio previsto e una fascia di incertezza al novantacinque per cento."
+#| fig-width: 8
+#| fig-height: 5.5
 year_grid <- tibble(
   year = 2015:2024,
   year_c = year - 2019
@@ -346,6 +361,11 @@ La banda rappresenta l'incertezza sulla media condizionata $\lambda_t$. Non rapp
 Per controllare il modello generiamo nuovi conteggi dalla distribuzione predittiva:
 
 ```{r}
+#| label: fig-count-poisson-predictive-intervals
+#| fig-cap: "Distribuzione predittiva a posteriori dei conteggi annuali nel modello di Poisson. La linea rappresenta la mediana dei nuovi conteggi simulati, la fascia l'intervallo predittivo al 95% e i punti i valori osservati."
+#| fig-alt: "Serie temporale con conteggi osservati, mediana dei conteggi futuri simulati e un'ampia fascia predittiva al novantacinque per cento."
+#| fig-width: 8
+#| fig-height: 5.5
 y_rep_poisson <- posterior_predict(fit_poisson)
 
 predicted_intervals <- as_tibble(y_rep_poisson) |>
@@ -385,6 +405,11 @@ T(\mathbf y,\boldsymbol\lambda)
 $$
 
 ```{r}
+#| label: fig-count-poisson-dispersion-check
+#| fig-cap: "Controllo predittivo a posteriori della dispersione nel modello di Poisson mediante la discrepanza di Pearson. La separazione tra la distribuzione calcolata sui dati osservati e quella delle repliche posteriori segnala un'eventuale incapacità del modello di riprodurre la variabilità dei conteggi."
+#| fig-alt: "Due curve di densità sovrapposte confrontano la discrepanza di Pearson dei dati osservati con quella delle repliche generate dal modello di Poisson."
+#| fig-width: 8
+#| fig-height: 5.5
 mu_poisson <- posterior_epred(fit_poisson)
 y_obs <- shooting_counts$events
 
@@ -526,7 +551,7 @@ Il capitolo mostra quindi due livelli di estensione. Il primo porta dal modello 
 
 ### Esercizio 1 — Comprendere il modello {.unnumbered .unlisted}
 
-*Livello essenziale · Codice: no · 10 minuti*
+*Codice: no · 10 minuti*
 
 Considera il modello
 
@@ -557,7 +582,7 @@ Scrivere direttamente $\lambda_i=\alpha+\beta x_i$ permetterebbe al modello di p
 
 ### Esercizio 2 — Prevedere e interpretare {.unnumbered .unlisted}
 
-*Livello essenziale · Codice: no · 10 minuti*
+*Codice: no · 10 minuti*
 
 Un modello ha
 
@@ -593,7 +618,7 @@ La quantità $\exp(\beta)=1.25$ indica che il conteggio atteso è maggiore del 2
 
 ### Esercizio 3 — Modificare la domanda con l'offset {.unnumbered .unlisted}
 
-*Livello essenziale · Codice: no · 10–15 minuti*
+*Codice: no · 10–15 minuti*
 
 Due servizi registrano:
 
@@ -623,7 +648,7 @@ Il servizio A ha quindi il tasso doppio. Un modello senza offset confronta il nu
 
 ### Esercizio 4 — Criticare il modello e comunicare {.unnumbered .unlisted}
 
-*Livello essenziale · Codice: no · 15 minuti*
+*Codice: no · 15 minuti*
 
 Un ricercatore riporta:
 

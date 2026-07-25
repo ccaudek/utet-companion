@@ -1,16 +1,16 @@
 # Una e due proporzioni come casi della regressione logistica {#sec-bayes-inference-proportions}
 
+::: {.callout-note appearance="minimal"}
 Una proporzione non richiede una nuova famiglia di metodi. Se osserviamo il numero di successi su un numero noto di prove, possiamo usare un modello binomiale. Con una sola popolazione, il modello contiene soltanto l'intercetta; con due popolazioni, aggiungiamo un predittore binario. Entrambi i casi sono quindi forme particolarmente semplici della regressione logistica introdotta nel capitolo precedente.
 
 Il vantaggio di questa formulazione è duplice. Da un lato, consente di interpretare direttamente le probabilità e i loro contrasti. Dall'altro, prepara l'estensione a modelli con più gruppi, covariate, interazioni e strutture gerarchiche, senza cambiare linguaggio statistico.
-
-## Orientamento {.unnumbered .unlisted}
 
 Il capitolo sviluppa due domande collegate. La prima riguarda la probabilità di un evento in una singola popolazione; la seconda riguarda la differenza tra le probabilità dell'evento in due popolazioni. In entrambi i casi partiremo dalla quantità sostantiva di interesse e non da un test dell'ipotesi nulla.
 
 Come esempio useremo i dati discussi da @bruckner2005after e ripresi in un'analisi bayesiana da @wagenmakers2010bayesian. Gli autori considerarono, tra gli altri aspetti, l'uso del preservativo durante il primo rapporto sessuale tra giovani adulti che avevano o non avevano sottoscritto un *virginity pledge*. Nel gruppo dei *pledgers*, 424 persone su 777 dichiararono di aver usato il preservativo; nel gruppo dei *non-pledgers*, i successi furono 5416 su 9072.
 
 L'obiettivo didattico non è stabilire se una delle proporzioni sia “significativamente diversa” da un valore convenzionale. Vogliamo invece stimare le probabilità, quantificarne l'incertezza e ricavare contrasti interpretabili sulla scala dell'outcome.
+:::
 
 ::: {.callout-important appearance="minimal" .chapter-status}
 **Da sapere.** Una proporzione può essere rappresentata mediante una regressione logistica: con una sola popolazione il modello contiene soltanto l’intercetta; con due popolazioni aggiunge un predittore binario. L’intercetta determina la probabilità del gruppo di riferimento, mentre il coefficiente del gruppo rappresenta la differenza tra i log-odds. Dalla distribuzione a posteriori si ricavano quantità più direttamente interpretabili, come le probabilità dei gruppi, la differenza tra probabilità, il rapporto tra probabilità e l’odds ratio.
@@ -103,6 +103,11 @@ $$
 Il prior è centrato su $p=0.5$ e ammette un intervallo ampio di probabilità. Possiamo verificarlo simulando direttamente dalla distribuzione a priori:
 
 ```{r}
+#| label: fig-proportions-one-prior
+#| fig-cap: "Distribuzione a priori della probabilità di uso del preservativo nel modello con una sola proporzione. Il prior normale sull'intercetta logit induce una distribuzione ampia sulla scala della probabilità, centrata attorno al 50%."
+#| fig-alt: "Curva di densità della probabilità a priori di uso del preservativo, distribuita tra zero e uno e concentrata maggiormente attorno al cinquanta per cento."
+#| fig-width: 7.5
+#| fig-height: 5
 prior_one <- tibble(
   alpha = rnorm(5000, 0, 1.5),
   p = plogis(alpha),
@@ -199,6 +204,11 @@ L'interpretazione riguarda la definizione sostantiva scelta, non un criterio uni
 Nel modello aggregato una replica consiste nel generare un nuovo numero di successi su 777 prove. Usiamo `posterior_predict()` e trasformiamo i conteggi in proporzioni:
 
 ```{r}
+#| label: fig-proportions-one-posterior-predictive
+#| fig-cap: "Controllo predittivo a posteriori per il modello con una sola proporzione. La densità rappresenta le proporzioni replicate su 777 prove; la linea tratteggiata indica la proporzione osservata."
+#| fig-alt: "Curva di densità delle proporzioni replicate dalla distribuzione predittiva a posteriori, con una linea verticale tratteggiata in corrispondenza della proporzione osservata."
+#| fig-width: 7.5
+#| fig-height: 5
 y_rep_one <- posterior_predict(fit_one_proportion)
 
 one_ppc <- tibble(
@@ -312,6 +322,11 @@ $$
 Per comprenderne le implicazioni simuliamo le probabilità dei due gruppi:
 
 ```{r}
+#| label: fig-proportions-two-prior
+#| fig-cap: "Distribuzioni a priori delle probabilità di uso del preservativo nei due gruppi. Le curve derivano dai prior sull'intercetta e sul coefficiente di gruppo espressi sulla scala dei log-odds."
+#| fig-alt: "Due curve di densità sovrapposte mostrano le probabilità a priori per il gruppo dei pledgers e per quello dei non-pledgers."
+#| fig-width: 8
+#| fig-height: 5
 prior_two <- tibble(
   alpha = rnorm(5000, 0, 1.5),
   beta = rnorm(5000, 0, 1),
@@ -369,6 +384,11 @@ summary(fit_two_proportions)
 La diagnostica del campionamento deve precedere l'interpretazione:
 
 ```{r}
+#| label: fig-proportions-two-mcmc-diagnostics
+#| fig-cap: "Diagnostica grafica del campionamento MCMC per il modello con due proporzioni. Le densità marginali e i tracciati delle catene permettono di valutare mescolamento, stazionarietà e coerenza tra catene."
+#| fig-alt: "Pannelli diagnostici MCMC con densità posteriori e tracciati delle catene per i coefficienti del modello a due gruppi."
+#| fig-width: 9
+#| fig-height: 7
 plot(fit_two_proportions)
 ```
 
@@ -449,6 +469,11 @@ SESOI e ROPE sono due modi collegati di formalizzare la stessa idea sostantiva. 
 ### Visualizzare le quantità principali
 
 ```{r}
+#| label: fig-proportions-two-posterior-probabilities
+#| fig-cap: "Probabilità posteriori di uso del preservativo nei due gruppi. I punti rappresentano le mediane posteriori e i segmenti gli intervalli di credibilità al 95%."
+#| fig-alt: "Due stime puntuali con intervalli orizzontali mostrano la probabilità posteriore di uso del preservativo per pledgers e non-pledgers."
+#| fig-width: 7.5
+#| fig-height: 4.5
 probability_plot_data <- two_draws |>
   select(p_non_pledge, p_pledge) |>
   pivot_longer(
@@ -481,6 +506,11 @@ ggplot(probability_plot_data, aes(probability, group)) +
 La rappresentazione delle probabilità rende immediata la differenza assoluta. Per esaminare direttamente il contrasto possiamo visualizzare la posterior della differenza tra probabilità:
 
 ```{r}
+#| label: fig-proportions-probability-difference
+#| fig-cap: "Distribuzione a posteriori della differenza di probabilità tra pledgers e non-pledgers. La linea tratteggiata corrisponde a differenza nulla, mentre la regione ombreggiata rappresenta l'intervallo di equivalenza pratica definito dalla SESOI."
+#| fig-alt: "Curva di densità della differenza di probabilità tra i due gruppi, con una linea verticale sullo zero e una fascia ombreggiata attorno allo zero."
+#| fig-width: 8
+#| fig-height: 5
 ggplot(two_draws, aes(probability_difference)) +
   geom_density(fill = modern_palette$grey6) +
   geom_vline(xintercept = 0, linetype = "dashed") +
@@ -506,6 +536,11 @@ La zona evidenziata rappresenta la regione di equivalenza pratica scelta per l'e
 Generiamo nuovi conteggi per i due gruppi e confrontiamo le proporzioni replicate con quelle osservate:
 
 ```{r}
+#| label: fig-proportions-two-posterior-predictive
+#| fig-cap: "Controllo predittivo a posteriori per i due gruppi. In ciascun pannello la densità descrive le proporzioni replicate, mentre la linea tratteggiata indica la proporzione osservata nel gruppo corrispondente."
+#| fig-alt: "Due pannelli mostrano le densità delle proporzioni replicate per pledgers e non-pledgers, ciascuna con una linea verticale tratteggiata sul valore osservato."
+#| fig-width: 9
+#| fig-height: 4.8
 y_rep_two <- posterior_predict(fit_two_proportions)
 
 ppc_two <- tibble(
@@ -555,7 +590,7 @@ Anche il confronto tra gruppi non possiede automaticamente un significato causal
 
 Infine, le probabilità stimate dipendono dalla definizione dell'evento. Cambiare la codifica del successo modifica intercetta, segno dei coefficienti e rapporti derivati, pur lasciando invariata l'informazione contenuta nei dati. La codifica deve quindi essere dichiarata e mantenuta coerente.
 
-## Errori interpretativi ricorrenti
+## Errori interpretativi comuni
 
 **Trattare una proporzione osservata come se fosse il parametro.** Il rapporto $y/n$ è una descrizione del campione; $p$ è la probabilità della popolazione rappresentata nel modello.
 
@@ -581,7 +616,7 @@ I modelli aggregati sono utili per rendere visibile la struttura essenziale, ma 
 
 ### Esercizio 1 — Comprendere: dal conteggio al parametro {.unnumbered .unlisted}
 
-*Livello essenziale · 10 minuti · Codice: no*
+*10 minuti · Codice: no*
 
 In una popolazione vengono osservati 18 successi su 30 prove.
 
@@ -601,7 +636,7 @@ La proporzione osservata è $18/30=0.60$. Il parametro $p$ rappresenta la probab
 
 ### Esercizio 2 — Prevedere: stessa proporzione, informazione diversa {.unnumbered .unlisted}
 
-*Livello essenziale · 10 minuti · Codice: no*
+*10 minuti · Codice: no*
 
 Confronta due studi:
 
@@ -625,7 +660,7 @@ La posterior dello studio B sarà più concentrata e avrà, in genere, un interv
 
 ### Esercizio 3 — Modificare: cambiare la definizione del successo {.unnumbered .unlisted}
 
-*Livello essenziale · 10–15 minuti · Codice: no*
+*10–15 minuti · Codice: no*
 
 In un confronto tra due gruppi definiamo inizialmente come successo “uso del preservativo” e otteniamo probabilità $p_0$ e $p_1$. Successivamente ricodifichiamo come successo “mancato uso del preservativo”.
 
@@ -653,7 +688,7 @@ Anche il coefficiente logistico cambia segno, perché i log-odds del complemento
 
 ### Esercizio 4 — Criticare e comunicare un confronto {.unnumbered .unlisted}
 
-*Livello essenziale · 15 minuti · Codice: no*
+*15 minuti · Codice: no*
 
 Un resoconto afferma:
 
