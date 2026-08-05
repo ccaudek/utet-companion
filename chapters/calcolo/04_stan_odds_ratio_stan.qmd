@@ -1,28 +1,24 @@
 # Odds ratio in Stan {#sec-bayes-odds-ratio}
 
 ::: {.callout-note appearance="minimal"}
-Nel capitolo precedente abbiamo imparato a leggere un programma Stan come una traduzione del modello statistico. Qui applichiamo la stessa idea a un confronto molto comune nelle scienze psicologiche: la differenza tra due probabilità di successo.
+In questo capitolo viene presentato uno dei programmi Stan più semplici da costruire, attraverso un confronto tra due proporzioni. Il tema principale è l'odds ratio, ma l'obiettivo didattico principale è un altro: imparare a riconoscere nel codice Stan gli elementi di un modello statistico già noto.
 
-L'obiettivo essenziale non è imparare a scrivere da zero una regressione logistica. È comprendere tre passaggi:
-
-1. ciascun gruppo possiede una probabilità di successo;
-2. da ogni probabilità si ricavano gli odds;
-3. il rapporto tra i due odds è una quantità derivata, la cui incertezza dipende dall'incertezza sulle due probabilità.
+Il problema è volutamente elementare. Abbiamo due gruppi, osserviamo il numero di successi in ciascuno di essi e vogliamo stimare le rispettive probabilità. Proprio perché il modello è semplice, il programma può essere letto quasi come una traduzione letterale delle sue assunzioni.
 :::
 
 ::: {.callout-important appearance="minimal" .chapter-status}
-**Da sapere.** L'odds ratio confronta gli odds di un esito in due gruppi. Non coincide né con la differenza tra probabilità né con il rapporto tra probabilità. In un modello bayesiano è spesso una quantità derivata: per ogni estrazione posteriore delle probabilità dei due gruppi si calcolano gli odds e il loro rapporto.
+**Da sapere.** Un modello con due conteggi binomiali stima due probabilità. Differenza tra probabilità, rapporto tra probabilità e odds ratio sono confronti derivati da quelle probabilità e non sono quantità equivalenti.
 
-**Da saper fare.** Passare da probabilità a odds; interpretare un odds ratio rispetto al valore di riferimento 1; leggere un programma Stan che stima due probabilità e calcola l'odds ratio nel blocco `generated quantities`; collegare il coefficiente logistico $\beta$ alla quantità $\exp(\beta)$.
+**Da saper fare.** Individuare nel programma Stan i dati osservati, i parametri incogniti, le prior, le likelihood e le quantità derivate; spiegare perché l'odds ratio viene calcolato nel blocco `generated quantities`; interpretare il valore di riferimento $\operatorname{OR}=1$.
 
-**Approfondimento facoltativo.** Compilare ed eseguire autonomamente i programmi con `cmdstanr`, studiare le diagnostiche MCMC e confrontare in dettaglio prior formulate su scale diverse.
+**Approfondimento facoltativo.** Eseguire il programma con `cmdstanr`, confrontarlo con la soluzione coniugata e collegare il modello a due proporzioni alla regressione logistica.
 
 [Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
 :::
 
 ::: {.callout-tip collapse="true" title="Prerequisiti"}
 
-- Sono dati per noti il modello Beta-Binomiale del capitolo 9 e l’uso essenziale di Stan introdotto nel capitolo 17.
+- Sono dati per noti il modello Beta--Binomiale del capitolo 9 e l'uso essenziale di Stan introdotto nel capitolo 17.
 - È utile conoscere il passaggio da probabilità a odds e il significato di un rapporto tra odds.
 - L'@sec-apx-cmdstanr-intro e l'@sec-apx-stan-lang sono necessarie solo per eseguire il codice; l'@sec-apx-mcmc-diagnostics è utile per la diagnostica MCMC.
 
@@ -46,102 +42,34 @@ if (!requireNamespace("cmdstanr", quietly = TRUE)) {
 ```
 :::
 
-## Il contesto sperimentale
+## Un problema semplice da tradurre in Stan
 
-Consideriamo una ricostruzione didattica ispirata agli studi sulla visione dei colori nelle api. Due gruppi vengono osservati durante una prova di scelta:
+Consideriamo una ricostruzione didattica ispirata agli studi sulla percezione dei colori nelle api [@vonfrisch1914farbensinn]. Due gruppi di api vengono osservati durante una prova di scelta:
 
-- **gruppo sperimentale:** api precedentemente addestrate ad associare un disco blu a una ricompensa;
-- **gruppo di controllo:** api senza tale addestramento.
+- nel **gruppo sperimentale**, le api sono state addestrate ad associare un disco blu a una ricompensa;
+- nel **gruppo di controllo**, le api non hanno ricevuto questo addestramento.
 
-Durante il test si registra quante volte viene scelto il disco blu.
+Durante il test registriamo quante volte viene scelto il disco blu.
 
 | Gruppo | Scelte del blu | Totale |
 |---|---:|---:|
 | Sperimentale | 130 | 200 |
 | Controllo | 100 | 200 |
 
-Nel modello semplificato assumiamo che, entro ciascun gruppo, ogni prova abbia la stessa probabilità di produrre una scelta del blu e che le prove siano condizionalmente indipendenti.
+Il modello semplificato assume che, entro ciascun gruppo, ogni prova abbia la stessa probabilità di produrre una scelta del blu e che le prove siano condizionalmente indipendenti.
 
-La domanda è:
+Prima ancora di scrivere il codice, possiamo formulare il problema attraverso quattro domande:
 
-> Quanto differiscono gli odds di scegliere il disco blu nei due gruppi?
+1. **Che cosa abbiamo osservato?** I conteggi $k_1=130$ su $n_1=200$ e $k_0=100$ su $n_0=200$.
+2. **Che cosa non conosciamo?** Le probabilità di scegliere il blu nei due gruppi.
+3. **Come colleghiamo probabilità e dati?** Con due distribuzioni binomiali.
+4. **Che cosa vogliamo confrontare?** Le due probabilità e alcune quantità da esse derivate, tra cui l'odds ratio.
 
-Questa formulazione riguarda il confronto descritto dai dati. Un'interpretazione causale dell'addestramento richiederebbe inoltre un disegno sperimentale che giustifichi tale conclusione.
+La formulazione riguarda anzitutto il confronto descritto dai dati. Un'interpretazione causale dell'addestramento richiederebbe inoltre un disegno sperimentale che giustifichi tale conclusione.
 
-## Probabilità, odds e odds ratio
+## Dalle due proporzioni al modello
 
-### Dalla probabilità agli odds
-
-Nel gruppo sperimentale la proporzione osservata è
-
-$$
-\hat p_1 = \frac{130}{200}=0.65.
-$$
-
-Gli odds corrispondenti sono
-
-$$
-\widehat{\operatorname{odds}}_1
-=
-\frac{\hat p_1}{1-\hat p_1}
-=
-\frac{0.65}{0.35}
-\approx 1.86.
-$$
-
-Questo significa che, nei dati osservati, vi sono circa 1.86 scelte del blu per ogni scelta alternativa.
-
-Nel gruppo di controllo,
-
-$$
-\hat p_0 = \frac{100}{200}=0.50,
-\qquad
-\widehat{\operatorname{odds}}_0
-=
-\frac{0.50}{0.50}
-=1.
-$$
-
-Vi è quindi una scelta del blu per ogni scelta alternativa.
-
-### Il rapporto tra gli odds
-
-L'odds ratio campionario è
-
-$$
-\widehat{\operatorname{OR}}
-=
-\frac{\widehat{\operatorname{odds}}_1}
-     {\widehat{\operatorname{odds}}_0}
-=
-\frac{1.86}{1}
-\approx 1.86.
-$$
-
-Il valore di riferimento è 1:
-
-- $\operatorname{OR}=1$: i due gruppi hanno gli stessi odds;
-- $\operatorname{OR}>1$: gli odds sono maggiori nel gruppo posto al numeratore;
-- $\operatorname{OR}<1$: gli odds sono minori nel gruppo posto al numeratore.
-
-::: {.callout-warning title="Un odds ratio non è un aumento percentuale della probabilità"}
-Un OR pari a 1.86 non significa che la probabilità sia aumentata dell'86%. Le probabilità osservate passano da 0.50 a 0.65, una differenza di 0.15 e un rapporto pari a 1.30. L'OR confronta invece
-
-$$
-\frac{0.65/0.35}{0.50/0.50}.
-$$
-
-Differenza di probabilità, rapporto tra probabilità e odds ratio sono tre quantità distinte.
-:::
-
-## Un modello bayesiano per le due probabilità
-
-Indichiamo con
-
-- $\theta_1$ la probabilità di scegliere il blu nel gruppo sperimentale;
-- $\theta_0$ la probabilità di scegliere il blu nel gruppo di controllo.
-
-Un modello Beta--Binomiale semplice è
+Indichiamo con $\theta_1$ la probabilità di scegliere il blu nel gruppo sperimentale e con $\theta_0$ la probabilità corrispondente nel gruppo di controllo. Un modello Beta--Binomiale semplice è
 
 $$
 \begin{aligned}
@@ -152,18 +80,65 @@ k_0 \mid \theta_0 &\sim \operatorname{Binomiale}(n_0,\theta_0).
 \end{aligned}
 $$
 
-Le due prior sono simmetriche intorno a 0.50 e assegnano minore plausibilità iniziale ai valori molto vicini a 0 e 1. La scelta è didattica e deve essere valutata rispetto al contesto sostantivo.
+Le prior Beta$(2,2)$ sono simmetriche intorno a $0.50$ e assegnano una minore plausibilità iniziale ai valori molto vicini a 0 e 1. La scelta è puramente didattica: in un'applicazione reale, invece, dovrebbe essere motivata rispetto al contesto sostantivo.
 
-Grazie alla coniugazione, sappiamo già che
+La struttura del modello è quindi molto semplice. Ci sono due parametri incogniti, uno per gruppo, e ciascun conteggio osservato dipende dalla probabilità del proprio gruppo. Una volta ottenuta la distribuzione a posteriori di $\theta_1$ e $\theta_0$, è possibile confrontarle in modi diversi.
+
+Nei dati osservati, le proporzioni sono
 
 $$
-\begin{aligned}
-\theta_1 \mid y &\sim \operatorname{Beta}(132,72), \\
-\theta_0 \mid y &\sim \operatorname{Beta}(102,102).
-\end{aligned}
+\hat p_1=\frac{130}{200}=0.65,
+\qquad
+\hat p_0=\frac{100}{200}=0.50.
 $$
 
-L'odds ratio non riceve qui una distribuzione separata. Per ogni coppia di valori posteriori si calcola
+La differenza tra le proporzioni è $0.15$, mentre il loro rapporto è $1.30$. L'odds ratio usa invece gli odds, cioè il rapporto tra la probabilità di successo e quella di insuccesso:
+
+$$
+\operatorname{odds}(p)=\frac{p}{1-p}.
+$$
+
+Per il gruppo sperimentale,
+
+$$
+\widehat{\operatorname{odds}}_1
+=
+\frac{0.65}{0.35}
+\approx 1.86,
+$$
+
+mentre per il gruppo di controllo,
+
+$$
+\widehat{\operatorname{odds}}_0
+=
+\frac{0.50}{0.50}
+=1.
+$$
+
+L'odds ratio campionario è quindi
+
+$$
+\widehat{\operatorname{OR}}
+=
+\frac{\widehat{\operatorname{odds}}_1}
+     {\widehat{\operatorname{odds}}_0}
+\approx 1.86.
+$$
+
+Il valore di riferimento è 1. Un valore pari a 1 indica odds uguali nei due gruppi; un valore maggiore di 1 indica odds maggiori nel gruppo posto al numeratore, mentre un valore minore di 1 indica odds inferiori.
+
+::: {.callout-warning title="L'odds ratio non è un aumento percentuale della probabilità"}
+Un OR pari a 1.86 non significa che la probabilità sia aumentata dell'86%. Le probabilità osservate passano da 0.50 a 0.65, una differenza di 0.15 e un rapporto pari a 1.30. L'OR confronta invece
+
+$$
+\frac{0.65/0.35}{0.50/0.50}.
+$$
+
+La differenza tra le probabilità, il rapporto tra le probabilità e l'odds ratio descrivono aspetti diversi dello stesso confronto.
+:::
+
+Nel modello bayesiano, l'odds ratio non ha bisogno di essere trattato come un terzo parametro indipendente. Per ogni coppia di valori posteriori di $\theta_1$ e $\theta_0$ calcoliamo
 
 $$
 \operatorname{OR}
@@ -172,15 +147,24 @@ $$
      {\theta_0/(1-\theta_0)}.
 $$
 
-La distribuzione di tutti questi rapporti è la distribuzione a posteriori dell'OR.
+La distribuzione di tutti questi rapporti è la distribuzione a posteriori dell'OR. L'incertezza sulle due probabilità viene così propagata automaticamente alla quantità derivata.
 
-::: {.callout-important title="L'OR è una quantità derivata"}
-Il modello apprende direttamente $\theta_1$ e $\theta_0$. L'OR viene ricalcolato per ogni estrazione posteriore. In questo modo l'incertezza su entrambe le probabilità viene propagata automaticamente all'odds ratio.
+::: {.callout-note collapse="true" title="Approfondimento: la soluzione coniugata"}
+Grazie alla coniugazione Beta--Binomiale, in questo esempio conosciamo anche la soluzione analitica:
+
+$$
+\begin{aligned}
+\theta_1 \mid y &\sim \operatorname{Beta}(132,72), \\
+\theta_0 \mid y &\sim \operatorname{Beta}(102,102).
+\end{aligned}
+$$
+
+Questa soluzione non è necessaria per comprendere il programma Stan. Sarà però utile in seguito per controllare che il campionamento numerico riproduca il modello previsto.
 :::
 
-## Leggere il programma Stan
+## Leggere il programma Stan come una traduzione del modello
 
-Il programma seguente traduce quasi letteralmente il modello.
+Il programma seguente è intenzionalmente semplice. Ogni suo blocco corrisponde a una parte riconoscibile del ragionamento appena svolto.
 
 ```stan
 data {
@@ -209,38 +193,71 @@ generated quantities {
 }
 ```
 
-La struttura può essere letta senza conoscere tutti i dettagli della sintassi.
+La lettura può procedere dall'alto verso il basso.
 
-| Blocco | Domanda sostantiva | Contenuto |
+**Nel blocco `data`** dichiariamo ciò che è già noto: il numero totale di prove e il numero di scelte del blu in ciascun gruppo. I vincoli indicano, per esempio, che un conteggio di successi non può essere negativo né superare il numero totale di prove.
+
+**Nel blocco `parameters`** dichiariamo ciò che vogliamo apprendere: le due probabilità $\theta_1$ e $\theta_0$. I limiti tra 0 e 1 traducono nel programma una proprietà matematica delle probabilità.
+
+**Nel blocco `model`** compaiono prima le prior e poi le distribuzioni dei dati. Le quattro istruzioni corrispondono quasi letteralmente alle quattro righe del modello matematico:
+
+$$
+\theta_1,\theta_0\sim\operatorname{Beta}(2,2),
+$$
+
+$$
+k_1\sim\operatorname{Binomiale}(n_1,\theta_1),
+\qquad
+k_0\sim\operatorname{Binomiale}(n_0,\theta_0).
+$$
+
+**Nel blocco `generated quantities`** trasformiamo le estrazioni posteriori in quantità più facili da comunicare. Per ogni estrazione di $\theta_1$ e $\theta_0$, Stan calcola:
+
+- la differenza assoluta tra le probabilità;
+- il rapporto tra le probabilità;
+- la differenza tra i log-odds;
+- l'odds ratio;
+- un indicatore che vale 1 quando l'odds ratio supera 1.
+
+Queste quantità non definiscono la posterior: sono conseguenze dei parametri già stimati. Per questo appartengono a `generated quantities` e non al blocco `model`.
+
+La tabella riassume la corrispondenza tra domanda scientifica e programma.
+
+| Blocco | Domanda | Contenuto |
 |---|---|---|
 | `data` | Che cosa è stato osservato? | successi e numero di prove nei due gruppi |
 | `parameters` | Che cosa è incognito? | le due probabilità $\theta_1$ e $\theta_0$ |
-| `model` | Quali sono prior e distribuzioni dei dati? | due prior Beta e due likelihood Binomiali |
+| `model` | Come colleghiamo parametri e dati? | due prior Beta e due likelihood binomiali |
 | `generated quantities` | Quali confronti vogliamo comunicare? | differenza, rapporto tra probabilità, log-OR, OR e indicatore $\operatorname{OR}>1$ |
 
-### Perché usare `generated quantities`
-
-Le cinque quantità finali sono conseguenze dei valori posteriori di $\theta_1$ e $\theta_0$. Non servono a definire la posterior e quindi non appartengono al blocco `model`.
-
-Per ogni estrazione:
-
-- `probability_difference` misura la differenza assoluta tra le probabilità;
-- `probability_ratio` confronta direttamente le probabilità;
-- `log_odds_ratio` confronta i log-odds;
-- `odds_ratio` riporta il confronto sulla scala moltiplicativa degli odds;
-- `or_gt_1` vale 1 quando, in quella estrazione, gli odds del gruppo sperimentale superano quelli del controllo.
-
-La media di `or_gt_1` approssima
+La media dell'indicatore `or_gt_1` approssima
 
 $$
 P(\operatorname{OR}>1\mid y).
 $$
 
-Questa probabilità riguarda la quantità definita dal modello. Non è, senza ulteriori specificazioni, la probabilità generica che “l'effetto sia vero”.
+Questa è la probabilità posteriore di una proposizione precisamente definita nel modello. Non coincide, senza ulteriori specificazioni, con una generica probabilità che “l'effetto sia vero”.
 
-## Esecuzione con `cmdstanr` {.unnumbered}
+## Dalla specificazione ai risultati
 
-::: {.callout-note collapse=true title="Codice facoltativo: compilazione e campionamento"}
+Una volta eseguito il programma, otteniamo estrazioni posteriori delle due probabilità e di tutte le quantità derivate. Con questi dati e le prior Beta$(2,2)$, la distribuzione a posteriori dell'OR è centrata intorno al valore campionario 1.86. Un intervallo a code uguali del 95% è approssimativamente compreso tra 1.24 e 2.74, e quasi tutta la massa posteriore si trova al di sopra di 1.
+
+Tali affermazioni devono sempre essere lette condizionatamente al modello, alle prior e alle ipotesi sulle osservazioni. Inoltre, l'OR non dovrebbe essere comunicato da solo. Per comprendere il significato sostanziale del confronto, è utile riportare anche le probabilità dei due gruppi o la loro differenza.
+
+Una descrizione sintetica può distinguere quattro aspetti:
+
+1. la posizione della distribuzione, mediante media o mediana dell'OR;
+2. l'incertezza, mediante un intervallo di credibilità;
+3. la direzione del confronto, mediante $P(\operatorname{OR}>1\mid y)$;
+4. la rilevanza sostantiva, mediante la probabilità di superare una soglia definita prima dell'interpretazione, per esempio $P(\operatorname{OR}>1.5\mid y)$.
+
+Una possibile formulazione è:
+
+> Condizionatamente al modello Beta--Binomiale e alle prior Beta$(2,2)$, gli odds di scegliere il disco blu risultano maggiori nel gruppo sperimentale. La posterior dell'OR è centrata intorno a 1.8, con un intervallo di credibilità del 95% approssimativamente compreso tra 1.2 e 2.7; la probabilità posteriore che l'OR superi 1 è molto elevata.
+
+Questa frase non deve essere trasformata automaticamente in un'affermazione causale né in un aumento percentuale della probabilità.
+
+::: {.callout-note collapse=true title="Codice facoltativo: compilazione e campionamento con cmdstanr"}
 
 ```{r}
 stan_code_or_beta <- '
@@ -292,7 +309,7 @@ fit_or_beta <- model_or_beta$sample(
 ```
 :::
 
-::: {.callout-note collapse=true title="Codice facoltativo: riassunti e diagnostica"}
+::: {.callout-note collapse=true title="Codice facoltativo: riassunti, grafico e probabilità posteriori"}
 
 ```{r}
 parameters_to_report <- c(
@@ -349,19 +366,10 @@ posterior_probabilities
 ```
 :::
 
-Con questi dati e le prior Beta(2,2), la distribuzione a posteriori dell'OR è centrata vicino al valore campionario 1.86. Un intervallo a code uguali del 95% è approssimativamente compreso tra 1.24 e 2.74, e quasi tutta la massa posteriore si trova sopra 1. Questi valori devono essere letti condizionatamente al modello, alle prior e alle assunzioni sulle osservazioni.
+::: {.callout-note collapse=true title="Controllo facoltativo: confronto con la soluzione coniugata"}
+Questo esempio ha una soluzione analitica per le due probabilità. Stan dovrebbe quindi produrre estrazioni di $\theta_1$ compatibili con $\operatorname{Beta}(132,72)$ ed estrazioni di $\theta_0$ compatibili con $\operatorname{Beta}(102,102)$. Applicando la stessa formula dell'OR alle estrazioni analitiche e a quelle di Stan, le due distribuzioni dovrebbero risultare praticamente sovrapponibili, a meno dell'errore Monte Carlo.
 
-## Controllare Stan con la soluzione coniugata
-
-Questo esempio possiede una soluzione analitica per le due probabilità. È quindi utile come controllo del calcolo:
-
-- Stan dovrebbe produrre estrazioni di $\theta_1$ compatibili con $\operatorname{Beta}(132,72)$;
-- Stan dovrebbe produrre estrazioni di $\theta_0$ compatibili con $\operatorname{Beta}(102,102)$;
-- applicando la stessa formula dell'OR alle estrazioni analitiche e a quelle di Stan si dovrebbero ottenere distribuzioni praticamente sovrapponibili, a meno dell'errore Monte Carlo.
-
-La concordanza non dimostra che le assunzioni scientifiche siano corrette. Mostra che l'implementazione computazionale riproduce il modello matematico previsto.
-
-::: {.callout-note collapse=true title="Codice facoltativo: confronto con la soluzione analitica"}
+Tale concordanza non dimostra però che le assunzioni scientifiche siano corrette. Mostra solo che l'implementazione computazionale riproduce il modello matematico previsto.
 
 ```{r}
 set.seed(1234)
@@ -397,9 +405,12 @@ bind_rows(analytic_draws, stan_draws) |>
 ```
 :::
 
-## Il collegamento con la regressione logistica
+## Il ponte verso la regressione logistica
 
-Lo stesso confronto può essere espresso sulla scala dei log-odds. Se $x=0$ identifica il controllo e $x=1$ il gruppo sperimentale,
+Il modello appena letto stima direttamente una probabilità per ciascun gruppo. Lo stesso confronto può essere espresso mediante una regressione logistica. Questo collegamento è importante perché mostra come il modello elementare di questo capitolo possa essere esteso a modelli con più predittori.
+
+::: {.callout-note collapse=true title="Approfondimento: dalla differenza tra log-odds al coefficiente logistico"}
+Se $x=0$ identifica il controllo e $x=1$ il gruppo sperimentale, possiamo scrivere
 
 $$
 \operatorname{logit}(p_i)=\alpha+\beta x_i.
@@ -409,8 +420,8 @@ Ne segue che
 
 $$
 \begin{aligned}
-\operatorname{logit}(p_0) &= \alpha, \\
-\operatorname{logit}(p_1) &= \alpha+\beta,
+\operatorname{logit}(p_0)&=\alpha, \\
+\operatorname{logit}(p_1)&=\alpha+\beta,
 \end{aligned}
 $$
 
@@ -430,11 +441,7 @@ $$
 \operatorname{OR}=\exp(\beta).
 $$
 
-Questa identità è il ponte tra il confronto di due proporzioni e la regressione logistica.
-
-### Un programma logistico aggregato
-
-Con dati aggregati, non è necessario espandere artificialmente i conteggi in una lunga sequenza di 0 e 1. Stan dispone della distribuzione Binomiale parametrizzata direttamente sulla scala logit.
+Con dati aggregati, non è necessario espandere i conteggi in una lunga sequenza di 0 e 1. Stan dispone della distribuzione binomiale parametrizzata direttamente sulla scala logit:
 
 ```stan
 data {
@@ -461,24 +468,24 @@ generated quantities {
 }
 ```
 
-La lettura sostantiva è:
+La lettura sostantiva rimane semplice:
 
 - `alpha` rappresenta i log-odds nel gruppo di controllo;
 - `beta` rappresenta la differenza tra i log-odds dei due gruppi;
 - `exp(beta)` è l'odds ratio;
 - `inv_logit(alpha)` e `inv_logit(alpha + beta)` riportano il modello sulla scala delle probabilità.
+:::
 
-## Stessa likelihood non significa necessariamente stesso modello bayesiano
+::: {.callout-important title="Stessa likelihood non significa necessariamente stesso modello bayesiano"}
+Il modello con due prior Beta e il modello logistico descrivono la stessa struttura dei dati: due conteggi binomiali e un confronto tra gruppi. Tuttavia, le prior non sono formulate sulla stessa scala.
 
-Il modello con due prior Beta e il modello logistico precedente descrivono la stessa struttura dei dati: due conteggi binomiali e un confronto tra i gruppi. Tuttavia, le prior non sono le stesse.
-
-Nel primo modello specifichiamo prior indipendenti direttamente su $\theta_0$ e $\theta_1$:
+Nel primo modello,
 
 $$
-\theta_0,\theta_1\sim\operatorname{Beta}(2,2).
+\theta_0,\theta_1\sim\operatorname{Beta}(2,2),
 $$
 
-Nel secondo specifichiamo prior indipendenti su intercetta e coefficiente logistico:
+mentre nel secondo,
 
 $$
 \alpha\sim\operatorname{Normale}(0,1.5),
@@ -486,40 +493,24 @@ $$
 \beta\sim\operatorname{Normale}(0,1).
 $$
 
-Queste scelte inducono distribuzioni a priori differenti sulle probabilità e sull'OR. Di conseguenza, i due modelli possono produrre risultati simili quando i dati sono informativi, ma non sono esattamente la stessa analisi bayesiana.
-
-::: {.callout-important title="Parametrizzazione e prior devono essere considerate insieme"}
-Una trasformazione algebrica conserva il modello soltanto se anche la distribuzione a priori viene trasformata coerentemente. Due programmi che condividono la likelihood ma assegnano prior diverse possono avere posterior diverse.
+Queste scelte inducono distribuzioni a priori diverse sulle probabilità e sull'OR. Due programmi che condividono la funzione di verosimiglianza, ma assegnano prior diverse, possono quindi produrre posteriori diverse. Questa distinzione è particolarmente importante in caso di campioni piccoli, separazione quasi completa o prior molto informative.
 :::
 
-Questa distinzione diventa particolarmente importante con campioni piccoli, separazione quasi completa o prior molto informative. In tali situazioni la scelta della scala su cui formulare il prior può incidere sensibilmente sull'inferenza.
+## Che cosa impariamo da questo programma
 
-## Che cosa comunica la posterior dell'OR
+Il valore didattico dell'esempio non dipende dalla complessità dell'odds ratio, ma dalla trasparenza con cui il programma Stan rende visibile la struttura del modello.
 
-Una descrizione sintetica dovrebbe distinguere almeno quattro quantità:
+Partendo da due semplici proporzioni, abbiamo potuto riconoscere nel codice:
 
-1. **posizione:** mediana o media posterior dell'OR;
-2. **incertezza:** intervallo di credibilità;
-3. **direzione:** $P(\operatorname{OR}>1\mid y)$;
-4. **rilevanza sostantiva:** probabilità di superare una soglia scelta prima dell'interpretazione, per esempio $P(\operatorname{OR}>1.5\mid y)$.
+- i dati osservati;
+- i parametri incogniti;
+- le prior;
+- le likelihood;
+- le quantità derivate da comunicare.
 
-Una possibile formulazione è:
+L'esempio mostra inoltre tre principi generali. In primo luogo, non è necessario stimare direttamente ogni indice di interesse: molte quantità sostantive possono essere calcolate a partire dalle estrazioni posteriori dei parametri. In secondo luogo, la scala scelta per descrivere il confronto è importante: probabilità, differenze, rapporti, odds e log-odds non sono intercambiabili. Terzo, la prior è parte integrante del modello e deve essere considerata insieme alla parametrizzazione.
 
-> Condizionatamente al modello Beta--Binomiale e alle prior Beta(2,2), gli odds di scegliere il disco blu risultano maggiori nel gruppo sperimentale. La posterior dell'OR è centrata intorno a 1.8, con un intervallo di credibilità del 95% approssimativamente tra 1.2 e 2.7; la probabilità posteriore che l'OR superi 1 è molto elevata.
-
-Questa frase non deve essere trasformata automaticamente in un'affermazione causale né in un aumento percentuale della probabilità.
-
-## Riflessioni conclusive {.unnumbered .unlisted}
-
-L'esempio dell'odds ratio mostra come Stan possa propagare l'incertezza attraverso una trasformazione non lineare. Il modello apprende due probabilità; per ogni coppia di estrazioni posteriori calcola gli odds e il loro rapporto; la raccolta dei rapporti costituisce la posterior dell'OR.
-
-Il capitolo introduce inoltre tre principi generali:
-
-1. **le quantità sostantive possono essere derivate dai parametri:** non è necessario stimare direttamente ogni indice che si desidera comunicare;
-2. **la scala conta:** probabilità, odds, log-odds e odds ratio rappresentano aspetti diversi dello stesso confronto;
-3. **la prior fa parte del modello:** due parametrizzazioni con la stessa likelihood non sono automaticamente equivalenti se assegnano prior differenti.
-
-Stan rende questi passaggi eseguibili, ma la responsabilità di scegliere la quantità di interesse, la parametrizzazione e le prior rimane del ricercatore.
+Stan automatizza il calcolo e la propagazione dell'incertezza attraverso le trasformazioni, ma non decide quale confronto sia più informativo dal punto di vista scientifico, quale prior sia appropriata o quale interpretazione sia giustificata dal disegno dello studio. Queste responsabilità rimangono del ricercatore.
 
 ## Esercizi {.unnumbered .unlisted}
 

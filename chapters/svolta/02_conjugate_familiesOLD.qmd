@@ -1,23 +1,21 @@
-# Il modello Beta-Binomiale: capire la coniugazione
+# Il modello Beta-Binomiale e le famiglie coniugate
 
 ::: {.callout-note appearance="minimal"}
-Nel capitolo precedente l’aggiornamento bayesiano è stato costruito su una griglia: ogni valore candidato di $\theta$ riceveva un peso iniziale, veniva valutato alla luce dei dati e otteneva infine un peso a posteriori. In questo capitolo accade esattamente la stessa cosa, ma senza dover calcolare il prodotto punto per punto.
-
-Il modello Beta-Binomiale è infatti un caso **coniugato**. La prior e la verosimiglianza hanno forme matematiche compatibili e il loro prodotto appartiene ancora alla stessa famiglia della prior. L’aggiornamento
+Questo capitolo usa il modello Beta-Binomiale come esempio paradigmatico di aggiornamento bayesiano. La coniugazione non introduce una nuova regola: rende calcolabile in forma chiusa la stessa operazione vista con l'approssimazione su griglia,
 
 $$
-\text{posterior} \propto \text{verosimiglianza} \times \text{prior}
+\text{posterior} \propto \text{verosimiglianza} \times \text{prior}.
 $$
 
-si traduce così in una semplice somma di parametri. Questa trasparenza rende il modello particolarmente utile per comprendere in profondità che cosa conserva la posterior, che cosa aggiungono i dati e come si combinano le due fonti di informazione.
+Nel modello Beta-Binomiale, la moltiplicazione tra prior e verosimiglianza si traduce in una semplice somma di parametri. Proprio questa trasparenza consente di capire che cosa viene conservato, che cosa viene aggiunto dai dati e quanto pesa l'informazione iniziale.
 :::
 
 ::: {.callout-important appearance="minimal" .chapter-status}
-**Da sapere.** La coniugazione è una relazione tra una famiglia di prior e una specifica verosimiglianza: non è una proprietà della prior considerata isolatamente. Una prior Beta è coniugata rispetto a dati Bernoulli o binomiali perché la posterior risultante è ancora Beta.
+**Da sapere.** Una prior è coniugata rispetto a una verosimiglianza quando la posterior appartiene alla stessa famiglia della prior. Nel modello Beta-Binomiale, una prior Beta combinata con dati binomiali produce una posterior ancora Beta. I parametri della posterior si ottengono aggiungendo i successi e gli insuccessi osservati ai corrispondenti parametri della prior.
 
-**Da saper fare.** Passare da prior e dati ai parametri posteriori; interpretare separatamente posizione e concentrazione di una distribuzione Beta; leggere la media posterior come media ponderata tra informazione iniziale e proporzione campionaria; aggiornare i dati in una sola volta o in sequenza; valutare come prior differenti modificano la posterior.
+**Da saper fare.** Passare da prior e dati ai parametri posteriori; interpretare separatamente media e concentrazione di una distribuzione Beta; leggere la media posterior come media ponderata tra informazione iniziale e proporzione campionaria; aggiornare i dati in un'unica volta o in sequenza; valutare come posizione e concentrazione della prior influenzano la posterior.
 
-**Approfondimento facoltativo.** Il modello Normale-Normale, le coppie Gamma-Poisson e Gamma-Esponenziale e la distinzione tra posterior e distribuzione predittiva possono essere rimandati in una prima lettura.
+**Approfondimento facoltativo.** Il modello Normale-Normale, le coppie Gamma-Poisson e Gamma-Esponenziale e le distribuzioni predittive possono essere rimandati in una prima lettura.
 
 [Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
 :::
@@ -25,8 +23,8 @@ si traduce così in una semplice somma di parametri. Questa trasparenza rende il
 ::: {.callout-tip collapse="true" title="Prerequisiti"}
 
 - È data per nota l’approssimazione su griglia del capitolo 8, inclusa l’idea di posterior non normalizzata.
-- È utile conoscere la distribuzione binomiale e il significato di base dei parametri della distribuzione Beta.
-- L’@sec-apx-calculus può essere consultata per approfondire il passaggio dalle somme agli integrali; il codice R è facoltativo.
+- È utile conoscere la distribuzione binomiale e il significato dei parametri della distribuzione Beta.
+- L'@sec-apx-calculus può essere consultata per approfondire il passaggio dalle somme agli integrali; il codice R è facoltativo.
 
 :::
 
@@ -38,11 +36,27 @@ here::here("code", "_common.R") |>
 ```
 :::
 
-## Dalla griglia alla forma chiusa
+## Perché il modello Beta-Binomiale è paradigmatico
 
-Nel modello binomiale, ogni prova ha due possibili esiti, che per convenzione chiamiamo "successo" e "insuccesso". Il parametro $\theta$ rappresenta la probabilità di successo e i dati sono riassunti da $y$, il numero di successi osservati in $n$ prove. Questa struttura può descrivere, per esempio, il numero di risposte corrette, la quota di partecipanti che sceglie una determinata alternativa o la frequenza con cui un determinato comportamento si manifesta in condizioni definite.
+Nel capitolo precedente abbiamo costruito una posterior su una griglia. Per ogni valore candidato di $\theta$ abbiamo:
 
-Nel capitolo precedente, avremmo scelto molti valori candidati di $\theta$, calcolato il prior e la verosimiglianza per ciascuno di essi, moltiplicato i due pesi e, infine, normalizzato i risultati. La coniugazione non cambia questa logica. Consente soltanto di riconoscere direttamente la forma del prodotto.
+1. calcolato il peso assegnato dal prior;
+2. calcolato la verosimiglianza dei dati;
+3. moltiplicato le due quantità;
+4. normalizzato i prodotti.
+
+Il modello Beta-Binomiale esegue esattamente gli stessi passaggi, ma l'algebra consente di riconoscere immediatamente la forma della posterior. Non è quindi una procedura diversa dall'approssimazione su griglia: è un caso nel quale il prodotto può essere semplificato senza approssimazioni numeriche.
+
+Il modello è appropriato quando:
+
+- ogni prova ha due esiti, convenzionalmente chiamati successo e insuccesso;
+- il parametro $\theta$ rappresenta la probabilità di successo;
+- osserviamo $y$ successi su $n$ prove;
+- le assunzioni binomiali sono ragionevoli per la domanda considerata.
+
+Esempi psicologici includono il numero di risposte corrette, la quota di partecipanti che sceglie una certa opzione o la probabilità che si verifichi un comportamento in condizioni definite.
+
+## Dalla moltiplicazione alla posterior Beta
 
 Supponiamo di assegnare a $\theta$ una prior Beta:
 
@@ -50,21 +64,21 @@ $$
 \theta \sim \operatorname{Beta}(\alpha,\beta).
 $$
 
-Se trascuriamo le costanti che non dipendono da $\theta$, la densità del prior ha la forma
+Ignorando le costanti che non dipendono da $\theta$, la densità del prior è:
 
 $$
 p(\theta) \propto
 \theta^{\alpha-1}(1-\theta)^{\beta-1}.
 $$
 
-La verosimiglianza di $y$ successi su $n$ prove contiene le stesse due componenti, $\theta$ e $1-\theta$:
+Se osserviamo $y$ successi su $n$ prove, la verosimiglianza binomiale è:
 
 $$
 p(y\mid\theta) \propto
 \theta^y(1-\theta)^{n-y}.
 $$
 
-È questa somiglianza a rendere possibile la coniugazione. Moltiplicando prior e verosimiglianza, le potenze con la stessa base si combinano e i loro esponenti si sommano:
+Moltiplicando prior e verosimiglianza otteniamo:
 
 $$
 \begin{aligned}
@@ -79,7 +93,7 @@ p(\theta\mid y)
 \end{aligned}
 $$
 
-L’ultima espressione ha ancora la forma di una densità Beta. Anche senza calcolare esplicitamente la costante di normalizzazione, possiamo quindi riconoscere la posterior:
+Questa è la forma di una distribuzione Beta con parametri aggiornati:
 
 $$
 \boxed{
@@ -89,7 +103,7 @@ $$
 }
 $$
 
-L’aggiornamento si riduce a due operazioni parallele:
+La regola operativa è quindi:
 
 $$
 \begin{aligned}
@@ -98,27 +112,29 @@ $$
 \end{aligned}
 $$
 
-Non si tratta di una nuova versione del teorema di Bayes. La griglia moltiplica numericamente la prior e la verosimiglianza in molti punti, mentre la coniugazione riconosce algebricamente la famiglia a cui appartiene il prodotto. La posterior nasce dalla stessa operazione.
-
-::: {.callout-important title="La coniugazione come chiusura dell’aggiornamento"}
-Una famiglia è coniugata rispetto a una verosimiglianza quando l’aggiornamento non ci costringe a uscire da quella famiglia. Nel caso Beta-Binomiale, partiamo da una distribuzione Beta, incorporiamo i dati binomiali e otteniamo ancora una distribuzione Beta. Cambiano i parametri, ma non il linguaggio con cui rappresentiamo l’incertezza.
+::: {.callout-important title="Lo stesso prodotto visto sulla griglia"}
+L'approssimazione su griglia moltiplica numericamente prior e verosimiglianza in molti punti. La coniugazione riconosce algebricamente la forma del prodotto. In entrambi i casi, la posterior deriva dalla stessa operazione. Cambia soltanto il modo in cui viene eseguito il calcolo.
 :::
 
-## Leggere l’informazione nei parametri Beta
+## Come leggere i parametri della distribuzione Beta
 
-La regola $\alpha\mapsto\alpha+y$ e $\beta\mapsto\beta+n-y$ è facile da applicare, ma diventa davvero significativa quando quando si comprende il significato dei parametri. $\alpha$ e $\beta$ determinano insieme sia la posizione che la concentrazione della distribuzione. Per separare questi due aspetti conviene riscriverli attraverso
+### Media e concentrazione
+
+I parametri $\alpha$ e $\beta$ determinano contemporaneamente la posizione e la concentrazione della distribuzione. Per separarli è utile definire:
 
 $$
 m = \frac{\alpha}{\alpha+\beta}
 $$
 
- e
+come **media** del prior e
 
 $$
-\kappa = \alpha+\beta.
+\kappa = \alpha+\beta
 $$
 
-Il parametro $m$ rappresenta la media della distribuzione Beta e indica dove si concentra inizialmente la plausibilità; il parametro $\kappa$, invece, esprime il grado di concentrazione, ovvero quantifica quanto strettamente i valori si raccolgono attorno a tale posizione. Le due parametrizzazioni sono equivalenti:
+come **concentrazione**.
+
+Viceversa:
 
 $$
 \alpha=m\kappa,
@@ -126,11 +142,22 @@ $$
 \beta=(1-m)\kappa.
 $$
 
-A parità di $m$, una maggiore $\kappa$ produce una prior più stretta e più influente. A parità di $\kappa$, cambiare $m$ sposta invece la direzione verso cui il prior tende ad attrarre la posterior.
+La media $m$ indica intorno a quali valori si concentra inizialmente la plausibilità. La concentrazione $\kappa$ indica quanto fortemente la distribuzione è concentrata intorno a quella media. A parità di media, un valore maggiore di $\kappa$ produce una prior più stretta e quindi più influente.
 
-Poiché i successi si aggiungono ad $\alpha$ e gli insuccessi a $\beta$, questi parametri sono spesso descritti come **pseudo-conteggi**. L’immagine è utile: il prior porta nel modello una quantità di informazione che viene combinata con i nuovi conteggi. Tuttavia, non va interpretata come una ricostruzione letterale di osservazioni passate. I parametri $\alpha$ e $\beta$ possono essere non interi e non devono provenire da un dataset storico; nella densità Beta, compaiono come esponenti $\alpha-1$ e $\beta-1$.
+### L'interpretazione come pseudo-conteggi
 
-La parametrizzazione mediante $m$ e $\kappa$ evita questa ambiguità e mostra direttamente il compromesso prodotto dall’aggiornamento. La media posterior è
+Poiché i dati aggiornano $\alpha$ con i successi e $\beta$ con gli insuccessi, è comune descrivere questi parametri come **pseudo-conteggi**. Questa interpretazione è utile, ma non deve essere presa in modo troppo letterale:
+
+- $\alpha$ e $\beta$ non sono necessariamente conteggi interi;
+- non rappresentano obbligatoriamente osservazioni passate realmente raccolte;
+- nella densità Beta gli esponenti sono $\alpha-1$ e $\beta-1$;
+- il significato principale di $\alpha+\beta$ è il peso matematico che il prior esercita nella media posterior.
+
+Per questo motivo, in questo capitolo useremo soprattutto media $m$ e concentrazione $\kappa$. La terminologia degli pseudo-conteggi resta una scorciatoia intuitiva, non una descrizione storica dei dati.
+
+## La media posterior come media ponderata
+
+La media della posterior Beta è:
 
 $$
 E(\theta\mid y)
@@ -138,7 +165,7 @@ E(\theta\mid y)
 \frac{\alpha+y}{\alpha+\beta+n}.
 $$
 
-Sostituendo $m=\alpha/(\alpha+\beta)$ e $\kappa=\alpha+\beta$, otteniamo
+Usando $m=\alpha/(\alpha+\beta)$ e $\kappa=\alpha+\beta$, la stessa quantità può essere riscritta come:
 
 $$
 \boxed{
@@ -150,21 +177,24 @@ E(\theta\mid y)
 }
 $$
 
-La media a posteriori è quindi una media ponderata tra la media del prior e la proporzione osservata. La concentrazione $\kappa$ stabilisce il peso dell'informazione iniziale, mentre la numerosità $n$ stabilisce il peso dei dati. Il prior indica un punto di partenza, ma il suo effetto dipende dalla quantità di informazione che fornisce rispetto a quella contenuta nel campione.
+La media posterior è quindi una media ponderata tra:
 
-::: {.callout-tip title="Quattro quantità, un’unica lettura"}
+- la media del prior $m$;
+- la proporzione osservata $y/n$.
+
+I pesi sono determinati dalla concentrazione del prior $\kappa$ e dalla numerosità dei dati $n$. Se $n$ è molto maggiore di $\kappa$, prevale l'informazione dei dati. Se $\kappa$ è grande rispetto a $n$, il prior esercita un'influenza maggiore.
+
+::: {.callout-tip title="Una lettura da ricordare"}
 Nel modello Beta-Binomiale:
 
 - **$m$ dice dove si trova il prior**;
 - **$\kappa$ dice quanto pesa il prior**;
 - **$y/n$ dice dove puntano i dati**;
 - **$n$ dice quanto pesano i dati**.
-
-La posterior combina queste quattro quantità senza cancellarne nessuna.
 :::
 
-::: {.callout-note collapse="true" title="Strumenti R per seguire i calcoli"}
-Le funzioni seguenti non introducono un metodo diverso. Rendono esplicite le stesse trasformazioni dei parametri e producono alcuni riassunti utili per gli esempi del capitolo.
+## Funzioni essenziali in R
+
 La funzione seguente aggiorna il modello e restituisce anche le quantità più utili per l'interpretazione.
 
 ```{r}
@@ -228,11 +258,10 @@ riassumi_beta <- function(alpha, beta, soglia = 0.5) {
   )
 }
 ```
-:::
 
-## Un aggiornamento completo: i dati dello studio di Milgram
+## Esempio guidato: i dati dello studio di Milgram
 
-Seguiamo ora un aggiornamento dall'inizio alla fine. A scopo didattico, consideriamo un dato tratto dallo studio classico di @milgram1963behavioral. In una delle condizioni sperimentali, 26 partecipanti su 40 hanno proseguito fino al livello massimo previsto dalla procedura. Indichiamo con $\theta$ la proporzione di individui che adotterebbe quel comportamento in condizioni analoghe al modello sperimentale.
+Consideriamo, a scopo didattico, un dato tratto dallo studio classico di @milgram1963behavioral. In una delle condizioni sperimentali, 26 partecipanti su 40 proseguirono fino al livello massimo previsto dalla procedura. Indichiamo con $\theta$ la proporzione che adotterebbe quel comportamento in condizioni analoghe al modello sperimentale.
 
 $$
 y=26,
@@ -242,11 +271,11 @@ n=40,
 \frac{y}{n}=0.65.
 $$
 
-L'inferenza riguarda il parametro del modello nelle condizioni specificate. Tuttavia, non risolve da sola i problemi di validità esterna, di cambiamento storico, di differenze culturali o di adeguatezza della misurazione.
+L'inferenza riguarda il parametro del modello nelle condizioni specificate. Non risolve, da sola, problemi di validità esterna, cambiamento storico, differenze culturali o adeguatezza della misurazione.
 
-**Il punto di partenza.**
+### Specificare una prior illustrativa
 
-Prima di osservare i dati dobbiamo rappresentare ciò che riteniamo plausibile. Usiamo una prior Beta(2,8):
+Usiamo una prior Beta(2,8):
 
 $$
 \theta\sim\operatorname{Beta}(2,8).
@@ -278,9 +307,9 @@ aggiornamento <- beta_binomiale_aggiorna(
 aggiornamento
 ```
 
-**L’arrivo dei dati.**
+### Aggiornare i parametri
 
-Quando arrivano i dati, i 26 successi alimentano il primo parametro e i 14 insuccessi il secondo. La posterior è:
+La posterior è:
 
 $$
 \begin{aligned}
@@ -307,7 +336,7 @@ $$
 
 I dati non sostituiscono la prior: ne aggiornano i parametri. La posterior conserva l'informazione iniziale e incorpora i nuovi successi e insuccessi.
 
-**Lo stesso aggiornamento letto come compromesso.**
+### Verificare la media ponderata
 
 La media posterior può essere calcolata direttamente:
 
@@ -340,7 +369,7 @@ media_post_ponderata <-
 media_post_ponderata
 ```
 
-**L’aggiornamento come contabilità dell’informazione.**
+### Una tabella dell'aggiornamento
 
 ```{r}
 tabella_aggiornamento <- tibble(
@@ -380,9 +409,9 @@ knitr::kable(
 )
 ```
 
-La tabella rende visibile la logica della coniugazione. La riga dei dati non descrive una distribuzione Beta. Serve a mettere in evidenza la corrispondenza operativa: i successi si aggiungono ad $\alpha$, gli insuccessi a $\beta$ e la numerosità si aggiunge alla concentrazione.
+La riga dei dati non descrive una distribuzione Beta. Serve a mettere in evidenza la corrispondenza operativa: i successi si aggiungono ad $\alpha$, gli insuccessi a $\beta$ e la numerosità si aggiunge alla concentrazione.
 
-**Vedere l’aggiornamento.**
+### Visualizzare prior, verosimiglianza e posterior
 
 Per confrontare le **forme** delle tre componenti, riportiamo ciascuna curva alla propria altezza massima. La verosimiglianza non viene trasformata in una distribuzione di probabilità su $\theta$: viene soltanto riscalata per la visualizzazione.
 
@@ -460,7 +489,7 @@ Il grafico permette di distinguere tre oggetti:
 
 La posterior non viene ottenuta facendo una media geometrica delle curve. Deriva dal prodotto punto per punto tra prior e verosimiglianza, seguito dalla normalizzazione. La coniugazione consente di rappresentare quel prodotto attraverso i parametri Beta(28,22).
 
-**Interrogare la posterior.**
+### Riassumere la posterior
 
 ```{r}
 riassunto_post <- riassumi_beta(
@@ -480,11 +509,11 @@ La posterior permette di formulare domande direttamente probabilistiche, sempre 
 
 Queste affermazioni non sono proprietà dei dati isolati. Dipendono dall'intero modello inferenziale.
 
-## Che cosa cambia quando cambia il prior
+## Separare posizione e forza della prior
 
-La distinzione tra posizione e forza diventa più chiara se si modifica una sola proprietà del prior alla volta. In questo modo possiamo vedere separatamente **dove** il prior orienta la posterior e **quanto** riesce a spostarla.
+Per capire bene il modello è utile modificare una proprietà del prior alla volta.
 
-**Stessa posizione, forza diversa.**
+### Stessa media, concentrazioni diverse
 
 Confrontiamo tre prior con la stessa media 0.20, ma concentrazioni diverse:
 
@@ -557,7 +586,7 @@ ggplot(
   legenda_in_alto
 ```
 
-**Stessa forza, posizione diversa.**
+### Stessa concentrazione, medie diverse
 
 Consideriamo ora tre prior con la stessa concentrazione $\kappa=10$, ma medie differenti:
 
@@ -601,9 +630,9 @@ Quando si valuta una prior Beta bisogna chiedere separatamente:
 Confrontare prior che cambiano simultaneamente media e concentrazione rende più difficile capire quale proprietà abbia prodotto la differenza osservata.
 :::
 
-## L’apprendimento può continuare nel tempo
+## Aggiornamento sequenziale
 
-La coniugazione mostra con particolare chiarezza che l’aggiornamento bayesiano è cumulativo. La posterior ottenuta oggi può diventare il prior della fase successiva. Dividiamo i 40 dati in due blocchi che contengono complessivamente gli stessi 26 successi:
+L'aggiornamento bayesiano può essere effettuato in più passaggi. Dividiamo i 40 dati in due blocchi che contengono complessivamente gli stessi 26 successi:
 
 - primo blocco: 10 successi su 20 prove;
 - secondo blocco: 16 successi su 20 prove.
@@ -637,13 +666,11 @@ confronto_sequenziale <- tibble(
 confronto_sequenziale
 ```
 
-Entrambi i percorsi conducono a Beta(28,22). La posterior del primo blocco diventa semplicemente la prior del secondo. Questo risultato rende esplicita l'idea di apprendimento cumulativo: l'ordine dei due blocchi non modifica il risultato, a condizione che il modello e le assunzioni rimangano invariati.
+Entrambi i percorsi conducono a Beta(28,22). La posterior del primo blocco diventa semplicemente la prior del secondo. Questo risultato rende esplicita l'idea di apprendimento cumulativo: l'ordine dei due blocchi non cambia il risultato quando il modello e le assunzioni rimangono invariati.
 
-Tuttavia, l'equivalenza non implica che sia sempre appropriato combinare studi diversi. Se cambiano la popolazione, la procedura, la misurazione o il processo generativo, può essere necessario un modello più articolato, per esempio gerarchico.
+L'equivalenza non implica che sia sempre appropriato combinare studi diversi. Se cambiano popolazione, procedura, misurazione o processo generativo, può essere necessario un modello più articolato, per esempio gerarchico.
 
-## Che cosa si generalizza oltre il caso Beta-Binomiale
-
-Il caso Beta-Binomiale non è un'eccezione isolata. In altre coppie coniugate, il modo in cui l’informazione viene registrata cambia, ma la struttura rimane la stessa: il prior e i dati contribuiscono ai parametri posteriori della medesima famiglia.
+## Un secondo schema: il modello Normale-Normale
 
 ::: {.callout-note collapse="true" title="Approfondimento: combinare informazioni mediante le precisioni"}
 Nel modello Normale-Normale, il parametro di interesse è una media $\mu$. Supponiamo che:
@@ -721,6 +748,8 @@ normale_normale_aggiorna(
 ```
 :::
 
+## Altre coppie coniugate
+
 ::: {.callout-note collapse="true" title="Approfondimento: una panoramica operativa"}
 La stessa struttura ricorre in altri modelli semplici.
 
@@ -736,7 +765,7 @@ Per le distribuzioni Gamma, la tabella usa la parametrizzazione *shape-rate*, co
 Queste coppie sono utili per il calcolo e per costruire intuizioni, ma la coniugazione non è un criterio sufficiente per scegliere il modello. La domanda scientifica, il processo generativo e la plausibilità delle assunzioni vengono prima della comodità algebrica.
 :::
 
-La coniugazione facilita anche il passaggio dalla posterior sui parametri alla previsione di nuovi dati, ma i due oggetti non vanno confusi.
+## Posterior e distribuzione predittiva
 
 ::: {.callout-note collapse="true" title="Una distinzione da conservare"}
 Nel modello Beta-Binomiale:
@@ -749,21 +778,33 @@ Per esempio, dopo avere ottenuto $\theta\mid y\sim\operatorname{Beta}(28,22)$, i
 La distribuzione predittiva non si ottiene sostituendo semplicemente $\theta$ con la media posterior. Deve incorporare sia la variabilità dei nuovi dati sia l'incertezza residua sul parametro. Il tema verrà sviluppato nei capitoli dedicati ai controlli predittivi.
 :::
 
-## La coniugazione come modello mentale
+## Cosa imparare dal modello Beta-Binomiale
 
-Il modello Beta-Binomiale è abbastanza semplice da poter essere calcolato a mano, ma abbastanza ricco da mostrare l’intera logica dell’inferenza bayesiana.
+Il modello Beta-Binomiale rende visibili cinque idee generali dell'inferenza bayesiana.
 
-La posterior deriva sempre dal prodotto tra prior e verosimiglianza. La coniugazione rende quel prodotto leggibile nei parametri: $\alpha$ conserva e aggiorna l’informazione associata ai successi, mentre $\beta$ conserva e aggiorna quella associata agli insuccessi. La concentrazione aumenta di $n$ perché il modello ha incorporato $n$ nuove prove; la media si sposta verso la proporzione osservata in misura determinata dal rapporto tra $\kappa$ e $n$.
+1. **La posterior deriva dal prodotto.** La coniugazione non sostituisce il teorema di Bayes: ne semplifica il calcolo.
+2. **Prior e dati contribuiscono entrambi.** I parametri posteriori contengono l'informazione iniziale e i nuovi conteggi.
+3. **Posizione e forza sono proprietà diverse.** La media del prior indica dove è concentrato; $\kappa$ indica quanto pesa.
+4. **La posterior è più informativa.** La concentrazione aumenta di $n$, perché sono state incorporate nuove osservazioni.
+5. **L'aggiornamento è sequenziale.** Una posterior può diventare la prior della fase successiva, purché il modello rimanga appropriato.
 
-Da questo caso emergono alcune idee che continueranno a valere anche quando non avremo più una formula chiusa:
+## Riflessioni conclusive {.unnumbered .unlisted}
 
-1. **L’aggiornamento è un ripesamento, non una sostituzione.** I dati non cancellano il prior: ne modificano il peso relativo e la posizione risultante.
-2. **La forza e la direzione dell’informazione sono distinte.** $m$ indica dove punta il prior; $\kappa$ indica con quale forza.
-3. **La posterior conserva la storia dell’apprendimento.** I parametri posteriori contengono sia l’informazione iniziale sia quella apportata dai dati.
-4. **L’apprendimento è sequenziale.** Aggiornare in più fasi o in un’unica fase conduce allo stesso risultato quando il modello e il processo generativo restano invariati.
-5. **La comodità algebrica non decide il modello.** La coniugazione è preziosa per capire e calcolare, ma la scelta della verosimiglianza e del prior deve essere guidata dalla domanda scientifica e dalla plausibilità delle assunzioni.
+Il modello Beta-Binomiale è un caso semplice, ma non banale. Permette di osservare senza ambiguità come il prior e la verosimiglianza contribuiscano alla posterior. La regola
 
-La lezione più importante non è quindi memorizzare che Beta più Binomiale produce Beta. È comprendere perché accade: prior e verosimiglianza organizzano l’informazione nelle stesse componenti e l’aggiornamento le combina senza cambiare il linguaggio probabilistico. Nei modelli più complessi questa trasparenza algebrica scomparirà, ma la struttura concettuale rimarrà invariata.
+$$
+\operatorname{Beta}(\alpha,\beta)
++
+y\text{ successi e }n-y\text{ insuccessi}
+\longrightarrow
+\operatorname{Beta}(\alpha+y,\beta+n-y)
+$$
+
+è la forma compatta della moltiplicazione tra prior e verosimiglianza.
+
+La parametrizzazione mediante media $m$ e concentrazione $\kappa$ chiarisce due aspetti che non devono essere confusi: ciò che riteniamo plausibile prima dei dati e la forza con cui sosteniamo quella valutazione. La media posterior mostra poi come l'informazione iniziale e quella campionaria vengano ponderate in modo esplicito.
+
+Le famiglie coniugate sono quindi una palestra concettuale. La loro semplicità non deve indurre a scegliere modelli soltanto perché producono formule comode. Il loro valore principale consiste nel preparare il passaggio a modelli più flessibili, nei quali lo stesso ragionamento viene conservato anche quando la posterior deve essere approssimata numericamente.
 
 ## Esercizi {.unnumbered .unlisted}
 

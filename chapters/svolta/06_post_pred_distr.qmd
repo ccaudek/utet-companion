@@ -37,20 +37,16 @@ conflicts_prefer(base::match)
 ```
 :::
 
-## Dalla posterior alle previsioni
+## Dalla posterior ai dati futuri
 
-### La domanda predittiva
+L'aggiornamento bayesiano termina con una distribuzione a posteriori $p(\theta\mid y)$, ma spesso la domanda scientifica non riguarda direttamente il parametro. Ci interessa sapere quali osservazioni potremmo incontrare in futuro, oppure quali dati il modello aggiornato sarebbe in grado di riprodurre.
 
-Dopo avere osservato i dati $y$, l'aggiornamento bayesiano produce una distribuzione a posteriori $p(\theta\mid y)$. Questa distribuzione descrive quali valori del parametro rimangono plausibili e con quale peso.
-
-Se vogliamo prevedere una nuova osservazione $\tilde y$, non dobbiamo scegliere un solo valore di $\theta$. Occorre considerare tutti i valori ancora plausibili e, per ciascuno di essi, i dati che il modello potrebbe generare.
-
-La distribuzione predittiva a posteriori è
+Il passaggio dalla posterior alle previsioni richiede un'idea semplice ma decisiva: non scegliamo un solo valore di $\theta$. Consideriamo tutti i valori che rimangono plausibili dopo avere osservato i dati e, per ciascuno, immaginiamo ciò che il modello potrebbe generare. La distribuzione predittiva a posteriori combina queste possibilità in un'unica distribuzione sui dati osservabili:
 
 $$
 p(\tilde y\mid y)
 =
-\int p(\tilde y\mid\theta)\,p(\theta\mid y)\,d\theta.
+\int p(\tilde y\mid\theta)\,p(\theta\mid y)\,d\theta,
 $$ {#eq-posterior-predictive-distribution}
 
 dove:
@@ -73,16 +69,17 @@ La formula dice:
 L'integrale non seleziona la stima puntuale migliore. **Fa una media di tutte le distribuzioni predittive compatibili con la posterior.**
 :::
 
-### Una precisazione terminologica
+::: {.callout-note collapse="true" title="Verosimiglianza e distribuzione generativa: stessa formula, letture diverse"}
 
-Nel contesto predittivo, $p(\tilde y\mid\theta)$ viene letto come distribuzione generativa dei dati futuri condizionata al parametro.
+Nel contesto predittivo, $p(\tilde y\mid\theta)$ è la distribuzione generativa dei dati futuri condizionata al parametro.
 
 - Nella verosimiglianza, i dati osservati sono fissi e la funzione viene esaminata al variare di $\theta$.
 - Nella predizione, $\theta$ è fissato e la distribuzione viene esaminata al variare di $\tilde y$.
 
-La forma matematica è la stessa, ma il ruolo delle quantità è diverso.
+La forma matematica è la stessa, ma cambia la domanda che le rivolgiamo.
+:::
 
-## Prima l'intuizione discreta
+### La media ponderata, prima in forma discreta
 
 Quando il parametro può assumere pochi valori, l'integrale diventa una somma:
 
@@ -91,8 +88,6 @@ p(\tilde y\mid y)
 =
 \sum_j p(\tilde y\mid\theta_j)\,p(\theta_j\mid y).
 $$ {#eq-posterior-predictive-discrete}
-
-### Un esempio con tre valori possibili
 
 Supponiamo che, dopo avere osservato i dati, il parametro possa assumere soltanto i valori $0.2$, $0.5$ e $0.8$, con le seguenti probabilità a posteriori:
 
@@ -194,7 +189,7 @@ Il valore $\theta=0.8$ contribuisce maggiormente perché:
 - riceve anche il peso a posteriori più elevato.
 :::
 
-### Vedere la media di distribuzioni
+La stessa operazione si vede chiaramente nel grafico seguente: le prime tre distribuzioni descrivono ciò che accadrebbe sotto ciascun valore possibile di $\theta$; l'ultima è la loro media, ponderata con le probabilità a posteriori.
 
 ```{r}
 #| label: fig-post-pred-discrete-mixture
@@ -231,9 +226,7 @@ posterior_predictive_plot_data |>
 
 La distribuzione finale non coincide necessariamente con nessuna delle distribuzioni condizionate. È una nuova distribuzione ottenuta combinandole.
 
-## Dalla somma all'integrale
-
-Quando $\theta$ è continuo, non possiamo elencare uno per uno tutti i suoi possibili valori. La logica rimane identica:
+Quando $\theta$ è continuo, non possiamo più elencare uno per uno tutti i valori possibili. La logica, tuttavia, non cambia: la somma dell'esempio discreto diventa un integrale.
 
 $$
 \underbrace{
@@ -259,17 +252,13 @@ La formula **non**:
 Descrive una distribuzione sui **dati futuri**, ottenuta mediando le distribuzioni $p(\tilde y\mid\theta)$ con i pesi $p(\theta\mid y)$.
 :::
 
-## Due fonti di incertezza predittiva
+## Da dove nasce l'incertezza predittiva
 
-La distribuzione predittiva a posteriori combina due forme di incertezza.
+La distribuzione predittiva a posteriori combina due fonti di incertezza che è utile tenere distinte.
 
-### Incertezza residua sul parametro
+La prima è l'**incertezza residua sul parametro**: la posterior non concentra generalmente tutta la probabilità su un unico valore di $\theta$, e valori diversi possono implicare previsioni differenti.
 
-La posterior non concentra generalmente tutta la probabilità su un unico valore di $\theta$. Valori diversi restano plausibili e possono implicare previsioni diverse.
-
-### Variabilità dei dati dato il parametro
-
-Anche se conoscessimo esattamente $\theta$, i dati futuri non sarebbero deterministici. Per esempio, con $\theta=0.7$ non otteniamo sempre sette successi su dieci: la distribuzione binomiale rappresenta la variabilità del processo.
+La seconda è la **variabilità dei dati dato il parametro**: anche se conoscessimo esattamente $\theta$, le osservazioni future non sarebbero deterministiche. Con $\theta=0.7$, per esempio, non otteniamo sempre sette successi su dieci; la distribuzione binomiale descrive la variabilità intrinseca del processo.
 
 ::: {.callout-tip title="Perché non basta usare la media della posterior?"}
 
@@ -290,7 +279,7 @@ $$
 Le due distribuzioni possono avere la stessa media, ma la predittiva completa è generalmente più dispersa.
 :::
 
-## Un esempio paradigmatico: il modello Beta-Binomiale
+## Un esempio completo: il modello Beta-Binomiale
 
 Supponiamo di avere osservato 70 successi su 100 prove e di avere specificato il prior
 
@@ -314,7 +303,9 @@ $$
 \tilde y\mid\theta\sim\operatorname{Binomiale}(10,\theta).
 $$
 
-### La distribuzione Beta-Binomiale
+La posterior Beta(72,32) contiene l'incertezza residua su $\theta$; il modello binomiale descrive invece la variabilità delle dieci nuove prove. Combinandoli otteniamo una distribuzione sul numero futuro di successi.
+
+::: {.callout-note collapse="true" title="Approfondimento: la forma Beta-Binomiale e il calcolo esatto"}
 
 Integrando $\theta$ rispetto alla posterior otteniamo
 
@@ -403,8 +394,12 @@ posterior_predictive_summary |>
 ```
 
 Queste quantità descrivono **risultati futuri**, non valori plausibili del parametro. La posterior Beta(72,32) è una distribuzione su $\theta$; la Beta-Binomiale è una distribuzione sul numero di successi $\tilde y$.
+:::
 
-### Calcolo esatto e simulazione esprimono lo stesso meccanismo
+Il calcolo esatto è utile perché rende trasparente la struttura della distribuzione. Nelle applicazioni, tuttavia, la stessa operazione viene spesso eseguita mediante simulazione.
+
+::: {.callout-note collapse="true" title="Approfondimento: calcolo esatto e simulazione"}
+
 
 La distribuzione predittiva può essere approssimata con due istruzioni ripetute:
 
@@ -461,8 +456,12 @@ left_join(
 ```
 
 La simulazione non introduce una definizione diversa. È un modo computazionale per eseguire la stessa media rappresentata dall'integrale.
+:::
 
-### Predittiva completa e previsione *plug-in*
+Un secondo confronto chiarisce perché la predittiva completa non dovrebbe essere sostituita automaticamente da una previsione costruita con una sola stima del parametro.
+
+::: {.callout-note collapse="true" title="Approfondimento: predittiva completa e previsione plug-in"}
+
 
 Consideriamo ora una Binomiale con probabilità fissata alla media posterior:
 
@@ -514,8 +513,9 @@ predictive_comparison |>
 ```
 
 Le due distribuzioni hanno la stessa media, circa 6.92 successi. La predittiva completa ha però una deviazione standard leggermente maggiore, perché include anche l'incertezza su $\theta$.
+:::
 
-## Quanto conta la concentrazione della posterior?
+### Come la concentrazione della posterior modifica la previsione
 
 Per isolare l'effetto dell'incertezza parametrica, confrontiamo due posterior con la stessa media, $0.70$, ma concentrazione diversa:
 
@@ -596,7 +596,7 @@ Una posterior più concentrata non elimina la variabilità dei dati: anche conos
 Una posterior più dispersa aggiunge ulteriore incertezza, perché combina distribuzioni binomiali centrate su valori di $\theta$ più differenti. Per questo assegna maggiore probabilità agli esiti lontani dal centro.
 :::
 
-## Predittiva a priori e predittiva a posteriori
+### Dalla predittiva a priori a quella a posteriori
 
 Le due distribuzioni sono costruite con lo stesso modello generativo. Cambiano soltanto i pesi.
 
@@ -609,17 +609,13 @@ Le due distribuzioni sono costruite con lo stesso modello generativo. Cambiano s
 
 Non è garantito che la predittiva a posteriori sia sempre molto più stretta della predittiva a priori. Dipende da quanto i dati hanno ridotto l'incertezza e dalla struttura del modello. La differenza essenziale è che la seconda incorpora l'informazione contenuta nei dati osservati.
 
-## Previsione e controllo predittivo
+## Dalla previsione al controllo del modello
 
-### Prevedere dati futuri
-
-Quando $\tilde y$ rappresenta un'osservazione che sarà realmente raccolta in seguito, la distribuzione predittiva risponde alla domanda:
+La stessa distribuzione può essere usata in due modi. Nel primo, $\tilde y$ rappresenta un'osservazione che sarà realmente raccolta in seguito. La predittiva risponde allora alla domanda:
 
 > Quali risultati futuri considera plausibili il modello dopo avere osservato i dati disponibili?
 
-### Generare dati replicati
-
-Per controllare l'adeguatezza del modello, usiamo spesso la stessa formula con dati replicati $y^{\mathrm{rep}}$:
+Nel secondo uso non stiamo necessariamente anticipando una futura osservazione reale. Generiamo invece dati replicati $y^{\mathrm{rep}}$, come se l'esperimento venisse ripetuto sotto il modello aggiornato:
 
 $$
 p(y^{\mathrm{rep}}\mid y)
@@ -644,7 +640,7 @@ Se il modello genera regolarmente dati con proprietà molto diverse da quelle os
 Se i dati osservati appaiono compatibili con le repliche, abbiamo soltanto verificato che il modello riesce a riprodurre le caratteristiche esaminate. **Non abbiamo dimostrato che il modello sia vero o unico.**
 :::
 
-### Controlli grafici con `brms`
+### Scegliere che cosa controllare
 
 In un modello stimato con `brms`, `pp_check()` genera repliche dalla distribuzione predittiva a posteriori e le confronta con i dati osservati.
 
@@ -666,15 +662,11 @@ Ogni controllo risponde a una domanda diversa. Un modello può riprodurre bene l
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-La distribuzione predittiva a posteriori trasferisce l'informazione della posterior dalla scala dei parametri alla scala dei dati osservabili. Il suo significato può essere riassunto in una sequenza:
+La distribuzione predittiva a posteriori trasforma l'inferenza dalla scala dei parametri a quella dei dati osservabili. La distribuzione a posteriori assegna un peso ai valori ancora plausibili di $\theta$; ciascuno di questi valori implica una distribuzione di possibili osservazioni e la distribuzione predittiva riunisce tali distribuzioni in una media ponderata.
 
-1. la posterior assegna pesi ai valori plausibili del parametro;
-2. ogni valore del parametro implica una distribuzione dei dati futuri;
-3. la predittiva combina queste distribuzioni usando i pesi posteriori.
+La previsione conserva quindi entrambe le fonti di incertezza: ciò che non sappiamo ancora sul parametro e la variabilità che rimarrebbe anche se il parametro fosse noto. Per questo motivo, una previsione basata su un'unica stima puntuale può risultare troppo sicura.
 
-La distribuzione risultante incorpora sia l'incertezza residua sui parametri sia la variabilità del processo generativo. Per questo non coincide, in generale, con la distribuzione ottenuta fissando il parametro alla sua stima puntuale.
-
-La stessa costruzione sostiene due usi distinti. Nel primo, descrive risultati futuri plausibili. Nel secondo, genera dati replicati da confrontare con quelli osservati per individuare carenze del modello. In entrambi i casi, il passaggio decisivo è lo stesso: **non prevediamo da un singolo parametro, ma da tutte le possibilità contemplate dalla posterior.**
+La medesima costruzione collega la previsione e il controllo del modello. Possiamo utilizzarla per descrivere risultati futuri plausibili o per generare repliche con cui confrontare i dati osservati. In entrambi i casi, il principio è lo stesso: **non prevediamo da un singolo parametro, ma dall'intera gamma di possibilità rappresentata dalla posterior.**
 
 ## Esercizi {.unnumbered .unlisted}
 
