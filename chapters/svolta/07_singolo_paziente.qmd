@@ -1,11 +1,11 @@
-# La decisione sul singolo paziente: dal punteggio osservato alla probabilità clinica {#sec-bayesian-inference-single-patient-cutoff}
+# Oltre il cut-off: inferenza bayesiana sul singolo paziente {#sec-bayesian-inference-single-patient-cutoff}
 
 ::: {.callout-important appearance="minimal" .chapter-status}
-**Da sapere.** Un punteggio osservato non coincide con il punteggio vero postulato dal modello psicometrico, perché contiene errore di misura. Nel modello Normale-Normale, la distribuzione normativa dei punteggi veri costituisce il prior, il modello dell'errore di misura costituisce la distribuzione generativa del punteggio osservato e il loro aggiornamento produce la posterior sul punteggio vero del singolo paziente.
+**Da sapere.** Un punteggio osservato non coincide con il punteggio vero postulato dal modello psicometrico: è una singola misurazione e contiene errore. Nel modello Normale-Normale, la distribuzione normativa dei punteggi veri costituisce il prior, il modello dell'errore di misura descrive come nasce il punteggio osservato e il loro aggiornamento produce una distribuzione a posteriori sul punteggio vero del singolo paziente.
 
-**Da saper fare.** Interpretare prior, likelihood, posterior e distribuzione predittiva nel caso di un singolo paziente; calcolare la stima di Kelley e riconoscerla come media a posteriori nel modello adottato; interpretare $P(\theta > c \mid X)$ senza trasformarla automaticamente in una diagnosi; distinguere l'incertezza sul punteggio vero dalla variabilità di una nuova somministrazione.
+**Da saper fare.** Interpretare prior, likelihood, posterior e distribuzione predittiva nel caso di un singolo paziente; riconoscere la stima di Kelley come media a posteriori nel modello adottato; interpretare $P(\theta>c\mid X)$ senza trasformarla automaticamente in una diagnosi; distinguere l'incertezza sul punteggio vero dalla variabilità di una nuova somministrazione.
 
-**Approfondimento facoltativo.** La derivazione algebrica dell'equivalenza tra Kelley e la media a posteriori, l'analisi di sensibilità rispetto all'attendibilità e la formulazione delle decisioni mediante funzioni di perdita possono essere rimandate in una prima lettura.
+**Approfondimento facoltativo.** Le formule del modello Normale-Normale, l'equivalenza algebrica tra Kelley e la media a posteriori, l'analisi di sensibilità rispetto all'attendibilità e la formulazione delle decisioni mediante funzioni di perdita possono essere rimandate in una prima lettura.
 
 [Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
 :::
@@ -26,78 +26,79 @@ here::here("code", "_common.R") |>
 ```
 :::
 
-## Una vignetta clinica: quando due punti sembrano decisivi {#sec-vignetta-clinica}
+## Quando due punti sembrano una diagnosi {#sec-vignetta-clinica}
 
-Immaginiamo che un clinico somministri un test standardizzato per la sintomatologia depressiva. Il manuale dello strumento indica un *cut-off* operativo pari a 70. Il paziente ottiene un punteggio osservato di 72.
+Immaginiamo che un clinico somministri un test standardizzato per la sintomatologia depressiva. Il manuale indica un *cut-off* operativo pari a 70 e il paziente ottiene 72.
 
-Una lettura meccanica sembra immediata:
-
-$$
-72 > 70.
-$$
-
-Il paziente è dunque sopra soglia? Il confronto aritmetico è corretto, ma non esaurisce il problema. Ogni punteggio psicometrico contiene errore di misura; due punti sopra il cut-off non autorizzano, da soli, una conclusione diagnostica netta.
-
-In questo capitolo formuleremo una domanda più precisa:
-
-::: {.callout-note title="La domanda sul punteggio vero" icon=false}
-Dato il punteggio osservato $X = 72$, quale probabilità attribuisce il modello all'evento che il **punteggio vero** del paziente, indicato con $\theta$, superi la soglia di 70?
+La lettura più immediata è:
 
 $$
-P(\theta > 70 \mid X = 72).
+72>70.
+$$
+
+Il confronto aritmetico è corretto. Il problema nasce quando lo si trasforma senza altri passaggi in una conclusione clinica: «il paziente è sopra soglia, dunque presenta il disturbo». Questo modo di ragionare è attraente perché converte una misura continua e incerta in una decisione netta. Ma il punteggio di 72 è soltanto *una realizzazione osservata di un processo di misurazione imperfetto*.
+
+L'alternativa bayesiana non consiste nell'ignorare il cut-off. Consiste nel porre una domanda più precisa:
+
+::: {.callout-note title="La domanda inferenziale" icon=false}
+Dato il punteggio osservato $X=72$, quale probabilità attribuisce il modello all'evento che il **punteggio vero** del paziente, indicato con $\theta$, superi la soglia di 70?
+
+$$
+P(\theta>70\mid X=72).
 $$
 :::
 
-Questa domanda riguarda l'incertezza sul livello latente misurato dal test. Non equivale ancora alla domanda diagnostica complessiva, che richiede altre informazioni cliniche e una regola decisionale.
+Questa domanda rende esplicita l'incertezza sul livello latente che il test cerca di misurare. Non coincide ancora con la probabilità di una diagnosi: per arrivare a una decisione clinica sono necessarie la validità diagnostica dello strumento, altre informazioni sul paziente e una valutazione delle conseguenze degli errori possibili.
 
-::: {.callout-warning title="Una cautela sul cut-off" icon=false}
-Nella pratica, molti cut-off sono definiti e validati sui **punteggi osservati**, non direttamente sui punteggi veri latenti. Confrontare $\theta$ con lo stesso valore numerico del cut-off è quindi una scelta modellistica utile a scopo didattico, ma deve essere giustificata nell'applicazione reale. Il capitolo mostra il meccanismo inferenziale; non propone una procedura diagnostica universale.
+::: {.callout-warning title="Cut-off osservato e soglia sul tratto latente" icon=false}
+
+Nella pratica, i cut-off sono spesso definiti sui **punteggi osservati**. Una regola come $X>70$ può essere stata validata come criterio operativo di screening o classificazione, ma ciò non significa che il punteggio osservato coincida con il livello vero del paziente o che l’errore di misura possa essere ignorato.
+
+Il confronto $P(\theta>70\mid X=72)$ pone una domanda diversa: quanto è plausibile che il tratto latente $\theta$ superi la soglia $70$, dato il punteggio osservato? Perché questa domanda sia sostantivamente corretta, occorre giustificare che la stessa soglia numerica abbia un significato interpretabile anche sulla scala latente.
+
+Nel presente capitolo questa corrispondenza viene assunta a scopo didattico, per mostrare come l’incertezza di misurazione possa essere incorporata nell’inferenza sul singolo caso. Non si propone quindi di sostituire automaticamente i cut-off validati con una soglia sul punteggio vero, né di fornire una procedura diagnostica universale.
 :::
 
-## Il punteggio osservato non è il punteggio vero {#sec-punteggio-osservato-vero}
+### Dal punteggio osservato al punteggio vero {#sec-punteggio-osservato-vero}
 
-Nella teoria classica dei test, il punteggio osservato $X$ viene rappresentato come:
-
-$$
-X = \theta + \varepsilon,
-$$
-
-dove:
-
-- $\theta$ è il **punteggio vero** postulato dal modello, cioè la componente stabile e sistematica della misurazione;
-- $\varepsilon$ è l'**errore di misura**, cioè la componente accidentale della singola somministrazione.
-
-Il termine *punteggio vero* non va interpretato in senso ontologico. Nel nostro esempio, $\theta$ non è "la depressione reale" del paziente in senso assoluto. È il valore latente che il modello del test cerca di stimare separando la componente stabile dalle fluttuazioni della misurazione.
-
-L'**attendibilità** $\rho$ è definita come la proporzione della varianza osservata attribuibile ai punteggi veri:
+Nella teoria classica dei test, il punteggio osservato è rappresentato come
 
 $$
-\rho = \frac{\sigma_\theta^2}{\sigma_X^2}.
+X=\theta+\varepsilon,
+$$
+dove $\theta$ è la componente stabile e sistematica postulata dal modello e $\varepsilon$ è l'errore accidentale della singola somministrazione.
+
+Il termine *punteggio vero* non va inteso in senso ontologico. Nel nostro esempio, $\theta$ non è «la depressione reale» del paziente in senso assoluto. È la quantità latente che il modello psicometrico cerca di separare dalle fluttuazioni della misura.
+
+L'**attendibilità** $\rho$ esprime la proporzione della varianza osservata attribuibile ai punteggi veri:
+
+$$
+\rho=\frac{\sigma_\theta^2}{\sigma_X^2}.
 $$
 
 Sotto le assunzioni della teoria classica dei test,
 
 $$
-\sigma_\theta^2 = \rho\sigma_X^2,
+\sigma_\theta^2=\rho\sigma_X^2,
 \qquad
-\sigma_e^2 = (1-\rho)\sigma_X^2.
+\sigma_e^2=(1-\rho)\sigma_X^2.
 $$
 
 La radice quadrata di $\sigma_e^2$ è l'errore standard della misura (*standard error of measurement*, SEM):
 
 $$
-\text{SEM} = \sigma_X\sqrt{1-\rho}.
+\text{SEM}=\sigma_X\sqrt{1-\rho}.
 $$
 
-## Il contesto numerico {#sec-contesto-numerico}
+### Il caso che seguiremo {#sec-contesto-numerico}
 
 Useremo lo stesso scenario in tutto il capitolo:
 
-- media normativa: $\mu_X = 70$;
-- deviazione standard osservata nella popolazione normativa: $\sigma_X = 15$;
-- attendibilità: $\rho = 0.85$;
-- punteggio osservato: $X = 72$;
-- soglia: $c = 70$.
+- media normativa: $\mu_X=70$;
+- deviazione standard osservata nella popolazione normativa: $\sigma_X=15$;
+- attendibilità: $\rho=0.85$;
+- punteggio osservato: $X=72$;
+- soglia: $c=70$.
 
 ```{r}
 mu_pop  <- 70
@@ -116,51 +117,43 @@ cat("DS dei punteggi veri:", round(sigma_theta, 2), "\n")
 cat("Errore standard della misura:", round(sigma_e, 2), "\n")
 ```
 
-Il SEM è circa `r round(sigma_e, 2)` punti. Ciò non significa che ogni misurazione sbagli esattamente di questa quantità. Significa che, nel modello, le ripetizioni del test attorno allo stesso punteggio vero presentano una deviazione standard pari a circa `r round(sigma_e, 2)`.
+Il SEM è circa `r round(sigma_e, 2)` punti. Ciò non significa che ogni misurazione sbagli esattamente di questa quantità. Significa che, nel modello, le ripetizioni del test attorno allo stesso punteggio vero hanno una deviazione standard di circa `r round(sigma_e, 2)` punti. Il valore osservato è quindi informativo, ma non corrisponde perfettamente al livello latente.
 
-## Prior, modello di misura e posterior {#sec-prior-likelihood-posterior-paziente}
+## Costruire l'inferenza sul singolo paziente {#sec-prior-likelihood-posterior-paziente}
 
-Il caso del singolo paziente permette di dare un significato sostantivo ai tre elementi dell'aggiornamento bayesiano.
+Il caso del singolo paziente ha il vantaggio di rendere concreti i tre elementi dell'aggiornamento bayesiano. Questi elementi non sono concetti astratti, ma descrivono ciò che sappiamo prima del test, il funzionamento della misurazione e le conclusioni che possiamo trarre osservando il risultato.
 
-### Il prior: cosa sappiamo prima del punteggio individuale
-
-Prima di osservare $X=72$, il modello descrive come sono distribuiti i punteggi veri nella popolazione normativa:
+**Prima del punteggio individuale: il prior normativo.** La distribuzione dei punteggi veri nella popolazione di riferimento è modellata come
 
 $$
-\theta \sim \mathcal{N}(\mu_X,\sigma_\theta^2).
+\theta\sim\mathcal{N}(\mu_X,\sigma_\theta^2).
 $$
 
-Nel nostro esempio:
+Nel nostro esempio,
 
 $$
-\theta \sim \mathcal{N}(70,\rho\cdot15^2).
+\theta\sim\mathcal{N}(70,\rho\cdot15^2).
 $$
 
-Il prior non afferma che il paziente "sia medio". Esprime che, prima di usare il suo punteggio, i valori vicini alla media normativa sono più frequenti nel modello rispetto ai valori estremi.
+Il prior non afferma che il paziente «sia medio». Piuttosto, esprime l'idea che, prima di utilizzare il punteggio individuale, i valori vicini alla media normativa sono più frequenti nel modello rispetto a quelli estremi.
 
-### Il modello di misura: quali punteggi può produrre un dato $\theta$
-
-Condizionatamente al punteggio vero, una singola somministrazione è modellata come:
+**Come nasce il punteggio osservato: il modello di misura.** Condizionatamente al punteggio vero,
 
 $$
-X\mid\theta \sim \mathcal{N}(\theta,\sigma_e^2).
+X\mid\theta\sim\mathcal{N}(\theta,\sigma_e^2).
 $$
 
-Questa distribuzione risponde alla domanda:
+La distribuzione risponde alla domanda: se il punteggio vero fosse $\theta$, quali valori osservati potrebbe produrre il test a causa dell'errore di misura? Dopo che è stato osservato il valore $X=72$, la stessa espressione, letta come funzione di $\theta$, diventa la funzione di verosimiglianza. Essa misura quanto ciascun valore candidato di $\theta$ sia compatibile con il punteggio ottenuto.
 
-> Se il punteggio vero fosse $\theta$, quali punteggi osservati potrebbe produrre il test a causa dell'errore di misura?
-
-Dopo avere osservato $X=72$, la stessa funzione, considerata come funzione di $\theta$, costituisce la likelihood. Non è una distribuzione a priori sui possibili valori di $\theta$: misura quanto ciascun valore di $\theta$ rende compatibile il punteggio osservato.
-
-### La posterior: combinare informazione normativa e punteggio individuale
-
-L'aggiornamento è:
+**Dopo il punteggio: la posterior.** Il prior normativo e la likelihood vengono combinati mediante
 
 $$
-p(\theta\mid X)
-\propto
-p(X\mid\theta)p(\theta).
+p(\theta\mid X)\propto p(X\mid\theta)p(\theta).
 $$
+
+Il risultato non è un nuovo verdetto binario, ma una distribuzione completa sui valori plausibili del punteggio vero.
+
+::: {.callout-note collapse="true" title="Le formule del modello Normale-Normale"}
 
 Poiché prior e modello di misura sono normali, anche la posterior è normale:
 
@@ -181,6 +174,8 @@ $$
 \frac{1}{\sigma_e^2}
 \right)^{-1},
 $$
+
+e
 
 $$
 \mu_{\text{post}}
@@ -203,8 +198,9 @@ mu_post <- sigma_post2 *
 cat("Media a posteriori:", round(mu_post, 2), "\n")
 cat("DS a posteriori:", round(sigma_post, 2), "\n")
 ```
+:::
 
-La distribuzione a posteriori è quindi:
+Nel nostro caso,
 
 $$
 \theta\mid X=72
@@ -212,15 +208,17 @@ $$
 \mathcal{N}(`r round(mu_post, 2)`, `r round(sigma_post, 2)`^2).
 $$
 
-| Elemento | Distribuzione | Significato sostantivo |
+La media della posterior è 71.7: il punteggio osservato di 72 sposta l'inferenza al di sopra della media normativa, ma non viene considerato come una misura priva di errore. La deviazione standard posterior, pari a circa `r round(sigma_post, 2)`, descrive l'incertezza che rimane sul punteggio vero.
+
+| Elemento | Distribuzione | Domanda sostantiva |
 |---|---|---|
-| Prior | $p(\theta)$ | distribuzione normativa dei punteggi veri prima di osservare il paziente |
-| Modello di misura | $p(X\mid\theta)$ | variabilità delle misurazioni che un dato punteggio vero può generare |
-| Posterior | $p(\theta\mid X)$ | incertezza aggiornata sul punteggio vero del paziente dopo $X=72$ |
+| Prior | $p(\theta)$ | prima di osservare il paziente, quali punteggi veri sono plausibili? |
+| Modello di misura | $p(X\mid\theta)$ | a punteggio vero fissato, quali misure potrebbe produrre il test? |
+| Posterior | $p(\theta\mid X)$ | dopo $X=72$, quali punteggi veri sono plausibili per il paziente? |
 
-## Kelley come media a posteriori {#sec-kelley-shrinkage}
+### Perché la stima si sposta verso la media {#sec-kelley-shrinkage}
 
-La formula classica di @Kelley1923 per stimare il punteggio vero è:
+La formula classica di @Kelley1923 per stimare il punteggio vero è
 
 $$
 \hat\theta_{\text{Kelley}}
@@ -233,7 +231,7 @@ theta_kelley <- rho * X_obs + (1 - rho) * mu_pop
 cat("Stima di Kelley:", round(theta_kelley, 2), "\n")
 ```
 
-Nel modello adottato, la media a posteriori coincide con la stima di Kelley:
+Nel modello adottato, questa stima coincide esattamente con la media a posteriori:
 
 $$
 \mu_{\text{post}}
@@ -241,18 +239,15 @@ $$
 \rho X+(1-\rho)\mu_X.
 $$
 
-Per il nostro paziente:
+Per il nostro paziente,
 
 $$
 0.85\times72+0.15\times70=71.7.
 $$
 
-L'attendibilità determina il peso del punteggio osservato:
+La formula rende evidente il ruolo dell'attendibilità. Se $\rho$ è alta, il punteggio individuale riceve un peso maggiore. Se è bassa, il punteggio viene considerato più rumoroso e la stima si sposta maggiormente verso la media normativa.
 
-- se $\rho$ è alta, il punteggio osservato riceve molto peso;
-- se $\rho$ è bassa, il punteggio osservato è considerato più rumoroso e la stima viene corretta maggiormente verso la media normativa.
-
-Questo spostamento è una forma di *shrinkage*. Non è una penalizzazione arbitraria del paziente: deriva dalla combinazione tra frequenza normativa dei punteggi veri e precisione della misurazione.
+Questo spostamento, detto *shrinkage*, non è una correzione punitiva né un modo per «normalizzare» il paziente. È il risultato della combinazione di due informazioni: la posizione del singolo punteggio e la precisione con cui è stato misurato. Un valore estremo ma poco attendibile fornisce meno informazioni su $\theta$ rispetto a un valore estremo ottenuto con uno strumento molto preciso.
 
 Anche la deviazione standard posterior assume una forma semplice:
 
@@ -262,7 +257,7 @@ $$
 \sigma_X\sqrt{\rho(1-\rho)}.
 $$
 
-Questa quantità coincide con l'errore standard dell'errore di stima usato nella formulazione classica di Kelley. La coincidenza riguarda questo specifico modello e le sue assunzioni; non rende equivalenti in generale inferenza frequentista e inferenza bayesiana.
+Questa quantità coincide con l'errore standard dell'errore di stima nella formulazione classica di Kelley. Tale coincidenza vale per questo specifico modello e per le sue assunzioni, ma non rende equivalenti, in generale, l'inferenza frequentista e l'inferenza bayesiana.
 
 ```{r}
 #| echo: false
@@ -301,13 +296,15 @@ ggplot(plot_df, aes(x = theta, y = densita, linetype = elemento)) +
   legenda_in_alto
 ```
 
-::: {.callout-note title="La likelihood nel grafico" icon=false}
-La likelihood è stata moltiplicata per una costante per renderla visibile accanto alle due densità. Questo riscalamento non cambia la posterior, perché nella relazione $p(\theta\mid X)\propto p(X\mid\theta)p(\theta)$ qualsiasi costante comune viene eliminata dalla normalizzazione.
+La @fig-single-patient-prior-likelihood-posterior mostra l'intero aggiornamento. Il prior concentra maggiormente il peso vicino alla media, la likelihood favorisce i valori di $\theta$ compatibili con il punteggio osservato e la posterior combina le due fonti risultando più concentrata.
+
+::: {.callout-note title="Perché la likelihood è riscalata nel grafico?" icon=false}
+La likelihood è stata moltiplicata per una costante per poterla visualizzare accanto alle due densità. Il riscalamento non cambia la posterior: nella relazione $p(\theta\mid X)\propto p(X\mid\theta)p(\theta)$ qualsiasi costante comune viene eliminata dalla normalizzazione.
 :::
 
-## La probabilità di superare la soglia {#sec-domanda-clinica-diretta}
+## Trasformare la posterior in una domanda clinica {#sec-domanda-clinica-diretta}
 
-La posterior consente di calcolare direttamente:
+Una volta ottenuta la posterior, non siamo obbligati a ridurla a una sola stima. Possiamo porre direttamente la domanda che aveva motivato il capitolo:
 
 $$
 P(\theta>c\mid X)
@@ -344,9 +341,9 @@ cat(
 )
 ```
 
-Nel modello, la probabilità che il punteggio vero superi la soglia è circa **`r round(prob_sopra_cutoff * 100, 1)`%**. Il superamento è quindi più plausibile del non superamento, ma l'incertezza rimane sostanziale.
+Nel modello, la probabilità che il punteggio vero superi la soglia è di circa **`r round(prob_sopra_cutoff * 100, 1)`%**. Il superamento è dunque più plausibile del non superamento, ma l'incertezza resta sostanziale. La posterior non trasforma il punteggio di 72 in una certezza, ma quantifica quanto l'evidenza disponibile sostenga i valori sopra e sotto la soglia.
 
-L'intervallo di credibilità al 95% è [`r round(IC_post[1], 1)`, `r round(IC_post[2], 1)`]. Condizionatamente al modello, ai parametri normativi, all'attendibilità assunta e al punteggio osservato, la posterior assegna il 95% della propria probabilità a questo intervallo.
+L'intervallo di credibilità al 95% è [`r round(IC_post[1], 1)`, `r round(IC_post[2], 1)`]. Condizionatamente al modello, ai parametri normativi, all'attendibilità assunta e al punteggio osservato, il 95% della probabilità a posteriori si colloca in questo intervallo.
 
 ```{r}
 #| echo: false
@@ -391,19 +388,21 @@ ggplot(post_df, aes(x = theta, y = densita)) +
   )
 ```
 
-::: {.callout-important title="Che cosa significa il 62%?" icon=false}
-Il valore non significa che il paziente abbia una probabilità del 62% di "essere depresso". Significa che, sotto il modello specificato, il 62% della distribuzione a posteriori del punteggio vero si trova sopra la soglia numerica di 70. Il passaggio da questa quantità a una diagnosi richiede validità diagnostica del test, informazioni cliniche aggiuntive e una regola decisionale.
+La @fig-single-patient-threshold-probability rende visibile l'interpretazione: la soglia divide la posterior in due aree e la probabilità richiesta è l'area a destra di 70.
+
+::: {.callout-important title="Che cosa significa il `r round(prob_sopra_cutoff * 100, 1)`%?" icon=false}
+Ciò non significa che il paziente abbia una probabilità del `r round(prob_sopra_cutoff * 100, 1)`% di «essere depresso». Significa che, secondo il modello specifico, questa quota della distribuzione a posteriori **del punteggio vero** si colloca al di sopra della soglia numerica di 70. Per passare da questa quantità a una diagnosi sono necessarie la validità diagnostica, informazioni cliniche aggiuntive e una regola decisionale.
 :::
 
-## Posterior e predittiva: due oggetti diversi {#sec-posterior-predittiva}
+### Stimare il tratto e prevedere una nuova misura non sono la stessa cosa {#sec-posterior-predittiva}
 
-La posterior sul punteggio vero risponde a:
+La posterior risponde alla domanda:
 
 > Quali valori di $\theta$ sono plausibili per questo paziente dopo avere osservato $X=72$?
 
-Una domanda diversa è:
+Una domanda diversa riguarda ciò che vedremmo ripetendo il test:
 
-> Se ripetessimo il test, quale nuovo punteggio osservato $\tilde X$ potremmo ottenere?
+> Quale nuovo punteggio osservato $\tilde X$ potremmo ottenere?
 
 La risposta è la distribuzione predittiva a posteriori:
 
@@ -413,7 +412,7 @@ p(\tilde X\mid X)
 \int p(\tilde X\mid\theta)p(\theta\mid X)\,d\theta.
 $$
 
-Nel modello Normale-Normale:
+Nel modello Normale-Normale,
 
 $$
 \tilde X\mid X
@@ -425,10 +424,7 @@ $$
 \right).
 $$
 
-La varianza predittiva comprende:
-
-1. l'incertezza residua sul punteggio vero;
-2. un nuovo errore di misura nella seconda somministrazione.
+La varianza predittiva contiene due fonti di incertezza: quella residua sul punteggio vero e un nuovo errore di misura nella seconda somministrazione.
 
 ```{r}
 sigma_pred <- sqrt(sigma_post2 + sigma_e2)
@@ -458,7 +454,7 @@ cat(
 )
 ```
 
-La probabilità che una **nuova misurazione osservata** superi 70 è circa `r round(prob_pred_sopra * 100, 1)`%, diversa da $P(\theta>70\mid X)$ perché riguarda un oggetto diverso e include un nuovo errore di misura.
+La probabilità che una **nuova misurazione osservata** superi 70 è circa `r round(prob_pred_sopra * 100, 1)`%. È diversa da $P(\theta>70\mid X)$ perché riguarda un altro oggetto e include una nuova fluttuazione della misura.
 
 ```{r}
 #| echo: false
@@ -496,17 +492,21 @@ ggplot(
   legenda_in_alto
 ```
 
+La @fig-single-patient-posterior-predictive mostra che le due distribuzioni hanno lo stesso centro ma ampiezze diverse. La posterior descrive l'incertezza sul tratto latente; la predittiva è più larga perché include anche ciò che potrebbe cambiare nella prossima somministrazione.
+
 | Domanda | Distribuzione rilevante | Fonte di variabilità |
 |---|---|---|
 | Qual è il punteggio vero? | $p(\theta\mid X)$ | incertezza residua su $\theta$ |
 | Quale punteggio osserveremo ripetendo il test? | $p(\tilde X\mid X)$ | incertezza su $\theta$ + nuovo errore di misura |
 
-## L'attendibilità modifica sia la stima sia l'incertezza {#sec-sensibilita-attendibilita}
+## Quanto dipende dalla qualità della misura? {#sec-sensibilita-attendibilita}
 
-A parità di punteggio osservato, una maggiore attendibilità:
+L'attendibilità non è un dettaglio tecnico aggiunto alla fine dell'analisi. Determina quanto il punteggio individuale può modificare ciò che sappiamo prima della misurazione.
 
-- assegna più peso a $X$ nella media posterior;
-- riduce la dispersione posterior;
+A parità di $X$, una maggiore attendibilità:
+
+- assegna più peso al punteggio osservato nella media posterior;
+- riduce l'incertezza sul punteggio vero;
 - riduce la variabilità predittiva di una nuova somministrazione.
 
 La tabella seguente mantiene invariati $X=72$, $\mu_X=70$ e $\sigma_X=15$ e modifica soltanto $\rho$.
@@ -567,15 +567,15 @@ reliability_table |>
   tt(caption = "Effetto dell'attendibilità sull'inferenza per il singolo paziente")
 ```
 
-La tabella mostra perché l'attendibilità è un elemento sostantivo dell'interpretazione. Non modifica soltanto la larghezza di un intervallo: stabilisce quanto il singolo punteggio osservato possa spostare l'inferenza rispetto alla distribuzione normativa.
+Questo confronto chiarisce un aspetto spesso trascurato nell'interpretazione professionale dei test: lo stesso punteggio numerico non fornisce sempre la stessa evidenza. Il suo significato dipende dalla qualità della misurazione. Con un'attendibilità più alta, una quota maggiore della distanza tra il punteggio e la media normativa viene attribuita al punteggio vero; con un'attendibilità più bassa, una quota maggiore resta compatibile con l'errore.
 
 ::: {.callout-warning title="L'attendibilità non è necessariamente nota con certezza" icon=false}
-Il capitolo tratta $\rho$, $\mu_X$ e $\sigma_X$ come quantità note. Nella pratica sono stimate da campioni normativi, possono variare tra popolazioni e condizioni di somministrazione e possono non descrivere perfettamente il singolo paziente. Un modello più completo rappresenterebbe anche questa incertezza.
+Il capitolo tratta $\rho$, $\mu_X$ e $\sigma_X$ come quantità note. Nella pratica, queste quantità sono stimate da campioni normativi e possono variare da una popolazione all'altra e a seconda delle condizioni di somministrazione, senza riuscire a descrivere perfettamente il singolo paziente. Un modello più completo dovrebbe rappresentare anche questa incertezza.
 :::
 
 ## Dalla probabilità alla decisione {#sec-decisione-clinica}
 
-Il modello restituisce:
+Il modello restituisce una quantità interpretabile:
 
 $$
 P(\theta>70\mid X=72)
@@ -583,26 +583,26 @@ P(\theta>70\mid X=72)
 `r round(prob_sopra_cutoff, 2)`.
 $$
 
-Questa probabilità non produce automaticamente una decisione. Per decidere occorre considerare almeno:
+Questa probabilità migliora il ragionamento rispetto al semplice confronto $72>70$, ma non produce automaticamente una decisione. Per decidere occorre considerare almeno:
 
-- conseguenze di un falso positivo e di un falso negativo;
-- validità del cut-off rispetto all'obiettivo clinico;
-- prevalenza e contesto del problema;
-- informazioni provenienti da colloquio, anamnesi e altre misure;
-- possibilità di ripetere o integrare la valutazione.
+- le conseguenze di un falso positivo e di un falso negativo;
+- la validità del cut-off rispetto all'obiettivo clinico;
+- la prevalenza e il contesto del problema;
+- le informazioni provenienti da colloquio, anamnesi e altre misure;
+- la possibilità di ripetere o integrare la valutazione.
 
 ::: {.callout-note title="Una formulazione prudente" icon=false}
-Dato il modello psicometrico adottato e il punteggio osservato di 72, la distribuzione a posteriori assegna circa il `r round(prob_sopra_cutoff * 100, 1)`% di probabilità a valori del punteggio vero superiori a 70. Il risultato segnala un'incertezza clinicamente rilevante e può motivare un approfondimento, ma non sostiene da solo una diagnosi.
+Dato il modello psicometrico adottato e il punteggio osservato di 72, la distribuzione a posteriori assegna circa il `r round(prob_sopra_cutoff * 100, 1)`% di probabilità a valori del punteggio vero superiori a 70. Il risultato segnala un'incertezza clinicamente rilevante che può motivare un approfondimento, ma non è sufficiente a sostenere una diagnosi.
 :::
 
-La funzione dell'analisi bayesiana non è sostituire il giudizio clinico con un algoritmo. È separare con chiarezza:
+L'analisi bayesiana non mira a sostituire il giudizio clinico con un algoritmo. Il suo contributo è quello di impedire che passaggi concettualmente diversi vengano confusi:
 
-1. ciò che il test ha osservato;
-2. ciò che il modello inferisce sul punteggio vero;
-3. ciò che potrebbe accadere in una nuova misurazione;
-4. la decisione che si sceglie di prendere e i costi associati agli errori.
+1. il test **osserva** un punteggio;
+2. il modello **inferisce** un livello latente;
+3. la predittiva descrive che cosa potremmo **osservare di nuovo**;
+4. il professionista **decide** tenendo conto delle conseguenze e del contesto.
 
-## Sintesi operativa {#sec-sintesi-operativa}
+### Una mappa del ragionamento {#sec-sintesi-operativa}
 
 | Passaggio | Domanda | Risposta del modello |
 |---|---|---|
@@ -610,18 +610,18 @@ La funzione dell'analisi bayesiana non è sostituire il giudizio clinico con un 
 | Modello di misura | Se $\theta$ fosse noto, quali valori di $X$ potremmo osservare? | normale centrata in $\theta$ con varianza di errore |
 | Posterior | Dopo $X=72$, quali valori di $\theta$ sono plausibili? | normale centrata in 71.7 |
 | Probabilità di soglia | Quanta posterior cade sopra 70? | circa `r round(prob_sopra_cutoff * 100, 1)`% |
-| Predittiva | Quale valore potremmo osservare ripetendo il test? | distribuzione più ampia, perché include nuovo errore |
+| Predittiva | Quale valore potremmo osservare ripetendo il test? | distribuzione più ampia, perché include un nuovo errore |
 | Decisione | Che cosa conviene fare? | richiede probabilità, conseguenze e contesto clinico |
 
-## Riflessioni conclusive {.unnumbered .unlisted}
+## Il punto del capitolo {.unnumbered .unlisted}
 
-Questo capitolo chiude la Parte applicando a un singolo caso gli oggetti introdotti nei capitoli precedenti.
+Il fraintendimento iniziale nasce dal considerare il punteggio osservato come una proprietà certa della persona e il cut-off come se producesse direttamente una diagnosi. Il modello bayesiano non elimina la soglia né nega l'utilità del test. Mostra, però, che tra il dato e la decisione esiste un passaggio inferenziale che deve essere esplicitato.
 
-Il **prior** non è un'aggiunta astratta: descrive la distribuzione normativa dei punteggi veri prima di osservare il paziente. La **likelihood** traduce l'attendibilità del test in un modello concreto dell'errore di misura. Il loro prodotto produce la **posterior**, che quantifica l'incertezza residua sul punteggio vero del paziente. Integrando nuovamente sul parametro si ottiene la **distribuzione predittiva a posteriori** di una futura misurazione.
+In questo passaggio, il prior descrive la distribuzione normativa dei punteggi veri, la likelihood traduce l'attendibilità in un modello dell'errore di misura e la posterior quantifica ciò che il punteggio individuale permette di apprendere sul paziente. Nel modello Normale-Normale, la media posteriore coincide con la stima classica di Kelly; l'alternativa bayesiana non rigetta quindi la psicometria classica, ma inserisce la stima puntuale all'interno di una distribuzione completa.
 
-Nel modello Normale-Normale, la media posterior coincide con la stima classica di Kelley. Il contributo bayesiano non consiste dunque nel rigettare la psicometria classica, ma nel collocare la stima puntuale dentro una distribuzione completa e nel rendere direttamente formulabili domande come $P(\theta>c\mid X)$.
+Il guadagno sostantivo è la possibilità di formulare direttamente domande come $P(\theta>c\mid X)$ e, allo stesso tempo, di distinguerle da domande diverse: la probabilità di una diagnosi, la probabilità che una nuova somministrazione superi il cut-off e la scelta clinica più opportuna.
 
-Il risultato numerico non deve tuttavia essere sovrainterpretato. La probabilità che il punteggio vero superi una soglia non è automaticamente la probabilità di una diagnosi, e un cut-off non sostituisce la validità del modello, la qualità della misura o il giudizio clinico. L'inferenza bayesiana rende l'incertezza esplicita; non la elimina.
+L'inferenza bayesiana rende l'incertezza visibile e utilizzabile. Tuttavia, non trasforma il test in un giudice infallibile né sostituisce il professionista, ma rende più difficile confondere la misura con il costrutto e il risultato con la decisione.
 
 ## Esercizi {.unnumbered .unlisted}
 
