@@ -165,7 +165,7 @@ ggplot(dati_likelihood, aes(theta, verosimiglianza)) +
   )
 ```
 
-È importante sottolineare che la verosimiglianza, di per sé, non costituisce ancora una distribuzione di probabilità sul parametro $\theta$: essa, infatti, non assegna probabilità ai diversi valori ipotetici, ma ne quantifica piuttosto la capacità esplicativa relativa rispetto ai medesimi dati osservati. Per passare dalla verosimiglianza alla probabilità a posteriori, è necessario integrare questa informazione con il prior.
+È fondamentale sottolineare che la verosimiglianza, di per sé, non costituisce ancora una distribuzione di probabilità sul parametro $\theta$. Essa, infatti, non assegna una probabilità ai diversi valori ipotetici, ma quantifica piuttosto il grado di plausibilità che i dati osservati conferiscono a ciascuno di essi. Per passare dalla verosimiglianza alla probabilità a posteriori, è necessario integrare questa informazione con il prior.
 
 ### Combinare le due fonti di informazione
 
@@ -510,7 +510,7 @@ La media ottenuta con la griglia fine è `r round(media_fine, 4)`, praticamente 
 
 ## Ripetere lo stesso ragionamento in un nuovo contesto
 
-Per consolidare la comprensione del meccanismo ora delineato, applichiamolo a un contesto empirico diverso. Immaginiamo che un partecipante, osservando dieci volti, identifichi correttamente la rabbia in sette prove. Indichiamo ancora con $\theta$ la probabilità di una risposta corretta. A fini puramente didattici, adottiamo una distribuzione a priori Beta(4, 6), la cui media è pari a 0.4. Questa scelta non riflette alcuna proprietà consolidata desunta dalla letteratura, ma rappresenta piuttosto un'aspettativa iniziale esplicita solo per le finalità del presente esempio.
+Per consolidare la comprensione del meccanismo appena descritto, applichiamolo ora a un contesto empirico diverso. Si supponga che un partecipante, in un esperimento di riconoscimento delle emozioni facciali, osservi dieci volti e identifichi correttamente l'espressione di rabbia in sette occasioni. Indichiamo ancora con $\theta$ la probabilità di una risposta corretta. A puro scopo illustrativo, adottiamo una distribuzione a priori Beta(4, 6), la cui media è 0.4. Precisiamo che tale scelta non deriva da evidenze consolidate in letteratura, ma costituisce un'aspettativa iniziale fissata esplicitamente ai soli fini del presente esempio.
 
 ```{r}
 corrette <- 7
@@ -530,14 +530,16 @@ peso_emozioni <- prior_emozioni * likelihood_emozioni
 posterior_emozioni <- peso_emozioni / sum(peso_emozioni)
 ```
 
-L'intero aggiornamento rimane contenuto nelle stesse due operazioni:
+L'intero aggiornamento si riduce a due semplici operazioni aritmetiche:
 
 ```{r}
 peso_emozioni <- prior_emozioni * likelihood_emozioni
 posterior_emozioni <- peso_emozioni / sum(peso_emozioni)
 ```
 
-La prima riga combina, punto per punto, aspettative iniziali e compatibilità con i dati. La seconda converte i prodotti in probabilità.
+La prima riga moltiplica puntualmente il prior per la verosimiglianza, ottenendo dei pesi non normalizzati. La seconda normalizza questi pesi dividendo per la loro somma, in modo che la posteriori sia effettivamente una distribuzione di probabilità.
+
+Calcoliamo ora alcune misure di sintesi della distribuzione ottenuta:
 
 ```{r}
 media_emozioni <- sum(theta_emozioni * posterior_emozioni)
@@ -552,7 +554,7 @@ moda_emozioni
 c(limite_inf_94, limite_sup_94)
 ```
 
-La media a posteriori è `r round(media_emozioni, 3)`, la moda è `r round(moda_emozioni, 3)` e l'intervallo centrale al 94% va approssimativamente da `r round(limite_inf_94, 3)` a `r round(limite_sup_94, 3)`. Con sole dieci prove, i dati spostano la distribuzione verso valori più alti, ma l'incertezza rimane ampia.
+La media a posteriori è `r round(media_emozioni, 3)`, la moda è `r round(moda_emozioni, 3)` e l'intervallo centrale al 94% (che esclude il 3% da ciascuna coda) va approssimativamente da `r round(limite_inf_94, 3)` a `r round(limite_sup_94, 3)`. Si noti che, pur avendo osservato 7 successi su 10, la media si sposta da 0.4 (prior) a circa `r round(media_emozioni, 3)`; l'ampiezza dell'intervallo, tuttavia, rivela che con dieci prove l'incertezza rimane ancora considerevole.
 
 ```{r}
 #| label: fig-grid-emotion-update
@@ -608,11 +610,11 @@ ggplot(dati_emozioni, aes(theta, valore, color = componente)) +
   legenda_in_alto
 ```
 
-L'esempio cambia, ma il procedimento no. Questo aspetto è fondamentale: una volta compresi i concetti di moltiplicazione e normalizzazione, si è compreso il funzionamento essenziale dell'aggiornamento bayesiano.
+I dati e il contesto possono cambiare, ma la regola non muta. È proprio questa **invariabilità** il cuore del metodo bayesiano: una volta interiorizzata la duplice operazione di moltiplicazione (prior $\times$ verosimiglianza) e normalizzazione (divisione per la somma), si possiede la chiave di volta dell'intero approccio, applicabile a qualsiasi domanda empirica.
 
 ## Il messaggio da portare con sé {.unnumbered .unlisted}
 
-L'approssimazione su griglia non è importante perché è efficiente. È importante perché non nasconde nulla. Per ogni possibile valore di $\theta$ è possibile osservare l'intero percorso:
+L'approssimazione su griglia non è importante per la sua efficienza, ma per la sua **trasparenza**. Per ogni possibile valore di $\theta$, essa rende visibile l'intero percorso:
 
 $$
 \underbrace{p(\theta_i)}_{\text{plausibilità iniziale}}
@@ -622,16 +624,16 @@ $$
 \underbrace{p(\theta_i\mid y)}_{\text{plausibilità aggiornata}}.
 $$
 
-Da questo percorso emergono sei idee fondamentali.
+Da questo schema emergono sei idee fondamentali:
 
-1. **Prior e verosimiglianza devono riferirsi agli stessi valori del parametro.** Ogni riga della griglia rappresenta una possibilità distinta.
-2. **La moltiplicazione è punto per punto.** Un valore riceve molto peso soltanto se è sostenuto da entrambe le fonti di informazione.
-3. **Il prodotto non è ancora una distribuzione di probabilità.** Prima della normalizzazione descrive soltanto pesi relativi.
-4. **La normalizzazione cambia la scala, non la forma.** Trasforma i pesi in probabilità che sommano a uno senza alterarne i rapporti.
-5. **Griglia e soluzione analitica applicano la stessa logica.** La coniugazione Beta-Binomiale abbrevia il calcolo; la griglia mostra che cosa sta facendo.
-6. **La posterior rimane condizionata alle assunzioni.** Un calcolo corretto non elimina le scelte relative al modello, al prior, ai dati o alla risoluzione numerica.
+1. **Stesso parametro, stesso confronto.** Prior e verosimiglianza vanno valutati sugli identici valori di $\theta$; ogni riga della griglia è una possibilità distinta.
+2. **Moltiplicazione punto per punto.** Un valore ottiene credito solo se è sostenuto da entrambe le fonti di informazione.
+3. **Il prodotto è un peso, non una probabilità.** Prima della normalizzazione, i risultati esprimono solo plausibilità relative.
+4. **La normalizzazione ridimensiona, non deforma.** Trasforma i pesi in probabilità che sommano a uno, senza alterarne i rapporti reciproci.
+5. **Griglia e formula chiusa applicano la stessa logica.** La coniugazione Beta-Binomiale abbrevia il calcolo; la griglia mostra che cosa sta facendo.
+6. **La posterior è sempre condizionata.** Un calcolo esatto non cancella le scelte fatte su modello, prior, dati o risoluzione numerica.
 
-Quando questi passaggi diventano intuitivi, la formula di Bayes smette di apparire come una manipolazione simbolica e diventa una regola concreta per ridistribuire la plausibilità alla luce dell'evidenza.
+Quando questi passaggi diventano intuitivi, la formula di Bayes smette di apparire come una manipolazione simbolica e diventa una regola concreta che consente di **pesare ciò che si credeva con ciò che si osserva**.
 
 ## Esercizi {.unnumbered .unlisted}
 
