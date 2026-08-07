@@ -1,17 +1,17 @@
 # Regressione bayesiana con `brms`: il workflow completo {#sec-linmod-bayesian-reg}
 
 ::: {.callout-note appearance="minimal"}
-Nei capitoli precedenti abbiamo introdotto il modello lineare come distribuzione condizionata e abbiamo esaminato una conseguenza fondamentale della previsione imperfetta, la regressione verso la media. Rimane ora da affrontare il problema inferenziale centrale: determinare come apprendere dai dati empirici i valori plausibili dell'intercetta, della pendenza e della variabilità residua, quantificando ed esprimendo esplicitamente l'incertezza che inevitabilmente li accompagna.
+Nei due capitoli precedenti abbiamo costruito il modello lineare come distribuzione condizionata e abbiamo visto che una retta di regressione descrive la **media condizionata**, non il destino di ogni singola osservazione. Possiamo ora affrontare il passaggio inferenziale: apprendere dai dati quali valori di intercetta, pendenza e variabilità residua siano plausibili e rappresentare esplicitamente l'incertezza che rimane su queste quantità.
 
-L'inferenza bayesiana risolve questo problema integrando sistematicamente tre elementi fondamentali: *il modello generativo*, ovvero la formalizzazione matematica che specifica il processo teorico attraverso cui i dati vengono prodotti; *le distribuzioni a priori*, ovvero l'espressione formale che descrive la plausibilità dei parametri prima di considerare l'evidenza empirica attuale; e *la verosimiglianza*, ovvero la funzione che permette di aggiornare lo stato di conoscenza iniziale alla luce delle osservazioni raccolte. L'esito dell'inferenza non consiste nella stima di un'unica retta ottimale, ma produce una distribuzione congiunta a posteriori di rette e livelli di dispersione, tutti compatibili con il modello adottato, i prior definiti e i dati effettivamente osservati. Questo capitolo illustra l'applicazione pratica di tali concetti, applicando in modo completo l'intero flusso di lavoro bayesiano: una sequenza operativa e concettuale che verrà riutilizzata sistematicamente come standard metodologico nel resto del Companion.
+Questo capitolo non introduce un nuovo principio bayesiano, ma applica al modello lineare il flusso di lavoro già sviluppato nella Parte *Svolta*. Specificare il modello, formulare distribuzioni a priori, controllarne le implicazioni, adattare il modello, diagnosticare il campionamento, interpretare la distribuzione a posteriori e verificare le conseguenze predittive diventeranno passaggi ricorrenti da questo momento in poi. `brms` rende operativa questa sequenza senza nascondere la struttura probabilistica che la giustifica.
 :::
 
 ::: {.callout-important appearance="minimal" .chapter-status}
-**Da sapere.** La regressione bayesiana combina modello generativo, prior e verosimiglianza per ottenere una distribuzione congiunta a posteriori dei parametri. Il workflow non termina con la stima: richiede di controllare la plausibilità dei prior, verificare la qualità del campionamento, interpretare l’incertezza e valutare se il modello riproduce gli aspetti rilevanti dei dati.
+**Da sapere.** Un modello di regressione bayesiano combina la distribuzione dei dati e le distribuzioni a priori per ottenere una distribuzione congiunta a posteriori dei parametri. L'analisi non termina con il *fitting*: è necessario controllare le implicazioni dei prior, verificare che il campionamento numerico sia affidabile, interpretare le quantità posteriori pertinenti alla domanda scientifica e valutare se il modello riproduce aspetti rilevanti dei dati.
 
-**Da saper fare.** Definire le quantità di interesse; leggere una formula di Wilkinson e tradurla nell'equazione del modello; specificare e stimare con `brms` un modello lineare gaussiano; eseguire un *prior predictive check*; controllare $\widehat{R}$, dimensione campionaria effettiva e divergenze; interpretare coefficienti, intervalli di credibilità e probabilità posteriori; distinguere la media condizionata dalla previsione di una nuova osservazione; svolgere e interpretare i principali *posterior predictive checks*.
+**Da saper fare.** Definire le quantità di interesse; tradurre una formula di Wilkinson nell'equazione del modello; specificare e adattare con `brms` un modello lineare gaussiano; eseguire un controllo predittivo a priori; controllare $\widehat{R}$, dimensione campionaria effettiva e divergenze; interpretare coefficienti, intervalli di credibilità e probabilità posteriori; distinguere l'incertezza sulla media condizionata dalla distribuzione di una nuova osservazione; svolgere e interpretare controlli predittivi a posteriori mirati.
 
-**Approfondimento facoltativo.** La derivazione analitica della verosimiglianza, le diagnostiche grafiche più dettagliate, l’analisi sistematica di sensibilità ai prior, il catalogo completo degli errori procedurali e gli esercizi avanzati possono essere rimandati. Nel percorso essenziale è necessario padroneggiare la sequenza modello generativo → stima con `brms` → interpretazione della posterior → controllo predittivo.
+**Approfondimento facoltativo.** La derivazione analitica della log-verosimiglianza, le diagnostiche grafiche più dettagliate e l'analisi di sensibilità ai prior possono essere rimandate in una prima lettura. Nel percorso essenziale è sufficiente padroneggiare la sequenza: domanda scientifica → modello e prior → controllo predittivo a priori → adattamento e diagnostica → interpretazione della distribuzione a posteriori → controllo predittivo a posteriori.
 
 [Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
 :::
@@ -48,36 +48,38 @@ set.seed(1234)
 
 Per illustrare il passaggio dalla formulazione di un'ipotesi teorica alla sua quantificazione statistica, consideriamo uno scenario simulato in cui si intende descrivere la relazione strutturale tra due variabili:
 
-* **le ore di sonno** registrate durante una notte, che indicheremo come variabile predittore $X$;
+* **le ore di sonno** registrate durante una notte, che indicheremo come variabile predittore $X;$
 * **il livello di ansia** dei soggetti, misurato su una scala indicativa da 0 a 100, che costituirà la nostra variabile di esito $Y$.
 
-In questo contesto, il nucleo dell'indagine descrittiva può essere riassunto dal seguente quesito:
+La domanda descrittiva che guiderà l'analisi è semplice:
 
-> Come varia, in media, il punteggio di ansia in relazione alle ore di sonno all'interno del processo catturato dal modello?
+> Come varia il livello medio di ansia al variare delle ore di sonno nel processo rappresentato dal modello?
 
-Un problema metodologico comune nei modelli lineari riguarda l'interpretazione dell'intercetta: se calcolata sul valore originario $X = 0$ (ovvero l'assenza totale di sonno), essa rappresenterebbe una condizione estrema e biologicamente non plausibile, privando il parametro di un reale significato euristico. Per ovviare a questo limite e rendere l'intercetta immediatamente interpretabile, procediamo alla **centratura** della variabile predittore rispetto alla media campionaria ($\bar{x}$):
+Prima di stimare il modello, è necessario rendere interpretabili i suoi parametri. Sulla scala originaria, l'intercetta corrisponderebbe a $X=0$, ovvero a zero ore di sonno, un valore lontano dalla regione dei dati e poco utile come riferimento. Centriamo quindi il predittore rispetto alla media campionaria ($\bar{x}$):
 
 $$x_i^c = x_i - \bar{x}.$$
 
 Grazie a questa trasformazione, il valore $x_i^c = 0$ non indica più l'assenza di sonno, ma descrive la condizione di un individuo che ha dormito un numero di ore esattamente pari alla media del campione.
 
-In virtù di tale impostazione, definiamo le principali **quantità di interesse** (o *estimand*) su cui si focalizzerà l'inferenza:
+Possiamo ora dichiarare le principali **quantità inferenziali di interesse**:
 
-* $\alpha$: il punteggio medio di ansia atteso per un individuo la cui durata del sonno si colloca perfettamente nella media campionaria;
-* $\beta$: la variazione media attesa nel punteggio di ansia associata a un incremento di un'ora di sonno;
-* $\sigma$: la deviazione standard residua, che quantifica la dispersione e la variabilità dei punteggi di ansia osservati attorno alla retta della media condizionata;
-* $\Pr(\beta < 0 \mid y)$: la probabilità a posteriori che l'associazione tra le due variabili sia negativa, che quantifica il sostegno a posteriori per una direzione negativa dell'associazione, condizionatamente al modello;
-* $3\beta$: la differenza media attesa nei livelli di ansia quando si confrontano due condizioni che differiscono esattamente di tre ore di sonno.
+* $\alpha$: il livello medio di ansia atteso in corrispondenza della durata media del sonno nel campione;
+* $\beta$: la differenza media attesa nel punteggio di ansia associata a un'ora in più di sonno;
+* $\sigma$: la deviazione standard residua, che descrive la dispersione delle osservazioni attorno alla media condizionata;
+* $\Pr(\beta < 0 \mid y)$: la probabilità a posteriori che la pendenza sia negativa, condizionatamente al modello, ai prior e ai dati;
+* $3\beta$: la differenza media associata a una differenza di tre ore di sonno.
+
+Le prime tre quantità sono parametri del modello, mentre le ultime due sono **funzioni della distribuzione a posteriori** costruite per rispondere a domande scientifiche specifiche.
 
 ::: {.callout-important title="Definire prima ciò che si vuole apprendere"}
-Un modello statistico produce una notevole quantità di output numerici, ma non tutti rispondono alla stessa domanda scientifica. L'unico modo per evitare che l'analisi si riduca a una selezione post-hoc dei coefficienti è specificare preventivamente e in modo rigoroso le quantità di interesse, impedendo così che l'interpretazione si limiti a una lettura acritica e automatizzata delle tabelle di output.
+Un modello produce molte quantità, ma non tutte rispondono alla stessa domanda. Dichiarare in anticipo quali parametri, contrasti o probabilità posteriori sono scientificamente rilevanti aiuta a evitare che l'interpretazione diventi una lettura selettiva dell'output disponibile.
 :::
 
 ## Simulare un caso di studio
 
-Nello studio della metodologia statistica, l'uso di dati simulati costituisce uno strumento didattico ed epistemologico fondamentale. Definendo a priori i parametri generativi della popolazione (i cosiddetti "valori veri"), disponiamo di un termine di paragone assoluto. Ciò ci consente di verificare con precisione se il *workflow* analitico adottato sia effettivamente in grado di recuperare la struttura latente che ha prodotto i dati osservati, valutando al contempo l'accuratezza delle stime.
+Per introdurre il workflow useremo dati simulati. La simulazione offre un vantaggio didattico preciso: conosciamo i valori dei parametri impiegati per generare il campione e possiamo quindi confrontarli con quanto appreso dal modello. Questi valori generativi noti costituiscono un punto di riferimento per comprendere il comportamento dell'inferenza, ma non trasformano il singolo campione simulato in una prova generale della bontà del metodo.
 
-Il blocco di codice seguente implementa la simulazione numerica descritta nel paragrafo precedente, generando un campione di $n = 100$ osservazioni:
+Il blocco di codice seguente implementa la simulazione numerica descritta nel paragrafo precedente e genera un campione di $n = 100$ osservazioni:
 
 ```{r}
 #| label: simulate-anxiety-sleep-data
@@ -90,7 +92,7 @@ n <- 100
 sonno <- runif(n, min = 3, max = 10)
 sonno_c <- sonno - mean(sonno)
 
-# Definizione dei parametri generativi ("punteggi veri")
+# Parametri generativi noti
 alpha_true <- 50
 beta_true  <- -4
 sigma_true <- 10
@@ -112,7 +114,7 @@ sleep_anxiety <- tibble(
 head(sleep_anxiety)
 ```
 
-Prima di procedere all'adattamento formale del modello lineare, è buona pratica metodologica condurre un'analisi esplorativa visiva per esaminare la forma della relazione empirica tra le variabili.
+Prima di procedere con l'adattamento formale del modello lineare, è buona pratica metodologica condurre un'analisi esplorativa visiva per esaminare la forma della relazione empirica tra le variabili.
 
 ```{r}
 #| label: fig-sleep-anxiety-scatter
@@ -130,7 +132,7 @@ sleep_anxiety |>
   )
 ```
 
-L'ispezione visiva del grafico a dispersione (*scatterplot*) suggerisce chiaramente la presenza di un'associazione lineare negativa tra la durata del sonno e i livelli di ansia. Tuttavia, l'evidenza grafica da sola non è sufficiente per l'inferenza scientifica: non consente di quantificare l'incertezza campionaria che grava sui parametri del modello ($\alpha$, $\beta$ e $\sigma$), né di distinguere concettualmente l'incertezza legata alla posizione della retta media dalla variabilità intrinseca che caratterizzerebbe la previsione di una singola nuova osservazione. Per risolvere questi problemi è necessario formalizzare il modello in un quadro probabilistico.
+Il grafico suggerisce un'associazione lineare negativa tra la durata del sonno e l'ansia, ma non quantifica l'incertezza sui parametri $\alpha$, $\beta$ e $\sigma$. Inoltre, non distingue l'incertezza sulla posizione della retta media dalla dispersione attesa per una nuova osservazione. Per rispondere a queste domande, è necessario specificare il modello probabilistico e fare inferenza sui suoi parametri.
 
 ## Specificare il modello generativo
 
@@ -140,7 +142,7 @@ $$
 \begin{aligned} y_i \mid x_i, \alpha, \beta, \sigma   &\sim \operatorname{Normal}(\mu_i,\sigma), \\ \mu_i   &= \alpha + \beta x_i^c. \end{aligned}
 $$ {#eq-bayesian-linear-model}
 
-La formulazione matematica esplicita due componenti logiche distinte: la prima riga definisce la **funzione descrittiva della distribuzione condizionata** delle osservazioni, assumendo che gli scostamenti individuali seguano una legge normale; la seconda riga specifica la **componente deterministica**, ovvero il processo geometrico con cui la media condizionata varia in funzione del predittore.
+Le due righe svolgono funzioni diverse. La prima specifica la **distribuzione condizionata delle osservazioni** attorno alla loro media, mentre la seconda descrive come tale media cambia al variare del predittore. Insieme, definiscono la componente dei dati del modello lineare gaussiano.
 
 All'interno di questa architettura, i parametri assumono un significato interpretativo ben definito:
 
@@ -148,7 +150,7 @@ All'interno di questa architettura, i parametri assumono un significato interpre
 * $\beta$ esprime la pendenza (*slope*) della retta, quantificando la variazione attesa nella media della variabile di esito per ogni incremento unitario del predittore;
 * $\sigma$ descrive la deviazione standard residua, ovvero la dispersione dei punteggi osservati attorno alla retta delle medie condizionate.
 
-Dal punto di vista metodologico, è importante sottolineare che questa formulazione mantiene una natura puramente descrittiva e predittiva. Quando si opera su dati di tipo osservazionale, il coefficiente $\beta$ riflette esclusivamente un confronto statico tra la media di unità statistiche che presentano livelli differenti di $X$; esso non può essere interpretato automaticamente come l'effetto causale di un intervento diretto sulla durata del sonno [@gelman2021regression].
+Questa specificazione descrive una relazione condizionata tra $X$ e $Y$. Con i dati osservazionali, $\beta$ rappresenta un'associazione tra unità che differiscono nei valori di $X$ e non può essere interpretato automaticamente come l'effetto causale di un intervento sulla durata del sonno [@gelman2021regression].
 
 ## Dall'equazione alla sintassi di Wilkinson
 
@@ -158,7 +160,7 @@ In R e in `brms`, la componente sistematica del modello viene espressa mediante 
 ansia ~ sonno_c
 ```
 
-La formula si legge: **modellare `ansia` in funzione di `sonno_c`**. Essa specifica quali variabili entrano nella media condizionata, ma non stabilisce da sola la distribuzione dell'esito: questa viene indicata separatamente con `family = gaussian()`.
+La formula si legge: **modellare `ansia` in funzione del `sonno_c`**. Essa specifica quali variabili entrano nella media condizionata, ma non stabilisce da sola la distribuzione dell'esito, che questa viene indicata separatamente con `family = gaussian()`.
 
 | Elemento | Significato nel modello |
 |---|---|
@@ -195,16 +197,18 @@ Alcune estensioni frequenti sono:
 | `ansia ~ 0 + sonno_c` | rimuove l'intercetta e forza la media a zero quando `sonno_c = 0`; qui sarebbe una scelta difficile da giustificare |
 
 ::: {.callout-important title="Una formula non è ancora un'analisi completa"}
-La sintassi di Wilkinson specifica la struttura della media condizionata. Per definire l'intero modello servono anche la famiglia probabilistica, i prior, i dati e le assunzioni sul disegno di ricerca. Due analisi con la stessa formula possono quindi differire per likelihood o prior e produrre inferenze diverse.
+La sintassi di Wilkinson specifica la struttura della media condizionata. Per definire l'intero modello sono necessari anche la famiglia probabilistica, i prior, i dati e le ipotesi sul disegno della ricerca. Due analisi con la stessa formula possono quindi differire per la likelihood o i prior e produrre inferenze diverse.
 :::
 
 ## La funzione di verosimiglianza
 
-Dato un vettore di parametri incogniti, la **verosimiglianza** (*likelihood*) quantifica il grado di compatibilità e congruenza dei dati empirici osservati con la distribuzione teorica specificata dal modello. Sotto l'assunzione metodologica di indipendenza condizionale tra le osservazioni, per cui il punteggio di un soggetto non fornisce informazioni sul punteggio di un altro una volta noti i parametri, la verosimiglianza complessiva del campione si esprime come il prodotto delle densità individuali:
+La **verosimiglianza** (*likelihood*) esprime come i dati osservati informano i parametri all'interno del modello specificato. Se si assume l'indipendenza condizionale tra le osservazioni, la densità congiunta dei dati, considerata come funzione di $\alpha$, $\beta$ e $\sigma$, è il prodotto delle densità individuali:
 
 $$
 \mathcal{L}(\alpha,\beta,\sigma\mid\mathbf{y},\mathbf{x}) = \prod_{i=1}^{n} \mathcal{N}\!\left(y_i\mid\alpha+\beta x_i^c,\sigma^2\right).
 $$ {#eq-likelihood-simple-regression}
+
+::: {.callout-note collapse="true" title="Approfondimento: dalla verosimiglianza alla log-verosimiglianza"}
 
 Esplicitando la funzione di densità della distribuzione normale, l'equazione assume la forma:
 
@@ -212,32 +216,34 @@ $$
 \mathcal{L}(\alpha,\beta,\sigma\mid\mathbf{y},\mathbf{x}) = \prod_{i=1}^{n} \frac{1}{\sqrt{2\pi\sigma^2}} \exp\!\left[ -\frac{\left(y_i-\alpha-\beta x_i^c\right)^2}{2\sigma^2} \right].
 $$
 
-Nelle applicazioni computazionali e nella stima dei modelli, è preferibile operare sui logaritmi naturali della funzione. La trasformazione logaritmica trasforma la produttoria in una sommatoria, prevenendo i problemi di underflow numerico. La corrispondente funzione di *log-verosimiglianza* si formalizza come:
+Per il calcolo numerico è conveniente lavorare con la **log-verosimiglianza**, perché il logaritmo trasforma il prodotto in una somma e migliora la stabilità numerica:
 
 $$
 \log \mathcal{L}(\alpha,\beta,\sigma\mid\mathbf{y},\mathbf{x}) = -\frac{n}{2}\log(2\pi)-n\log\sigma   -\frac{1}{2\sigma^2}     \sum_{i=1}^{n}\left(y_i-\alpha-\beta x_i^c\right)^2.
 $$ {#eq-log-likelihood-simple-regression}
 
-> **Nota concettuale:** È di fondamentale importanza non confondere la verosimiglianza con una distribuzione di probabilità dei parametri. Poiché i dati $\mathbf{y}$ sono fissi (in quanto già osservati) e i parametri sono variabili, la funzione $\mathcal{L}$ non integra a 1 sul dominio dei parametri stessi.
+:::
 
-La verosimiglianza cessa di essere un semplice criterio di adattamento geometrico e si integra nell'inferenza probabilistica solo quando viene combinata con le distribuzioni *prior*, secondo il teorema di Bayes:
+> **Nota concettuale:** la verosimiglianza non è una distribuzione di probabilità sui parametri. È una funzione dei parametri costruita mantenendo fissi i dati osservati e, in generale, non è normalizzata rispetto allo spazio dei parametri.
+
+Nel modello bayesiano la verosimiglianza viene combinata con le distribuzioni a priori secondo il teorema di Bayes:
 
 $$
 p(\alpha,\beta,\sigma\mid\mathbf{y},\mathbf{x}) \propto p(\mathbf{y}\mid\mathbf{x},\alpha,\beta,\sigma)\,p(\alpha,\beta,\sigma). 
 $$ {#eq-bayes-linear-regression}
 
-In questa formulazione, la verosimiglianza funge da "ponte informativo" e opera l'aggiornamento logico che trasforma le credenze iniziali (*prior*) nella distribuzione congiunta a posteriori delle nostre conoscenze sui parametri.
+La distribuzione a posteriori combina quindi l'informazione contenuta nei dati, attraverso la verosimiglianza, con le assunzioni espresse dalle distribuzioni a priori.
 
 ## Specificare i prior sulla scala del problema
 
-La formulazione delle distribuzioni a priori (*prior*) non deve seguire automatismi matematici, ma deve basarsi sul significato sostantivo e sulla scala metrica dei parametri. Nel nostro scenario, le conoscenze teoriche ed empiriche sul fenomeno ci forniscono alcuni vincoli biologici e psicometrici precisi:
+Le distribuzioni a priori devono essere valutate sulla scala del problema, non scelte per automatismo. Nel nostro esempio simulato useremo alcuni vincoli semplici e trasparenti:
 
 * **Il punteggio di ansia ($Y$)** è quantificato su una scala definita nell'intervallo $[0, 100]$;
 * **L'intercetta ($\alpha$)** esprime il livello di ansia atteso in corrispondenza del tempo medio di sonno del campione;
-* **La pendenza ($\beta$)** descrive l'effetto di un'unica ora di sonno aggiuntiva: variazioni di decine di punti per una sola ora risulterebbero sostantivamente poco plausibili;
-* **La deviazione standard residua ($\sigma$)** deve assumere rigorosamente valori positivi e, verosimilmente, non può superare l'intera estensione della scala di misura.
+* **La pendenza ($\beta$)** descrive l'associazione media con un'ora in più di sonno: variazioni di decine di punti per una sola ora sarebbero poco plausibili sulla scala scelta;
+* **La deviazione standard residua ($\sigma$)** deve essere positiva; valori dello stesso ordine dell'intera estensione della scala sarebbero difficili da conciliare con il significato dell'esito.
 
-Sulla base di queste considerazioni geometriche e fenomenologiche, formalizziamo il sistema dei *prior* come segue:
+Per scopi didattici adottiamo quindi le seguenti distribuzioni a priori:
 
 $$
 \begin{aligned} \alpha &\sim \operatorname{Normal}(50,10),\\ \beta  &\sim \operatorname{Normal}(-2,2),\\ \sigma &\sim \operatorname{Lognormal}(\log 10,0.4). \end{aligned}
@@ -245,25 +251,23 @@ $$ {#eq-priors-sleep-anxiety}
 
 ### Prior per l'intercetta ($\alpha$)
 
-Il prior $\operatorname{Normal}(50,10)$ assegna la massima plausibilità teorica ai livelli di ansia situati attorno al centro geometrico della scala ($50$), concedendo al contempo un'ampia variabilità (il $95\%$ della massa di probabilità a priori si colloca tra $30$ e $70$). Questa scelta non vincola rigidamente il parametro, ma rende poco plausibili valori molto lontani dal centro della scala. La scelta metodologica di centrare il predittore garantisce che questa valutazione a priori mantenga un significato psicometrico concreto e direttamente interpretabile.
+Il prior $\operatorname{Normal}(50,10)$ colloca l'intercetta attorno al centro della scala e lascia una dispersione sostanziale: circa il $95\%$ della massa cade tra 30 e 70. La centratura del predittore rende questa scelta direttamente interpretabile, perché $\alpha$ riguarda il livello medio di ansia in corrispondenza del sonno medio osservato.
 
 ### Prior per la pendenza ($\beta$)
 
-Il prior $\operatorname{Normal}(-2,2)$ riflette un'ipotesi teorica basata su una moderata associazione negativa, coerente con la letteratura sulla privazione del sonno. Tuttavia, la deviazione standard pari a $2$ assegna una densità di probabilità non trascurabile sia all'assenza di effetto ($\beta = 0$) sia a un'eventuale associazione positiva. In ambito accademico, l'introduzione di un prior parzialmente direzionale è considerata legittima solo se sostenuta da solide evidenze empiriche o teoriche antecedenti e indipendenti dai dati attuali.
+Il prior $\operatorname{Normal}(-2,2)$ rappresenta, nell'esempio, un'aspettativa moderatamente negativa senza escludere valori prossimi a zero o positivi. La sua funzione è didattica: mostra come una conoscenza precedente di tipo direzionale possa essere formalizzata. In un'analisi reale, una scelta di questo tipo dovrebbe essere motivata da informazioni indipendenti dai dati correnti e documentata in modo trasparente.
 
 ### Prior per la deviazione standard ($\sigma$)
 
-La distribuzione lognormale risolve un vincolo geometrico fondamentale, assegnando una densità di probabilità esclusivamente a valori positivi ($\sigma > 0$) e concentrando la massa attorno a livelli di dispersione che sono sensati dal punto di vista empirico. In letteratura non esiste un consenso unanime su un prior standard per la variabilità residua: le distribuzioni *half-Normal*, *half-Student-$t$*, *Gamma* o *Lognormale* presentano comportamenti asintotici e implicazioni logiche molto diverse sia in prossimità dello zero sia nelle code estreme. La scelta deve essere valutata prima dell'analisi informativa mediante controlli predittivi a priori e, successivamente, mediante analisi di sensibilità.
+La distribuzione lognormale assegna probabilità solo ai valori positivi di $\sigma$ e concentra la massa su livelli di dispersione compatibili con la scala dell'esito. Non esiste un'unica famiglia di prior appropriata in ogni problema: ciò che conta è valutarne le implicazioni sulla scala dei dati, prima di utilizzare le osservazioni per l'aggiornamento.
 
-::: {.callout-warning title="La relatività concettuale dei prior"}
-Definire un prior come "debolmente informativo" o "altamente informativo" prescindendo dalla scala metrica del parametro è un errore metodologico. Una distribuzione normale con deviazione standard pari a $10$, per esempio, risulterebbe estremamente ampia se applicata a un coefficiente standardizzato, ma si rivelerebbe eccessivamente restrittiva se il fenomeno in studio fosse espresso su una scala temporale in millisecondi. La valutazione di un prior è sempre un'operazione dipendente dalla scala.
+::: {.callout-warning title="L'informatività dipende dalla scala"}
+Le etichette *debolmente informativo* o *fortemente informativo* hanno senso solo rispetto alla scala del parametro e alle conseguenze che il prior produce sulla scala osservabile. La stessa deviazione standard può essere molto ampia in un problema e molto restrittiva in un altro.
 :::
 
 ## Controllare i prior prima di adattare il modello
 
-Nello sviluppo di un modello bayesiano, l'ispezione delle impostazioni predefinite del software costituisce un passaggio preliminare indispensabile. Il pacchetto `brms` mette a disposizione strumenti specifici per verificare quali classi di parametri compongano la struttura statistica definita e quali distribuzioni a priori verrebbero applicate di *default*.
-
-Tramite la funzione `get_prior()`, possiamo mappare l'architettura dei parametri associata alla nostra formula lineare:
+Prima di adattare il modello, è utile verificare quali classi di parametri `brms` ha costruito e quali prior sarebbero utilizzati in assenza di una specificazione esplicita. La funzione `get_prior()` rende visibile tale struttura:
 
 ```{r}
 #| label: inspect-brms-priors
@@ -276,7 +280,7 @@ get_prior(
 
 ```
 
-Le impostazioni predefinite di `brms` variano in base alla natura del parametro. Per esempio, per i coefficienti di popolazione della classe `"b"`, il software usa di default un prior piatto improprio, mentre per l'intercetta e i parametri di scala adotta specificazioni differenti. Dal punto di vista metodologico, l'uso di prior impropri esclude la possibilità di effettuare un controllo predittivo a priori; pertanto, è necessario definire esplicitamente prior appropriati per tutti i parametri strutturali del modello.[^brms-default-priors]
+I default di `brms` dipendono dalla classe del parametro. Per i coefficienti di popolazione della classe `"b"`, per esempio, il default è piatto e improprio, mentre per l'intercetta e i parametri di scala sono previste specifiche diverse. I prior impropri non possono essere campionati per costruire una distribuzione predittiva a priori; pertanto, quando il controllo predittivo a priori fa parte del flusso di lavoro, è consigliabile specificare prior propri per i parametri rilevanti.[^brms-default-priors]
 
 [^brms-default-priors]: Per un approfondimento sui meccanismi di assegnazione automatica, si rimanda alla documentazione ufficiale delle funzioni [`default_prior()`](https://paulbuerkner.com/brms/reference/default_prior.html) e [`set_prior()`](https://paulbuerkner.com/brms/reference/set_prior.html).
 
@@ -296,7 +300,7 @@ sleep_anxiety_priors
 
 ### Il controllo predittivo a priori (*Prior Predictive Check*)
 
-Una volta stabiliti i prior per i singoli parametri, è fondamentale valutarne l'effetto congiunto sul comportamento globale del modello. Formalmente, la **distribuzione predittiva a priori** si ottiene integrando la funzione di verosimiglianza rispetto alla distribuzione congiunta dei prior:
+Una volta stabiliti i prior sui singoli parametri, è necessario valutarne le implicazioni congiunte sul comportamento del modello. Formalmente, la **distribuzione predittiva a priori** si ottiene integrando la funzione di verosimiglianza rispetto alla distribuzione congiunta dei prior:
 
 $$
 p(\widetilde{y}) = \int p(\widetilde{y}\mid\alpha,\beta,\sigma) \,p(\alpha,\beta,\sigma) \,d\alpha\,d\beta\,d\sigma .
@@ -329,7 +333,7 @@ Attraverso la funzione `pp_check()`, possiamo visualizzare l'estensione e la for
 
 ```{r}
 #| label: fig-prior-predictive-sleep-anxiety
-#| fig-cap: "Distribuzioni di punteggi simulate esclusivamente dalle informazioni a priori. Il controllo predittivo permette di stabilire se i prior scelti generino configurazioni di dati plausibili per il fenomeno in esame prima di interpellare la verosimiglianza."
+#| fig-cap: "Distribuzioni di punteggi simulate dalla distribuzione predittiva a priori. Il controllo permette di valutare se le implicazioni congiunte di prior e modello dei dati siano plausibili sulla scala dell'esito, prima di condizionare sui dati osservati."
 #| fig-width: 7
 #| fig-height: 5
 
@@ -340,15 +344,15 @@ pp_check(
 )
 ```
 
-La valutazione di questo grafico richiede sensibilità metodologica. Il ricercatore non deve aspettarsi che ogni singola replica campionaria rimanga rigidamente confinata entro l'intervallo empirico dell'ansia $[0, 100]$, in quanto il modello lineare gaussiano, per definizione, ammette un supporto continuo sull'intera retta reale. L'obiettivo del controllo consiste piuttosto nel verificare che non vi sia una frequenza sistematica di pattern aberranti o biologicamente impossibili. Se i dati teorici tendono ad accumularsi in modo massiccio oltre i limiti fisici dello strumento, l'inadeguatezza non risiede nei singoli prior, ma nella scelta della verosimiglianza normale, suggerendo la necessità di passare a modelli per dati limitati o censurati.
+Il grafico va interpretato come un controllo delle **implicazioni congiunte** di prior e modello dei dati. Poiché la distribuzione normale ha supporto sull'intera retta reale, alcune repliche possono oltrepassare i limiti nominali della scala $[0,100]$. Se però i valori impossibili diventano frequenti o estremi, è necessario riconsiderare i prior, la famiglia gaussiana o entrambe le componenti. Se i limiti della scala sono strutturali e sostantivamente vincolanti, può essere opportuno adottare una distribuzione dei dati che li rappresenti esplicitamente.
 
-::: {.callout-important title="Il controllo a priori riguarda l'intero modello"}
-Una scomposizione analitica può trarre in inganno: i parametri i cui prior appaiono singolarmente ragionevoli, una volta combinati algebricamente e stocasticamente, possono generare scenari empirici del tutto inverosimili. La calibrazione del modello deve quindi avvenire sempre ex ante sulla scala delle osservazioni simulate complessive e non limitarsi a una considerazione isolata delle singole densità marginali dei parametri.
+::: {.callout-important title="Il controllo a priori riguarda le implicazioni congiunte"}
+Prior marginalmente ragionevoli possono combinarsi in modo da generare dati implausibili. Il controllo predittivo a priori serve proprio a tradurre le assunzioni sui parametri nella scala delle osservazioni, dove molte incoerenze diventano immediatamente visibili.
 :::
 
 ## Adattare il modello con `brms`
 
-La formula `ansia ~ sonno_c` definisce la media condizionata descritta nella sezione precedente, mentre `family = gaussian()` specifica una distribuzione normale con deviazione standard residua $\sigma$. Procediamo all'adattamento del modello impostando `sample_prior = "yes"`, così da conservare anche estrazioni dai prior propri insieme alle estrazioni posteriori.
+La formula `ansia ~ sonno_c` definisce la media condizionata descritta nella sezione precedente, mentre `family = gaussian()` specifica una distribuzione normale con deviazione standard residua $\sigma$. Possiamo ora adattare il modello ai dati.
 
 ```{r}
 #| label: fit-bayesian-sleep-anxiety
@@ -360,7 +364,6 @@ fit_sleep <- brm(
   data = sleep_anxiety,
   family = gaussian(),
   prior = sleep_anxiety_priors,
-  sample_prior = "yes",
   backend = "cmdstanr",
   chains = 4,
   iter = 2000,
@@ -371,7 +374,7 @@ fit_sleep <- brm(
 
 ```
 
-Per garantire la tracciabilità e la riproducibilità del processo di stima, è buona norma stampare un riepilogo formale dei *prior* effettivamente vincolati all'oggetto del modello:
+Per documentare con chiarezza la specificazione utilizzata, controlliamo i prior effettivamente associati all'oggetto stimato:
 
 ```{r}
 #| label: summarize-priors-used
@@ -379,13 +382,13 @@ Per garantire la tracciabilità e la riproducibilità del processo di stima, è 
 prior_summary(fit_sleep)
 ```
 
-Dietro le quinte, `brms` traduce l'interfaccia R (composta da formula, famiglia probabilistica e prior) in un codice sorgente ottimizzato in linguaggio Stan. Il motore di stima esegue il campionamento tramite l'algoritmo **NUTS** (*No-U-Turn Sampler*), una variante avanzata e adattiva del metodo *Hamiltonian Monte Carlo* (HMC). Questo algoritmo esplora lo spazio geometrico dei parametri generando una sequenza di valori auto-correlati che, in condizioni di convergenza, approssimano numericamente la **distribuzione a posteriori congiunta**.
+Dietro l'interfaccia di `brms`, il modello viene tradotto in codice Stan e campionato mediante **NUTS** (*No-U-Turn Sampler*), una variante adattiva di *Hamiltonian Monte Carlo* (HMC). Le catene producono estrazioni autocorrelate che, quando il campionamento è affidabile, rappresentano numericamente la **distribuzione a posteriori congiunta**.
 
-> **Avvertenza concettuale:** Talvolta gli studenti tendono a confondere la natura delle simulazioni stocastiche. I campioni generati dalle catene MCMC non devono essere interpretati come se fossero nuove osservazioni empiriche o dataset indipendenti replicati, ma rappresentano, al contrario, un'approssimazione numerica della distribuzione a posteriori dei parametri del modello.
+> **Avvertenza concettuale:** le estrazioni MCMC non sono nuovi partecipanti né dataset replicati. Si tratta di estrazioni numeriche dalla distribuzione a posteriori dei parametri. Le repliche dei dati verranno generate in un passaggio distinto, attraverso la distribuzione predittiva a posteriori.
 
 ## Valutare la convergenza e la stabilità del campionamento
 
-Prima di procedere all'interpretazione della distribuzione a posteriori, è importante verificare la stabilità e l'affidabilità algoritmica del processo di stima. Questo scrutinio diagnostico risponde a una domanda strettamente computazionale: ci assicura che l'algoritmo geometrico abbia esplorato lo spazio dei parametri in modo corretto ed efficiente. Non va confuso, pertanto, con una valutazione del merito scientifico o della validità teorica del modello stesso.
+Prima di interpretare la distribuzione a posteriori, è necessario valutare la qualità del campionamento numerico. Questa diagnostica risponde a una domanda di natura computazionale: le catene forniscono un'approssimazione sufficientemente affidabile della distribuzione a posteriori specificata? La risposta non ci dice ancora se il modello sia scientificamente adeguato.
 
 ### Indici diagnostici numerici
 
@@ -399,19 +402,19 @@ summary(fit_sleep)
 
 Nell'ispezione dell'output, l'attenzione del ricercatore deve focalizzarsi su tre indicatori chiave:
 
-* **Il fattore di riduzione della varianza ($\widehat{R}$):** noto anche come diagnostica di Gelman-Rubin, confronta la variabilità interna alle singole catene con la variabilità tra le catene. Nei modelli che hanno raggiunto una convergenza soddisfacente, il valore di $\widehat{R}$ deve approssimarsi a $1$ per ogni parametro stimato (tipicamente esigendo valori inferiori a $1.05$ o, più rigorosamente, a $1.01$).
-* **L'ampiezza campionaria effettiva ($ESS_{\text{bulk}}$ e $ESS_{\text{tail}}$):** quantifica il numero di campioni indipendenti equivalenti contenuti nelle catene auto-correlate. La metrica *bulk* valuta la precisione della stima della media e della mediana della posterior, mentre la metrica *tail* monitora l'accuratezza nella stima dei quantili estremi e delle code della distribuzione.
-* **Diagnostiche del campionatore:** l'assenza totale di messaggi di errore o avvisi formali generati dal motore Stan (quali superamenti del limite di profondità dell'albero di ricerca o segnalazioni di transizioni divergenti).
+* **$\widehat{R}$:** confronta l'informazione fornita dalle diverse catene e segnala problemi di mescolamento quando si discosta da 1. Nelle analisi finali è prudente richiedere valori inferiori a circa $1.01$ per le quantità di interesse; una soglia non sostituisce comunque l'esame congiunto delle altre diagnostiche.
+* **La dimensione campionaria effettiva ($ESS_{\text{bulk}}$ e $ESS_{\text{tail}}$):** traduce l'autocorrelazione delle catene nel numero equivalente di estrazioni indipendenti. *Bulk ESS* riguarda soprattutto la parte centrale della distribuzione; *tail ESS* è particolarmente informativa per quantili e code.
+* **Avvisi del campionatore:** le transizioni divergenti richiedono particolare attenzione perché possono segnalare esplorazione inadeguata della geometria della posterior. Altri avvisi, come il raggiungimento della profondità massima dell'albero, possono riguardare soprattutto l'efficienza e vanno interpretati nel loro contesto.
 
-> **Avvertenza metodologica:** Le soglie numeriche convenzionali rappresentano standard operativi e linee guida prudenziali, non certificazioni formali e automatiche di correttezza statistica. L'assenza di anomalie numeriche costituisce una condizione necessaria, ma non sufficiente, per decretare la validità dell'inferenza.
+> **Avvertenza metodologica:** le soglie diagnostiche sono criteri operativi, non certificazioni automatiche. Un campionamento numericamente affidabile è necessario per interpretare la posterior calcolata, ma non dimostra che la specificazione del modello o l'interpretazione scientifica siano adeguate.
 
 ### Diagnostiche grafiche: Trace plot e Rank plot
 
-Per integrare gli indici numerici ed escludere la presenza di patologie locali nella simulazione, ricorriamo a strumenti di visualizzazione grafica. Il primo è il *trace plot*, che mostra l'evoluzione sequenziale dei valori campionati da ciascuna catena nel corso delle iterazioni di campionamento (*post-warmup*):
+Gli indici numerici possono essere affiancati da diagnostiche grafiche. Il *trace plot* mostra la sequenza delle estrazioni di ciascuna catena dopo il warm-up:
 
 ```{r}
 #| label: fig-mcmc-trace-sleep-anxiety
-#| fig-cap: "Trace plot delle quattro catene MCMC relative a intercetta, pendenza e deviazione standard residua. L'intreccio sovrapposto e compatto delle traiettorie simula l'aspetto visivo di un 'bruco', segno di una corretta miscelazione delle catene."
+#| fig-cap: "Trace plot delle quattro catene MCMC per intercetta, pendenza e deviazione standard residua. Catene sovrapposte, senza derive persistenti o separazioni evidenti, sono un segnale favorevole da leggere insieme alle diagnostiche numeriche."
 #| fig-width: 8
 #| fig-height: 6
 
@@ -424,11 +427,11 @@ sleep_draws |>
   mcmc_trace(facet_args = list(nrow = 3))
 ```
 
-Il secondo strumento grafico è il *rank plot*, un istogramma che analizza la distribuzione dei ranghi relativi delle quattro catene sovrapposte:
+Il *rank plot* confronta invece la distribuzione dei ranghi delle estrazioni tra le catene:
 
 ```{r}
 #| label: fig-mcmc-rank-sleep-anxiety
-#| fig-cap: "Rank plot sovrapposto per le catene MCMC. Profili uniformi e sovrapponibili indicano che le catene hanno esplorato i medesimi spazi probabilistici, escludendo anomalie sistematiche o segregazioni locali."
+#| fig-cap: "Rank plot sovrapposto delle catene MCMC. Profili approssimativamente uniformi e simili tra catene sono coerenti con un buon mescolamento, ma vanno interpretati insieme alle altre diagnostiche."
 #| fig-width: 8
 #| fig-height: 5
 
@@ -437,11 +440,11 @@ sleep_draws |>
   mcmc_rank_overlay()
 ```
 
-Un'esplorazione ottimale della distribuzione stazionaria si traduce graficamente in *trace plot* in cui le catene si sovrappongono rapidamente creando un pattern denso e uniforme (comunemente definito "a bruco"), e in *rank plot* i cui profili si mantengono bilanciati e piatti, escludendo che una catena sia rimasta confinata in porzioni isolate dello spazio campionario.
+Trace plot senza derive persistenti o separazioni tra catene e rank plot approssimativamente uniformi sono segnali rassicuranti. Tuttavia, non costituiscono una certificazione autonoma di convergenza: devono essere letti insieme a $\widehat{R}$, agli ESS e agli eventuali avvisi prodotti dal campionatore.
 
 ### Transizioni divergenti
 
-Le transizioni divergenti rappresentano una specificità fondamentale degli algoritmi HMC/NUTS. Esse fungono da spie luminose matematiche, indicando che il campionatore ha intercettato aree della distribuzione a posteriori caratterizzate da variazioni geometriche repentine e curvature estreme (es. "imbuti" di probabilità) che l'approssimazione numerica non è riuscita a mappare in modo accurato. Isoliamo matematicamente la presenza di tali eventi:
+Le **transizioni divergenti** sono un'importante diagnostica di HMC/NUTS. Segnalano che, durante l'integrazione numerica, il campionatore ha incontrato regioni della distribuzione a posteriori difficili da esplorare con sufficiente accuratezza. La loro presenza richiede quindi attenzione, soprattutto quando le divergenze si concentrano in particolari regioni dello spazio dei parametri:
 
 ```{r}
 #| label: count-divergences-sleep-anxiety
@@ -453,21 +456,19 @@ nuts_sleep |>
   summarise(n_divergenze = sum(Value))
 ```
 
-Rilevare transizioni divergenti significa che le stime prodotte potrebbero risultare localmente distorte o incomplete. Sebbene l'incremento del parametro di controllo `adapt_delta` possa forzare l'algoritmo ad adottare passi di integrazione più piccoli risolvendo le divergenze minori, il persistere di tali anomalie non deve essere trattato con correzioni puramente algoritmiche. Al contrario, occorre esaminare la parametrizzazione, i prior e la geometria del modello. Un aumento di `adapt_delta` può risolvere problemi numerici limitati, ma non sostituisce la diagnosi della causa delle divergenze.
+Le divergenze possono produrre un'esplorazione incompleta della posterior. Aumentare il valore di  `adapt_delta` riduce la dimensione dei passi di integrazione e può risolvere alcuni problemi, ma non deve diventare una soluzione automatica. Se le divergenze persistono, è necessario esaminare la parametrizzazione, le priorità e la struttura del modello.
 
-::: {.callout-warning title="I tre livelli del controllo di validità"}
-Nello sviluppo di una ricerca, lo studente deve saper scindere nettamente tre ordini di interrogativi, distinti ma collegati:
+::: {.callout-warning title="Tre livelli da non confondere"}
+1. **Il campionamento è affidabile?** Lo valutiamo con $\widehat{R}$, ESS e diagnostiche del campionatore.
+2. **Il modello riproduce aspetti rilevanti dei dati?** Lo esaminiamo con controlli predittivi mirati.
+3. **L'interpretazione scientifica è giustificata?** Dipende anche dal disegno di ricerca, dalla misurazione e dalle assunzioni sostantive.
 
-1. **Il campionatore ha funzionato correttamente?** Risolto mediante le diagnostiche MCMC ($\widehat{R}$, $ESS$, divergenze).
-2. **Il modello riproduce fedelmente i dati empirici?** Risolto mediante i controlli predittivi a posteriori (*Posterior Predictive Check*).
-3. **L'interpretazione dei parametri risponde validamente alla domanda scientifica originaria?** Risolto analizzando il disegno di ricerca, l'adeguatezza delle metriche e la sostenibilità delle assunzioni teoriche.
-
-Una risposta favorevole al primo livello attesta la precisione del calcolo numerico, ma non costituisce in alcun modo una garanzia di successo per i due livelli successivi.
+Un esito favorevole a un livello non garantisce automaticamente i successivi.
 :::
 
 ## Interpretare la distribuzione a posteriori
 
-Una volta verificata la convergenza dell'algoritmo, possiamo passare all'interpretazione scientifica dei risultati. Il primo passo operativo consiste nell'estrarre le stime della distribuzione a posteriori sotto forma di struttura dati manipolabile:
+Dopo aver verificato che il campionamento non presenti problemi rilevanti, possiamo interpretare le quantità posteriori. Iniziamo estraendo le distribuzioni dei parametri in una struttura dati manipolabile:
 
 ```{r}
 #| label: extract-posterior-sleep-anxiety
@@ -482,7 +483,7 @@ sleep_draws |>
   )
 ```
 
-Sul piano concettuale, è fondamentale ricordare che la *posterior* ottenuta è una **distribuzione congiunta**: ogni singola riga della matrice dei campioni MCMC racchiude valori generati simultaneamente per $\alpha$, $\beta$ e $\sigma$. Di conseguenza, le stime mantengono intatta la struttura di interdipendenza tra i parametri. Tali relazioni di dipendenza a posteriori derivano dall'interazione tra la geometria del disegno di ricerca, l'evidenza dei dati e la parametrizzazione scelta; non esiste alcuna legge statistica a priori che imponga, ad esempio, che a una pendenza più elevata debba corrispondere una deviazione standard residua più contenuta.
+La distribuzione a posteriori è **congiunta**: ogni estrazione MCMC contiene valori simultanei di $\alpha$, $\beta$ e $\sigma$. Ciò consente di conservare le dipendenze tra i parametri e di propagare correttamente l'incertezza quando si calcolano quantità derivate o previsioni.
 
 ### Gli intervalli di credibilità
 
@@ -496,13 +497,11 @@ sleep_draws |>
   summarise_draws(median, ~ quantile2(.x, probs = c(0.025, 0.975)))
 ```
 
-> **Nota di metodo (Intervallo di credibilità vs. Intervallo di confidenza):** Un intervallo di credibilità al $95\%$ è un intervallo al quale la distribuzione a posteriori assegna probabilità $0.95$, condizionatamente al modello, ai prior e ai dati osservati.
-
-Questa interpretazione, lineare e intuitiva per lo studente, si contrappone radicalmente all'intervallo di confidenza della statistica frequentista (il quale descrive invece la frequenza a lungo termine di intervalli campionari che conterrebbero il parametro fisso). È altrettanto cruciale non incorrere nell'errore didattico di confondere l'intervallo di credibilità sui parametri con una fascia di tolleranza sulle osservazioni: esso non indica in alcun modo che il $95\%$ dei punteggi dei futuri soggetti si collocherà entro quei confini.
+> **Nota di metodo:** un intervallo di credibilità al $95\%$ delimita una regione alla quale la distribuzione a posteriori assegna una probabilità $0.95$, condizionatamente al modello, ai prior e ai dati. Questa interpretazione va distinta da quella di un intervallo di confidenza frequentista e, soprattutto, da quella di un intervallo predittivo: un intervallo su $\beta$ non descrive dove cadrà il $95\%$ delle future osservazioni.
 
 ### Valutazioni probabilistiche dirette e quantità derivate
 
-Uno dei maggiori vantaggi del paradigma bayesiano risiede nella possibilità di manipolare direttamente i campioni della posterior per calcolare probabilità associate a specifiche ipotesi scientifiche o per stimare quantità derivate:
+Le estrazioni posteriori permettono di calcolare direttamente probabilità e quantità derivate pertinenti alla domanda scientifica:
 
 ```{r}
 #| label: posterior-probabilities-sleep-anxiety
@@ -525,13 +524,11 @@ sleep_draws |>
   )
 ```
 
-Nel codice precedente, la funzione `mean(b_sonno_c < 0)` calcola la proporzione di iterazioni in cui il coefficiente assume valore negativo, traducendosi direttamente nella probabilità a posteriori $\Pr(\beta < 0 \mid y)$. Questa quantità offre una risposta matematica immediata alla domanda circa la direzione dell'associazione studiata, poste come valide le assunzioni del modello.
-
-Bisogna tuttavia prestare attenzione ai limiti epistemologici di tale metrica: essa quantifica lo stato di certezza relativo al parametro all'interno dello scenario formalizzato, ma non misura la probabilità che il modello teorico sia "vero" in senso assoluto, né possiede la facoltà di convertire magicamente un'associazione di natura osservazionale in un nesso di causa-effetto.
+Nel codice precedente, la proporzione di estrazioni in cui `b_sonno_c < 0` stima $\Pr(\beta < 0 \mid y)$ entro il modello specificato. Tale quantità riguarda la direzione del parametro, non la probabilità che l'intero modello sia vero e non attribuisce automaticamente un significato causale all'associazione osservata.
 
 ## Dalla posterior alle previsioni
 
-Un errore metodologico ricorrente consiste nel confondere le stime relative ai parametri del modello con le stime relative alle osservazioni future. Nel framework probabilistico bayesiano, la distribuzione a posteriori dei parametri e la distribuzione predittiva costituiscono due risposte computazionali a quesiti scientifici profondamente distinti.
+La distribuzione a posteriori dei parametri e la distribuzione predittiva rispondono a domande diverse. Questa distinzione, anticipata nel capitolo precedente, diventa ora operativa.
 
 ### 1. Incertezza sulla media condizionata ($\mathbb{E}[Y \mid X]$)
 
@@ -541,7 +538,7 @@ $$
 \widetilde{\mu}(x) = \alpha + \beta \cdot x^c.
 $$
 
-In questo scenario, la variabilità dei campioni generati riflette esclusivamente l'incertezza epistemica che grava sui parametri strutturali $\alpha$ e $\beta$. Questa distribuzione risponde alla domanda: *"Qual è la posizione plausibile della retta media alla luce dei dati?"*
+La variabilità di queste estrazioni riflette l'incertezza a posteriori sulla **media condizionata** indotta soprattutto da $\alpha$ e $\beta$. La domanda è: *quali valori della media di $Y$ sono plausibili, per un dato valore di $X$, alla luce del modello e dei dati?*
 
 ### 2. Distribuzione predittiva a posteriori ($Y_{\text{new}}$)
 
@@ -551,9 +548,9 @@ $$
 \widetilde{y}(x) \sim \operatorname{Normal}\!\left(\widetilde{\mu}(x), \sigma\right).
 $$
 
-Questa formulazione matematica evidenzia come la distribuzione predittiva incorpori due sorgenti di variazione distinte: l'incertezza legata alla posizione della media $\widetilde{\mu}(x)$ e la variabilità aleatoria residua espressa da $\sigma$. Di conseguenza, la dispersione di queste stime risulterà strutturalmente molto più ampia, rispondendo al quesito: *"In quale range è plausibile che si collochi il punteggio di un singolo nuovo soggetto?"*
+La distribuzione predittiva aggiunge all'incertezza sulla media condizionata la variabilità residua rappresentata da $\sigma$. Per questo motivo è in genere più dispersa e risponde a una domanda diversa: *quali valori potrebbe assumere una nuova osservazione con questo valore del predittore?*
 
-Il blocco di codice seguente traduce questa distinzione in vettori numerici, calcolando i quantili per una griglia di valori ideali di sonno:
+Costruiamo una griglia di valori del sonno e calcoliamo entrambe le distribuzioni:
 
 ```{r}
 #| label: posterior-predictions-sleep-anxiety
@@ -585,7 +582,7 @@ sleep_predictions <- sleep_grid |>
   )
 ```
 
-La rappresentazione grafica di queste due componenti mette in risalto l'impatto della variabilità residua sulla stima della precisione:
+Rappresentandole nello stesso grafico, la differenza tra le due domande diventa immediatamente visibile:
 
 ```{r}
 #| label: fig-expected-predictive-sleep-anxiety
@@ -619,25 +616,25 @@ sleep_anxiety |>
   labs(x = "Ore di sonno", y = "Punteggio di ansia")
 ```
 
-::: {.callout-caution title="La precisione semantica delle bande di incertezza"}
-L'uso di un'espressione generica come "bande di credibilità delle previsioni" è impreciso e ostacola l'apprendimento. Una banda definita sulla media condizionata quantifica geometricamente l'errore standard attorno alla traiettoria della retta, mentre un intervallo predittivo quantifica lo spazio di tolleranza atteso per i punteggi individuali. Ignorare questa distinzione significa nascondere il ruolo metodologico della variabilità non spiegata ($\sigma$).
+::: {.callout-caution title="Due bande, due domande"}
+La banda sulla media condizionata rappresenta l'incertezza a posteriori sulla posizione della retta media. L'intervallo predittivo, invece, riguarda una nuova osservazione e include anche la variabilità residua $\sigma$. Entrambe le bande possono essere probabilistiche, ma rispondono a quesiti diversi.
 :::
 
-## Valutare l'adeguatezza predittiva a posteriori (*Posterior Predictive Check*)
+## Controllare il modello con la distribuzione predittiva a posteriori
 
-Dopo aver valutato la stabilità numerica del campionatore e aver interpretato i parametri estratti, il workflow bayesiano impone la validazione del modello. Questa fase si realizza attraverso il **controllo predittivo a posteriori** (*Posterior Predictive Check*, PPC), una procedura diagnostica che valuta la capacità del modello di generare configurazioni di dati sintetici coerenti con l'evidenza empirica originaria.
+Dopo la diagnostica computazionale e l'interpretazione delle quantità posteriori, è necessario verificare le conseguenze osservabili del modello. Il **controllo predittivo a posteriori** (*posterior predictive check*, PPC) confronta i dati osservati con le repliche generate dalla distribuzione predittiva a posteriori. Tuttavia, non si tratta di un test definitivo di validità, ma piuttosto di uno strumento per individuare discrepanze tra i risultati generati dal modello e le caratteristiche dei dati che riteniamo scientificamente rilevanti.
 
-Sul piano formale, il PPC si fonda sulla **distribuzione predittiva a posteriori**, definita integrando la funzione di verosimiglianza rispetto alla distribuzione a posteriori dei parametri ($\theta = \{\alpha, \beta, \sigma\}$):
+Dal punto di vista formale, il PPC si basa sulla **distribuzione predittiva a posteriori**, definita integrando la funzione di verosimiglianza rispetto alla distribuzione a posteriori dei parametri ($\theta = \{\alpha, \beta, \sigma\}$):
 
 $$
 p(\widetilde{y}\mid y) = \int p(\widetilde{y}\mid\theta) \,p(\theta\mid y) \,d\theta.
 $$
 
-Questa espressione proietta l'incertezza accumulata nella distribuzione a posteriori direttamente sulla scala delle osservazioni, restituendo una distribuzione di possibili repliche dei dati. In termini operativi: se il modello coglie adeguatamente il processo generativo, le repliche simulate da questa distribuzione dovrebbero assomigliare ai dati effettivamente raccolti. Poiché non esiste un singolo test definitivo per decretare l'adeguatezza di un modello, il ricercatore deve scegliere e esaminare metriche e caratteristiche dei dati strettamente connesse agli obiettivi dello studio.
+L'integrazione trasferisce l'incertezza sui parametri alla scala delle osservazioni e produce possibili repliche dei dati. Il confronto deve quindi essere progettato in funzione della domanda: distribuzione marginale, code, dispersione, relazione con il predittore o altre caratteristiche che il modello dovrebbe essere in grado di riprodurre.
 
 ### 1. Ispezione della forma marginale della distribuzione
 
-Il primo livello di controllo analizza la macro-struttura dell'esito, confrontando la densità empirica della variabile dipendente con le curve di densità ricavate da molteplici repliche simulate ($y_{\text{rep}}$):
+Iniziamo confrontando la densità osservata dell'esito con quelle ottenute da diverse repliche simulate ($y_{\text{rep}}$):
 
 ```{r}
 #| label: fig-ppc-density-sleep-anxiety
@@ -652,11 +649,11 @@ pp_check(
 )
 ```
 
-Questo grafico permette di escludere macroscopiche violazioni geometriche della verosimiglianza scelta, come la presenza di bimodalità non intercettate, asimmetrie severe o anomalie nelle code della distribuzione.
+Questo grafico può mettere in evidenza discrepanze macroscopiche nella forma marginale dell'esito, come ad esempio asimmetrie, code o multimodalità che le repliche del modello non sono in grado di riprodurre.
 
-### 2. Monitoraggio delle statistiche di sintesi (Media e Dispersione)
+### 2. Statistiche di sintesi: media e dispersione
 
-Un modello adeguato deve saper riprodurre accuratamente i momenti centrali del campione originale. Valutiamo pertanto la collocazione della media e della deviazione standard empiriche all'interno delle rispettive distribuzioni campionarie simulate:
+La media e la deviazione standard sono due semplici caratteristiche che il modello può essere chiamato a riprodurre. Confrontiamo quindi i valori osservati con quelli ottenuti dalle repliche predittive.
 
 ```{r}
 #| label: fig-ppc-statistics-sleep-anxiety
@@ -668,15 +665,15 @@ pp_check(fit_sleep, type = "stat", stat = "mean")
 pp_check(fit_sleep, type = "stat", stat = "sd")
 ```
 
-Se il valore osservato si colloca in una regione tipica delle distribuzioni simulate, non emerge una discrepanza evidente per quella specifica statistica. Il risultato non esclude problemi in altre caratteristiche dei dati.
+Se il valore osservato si colloca in una regione tipica delle distribuzioni simulate, non si evidenzia una discrepanza evidente per quella specifica statistica. Tale risultato non esclude la presenza di problemi in altre caratteristiche dei dati.
 
-### 3. Verifica della relazione strutturale tra outcome e predittore
+### 3. Relazione tra esito e predittore
 
-Un limite intrinseco dei primi due controlli risiede nella loro natura marginale: un modello potrebbe riprodurre perfettamente la media e la deviazione standard dell'ansia pur fallendo grossolanamente nel descrivere il legame con il sonno. Per colmare questa lacuna, definiamo una statistica di discrepanza focalizzata sulla pendenza campionaria ($\beta$ empirico):
+I controlli marginali possono apparire soddisfacenti, anche se il modello non rappresenta bene la relazione tra sonno e ansia. A scopo illustrativo, possiamo quindi controllare una statistica che riassume direttamente l'associazione lineare, ovvero la pendenza campionaria:
 
 ```{r}
 #| label: fig-ppc-slope-sleep-anxiety
-#| fig-cap: "Distribuzione predittiva a posteriori della pendenza campionaria ed evidenza empirica osservata. Questo controllo mirato attesta la capacità del modello di catturare la forza dell'associazione covariante."
+#| fig-cap: "Distribuzione predittiva a posteriori della pendenza campionaria, confrontata con la pendenza osservata. Il controllo interroga specificamente la capacità delle repliche del modello di riprodurre l'associazione lineare tra sonno e ansia."
 #| fig-width: 7
 #| fig-height: 5
 
@@ -692,21 +689,21 @@ pp_check(
 )
 ```
 
-::: {.callout-important title="Il superamento dei controlli non attesta la verità del modello"}
-Un esito favorevole a tutti i controlli predittivi a posteriori non costituisce in alcun modo una prova logica della veridicità o della correttezza intrinseca del modello teorico. Indica esclusivamente che lo strumento statistico si dimostra accurato rispetto alle specifiche metriche e proprietà interrogate. Fenomeni complessi capaci di minare la validità delle conclusioni — quali la presenza di relazioni non lineari latenti, eteroschedasticità (varianza non costante dei residui), dipendenze stocastiche tra le osservazioni o sistematici errori di misurazione — non vengono catturati da questi indici e richiedono procedure diagnostiche dedicate e mirate.
+::: {.callout-important title="Un controllo favorevole non dimostra che il modello sia vero"}
+Ogni PPC interroga solo alcune caratteristiche dei dati. Un modello può riprodurre bene la media, la dispersione e la pendenza, ma fallire comunque a causa di non linearità, eteroschedasticità, dipendenze tra le osservazioni o problemi di misurazione. Il controllo del modello è quindi iterativo e guidato dalle possibili modalità di fallimento rilevanti per la domanda scientifica.
 :::
 
 ## Analisi di sensibilità alle distribuzioni a priori (*Prior Sensitivity Analysis*)
 
-Nel paradigma bayesiano, la scelta delle distribuzioni a priori (*prior*) rappresenta un'esplicita assunzione teorica formale che si integra con l'evidenza empirica. Di conseguenza, il workflow bayesiano richiede la verifica che le stime posteriori ottenute non siano il risultato di una scelta a priori unica e specifica. L'analisi di sensibilità valuta proprio la robustezza delle conclusioni scientifiche sottoponendo il modello a scenari di informazione alternativa.
+Quando le conclusioni sostanziali potrebbero dipendere dalla specificazione dei prior, è utile svolgere un'**analisi di sensibilità**. L'obiettivo non è trovare un prior che produca il risultato desiderato, ma verificare come cambino le quantità di interesse in base a alternative plausibili.
 
-In questo specifico passaggio diagnostico, poniamo a confronto la specificazione principale con un modello alternativo caratterizzato da distribuzioni a priori marcatamente più ampie, non direzionali e a bassa informatività:
+Confrontiamo la specificazione principale con un insieme di prior più ampi e non direzionali:
 
 $$
 \alpha\sim\operatorname{Normal}(50,25), \qquad \beta\sim\operatorname{Normal}(0,5), \qquad \sigma\sim\operatorname{Lognormal}(\log 15,0.7).
 $$
 
-L'implementazione computazionale di questo confronto si articola attraverso la stima del secondo modello di calcolo:
+Adattiamo quindi lo stesso modello con i prior alternativi:
 
 ```{r}
 #| label: fit-prior-sensitivity-sleep-anxiety
@@ -735,11 +732,11 @@ fit_sleep_sensitivity <- brm(
 )
 ```
 
-Per valutare l'impatto di questa variazione sui parametri chiave della ricerca, sovrapponiamo graficamente le densità a posteriori della pendenza ($\beta$) stimate nei due diversi scenari:
+Confrontiamo poi le distribuzioni a posteriori della pendenza $\beta$:
 
 ```{r}
 #| label: fig-prior-sensitivity-slope
-#| fig-cap: "Confronto visivo delle distribuzioni a posteriori per la pendenza campionaria (beta) in funzione della specificazione dei prior. La marcata sovrapposizione delle due aree attesta la stabilità dell'effetto."
+#| fig-cap: "Distribuzioni a posteriori della pendenza ottenute con la specificazione principale e con prior più ampi. Una forte sovrapposizione indica scarsa sensibilità della pendenza alle due specificazioni considerate."
 #| fig-width: 7
 #| fig-height: 4.8
 
@@ -759,57 +756,46 @@ bind_rows(
   )
 ```
 
-> **Criterio di interpretazione metodologica:** Se le stime e le conseguenti interpretazioni sostanziali del fenomeno cambiano in modo marcato al variare dei prior, emerge una forte dipendenza dei risultati dalle assunzioni di partenza; tale dinamica epidemiologica o psicologica deve essere esplicitamente riportata, discussa e giustificata nel report di ricerca. Al contrario, se le densità a posteriori rimangono sostanzialmente immutate e sovrapponibili, possiamo concludere che i dati empirici raccolti contengono sufficiente informazione da dominare la scelta dei prior, suggerendo che, per le specificazioni confrontate e per quella quantità, le conclusioni sono poco sensibili ai prior.
+> **Criterio di interpretazione:** se la quantità di interesse cambia in modo sostanziale tra prior ragionevoli, la conclusione dipende in misura non trascurabile dalle assunzioni iniziali e questa dipendenza va riportata. Se invece le posteriori sono molto simili, possiamo affermare  che, **per le specificazioni confrontate e per quella quantità**, la conclusione è poco sensibile alla scelta del prior.
 
-Dal punto di vista epistemologico, l'analisi di sensibilità non ha la funzione di giustificare o rendere accettabile una scelta arbitraria o ingiustificata dei parametri di partenza: essa richiede sempre che le specificazioni poste a confronto rappresentino alternative teoricamente plausibili e scientificamente sostenibili nel dominio di studio.
+L'analisi di sensibilità non rende accettabile un prior arbitrario: le alternative confrontate devono restare scientificamente plausibili.
 
 ## Formalizzare la comunicazione scientifica dei risultati
 
-Una rendicontazione scientifica rigorosa deve connettere in modo trasparente le stime numeriche ottenute all'ipotesi di ricerca originaria. Dal punto di vista lessicale e logico, è necessario operare una netta distinzione concettuale tra i parametri strutturali (i coefficienti della retta), le medie condizionate (l'incertezza sulla traiettoria attesa) e le stime predittive (la variabilità sui singoli soggetti futuri).
+La comunicazione dei risultati dovrebbe tornare alle quantità di interesse dichiarate all'inizio e distinguere chiaramente coefficienti, medie condizionate e previsioni individuali. Un possibile schema è il seguente:
 
-Nello stendere il report di ricerca o l'articolo scientifico, lo studente può adottare il seguente schema formale di descrizione:
+> Nel campione analizzato, un'ora in più di sonno era associata a una variazione media dell'ansia pari a `[mediana di beta]` punti; l'intervallo di credibilità al 95% per la pendenza era `[limite inferiore, limite superiore]`. La probabilità a posteriori di una pendenza negativa era $\Pr(\beta < 0 \mid y) =$ `[valore]`, condizionatamente al modello e ai prior. La deviazione standard residua e gli intervalli predittivi indicavano inoltre una sostanziale variabilità tra possibili osservazioni individuali. Le diagnostiche MCMC non hanno evidenziato problemi rilevanti di campionamento e i controlli predittivi esaminati non hanno mostrato discrepanze evidenti nelle caratteristiche considerate.
 
-> Il modello lineare bayesiano rivela che un incremento unitario pari a un'ora di sonno si associa a una variazione media del punteggio di ansia pari a `[Mediana della Posterior]` punti, con un intervallo di credibilità al 95% compreso tra `[Limite Inferiore]` e `[Limite Superiore]`. La probabilità a posteriori che l'associazione indagata assuma una direzione negativa è pari a $\Pr(\beta < 0 \mid y) =$ `[Valore Probabilità]`. Sul piano applicativo, le traiettorie previsionali a livello individuale presentano un'ampia dispersione geometrica, come dimostrato dall'entità della deviazione standard residua ($\sigma$) e dall'estensione degli intervalli predittivi a posteriori. Le procedure diagnostiche di *Posterior Predictive Check* eseguite non hanno evidenziato anomalie o discrepanze sistematiche rispetto alle proprietà statistiche interrogate.
+> **Nota di metodo:** il linguaggio del resoconto deve riflettere il disegno della ricerca. Con dati osservazionali è appropriato parlare di *associazione*, *differenza condizionata* o *pendenza*; termini causali come *effetto del sonno* richiedono un disegno e assunzioni che consentano un'interpretazione causale.
 
-> **Nota di rigore metodologico:** questo impianto espositivo richiede un attento allineamento al disegno di ricerca che ha generato i dati. In contesti di natura strettamente osservazionale o correlazionale, è doveroso dal punto di vista metodologico impiegare espressioni descrittive quali *associazione*, *differenza condizionata* o *pendenza stimata*, evitando formulazioni causali come *effetto del sonno* quando il disegno non consente di identificare un intervento causale.
+## Errori concettuali da evitare
 
-## Catalogo degli errori concettuali e procedurali più frequenti
-
-Al fine di prevenire vizi interpretativi o fallimenti computazionali nella stesura della tesi o del report di analisi, viene qui sintetizzato un quadro sinottico delle principali insidie metodologiche:
-
-::: {.callout-caution title="Errori sistematici da evitare nel workflow bayesiano"}
-
-1. **Accettazione acritica dei prior di default:** Affidarsi ciecamente alle impostazioni predefinite del software (es. `brms`) senza verificarne l'architettura. Classi differenti di parametri possiedono costrutti di default diversi e, in alcuni casi, includono prior impropri (funzioni la cui densità non integra a 1), delegando interamente il calcolo ai dati anche quando non opportuno.
-2. **Valutazione dei prior sulla sola scala dei parametri:** Giudicare la plausibilità di una distribuzione a priori osservando esclusivamente i suoi confini numerici astratti. L'adeguatezza di un prior si testa sperimentalmente sulla scala biologica o psicologica delle osservazioni reali, ricorrendo alle simulazioni predittive a priori (*Prior Predictive Check*).
-3. **Sovrapposizione concettuale tra bande di credibilità e bande predittive:** Estendere l'intervallo di credibilità calcolato su un coefficiente ($\beta$) per formulare previsioni sui punteggi di futuri soggetti. Una stima predittiva individuale corretta deve obbligatoriamente incorporare la variabilità stocastica residua ($\sigma$).
-4. **Feticismo dell'indice $\widehat{R}$:** Ritenere che un valore di $\widehat{R} \approx 1$ per tutti i parametri costituisca una prova matematica della validità o della correttezza del modello statistico. Tale indice certifica unicamente la stabilità e la convergenza numerica delle catene MCMC, non l'adeguatezza delle assunzioni o della specificazione strutturale.
-5. **Monotonia nei controlli predittivi a posteriori:** Esaurire la fase di validazione del modello impiegando un unico grafico PPC (es. il solo *dens_overlay*). Ogni specifico controllo interroga una limitata proprietà geometrica dei dati e può risultare sistematicamente cieco di fronte a fallimenti strutturali di altra natura.
-6. **Falsa sicurezza legata all'ampiezza campionaria ($N$ grande):** Concludere dogmaticamente che l'impatto dei prior sia nullo sul presupposto di disporre di un campione numeroso. L'influenza delle assunzioni a priori dipende strettamente anche dalla variabilità interna dei predittori, dalla presenza di collinearità tra le variabili e dalla specifica porzione di distribuzione (es. le code) che si intende stimare.
-7. **Equiparazione tra $\Pr(\beta < 0 \mid y)$ e cogenza causale:** Interpretare la massa di probabilità accumulata sui valori negativi come una misura diretta dell'esistenza di un meccanismo di causa-effetto. Tale metrica esprime semplicemente una probabilità condizionata all'impianto logico del modello per un parametro di covariazione.
-8. **Risoluzione meccanica delle divergenze tramite `adapt_delta`:** Incrementare in modo automatico e ripetuto il parametro di controllo dell'algoritmo non appena Stan rileva transizioni divergenti. Sebbene un valore di `adapt_delta` più stringente riduca i passi di integrazione, il persistere di divergenze richiede di esaminare parametrizzazione, prior e geometria del modello, e può rendere necessaria una riparametrizzazione.
+::: {.callout-caution title="Sei confusioni ricorrenti"}
+1. **Lasciare i prior al software senza esaminarli.** I default sono parte del modello. Se si desidera eseguire un controllo predittivo a priori, i parametri rilevanti devono avere dei prior propri e campionabili.
+2. **Valutare i prior soltanto parametro per parametro.** La plausibilità va controllata anche sulla scala dei dati simulati, perché prior marginalmente ragionevoli possono avere implicazioni congiunte implausibili.
+3. **Confondere media condizionata con la nuova osservazione.** `posterior_epred()` descrive il valore atteso mentre `posterior_predict()` aggiunge la variabilità residua e risponde a una domanda predittiva diversa.
+4. **Scambiare la diagnostica computazionale con l'adeguatezza scientifica.** Valori soddisfacenti di $\widehat{R}$ e di ESS, nonché l'assenza di divergenze indicano che il campionatore non presenta problemi evidenti, ma non dimostrano che il modello rappresenti bene il fenomeno.
+5. **Trattare un PPC come un test globale.** Ogni controllo è sensibile solo alle caratteristiche interrogate. Controlli diversi servono per possibili fallimenti diversi.
+6. **Attribuire causalità a una probabilità sulla pendenza.** $\Pr(\beta<0\mid y)$ riguarda il segno del coefficiente nel modello. Il significato causale dipende dal disegno e dalle assunzioni di identificazione e non dalla probabilità a posteriori in sé.
 :::
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-Il *workflow* bayesiano non può essere ridotto a un mero espediente tecnico, né alla semplice sostituzione di una stima puntuale frequentista con una media calcolata a posteriori. Al contrario, esso si configura come un paradigma metodologico organico, una sequenza coerente di operazioni concettuali e computazionali che accompagna il ricercatore dalla formulazione dell'ipotesi fino alla rendicontazione dei risultati.
+Questo capitolo ha trasformato il modello lineare introdotto in precedenza in un'analisi bayesiana completa. Il passaggio cruciale non consiste nell'ottenere una nuova formula per la retta, ma nel rappresentare **tutto ciò che non conosciamo** attraverso una distribuzione a posteriori e nel verificare sistematicamente le conseguenze del modello.
 
-Questo percorso integrato si articola attraverso undici passaggi fondamentali, strettamente interconnessi:
+Il percorso può essere riassunto in una sequenza che verrà riutilizzata nei capitoli successivi:
 
-1. **Definire con rigore la domanda scientifica** e identificare le precise quantità di interesse (*estimand*) prima di interrogare i dati;
-2. **Formulare un modello generativo** in grado di esplicitare i processi matematici e stocastici che si ipotizza abbiano prodotto le osservazioni;
-3. **Tradurre l'informazione teorica disponibile in distribuzioni a priori (*prior*)**, ancorandole strettamente alla scala metrica del problema;
-4. **Valutare le implicazioni di tali assunzioni ex ante**, saggiandone la plausibilità fenomenologica attraverso simulazioni predittive a priori;
-5. **Adattare il modello e diagnosticare il campionamento**, escludendo patologie algoritmiche delle catene MCMC per garantirne la stabilità numerica;
-6. **Interpretare la distribuzione a posteriori congiunta** e le quantità probabilistiche derivate in relazione agli obiettivi dello studio;
-7. **Scindere concettualmente la stima della media condizionata** (l'incertezza sulla traiettoria) dalla stima della previsione individuale (che include la variabilità residua);
-8. **Verificare l'adeguatezza predittiva del modello** mediante controlli a posteriori mirati sulle caratteristiche cruciali dei dati;
-9. **Sottoporre le conclusioni a un'analisi di sensibilità**, saggiando la robustezza delle stime sotto specificazioni a priori alternative;
-10. **Comunicare i risultati e i limiti intrinseci dell'analisi**, calibrando il linguaggio in funzione del disegno di ricerca adottato.
-11. **Ogni funzione dei parametri ($3\beta$, una media condizionata, una previsione) è essa stessa una variabile a posteriori:** `mutate_variables()` e le `rvar` rendono questo principio operativo.
+1. **definire la domanda e le quantità di interesse**;
+2. **specificare il modello dei dati e le distribuzioni a priori**;
+3. **controllare le implicazioni a priori sulla scala osservabile**;
+4. **adattare il modello e verificare il campionamento**;
+5. **interpretare parametri e quantità derivate dalla distribuzione a posteriori**;
+6. **distinguere l'incertezza sulla media condizionata dalla previsione di nuove osservazioni**;
+7. **controllare le implicazioni predittive e, quando rilevante, la sensibilità ai prior**.
 
-L'applicazione rigorosa di questa sequenza operativa ha il merito di separare nettamente tre livelli di validità che la prassi statistica tende spesso a sovrapporre: la correttezza puramente numerica del calcolo computazionale, l’adeguatezza statistica del modello ai dati e la fondatezza scientifica dell’interpretazione sostanziale. Il soddisfacimento dei requisiti su un piano non garantisce quello sugli altri, e nessun indice sintetico né automatismo software può sostituire un loro esame critico e congiunto.
+Tre livelli devono rimanere distinti lungo tutto il processo. Un campionamento numericamente affidabile non garantisce che il modello riproduca adeguatamente i dati e un modello che riproduce bene alcune caratteristiche dei dati non garantisce, a sua volta, che l'interpretazione scientifica sia giustificata dal disegno della ricerca. La forza del flusso di lavoro sta proprio nel rendere questi livelli espliciti e controllabili separatamente.
 
-Nel prossimo capitolo renderemo esplicita l’infrastruttura computazionale del modello lineare, connettendo logicamente la formula di Wilkinson in R, la struttura della matrice del modello e il codice sorgente Stan. L’obiettivo didattico non è introdurre una nuova classe di modelli, bensì quello di rendere esplicito e trasparente tutto ciò che `brms` costruisce in modo automatico, offrendo gli strumenti concettuali per acquisire il pieno controllo del processo inferenziale.
+Nel prossimo capitolo renderemo visibile l'infrastruttura che `brms` costruisce automaticamente: la formula di Wilkinson, la matrice del modello e il codice Stan. Non introdurremo una nuova classe di modelli, ma apriremo la "scatola" computazionale del modello appena stimato, così da comprendere come la notazione compatta usata qui venga tradotta negli oggetti su cui opera il campionatore.
 
 ## Esercizi {.unnumbered .unlisted}
 
@@ -855,11 +841,11 @@ C assume che l'associazione con il sonno sia la stessa a ogni età e che i due c
 
 Supponi che il modello `ansia ~ sonno_c` produca queste sintesi:
 
-- mediana di $\alpha$: 50,2;
-- mediana di $\beta$: $-3,8$;
-- intervallo di credibilità al 95% per $\beta$: $[-5,7,-1,9]$;
-- $P(\beta<0\mid y)=0,999$;
-- mediana di $\sigma$: 9,8.
+- mediana di $\alpha$: 50.2;
+- mediana di $\beta$: $-3.8$;
+- intervallo di credibilità al 95% per $\beta$: $[-5.7,-1.9]$;
+- $P(\beta<0\mid y)=0.999$;
+- mediana di $\sigma$: 9.8.
 
 Interpreta ciascuna quantità. Calcola inoltre la differenza media attesa tra due persone che differiscono di tre ore di sonno. Indica quali conclusioni non sono giustificate da questi risultati.
 
@@ -868,9 +854,9 @@ Ricorda che il predittore è centrato e che $3\beta$ è una quantità derivata. 
 :::
 
 ::: {.callout-note collapse="true" title="Soluzione commentata"}
-$\alpha$ è l'ansia media attesa per una persona con durata del sonno uguale alla media campionaria. $\beta=-3,8$ indica che un'ora in più di sonno è associata, in media, a 3,8 punti in meno di ansia. L'intervallo descrive l'incertezza a posteriori sulla pendenza. La probabilità 0,999 quantifica il sostegno, entro il modello, per una pendenza negativa. $\sigma=9,8$ descrive una notevole dispersione dei punteggi individuali attorno alla retta media.
+$\alpha$ è l'ansia media attesa per una persona con durata del sonno uguale alla media campionaria. $\beta=-3.8$ indica che un'ora in più di sonno è associata, in media, a 3.8 punti in meno di ansia. L'intervallo descrive l'incertezza a posteriori sulla pendenza. La probabilità 0.999 quantifica il sostegno, entro il modello, per una pendenza negativa. $\sigma=9.8$ descrive una notevole dispersione dei punteggi individuali attorno alla retta media.
 
-Per tre ore, la differenza media è $3\beta=-11,4$ punti. Non si può concludere che tre ore aggiuntive causino una riduzione di 11,4 punti, che ogni individuo migliori di tale quantità o che il modello sia vero.
+Per tre ore, la differenza media è $3\beta=-11.4$ punti. Non si può concludere che tre ore aggiuntive causino una riduzione di 11.4 punti, che ogni individuo migliori di tale quantità o che il modello sia vero.
 :::
 
 ### Esercizio 3 — Impostare l'analisi e scegliere l'output {.unnumbered .unlisted}
@@ -915,7 +901,7 @@ La prima formula stima una pendenza descrittiva. La seconda produce una pendenza
 
 Valuta il seguente resoconto:
 
-> Il modello dimostra che un'ora aggiuntiva di sonno riduce causalmente l'ansia di 3,8 punti. L'intervallo $[-5,7,-1,9]$ contiene il 95% dei punteggi futuri. Poiché $\widehat R=1,00$ e i controlli predittivi sono buoni, il modello è corretto. Tutti i pazienti dovrebbero quindi dormire tre ore in più, ottenendo una riduzione di 11,4 punti.
+> Il modello dimostra che un'ora aggiuntiva di sonno riduce causalmente l'ansia di 3.8 punti. L'intervallo $[-5.7,-1.9]$ contiene il 95% dei punteggi futuri. Poiché $\widehat R=1.00$ e i controlli predittivi sono buoni, il modello è corretto. Tutti i pazienti dovrebbero quindi dormire tre ore in più, ottenendo una riduzione di 11.4 punti.
 
 Individua almeno quattro errori e riscrivi il paragrafo in una forma scientificamente appropriata.
 
@@ -928,7 +914,7 @@ Il resoconto attribuisce causalità a un'analisi osservazionale; interpreta l'in
 
 Una formulazione adeguata potrebbe essere:
 
-> Nel campione analizzato, un'ora aggiuntiva di sonno era associata a una diminuzione media dell'ansia pari a 3,8 punti; l'intervallo di credibilità al 95% per la pendenza era compreso tra $-5,7$ e $-1,9$. La probabilità a posteriori di un'associazione negativa era 0,999, condizionatamente al modello e ai prior. La dispersione residua indica tuttavia una considerevole variabilità individuale. Le diagnostiche non hanno evidenziato problemi computazionali e i controlli predittivi esaminati non hanno mostrato discrepanze evidenti, ma il disegno osservazionale non consente una conclusione causale né una raccomandazione clinica.
+> Nel campione analizzato, un'ora aggiuntiva di sonno era associata a una diminuzione media dell'ansia pari a 3.8 punti; l'intervallo di credibilità al 95% per la pendenza era compreso tra $-5.7$ e $-1.9$. La probabilità a posteriori di un'associazione negativa era 0.999, condizionatamente al modello e ai prior. La dispersione residua indica tuttavia una considerevole variabilità individuale. Le diagnostiche non hanno evidenziato problemi computazionali e i controlli predittivi esaminati non hanno mostrato discrepanze evidenti, ma il disegno osservazionale non consente una conclusione causale né una raccomandazione clinica.
 :::
 
 ::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}

@@ -1,30 +1,32 @@
 # Il modello lineare come modello generativo {#sec-linear-generative}
 
 ::: {.callout-note appearance="minimal"}
-La regressione lineare è spesso presentata come una procedura per tracciare la retta che meglio si adatta a una nube di punti. Questa descrizione è utile, ma incompleta. Una retta rappresenta soltanto il *valore medio atteso* dell'outcome, ma il modello deve anche descrivere la variabilità delle osservazioni attorno a tale valore.
+Con la Parte *Modelli* il focus cambia. La Parte *Calcolo* ha mostrato come rappresentare e approssimare le distribuzioni a posteriori e come organizzare l'analisi in un flusso di lavoro bayesiano. Ora la domanda diventa più propriamente di modellistica: **quale struttura probabilistica vogliamo usare per rappresentare il fenomeno?**
 
-In questo capitolo adotteremo quindi una prospettiva generativa. Invece di partire da una formula di stima, ci chiederemo:
+La regressione lineare è spesso presentata come una procedura per tracciare la retta che meglio si adatta a una nube di punti. Questa descrizione è utile, ma incompleta. La retta rappresenta solo il *valore medio atteso* dell'outcome; un modello statistico deve anche descrivere come le singole osservazioni possano variare attorno a quel valore.
+
+In questo capitolo adotteremo quindi una prospettiva generativa e ci chiederemo:
 
 > Quale processo probabilistico potrebbe avere prodotto dati simili a quelli osservati?
 
-Questa domanda prepara il terreno per l'intera sezione. La stima della media, il confronto tra gruppi, l'ANOVA e i modelli multilivello saranno presentati come variazioni della stessa idea: specificare una distribuzione per i dati, collegarne i parametri ai predittori e valutare quanto bene il modello rappresenta il fenomeno.
+Il modello lineare fornirà la grammatica di base per gran parte della Parte *Modelli*. La stima di una media, il confronto tra gruppi, l'ANOVA e i modelli multilivello saranno letti come variazioni della stessa idea: specificare una distribuzione per i dati, collegare alcuni dei suoi parametri ai predittori e rendere esplicite le fonti di variabilità che il modello deve rappresentare.
 :::
 
 ::: {.callout-important appearance="minimal" .chapter-status}
-**Da sapere.** Il modello lineare è un modello generativo per la distribuzione condizionata $p(y\mid x)$: la retta descrive la media attesa, mentre $\sigma$ rappresenta la variabilità delle singole osservazioni attorno a essa. Intercetta, pendenza e dispersione rispondono a domande diverse; la centratura modifica l’interpretazione dell’intercetta, ma non la pendenza. Un’associazione lineare, da sola, non identifica un effetto causale.
+**Da sapere.** Il modello lineare gaussiano specifica la distribuzione condizionata $p(y\mid x,\alpha,\beta,\sigma)$: la componente lineare descrive la media attesa, mentre $\sigma$ rappresenta la variabilità delle singole osservazioni attorno a essa. In questo capitolo isoleremo questa componente del modello; nella formulazione bayesiana completa essa verrà integrata con distribuzioni a priori sui parametri. Intercetta, pendenza e dispersione rispondono a domande diverse; la centratura modifica l'interpretazione dell'intercetta, ma non la pendenza. Un'associazione lineare, da sola, non identifica un effetto causale.
 
-**Da saper fare.** Tradurre una domanda descrittiva in un modello lineare gaussiano; interpretare $\alpha$, $\beta$ e $\sigma$; distinguere la media condizionata dalla previsione di una nuova osservazione; simulare dati dal modello; centrare un predittore; usare grafici dei residui e conoscenze sostantive per riconoscere possibili problemi di linearità, dispersione, indipendenza e forma distributiva.
+**Da saper fare.** Tradurre una domanda descrittiva in una specificazione lineare gaussiana; interpretare $\alpha$, $\beta$ e $\sigma$; distinguere la media condizionata dalla previsione di una nuova osservazione; simulare dati condizionatamente a predittori e parametri; scegliere un valore di riferimento utile per il predittore; usare grafici e conoscenze sostantive per riconoscere possibili inadeguatezze della specificazione.
 
-**Approfondimento facoltativo.** L’equivalenza tra minimi quadrati e massima verosimiglianza, i dettagli della stima puntuale con `lm()`, l’analisi approfondita dei residui e gli esercizi di simulazione possono essere rimandati. Nel percorso essenziale è sufficiente comprendere la specificazione generativa, interpretarne i parametri e valutarne qualitativamente le implicazioni.
+**Approfondimento facoltativo.** L'equivalenza tra minimi quadrati e massima verosimiglianza, i dettagli della stima puntuale con `lm()`, l'analisi approfondita dei residui e gli esercizi di simulazione possono essere rimandati. Nel percorso essenziale è sufficiente comprendere la struttura generativa del modello, interpretarne i parametri e distinguere ciò che riguarda la media condizionata da ciò che riguarda la variabilità delle osservazioni.
 
 [Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
 :::
 
 ::: {.callout-tip collapse="true" title="Prerequisiti"}
 
-- È dato per noto il workflow bayesiano del capitolo 20.
+- È data per nota la logica del flusso di lavoro bayesiano introdotta nel capitolo 20. Qui non la ripeteremo: ci concentreremo sul passaggio di **specificazione del modello**.
 - È utile conoscere media, deviazione standard, correlazione e funzione lineare; per un ripasso si possono usare il percorso di Analisi esplorativa dei dati e l'@sec-apx-lin-func.
-- L'@sec-linear-models-biv-model-frequentist richiama la regressione lineare frequentista; la lettura del codice R è facoltativa.
+- L'@sec-linear-models-biv-model-frequentist richiama la regressione lineare frequentista; la lettura del codice R è facoltativa e non costituisce un prerequisito inferenziale per il seguito.
 
 :::
 
@@ -51,7 +53,7 @@ set.seed(1234)
 
 ## Dalla domanda scientifica alla quantità di interesse
 
-Useremo i dati `kidiq`, tratti da un'indagine su donne statunitensi e sui loro figli [@gelman2021regression]. Considereremo due variabili:
+Per illustrare i principi appena discussi in un contesto applicativo, introduciamo i dati `kidiq`, tratti da un'indagine su donne statunitensi e sui loro figli [@gelman2021regression]. Considereremo due variabili:
 
 - `mom_iq`: punteggio di QI della madre;
 - `kid_score`: punteggio cognitivo del bambino.
@@ -65,10 +67,10 @@ Questa formulazione non chiede se il QI materno *causi* una variazione del punte
 $$
 \mu(x) = \mathbb{E}(Y \mid X=x),
 $$
-cioè il valore medio atteso di $Y$ tra le unità che presentano un determinato valore $x$ del predittore. Nel modello lineare, la variazione di questa media per un incremento unitario di $x$ è rappresentata dalla pendenza $\beta$.
+ovvero il valore medio atteso di $Y$ tra le unità che presentano un determinato valore $x$ del predittore. Nel modello lineare, la variazione di questa media per un incremento unitario di $x$ è rappresentata dalla pendenza $\beta$ (per una definizione formale si veda l'appendice [La funzione lineare](@sec-apx-lin-func)).
 
 ::: {.callout-important title="La variabile a destra non è automaticamente una causa"}
-Nel linguaggio della regressione, $X$ viene chiamata *predittore* perché contribuisce alla previsione di $Y$. Il termine non implica che intervenire su $X$ produrrebbe necessariamente una variazione di $Y$.
+Nel linguaggio della regressione, $X$ è chiamato *predittore* perché contribuisce alla previsione di $Y$. Tale termine non implica che intervenire su $X$ produrrebbe necessariamente una variazione di $Y$.
 :::
 
 ## Esplorare i dati
@@ -101,7 +103,6 @@ kidiq |>
     x = "QI della madre",
     y = "Punteggio cognitivo del bambino"
   ) 
-  # + theme_manuscript()
 ```
 
 Il diagramma suggerisce un'associazione positiva, ma mostra anche una considerevole dispersione verticale dei punti. Bambini le cui madri hanno punteggi simili nella variabile esplicativa possono presentare esiti cognitivi molto diversi. Un modello statistico adeguato deve pertanto essere in grado di rappresentare congiuntamente:
@@ -111,13 +112,23 @@ Il diagramma suggerisce un'associazione positiva, ma mostra anche una considerev
 
 ## Il modello generativo
 
-Si fissi un valore di riferimento $x_0$ e si definisca il predittore centrato
+Per comprendere la struttura del modello lineare è utile, in un primo momento, separare la **componente che genera i dati** dalla successiva inferenza sui parametri. Tratteremo quindi i valori osservati di $X$ come dati e specificheremo la distribuzione di $Y$ condizionatamente a $X$ e ai parametri. In altre parole, ci concentreremo su
+
+$$
+p(y\mid x,\alpha,\beta,\sigma).
+$$
+
+::: {.callout-note title="Componente generativa e modello bayesiano completo"}
+Nel seguito useremo l'espressione *modello generativo* in senso condizionale: una volta fissati i valori del predittore e dei parametri, la specificazione determina una distribuzione dei possibili valori di $Y$ e permette quindi di simularli. Un modello bayesiano completo aggiunge a questa componente le distribuzioni a priori sui parametri, per esempio $p(\alpha,\beta,\sigma)$. Questa distinzione ci permette di comprendere prima la struttura del modello lineare e, successivamente, di reintrodurre l'incertezza bayesiana sui suoi parametri.
+:::
+
+Si fissi ora un valore di riferimento $x_0$ e si definisca il predittore centrato
 
 $$
 x_i^c = x_i - x_0.
 $$
 
-Nell'esempio che segue, il riferimento è costituito dalla media campionaria del QI materno. Il modello lineare gaussiano può allora essere espresso nella forma
+Nell'esempio seguente useremo come riferimento la media campionaria del QI materno.Si tratta di una scelta conveniente, non di una regola: in altre applicazioni, infatti, può essere preferibile un valore di riferimento definito sostantivamente, in quanto l'interpretazione dell'intercetta dipende direttamente da tale scelta. Il modello lineare gaussiano può quindi essere espresso nella forma
 
 $$
 \begin{aligned}
@@ -164,7 +175,7 @@ Lo scostamento $y_i-\mu_i$ rappresenta ciò che il modello lineare non è riusci
 
 ## Dalla specificazione ai dati: simulare il modello
 
-Un modello si definisce generativo quando è possibile utilizzarlo per produrre dati. A titolo illustrativo, si considerino i seguenti valori:
+La natura generativa della specificazione diventa concreta quando la si usa nella direzione che va dai parametri ai dati. Una volta fissati i valori del predittore e dei parametri, il modello assegna una distribuzione a ogni possibile osservazione di $Y$ e consente di generare delle repliche. A titolo illustrativo, si considerino i seguenti valori:
 
 $$
 \alpha=87, \qquad \beta=0.60, \qquad \sigma=18.
@@ -225,10 +236,11 @@ plot_data |>
     x = "QI della madre",
     y = "Punteggio del bambino"
   ) 
-  # theme_manuscript()
 ```
 
-Una singola simulazione non deve necessariamente riprodurre esattamente il campione osservato: è la distribuzione delle repliche che deve essere compatibile con i dati osservati. Il controllo utile consiste nel verificare se le repliche generate dal modello presentino, nel loro insieme, caratteristiche plausibili, quali l'intervallo dei punteggi, la dispersione, la tendenza media e la frequenza dei valori estremi. Nei capitoli successivi, questa logica verrà formalizzata mediante controlli predittivi a priori e a posteriori.
+Una singola simulazione non deve necessariamente riprodurre esattamente il campione osservato. Ciò che ci interessa è piuttosto comprendere quali caratteristiche il modello può generare: l'intervallo dei punteggi, la dispersione, la tendenza media e la frequenza dei valori estremi.
+
+In questa simulazione $\alpha$, $\beta$ e $\sigma$ sono fissati a valori scelti a scopo didattico. Non stiamo quindi ancora costruendo una distribuzione predittiva a priori o a posteriori. Quando i parametri verranno a loro volta trattati come incerti e campionati da distribuzioni a priori o a posteriori, la stessa operazione di generazione dei dati diventerà il nucleo dei controlli predittivi già introdotti nelle parti precedenti.
 
 ## Perché centrare il predittore
 
@@ -240,7 +252,9 @@ $$
 
 l'intercetta $a$ corrisponde al valore medio atteso di $Y$ in corrispondenza di $X=0$. Nel caso del QI materno, tuttavia, tale valore non appartiene all'intervallo dei dati osservati e la sua interpretazione risulta priva di significato sostantivo.
 
-Imponendo $x_0=\bar{x}$ e definendo il predittore centrato $x_i^c=x_i-\bar{x}$, l'intercetta $\alpha$ assume il significato di punteggio medio atteso per un bambino la cui madre presenta un QI pari alla media campionaria. La pendenza $\beta$ rimane invariata: la trasformazione modifica unicamente l'origine della scala del predittore e non la relazione funzionale tra le variabili.
+Imponendo $x_0=\bar{x}$ e definendo il predittore centrato $x_i^c=x_i-\bar{x}$, l'intercetta $\alpha$ assume il significato di punteggio medio atteso per un bambino la cui madre presenta un QI pari alla media campionaria. In un modello con intercetta, la semplice traslazione del predittore non modifica la pendenza $\beta$: cambia l'origine della scala di $X$, ma non la relazione lineare rappresentata dal modello.
+
+La media campionaria è solo uno dei possibili riferimenti. Se esiste un valore sostantivamente significativo, come una soglia clinica, un'età di riferimento o una condizione di controllo, può essere più informativo centrare il predittore rispetto a tale valore. Nella regressione bayesiana questa scelta è rilevante anche per specificare e interpretare il prior sull'intercetta.
 
 ```{r}
 #| label: center-kidiq-predictor
@@ -266,11 +280,11 @@ La pendenza è identica nei due modelli. L'unica differenza riguarda l'intercett
 Centrare un predittore facilita l'interpretazione e, nei modelli più complessi, può migliorare la geometria computazionale. Tuttavia, non modifica l'adeguatezza della forma lineare, non elimina i possibili confondimenti e non trasforma un'associazione in un effetto causale.
 :::
 
-## Dai dati a una stima puntuale
+## Una stima puntuale come riferimento didattico
 
-Una volta formulato il modello, si procede all'identificazione dei valori dei parametri che meglio si accordano con i dati osservati. Per un modello gaussiano con deviazione standard costante, i coefficienti ottenuti con il metodo dei minimi quadrati coincidono con le stime di massima verosimiglianza di $\alpha$ e $\beta$.
+Finora abbiamo proceduto dal modello ai dati. Per dare un significato numerico ai parametri nell'esempio reale, compiamo ora il percorso inverso e ricaviamo alcuni valori di riferimento dal campione osservato. Utilizziamo la funzione `lm()` solo a scopo didattico: **non stiamo tornando a un'impostazione inferenziale frequentista**, né useremo questa stima puntuale come conclusione dell'analisi.
 
-La funzione `lm()` consente di ottenere tali stime puntuali.
+Nel modello lineare gaussiano con dispersione costante, le stime dei coefficienti ottenute con i minimi quadrati coincidono con le stime di massima verosimiglianza di $\alpha$ e $\beta$. La funzione `lm()` permette quindi di ottenere rapidamente valori utili per interpretare la geometria del modello prima di introdurre, nel capitolo sulla regressione bayesiana, i prior e le distribuzioni a posteriori.
 
 ```{r}
 #| label: fit-linear-point-estimates
@@ -281,7 +295,6 @@ alpha_hat <- unname(coef(fit_lm)["(Intercept)"])
 beta_hat  <- unname(coef(fit_lm)["mom_iq_c"])
 sigma_hat <- summary(fit_lm)$sigma
 r2_hat    <- summary(fit_lm)$r.squared
-beta_ci   <- confint(fit_lm, "mom_iq_c", level = 0.95)
 
 linear_summary <- tibble(
   quantita = c(
@@ -301,18 +314,18 @@ Le stime hanno la seguente interpretazione descrittiva:
 - l'intercetta corrisponde al valore medio condizionato atteso di $Y$ quando il QI materno è pari alla media campionaria;
 - la pendenza esprime la variazione media attesa del punteggio del bambino per un incremento di un punto nel QI materno;
 - la deviazione standard residua quantifica la dispersione dei punteggi attorno alla media condizionata;
-- $R^2$ esprime la proporzione di variabilità campionaria di `kid_score` spiegata dalla componente sistematica del modello.
+- $R^2$ descrive la quota di variabilità campionaria di `kid_score` rappresentata dalla componente lineare adattata.
 
-$R^2$ fornisce una descrizione sintetica dell'adattamento nel campione. Non attesta, tuttavia, la correttezza della specificazione, né la validità causale della spiegazione, e non coincide necessariamente con la capacità predittiva su nuove osservazioni.
+$R^2$ è quindi una sintesi dell'adattamento del modello al campione. Tuttavia, non attesta la correttezza della specificazione, non identifica una spiegazione causale e non coincide necessariamente con la capacità predittiva su nuove osservazioni.
 
 ::: {.callout-note title="Un esempio di comunicazione descrittiva"}
-Nel campione analizzato, un punto aggiuntivo di QI materno è associato a una differenza media stimata di `r sprintf("%.2f", beta_hat)` punti nel punteggio cognitivo del bambino (intervallo di confidenza al 95%: `r sprintf("%.2f", beta_ci[1])`--`r sprintf("%.2f", beta_ci[2])`). Per una madre con QI pari alla media campionaria, il punteggio medio atteso è `r sprintf("%.1f", alpha_hat)`. La deviazione standard residua, pari a `r sprintf("%.1f", sigma_hat)`, mostra che rimane una considerevole variabilità individuale non descritta dalla retta; il modello spiega nel campione circa il `r sprintf("%.0f", 100 * r2_hat)`% della variabilità dell'outcome.
+Nel campione analizzato, un punto aggiuntivo di QI materno è associato a una differenza media stimata di `r sprintf("%.2f", beta_hat)` punti nel punteggio cognitivo del bambino. Per una madre con QI pari alla media campionaria, il punteggio medio adattato è pari a `r sprintf("%.1f", alpha_hat)`. La deviazione standard residua, pari a `r sprintf("%.1f", sigma_hat)`, mostra che le osservazioni individuali rimangono ampiamente disperse attorno alla retta; la componente lineare rappresenta nel campione circa il `r sprintf("%.0f", 100 * r2_hat)`% della variabilità dell'outcome.
 
-Questa formulazione comunica la direzione e la grandezza dell'associazione, la sua incertezza e la variabilità residua, senza trasformare il coefficiente in un'affermazione causale.
+Questa formulazione è deliberatamente descrittiva. L'incertezza sui parametri non è ancora stata quantificata, ma sarà reintrodotta nel modello bayesiano mediante distribuzioni a posteriori.
 :::
 
 ::: {.callout-tip title="Dal punto alla distribuzione"}
-In questo capitolo utilizziamo una stima puntuale per illustrare i parametri in termini concreti. Nel capitolo dedicato al workflow bayesiano, $\alpha$, $\beta$ e $\sigma$ saranno rappresentati mediante distribuzioni a posteriori, consentendo di propagare esplicitamente l'incertezza nelle quantità derivate e nelle previsioni.
+La stima puntuale serve qui soltanto a rendere concreti $\alpha$, $\beta$ e $\sigma$. Nel capitolo sulla regressione bayesiana, questi parametri riceveranno delle distribuzioni a priori e, dopo l'aggiornamento con i dati, delle distribuzioni a posteriori. Le previsioni incorporeranno quindi sia l'incertezza sui parametri sia la variabilità delle nuove osservazioni.
 :::
 
 ## Valori adattati e residui
@@ -329,7 +342,7 @@ $$
 e_i = y_i-\widehat{y}_i.
 $$
 
-L'esame dei residui consente di individuare eventuali strutture sistematiche nei dati che il modello non è riuscito a rappresentare.
+L'esame dei residui consente di individuare strutture sistematiche che la media lineare adattata non è riuscita a rappresentare. In questo capitolo lo useremo come controllo esplorativo della specificazione; nel flusso di lavoro bayesiano, i grafici dei residui non sostituiscono i controlli predittivi che confrontano direttamente i dati osservati e le repliche generate dal modello.
 
 ```{r}
 #| label: augment-linear-fit
@@ -356,14 +369,13 @@ fit_augmented |>
     x = "Valore adattato",
     y = "Residuo"
   ) 
-  # theme_manuscript()
 ```
 
 Un diagramma dei residui non fornisce un giudizio automatico, ma orienta l'attenzione verso domande specifiche: persiste una curvatura nei residui? La dispersione tende ad aumentare con il valore atteso? Alcune osservazioni esercitano un'influenza sproporzionata sulle stime? Le osservazioni sono effettivamente indipendenti o presentano una struttura di dipendenza, ad esempio all'interno di famiglie, classi scolastiche o gruppi di partecipanti?
 
-## Assunzioni della specificazione gaussiana
+## Assunzioni e limiti della specificazione gaussiana
 
-Il modello in @eq-linear-generative costituisce una rappresentazione semplificata del fenomeno. Le sue assunzioni vanno pertanto interpretate come affermazioni verificabili sul processo generativo dei dati.
+Il modello in @eq-linear-generative costituisce una rappresentazione semplificata del fenomeno. Le sue assunzioni non sono tutte controllabili nello stesso modo: alcune producono implicazioni che possono essere messe a confronto con i dati, mentre altre dipendono dal disegno dello studio, dalla qualità delle misure o da conoscenze esterne al campione. Il punto essenziale è renderle esplicite e chiedersi quale parte dell'inferenza dipenda da ciascuna di esse.
 
 ### Linearità della media condizionata
 
@@ -375,7 +387,7 @@ Il medesimo valore di $\sigma$ viene impiegato per tutti i livelli di $X$. Se in
 
 ### Indipendenza condizionale
 
-Una volta specificati i predittori e i parametri, le osservazioni vengono trattate come indipendenti le une dalle altre. Tale assunzione può risultare problematica in presenza di misure ripetute o di dati con struttura gerarchica. I modelli multilivello, che verranno introdotti nei capitoli successivi, permettono di rappresentare esplicitamente queste forme di dipendenza.
+Una volta specificati i predittori e i parametri, le osservazioni vengono considerate indipendenti l'una dall'altra. Tale assunzione può risultare problematica in presenza di misure ripetute o di dati con struttura gerarchica. I modelli multilivello, che verranno introdotti nei capitoli successivi, permettono di rappresentare esplicitamente queste forme di dipendenza.
 
 ### Forma della distribuzione condizionata
 
@@ -386,40 +398,47 @@ Il modello assume una distribuzione normale attorno alla media condizionata. La 
 La formula del modello non corregge automaticamente gli errori di misurazione, le distorsioni da selezione campionaria o le discrepanze tra il costrutto teorico e la variabile osservata. Inoltre, la relazione stimata è definita nell'intervallo dei dati disponibili e ogni estrapolazione al di là di tale intervallo richiede assunzioni aggiuntive.
 
 ::: {.callout-warning title="Assunzioni diverse, conseguenze diverse"}
-La violazione di un'assunzione non produce sempre lo stesso tipo di conseguenza. Può alterare la grandezza stimata, compromettere l'adeguatezza delle previsioni, sottostimare l'incertezza o limitare la generalizzabilità dei risultati. Per questa ragione, non è sufficiente applicare una checklist meccanica, ma occorre chiedersi, per ciascuna assunzione, quale parte dell'inferenza ne dipenda e quali strumenti consentano di valutarne la tenuta empirica.
+Un'inadeguatezza del modello non produce sempre lo stesso tipo di conseguenza. Può alterare la grandezza stimata, compromettere le previsioni, generare un'incertezza non adeguatamente calibrata o limitare l'ambito di generalizzazione del risultato. Per questo motivo, non è sufficiente applicare una checklist meccanica, ma è necessario distinguere ciò che può essere diagnosticato attraverso i dati da ciò che richiede argomenti relativi al disegno, alla misurazione o al contesto.
 :::
 
 ## Descrivere, prevedere, spiegare
 
-Lo stesso modello matematico può essere utilizzato per scopi diversi, ma la validità delle conclusioni non dipende solo dai coefficienti di regressione. Nel nostro esempio, la pendenza descrive, all'interno del campione analizzato, come i punteggi dei bambini differiscano in media in funzione del QI materno. Questa è la funzione *descrittiva* del modello. Un secondo impiego riguarda la *previsione*: il modello può generare una distribuzione per il punteggio di un nuovo bambino, dato il valore del QI materno, a patto che la previsione individuale incorpori sia l'incertezza sui parametri sia la variabilità residua e che venga valutata su osservazioni non utilizzate per la stima. Un terzo obiettivo, ben diverso, è l'*interpretazione causale*, che richiederebbe una domanda causale esplicitamente formulata, una strategia di identificazione e assunzioni sul processo di assegnazione e sui potenziali confondenti — condizioni che il modello lineare, da solo, non è in grado di fornire. Per questi motivi, nel corso del Companion adotteremo una terminologia che distingue chiaramente gli scopi: utilizzeremo espressioni come *associazione*, *differenza condizionata* e *previsione* per descrivere ciò che il modello stima, riservando il termine *effetto* ai casi in cui l'interpretazione causale sia sostenuta dal disegno della ricerca e dalle assunzioni esplicitate. La sezione dedicata alla causalità affronterà questi aspetti in dettaglio.
+Lo stesso modello matematico può sostenere domande diverse, ma non autorizza automaticamente le stesse conclusioni. Nel nostro esempio, la pendenza descrive un'**associazione condizionata**, ovvero indica come la media di $Y$ differisce tra le unità con valori diversi di $X$. Il modello può anche essere utilizzato per la **previsione**, generando una distribuzione di possibili valori di $Y$ per nuove unità con un determinato valore di $X$.
 
-## Dalla domanda al resoconto: uno schema operativo
+L'**interpretazione causale** richiede invece qualcosa in più del modello lineare: una domanda causale esplicita, una strategia di identificazione e assunzioni sul processo di assegnazione, sui confondenti e sulla misurazione. In questa fase è sufficiente mantenere netta la distinzione. Nel Companion useremo quindi i termini *associazione*, *differenza condizionata* e *previsione* quando il modello giustifica soltanto affermazioni statistiche, riservando il termine *effetto* ai contesti in cui l'interpretazione causale è sostenuta da argomenti aggiuntivi. Il capitolo conclusivo della Parte *Modelli* e la successiva Parte *Causalità* svilupperanno sistematicamente questa distinzione.
 
-Una prima analisi con un modello lineare può essere organizzata attraverso sette passaggi collegati.
+## La grammatica comune della Parte Modelli
 
-1. **Formulare la domanda.** Stabilire se l'obiettivo è descrivere un'associazione, prevedere un esito o sostenere un'interpretazione causale.
-2. **Definire la quantità di interesse.** Per esempio, la differenza nella media condizionata di $Y$ associata a un incremento unitario di $X$.
-3. **Specificare il modello.** Dichiarare la forma della media condizionata e la distribuzione delle osservazioni attorno a essa.
-4. **Preparare e descrivere i dati.** Controllare scale, valori mancanti, intervallo osservato e struttura di dipendenza.
-5. **Stimare i parametri.** Ottenere informazioni su intercetta, pendenza e dispersione, insieme alla loro incertezza.
-6. **Controllare le implicazioni.** Esaminare residui e previsioni, chiedendosi quali aspetti dei dati il modello non riesca a rappresentare.
-7. **Comunicare il risultato.** Riportare grandezza, direzione, incertezza, variabilità residua, ambito di generalizzazione e limiti dell'interpretazione.
+Il flusso di lavoro generale è già stato introdotto nella Parte *Calcolo* e verrà applicato in forma completa alla regressione bayesiana. Qui è più utile isolare quattro domande che ricorreranno nei modelli successivi:
+
+1. **Quale distribuzione descrive l'outcome?** Nel modello di questo capitolo è una distribuzione normale condizionata ai predittori.
+2. **Quale parametro varia sistematicamente con i predittori?** Qui è la media $\mu_i$, collegata a $X$ attraverso $\alpha+\beta x_i^c$.
+3. **Come viene rappresentata la variabilità che resta?** Qui mediante un unico parametro $\sigma$; nei modelli multilivello compariranno ulteriori componenti di variabilità e dipendenza.
+4. **Quale quantità risponde alla domanda scientifica?** Può essere una media, una differenza tra medie, una pendenza, una previsione o un'altra quantità derivata dal modello.
+
+Questa grammatica permette di cogliere la continuità tra casi che, nella presentazione tradizionale, sono spesso trattati come procedure separate. Un modello a sola intercetta, un confronto tra due gruppi, un'ANOVA e un modello multilivello differiscono nella struttura assegnata ai parametri, ma condividono la stessa logica di specificazione probabilistica.
 
 ::: {.callout-tip title="Il vantaggio della prospettiva generativa"}
-La formulazione generativa rende esplicite le assunzioni, permette di simulare dati prima della stima, distingue la media attesa dalla variabilità individuale e collega naturalmente stima e previsione. Il prezzo di questa chiarezza è che occorre assumersi la responsabilità della specificazione: una formula eseguibile non garantisce che linearità, distribuzione, indipendenza o interpretazione sostantiva siano appropriate.
+La formulazione generativa rende esplicite le assunzioni, consente di simulare i dati prima della stima e distingue la media attesa dalla variabilità delle singole osservazioni. Il vantaggio non consiste nell'avere una formula più complessa, ma nel poter considerare ogni componente del modello come un'affermazione sul modo in cui i dati potrebbero essere generati. Tuttavia, una specificazione eseguibile non garantisce che tali affermazioni siano adeguate al fenomeno.
 :::
 
 ## Errori frequenti
 
 ::: {.callout-caution}
-## Errori frequenti
-
-Un errore comune è quello di interpretare l'intercetta senza averne prima verificato il valore di riferimento. Se $X = 0$ è privo di significato sostantivo, come nel caso di un QI pari a zero, o se si colloca molto al di là dei valori osservati, l'intercetta non ha alcun significato utile e non dovrebbe essere interpretata. Un secondo equivoco riguarda la pendenza: essa descrive la differenza media tra individui che presentano valori diversi del predittore, e non necessariamente il cambiamento che si verificherebbe in un singolo individuo se il suo valore su $X$ venisse modificato. La relazione osservata in un campione non può essere automaticamente trasposta a un processo individuale nel tempo. Un terzo errore consiste nel confondere la retta di regressione, che rappresenta la media condizionata, con una previsione individuale: le osservazioni singole si distribuiscono attorno a tale media, e la loro variabilità è descritta da $\sigma$. Un quarto malinteso è l'uso di $R^2$ come certificato di validità: un modello può avere un valore elevato di questo indice e tuttavia essere mal specificato o scientificamente irrilevante. Infine, non si deve attribuire un significato causale alla posizione del predittore nella formula di regressione: la sintassi `y ~ x` non codifica alcuna teoria causale, ma solo una relazione statistica condizionata.
+- **Interpretare l'intercetta senza considerare il riferimento.** Se $X=0$ è privo di significato sostantivo o è molto lontano dai valori osservati, l'intercetta può essere matematicamente definita, ma ha un valore scientifico limitato.
+- **Leggere la pendenza come cambiamento entro la persona.** In un'analisi trasversale, il valore di $\beta$ descrive la differenza media tra le unità con valori diversi di $X$, ma non rappresenta automaticamente ciò che accadrebbe alla stessa unità se si modificasse il valore di $X$.
+- **Confondere la retta con una previsione individuale.** La retta descrive il centro della distribuzione condizionata, mentre le singole osservazioni rimangono disperse attorno a essa secondo la componente aleatoria del modello.
+- **Usare $R^2$ come certificato di validità.** Un buon adattamento della componente lineare nel campione non dimostra che la specificazione sia adeguata, che il modello generalizzi o che rappresenti un meccanismo psicologico.
+- **Attribuire causalità alla sintassi della regressione.** Scrivere `y ~ x` specifica una relazione statistica condizionata, non una teoria dell'intervento o dell'identificazione causale.
 :::
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-Il modello lineare non si riduce a una semplice retta che collega i punti, ma è piuttosto un'affermazione probabilistica completa che specifica come la media condizionata dell'outcome vari secondo una funzione lineare, come le osservazioni si distribuiscano attorno a tale media e come la dispersione venga descritta da un parametro separato. Le assunzioni del modello determinano, di conseguenza, quali caratteristiche dei dati possono essere rappresentate e quali rimangono al di fuori della sua portata. La prospettiva generativa modifica profondamente il modo di condurre l'analisi: prima ancora di stimare i parametri, è possibile simulare il modello e verificare che le sue implicazioni siano plausibili rispetto al fenomeno studiato; dopo la stima, è possibile confrontare le repliche generate con i dati osservati e individuare gli aspetti che il modello non riesce a riprodurre. L'analisi diventa, quindi, un ciclo di costruzione, controllo e revisione, piuttosto che l'applicazione meccanica di una formula conclusiva. Nel prossimo capitolo, utilizzeremo la regressione verso la media per approfondire una conseguenza fondamentale della previsione imperfetta; successivamente, applicheremo l'intero flusso di lavoro bayesiano al modello lineare, sostituendo le stime puntuali con distribuzioni a posteriori e predittive che rendono esplicita l'incertezza.
+La Parte *Calcolo* ha posto soprattutto la domanda **come possiamo eseguire e controllare l'inferenza bayesiana?** Con l'inizio della Parte *Modelli* la domanda diventa **che cosa stiamo chiedendo al modello di rappresentare?** Il modello lineare fornisce una prima risposta particolarmente trasparente: una funzione descrive come varia la media condizionata dell'outcome, mentre una distribuzione descrive come le singole osservazioni possono allontanarsi da tale media.
+
+In questo capitolo abbiamo isolato la componente generativa $p(y\mid x,\alpha,\beta,\sigma)$ per renderne visibile la struttura. Abbiamo constatato che la retta non coincide con le osservazioni, che l'intercetta dipende dal valore di riferimento scelto, che la pendenza descrive una differenza nella media condizionata e che $\sigma$ rappresenta una fonte distinta di variabilità. Abbiamo inoltre chiarito che alcune implicazioni del modello possono essere esplorate tramite simulazioni e residui, mentre altre assunzioni richiedono argomentazioni riguardanti il disegno, la misurazione e l'ambito di generalizzazione.
+
+Questa grammatica verrà riutilizzata in tutta la Parte *Modelli*. Nel prossimo capitolo la regressione verso la media mostrerà una conseguenza fondamentale della previsione imperfetta. Subito dopo, nel capitolo sulla regressione bayesiana, completeremo la specificazione aggiungendo i prior su $\alpha$, $\beta$ e $\sigma$ e applicheremo il flusso di lavoro bayesiano con distribuzioni a posteriori e predittive. Da quel punto in poi, la media, i confronti tra gruppi, l'ANOVA e i modelli multilivello appariranno come estensioni della stessa architettura anziché come procedure statistiche separate.
 
 ## Esercizi {.unnumbered .unlisted}
 
@@ -436,14 +455,15 @@ $$
 1. Identifica outcome, predittore e quantità di interesse.
 2. Interpreta sostantivamente $\alpha$, $\beta$ e $\sigma$.
 3. Spiega perché la centratura rispetto a 7 ore rende utile l'intercetta.
-4. Indica quali informazioni aggiuntive sarebbero necessarie per interpretare $\beta$ come effetto causale del sonno.
+4. Questa equazione specifica già un modello bayesiano completo? Se no, quale componente manca?
+5. Indica quali informazioni aggiuntive sarebbero necessarie per interpretare $\beta$ come effetto causale del sonno.
 
 ::: {.callout-tip collapse="true" title="Suggerimento"}
 Distingui ciò che il modello descrive nel campione da ciò che accadrebbe intervenendo sulle ore di sonno.
 :::
 
 ::: {.callout-note collapse="true" title="Soluzione commentata"}
-L'outcome è il punteggio di memoria; il predittore è il numero di ore di sonno. La quantità di interesse è la differenza nella media condizionata del punteggio associata a un'ora aggiuntiva di sonno. $\alpha$ è il punteggio medio atteso per chi ha dormito 7 ore; $\beta$ è la differenza media attesa associata a un'ora in più; $\sigma$ è la deviazione standard dei punteggi individuali attorno alla media condizionata. La centratura rende l'intercetta interpretabile in un valore plausibile e sostantivamente rilevante del predittore. Per un'interpretazione causale servirebbero un disegno o una strategia di identificazione adeguati, insieme ad assunzioni sui confondenti, sulla misurazione e sul processo di assegnazione delle ore di sonno.
+L'outcome è il punteggio di memoria; il predittore è il numero di ore di sonno. La quantità di interesse è la differenza nella media condizionata del punteggio associata a un'ora aggiuntiva di sonno. $\alpha$ è il punteggio medio atteso per chi ha dormito 7 ore; $\beta$ è la differenza media attesa associata a un'ora in più; $\sigma$ è la deviazione standard dei punteggi individuali attorno alla media condizionata. La centratura rende l'intercetta interpretabile in un valore plausibile e sostantivamente rilevante del predittore. L'equazione specifica la distribuzione dei dati condizionatamente ai parametri, ma non un modello bayesiano completo: mancano le distribuzioni a priori sui parametri. Per un'interpretazione causale servirebbero inoltre un disegno o una strategia di identificazione adeguati, insieme ad assunzioni sui confondenti, sulla misurazione e sul processo di assegnazione delle ore di sonno.
 :::
 
 ### Esercizio 2 — Prevedere e interpretare {.unnumbered .unlisted}
@@ -481,14 +501,14 @@ kidiq_analysis <- kidiq |>
 
 fit <- lm(_________________________________________, data = kidiq_analysis)
 
-coefficienti <- broom::tidy(fit, conf.int = TRUE)
+coefficienti <- broom::tidy(fit)
 diagnostica  <- broom::augment(fit)
 ```
 
 1. Completa le due parti mancanti per centrare `mom_iq` sulla media e stimare il modello del capitolo.
-2. Indica quale oggetto useresti per comunicare pendenza e incertezza.
+2. Indica quale oggetto useresti per leggere e comunicare la stima della pendenza.
 3. Indica quale oggetto useresti per costruire un grafico residui-valori adattati.
-4. Spiega perché l'analisi non dovrebbe concludersi con la sola esecuzione di `lm()`.
+4. Spiega che cosa fornisce `lm()` in questo capitolo e che cosa manca ancora rispetto a un'analisi bayesiana completa.
 
 ::: {.callout-tip collapse="true" title="Suggerimento"}
 `tidy()` organizza i coefficienti; `augment()` aggiunge ai dati valori adattati e residui.
@@ -502,11 +522,11 @@ kidiq_analysis <- kidiq |>
 
 fit <- lm(kid_score ~ mom_iq_c, data = kidiq_analysis)
 
-coefficienti <- broom::tidy(fit, conf.int = TRUE)
+coefficienti <- broom::tidy(fit)
 diagnostica  <- broom::augment(fit)
 ```
 
-`coefficienti` contiene stime e intervalli utili per interpretare e comunicare l'associazione. `diagnostica` contiene `.fitted` e `.resid`, necessari per esaminare la struttura dei residui. `lm()` stima i parametri del modello specificato, ma non verifica automaticamente se la forma lineare, la dispersione costante, l'indipendenza e l'ambito di generalizzazione siano plausibili.
+`coefficienti` contiene le stime ottenute dal modello lineare adattato, mentre `diagnostica` contiene `.fitted` e `.resid`, utili per esaminare la struttura dei residui. In questo capitolo `lm()` serve come riferimento numerico per comprendere intercetta, pendenza e dispersione. Non specifica però prior, non produce distribuzioni a posteriori e non sostituisce i controlli del modello; questi elementi verranno introdotti nella regressione bayesiana.
 :::
 
 ### Esercizio 4 — Criticare e comunicare {.unnumbered .unlisted}
@@ -516,8 +536,7 @@ diagnostica  <- broom::augment(fit)
 Un'analisi osservazionale produce il seguente riassunto:
 
 - intercetta centrata: 87 punti;
-- pendenza: 0.61;
-- intervallo al 95% per la pendenza: [0.42, 0.80];
+- pendenza stimata: 0.61;
 - deviazione standard residua: 18 punti;
 - $R^2=0.20$.
 
@@ -536,7 +555,7 @@ Controlla linguaggio causale, significato di $R^2$, variabilità residua e inter
 ::: {.callout-note collapse="true" title="Soluzione commentata"}
 Il modello osservazionale identifica un'associazione condizionata, non un effetto causale. $R^2=0.20$ non garantisce previsioni individuali accurate; la deviazione standard residua di 18 punti segnala anzi una notevole dispersione. Il complemento di $R^2$ non può essere attribuito a una causa specifica come l'ambiente familiare. Inoltre, il coefficiente descrive una differenza media tra unità con valori diversi del predittore, non necessariamente un cambiamento entro la stessa persona.
 
-Un possibile resoconto è: «Nel campione analizzato, un punto aggiuntivo di QI materno è associato a una differenza media stimata di 0.61 punti nel punteggio cognitivo del bambino (intervallo al 95%: 0.42--0.80). Per una madre con QI pari al valore di centratura, il punteggio medio atteso è 87. Rimane una considerevole variabilità individuale attorno alla retta ($\sigma=18$), e il modello descrive circa il 20% della variabilità campionaria dell'outcome. Il risultato è associativo e non identifica, da solo, un effetto causale». Tra i limiti vanno menzionati almeno i possibili confondenti, la qualità delle misure, la rappresentatività del campione, la linearità e l'eventuale dipendenza tra osservazioni.
+Un possibile resoconto è: «Nel campione analizzato, un punto aggiuntivo di QI materno è associato a una differenza media stimata di 0.61 punti nel punteggio cognitivo del bambino. Per una madre con QI pari al valore di centratura, il punteggio medio adattato è 87. Rimane una considerevole variabilità individuale attorno alla retta ($\sigma=18$), e la componente lineare rappresenta circa il 20% della variabilità campionaria dell'outcome. Il risultato è descrittivo e non identifica, da solo, un effetto causale». In un resoconto inferenziale completo andrebbe inoltre comunicata l'incertezza sui parametri. Tra i limiti vanno menzionati almeno i possibili confondenti, la qualità delle misure, la rappresentatività del campione, la linearità e l'eventuale dipendenza tra osservazioni.
 :::
 
 ::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}

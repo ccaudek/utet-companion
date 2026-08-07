@@ -1,54 +1,36 @@
-# Dalla formula al programma: formule R, matrice del modello e Stan {#sec-linar-models-brms}
+# Regressione multipla: dalla formula al programma {#sec-linar-models-brms}
 
 ::: {.callout-note appearance="minimal"}
-Il modello lineare viene formalizzato in termini di distribuzioni probabilistiche e l'adattamento numerico viene affidato alle funzioni del pacchetto `brms`. Per lo studente o il ricercatore, tuttavia, una formula sintattica espressa nella forma
+Nel capitolo precedente abbiamo applicato il workflow bayesiano completo a una regressione con un solo predittore. Ora estenderemo la stessa struttura a più predittori e introdurremo il linguaggio che ci permetterà di rendere leggibili i capitoli successivi: **formula R, matrice del modello e programma Stan**.
 
-```r
-y ~ x1 + x2
-```
-
-può apparire distante dall'impianto formale dell'equazione matriciale
+Il passaggio dalla regressione semplice a quella multipla non richiede una nuova teoria dell'inferenza. Cambia soprattutto la struttura della media condizionata. Con un predittore avevamo una retta, con due predittori otteniamo un piano e con più predittori un iperpiano. La logica probabilistica rimane la stessa:
 
 $$
-\mathbf{y} = \alpha\mathbf{1} + \mathbf{X}\boldsymbol{\beta} + \boldsymbol{\varepsilon},
-$$
-e ancora più distante dalla complessa struttura di un codice sorgente scritto in linguaggio Stan. In realtà, queste tre rappresentazioni non sono entità separate, ma descrivono lo stesso oggetto statistico a livelli differenti di astrazione logica.
-
-In questo capitolo tracceremo l'intera catena di trasformazione che unisce l'intenzione teorica al calcolo computazionale, seguendo un percorso lineare:
-
-$$
-\begin{aligned}
-&\text{Domanda scientifica} \\
-&\downarrow \\
-&\text{Equazione matematica} \\
-&\downarrow \\
-&\text{Formula R} \\
-&\downarrow \\
-&\text{Matrice del modello} \\
-&\downarrow \\
-&\text{Programma Stan}.
-\end{aligned}
+y_i \sim \operatorname{Normal}(\mu_i,\sigma),
+\qquad
+\mu_i = \alpha + \beta_1 x_{1i} + \beta_2 x_{2i} + \cdots .
 $$
 
-L'obiettivo di questo approfondimento non è suggerire di sostituire sistematicamente le funzioni di `brms` con il codice Stan, operazione che risulterebbe inefficiente nella pratica quotidiana. Lo scopo è piuttosto quello di rendere esplicito e trasparente il contenuto semantico della formula, decodificando ciò che il software costruisce automaticamente dietro le quinte. Solo acquisendo questa consapevolezza, il ricercatore può comprendere appieno quali decisioni computazionali vengono delegate all'algoritmo e quali scelte metodologiche rimangono, in ultima istanza, sotto la sua diretta responsabilità scientifica.
+Questo capitolo si concentra quindi su due idee. La prima è **interpretativa**: in una regressione multipla ogni coefficiente descrive una differenza nella media condizionata, dato l'insieme degli altri termini inclusi nel modello. La seconda è di tipo **computazionale**: una formula compatta come `y ~ x1 + x2` viene trasformata in una matrice numerica e, tramite `brms`, in un programma Stan.
+
+Questa grammatica verrà riutilizzata immediatamente nei capitoli successivi. Un modello con sola intercetta, il confronto tra due gruppi e l'ANOVA non richiederanno principi fondamentali nuovi: cambieranno soprattutto le colonne della matrice del modello e, di conseguenza, il significato dei coefficienti.
 :::
 
 ::: {.callout-important appearance="minimal" .chapter-status}
-**Da sapere.** Formula R, matrice del modello e programma Stan sono rappresentazioni, a diversi livelli di astrazione, dello stesso modello generativo. In una regressione multipla, ciascun coefficiente descrive l’associazione con l’esito mantenendo costanti gli altri predittori inclusi nel modello.
+**Da sapere.** La regressione multipla estende il modello lineare includendo più predittori nella stessa media condizionata. Il significato di ciascun coefficiente dipende dagli altri termini presenti nella formula e dalla loro codifica. Formula R, matrice del modello e codice Stan sono rappresentazioni dello stesso modello a livelli diversi di astrazione.
 
-**Da saper fare.** Tradurre una domanda scientifica in una formula R; leggere la matrice del modello prodotta da `model.matrix()`; specificare e adattare il modello con `brms`; riconoscere nel codice Stan generato i blocchi che rappresentano dati, parametri, prior e verosimiglianza; interpretare le stime ed eseguire i principali controlli diagnostici e predittivi.
+**Da saper fare.** Tradurre una domanda descrittiva in una formula con più predittori; leggere le colonne prodotte da `model.matrix()`; interpretare un coefficiente come associazione condizionata agli altri predittori inclusi; specificare il modello con `brms`; riconoscere nel codice Stan generato la matrice dei predittori, i coefficienti e la verosimiglianza.
 
-**Approfondimento facoltativo.** La sezione [Scrivere lo stesso modello direttamente in Stan](#sec-formula-stan-direct), compresi compilazione, adattamento e confronto delle stime, non appartiene al percorso essenziale. Se lavori soltanto con `brms`, puoi saltarla e riprendere da [Che cosa guadagniamo e che cosa perdiamo](#sec-formula-tradeoffs). È richiesto saper leggere la struttura generale del programma Stan, non scriverlo autonomamente.
-
-[Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
+**Approfondimento facoltativo.** La lettura dettagliata del codice Stan generato è utile per comprendere la traduzione computazionale, ma non è necessaria per usare correttamente `brms`. La scrittura manuale di un programma Stan non fa parte del percorso essenziale di questo capitolo.
 :::
 
+[Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
+
 ::: {.callout-tip collapse="true" title="Prerequisiti"}
-
-- Sono dati per noti il modello generativo lineare del capitolo 21, il workflow con `brms` del capitolo 23 e l’introduzione a Stan del capitolo 17.
-- È utile conoscere la funzione lineare e la rappresentazione matriciale di un modello.
-- Per approfondire si possono consultare l'@sec-apx-lin-func, l'@sec-apx-matrix-algebra e l'@sec-apx-stan-lang; l’uso diretto di Stan non è necessario per il percorso essenziale.
-
+- Il modello lineare generativo è introdotto nell'@sec-linear-generative.
+- Il workflow completo con `brms` è sviluppato nell'@sec-linmod-bayesian-reg.
+- È sufficiente una conoscenza elementare di vettori e matrici; per un richiamo più sistematico si veda l'@sec-apx-matrix-algebra.
+- La lettura del codice Stan è introdotta nell'@sec-apx-stan-lang.
 :::
 
 ::: {.callout-caution collapse=true title="Preparazione del notebook"}
@@ -63,123 +45,155 @@ here::here("code", "_common.R") |>
 set.seed(4201)
 ```
 
-Il capitolo usa le dipendenze caricate da `_common.R`. La sezione facoltativa in Stan diretto richiede inoltre un'installazione funzionante di `cmdstanr` e CmdStan.
+Il capitolo usa le dipendenze caricate da `_common.R`.
 :::
 
-## Una formula è una rappresentazione del modello
+## Da una retta a più predittori
 
-La sintassi delle formule comunemente impiegata in R affonda le sue radici storiche e metodologiche nel sistema simbolico introdotto da Wilkinson e Rogers [@wilkinson1973symbolic]. Questo formalismo nasce con l'obiettivo di separare la descrizione strutturale di un modello lineare dalle specifiche procedure numeriche necessarie per stimarlo. Nella sua configurazione fondamentale, un'espressione espressa nella forma
-
-```r
-y ~ x
-```
-
-struttura una precisa gerarchia logica: la variabile posizionata a sinistra dell'operatore tilde (`~`) rappresenta la risposta probabilistica (o variabile dipendente), mentre i termini elencati a destra specificano i predittori che compongono la componente sistematica del modello. Poiché l'inclusione del parametro di intercetta è l'impostazione predefinita del sistema, la formulazione precedente è matematicamente e sintatticamente equivalente a:
-
-```r
-y ~ 1 + x
-```
-
-È importante notare che questa espressione simbolica non vincola il ricercatore a un algoritmo o a una filosofia inferenziale specifici. La stessa formula può essere passata come argomento alla funzione classica `lm()` (basata sui minimi quadrati ordinari), a `glm()` (per i modelli lineari generalizzati frequentisti) o a `brm()` (per l'inferenza bayesiana basata su catene MCMC). Ciò che cambia radicalmente nel passaggio da una funzione all'altra non è la relazione tra le variabili, ma l'architettura probabilistica sottostante, la natura matematica dei parametri stimati e l'ampiezza semantica delle conclusioni scientifiche che è possibile trarre.
-
-### Operazioni e costrutti sintattici fondamentali
-
-Alcune forme ricorrenti sono:
-
-```r
-y ~ 1                         # Modello con sola intercetta (stima della media globale)
-y ~ x                         # Regressione semplice (intercetta implicita e un predittore)
-y ~ x1 + x2                   # Effetti additivi di due predittori, senza interazione
-y ~ 0 + x                     # Modello vincolato a passare per l'origine (senza intercetta)
-y ~ x1 * x2                   # Modello completo: effetti principali (x1 + x2) e la loro interazione
-y ~ x1:x2                     # Inclusione del solo termine di interazione
-y ~ x + I(x^2)                # Relazione curvilinea: la funzione I() protegge l'operatore matematico ^2
-y ~ x + (1 | gruppo)          # Modello multilivello in brms: intercetta variabile per cluster
-```
-
-All'interno di questo formalismo, i simboli algebrici tradizionali cambiano statuto semantico. Il simbolo `+` non corrisponde a un'addizione numerica tra i valori delle variabili, ma all'inclusione di nuovi termini nel predittore lineare. Un termine può generare una sola colonna o più colonne della matrice del modello, come accade con i fattori. L'asterisco `*` è un operatore di espansione: `x1 * x2` equivale a `x1 + x2 + x1:x2`. Il significato concreto di `x1:x2` dipende dalla natura e dalla codifica delle due variabili.
-
-::: {.callout-important title="La formula descrive la componente sistematica"}
-Una formula come `y ~ x1 + x2` non specifica, da sola:
-
-- la distribuzione condizionata di $Y$;
-- i prior dei parametri;
-- la struttura della variabilità residua;
-- il significato causale dei coefficienti;
-- la qualità del modello.
-
-In `brms`, questi elementi vengono indicati mediante `family`, `prior` e altre componenti della specificazione.
-:::
-
-## Un modello con due predittori covarianti
-
-Per rendere trasparente e visibile la corrispondenza tra la sintassi del software e il processo generativo dei dati, esaminiamo un disegno di ricerca incentrato sullo stress quotidiano. Questo approccio basato sulla simulazione ci permette di definire a priori la "verità del mondo" e di verificare come il modello sia in grado di ricostruirla. Consideriamo tre costrutti psicometrici:
-
-* `negative_affect` ($X_1$): affetto negativo momentaneo, espresso su scala standardizzata;
-* `sleep_c` ($X_2$): indice centrato e standardizzato della durata del sonno; valori positivi indicano una durata superiore al riferimento;
-* `stress` ($Y$): indice di stress percepito, che funge da outcome.
-
-Nel definire il processo generativo, assumiamo uno scenario ecologicamente plausibile: affetto negativo e ore di sonno non sono indipendenti, ma covariano. Giornate caratterizzate da una maggiore intensità di affetto negativo tendono sistematicamente ad essere seguite da notti di sonno frammentato o insufficiente. Formalizziamo questa architettura probabilistica mediante il seguente sistema di equazioni:
+Con un solo predittore, il modello lineare gaussiano può essere scritto come
 
 $$
-\begin{aligned} y_i &\sim \operatorname{Normal}(\mu_i, \sigma), \\ \mu_i &= \alpha + \beta_1 x_{1i} + \beta_2 x_{2i}. 
-\end{aligned}
+y_i \sim \operatorname{Normal}(\mu_i,\sigma),
+\qquad
+\mu_i = \alpha + \beta x_i.
+$$
+
+Aggiungere un secondo predittore modifica soltanto la seconda equazione:
+
+$$
+y_i \sim \operatorname{Normal}(\mu_i,\sigma),
+\qquad
+\mu_i = \alpha + \beta_1 x_{1i} + \beta_2 x_{2i}.
 $$ {#eq-multiple-generative}
 
-A scopo didattico, fissiamo i parametri di popolazione (i valori "veri" del mondo) ai seguenti livelli:
+Il punto importante è che $\beta_1$ e $\beta_2$ non descrivono due regressioni semplici affiancate. Appartengono alla **stessa** media condizionata. Il valore previsto per ogni osservazione dipende simultaneamente da entrambi i predittori.
 
-$$\alpha=5, \qquad \beta_1=0.8, \qquad \beta_2=-0.7, \qquad \sigma=0.7.$$
+Dal punto di vista geometrico, con due predittori la media condizionata non è più una retta nel piano, ma un piano nello spazio tridimensionale. Con $K$ predittori, la stessa idea si generalizza a un iperpiano. Non è necessario visualizzare questo spazio per lavorare con il modello: la formula e la matrice del modello ne forniscono una rappresentazione compatta.
 
-Traduiamo questo processo generativo in codice R per generare il campione empirico:
+::: {.callout-important title="Che cosa cambia davvero"}
+Passare dalla regressione semplice alla regressione multipla non significa aggiungere coefficienti indipendenti tra loro. Significa cambiare la domanda:
+
+- regressione semplice: come varia in media $Y$ al variare di $X_1$?
+- regressione multipla: come varia in media $Y$ al variare di $X_1$, **tra unità che hanno lo stesso valore degli altri predittori inclusi nel modello**?
+
+La seconda domanda è condizionata alla specificazione scelta. Se cambiano i predittori inclusi, può cambiare anche il significato del coefficiente.
+:::
+
+## La formula R descrive la media condizionata
+
+La sintassi delle formule di R deriva dal sistema simbolico di Wilkinson e Rogers [@wilkinson1973symbolic]. Per il modello con due predittori scriviamo:
+
+```r
+y ~ x1 + x2
+```
+
+L'intercetta è inclusa automaticamente, quindi la formula è equivalente a:
+
+```r
+y ~ 1 + x1 + x2
+```
+
+e corrisponde alla componente sistematica
+
+$$
+\mu_i = \alpha + \beta_1 x_{1i} + \beta_2 x_{2i}.
+$$
+
+Nel percorso essenziale sono sufficienti quattro forme:
+
+```r
+y ~ 1                # sola intercetta
+y ~ x                # un predittore
+y ~ x1 + x2          # due predittori additivi
+y ~ 0 + x            # modello senza intercetta
+```
+
+Nei capitoli successivi incontreremo fattori, contrasti e altre codifiche. La regola rimarrà la stessa: **i termini a destra di `~` determinano le colonne che entreranno nel predittore lineare**.
+
+::: {.callout-note title="La formula non è il modello completo"}
+Una formula come `y ~ x1 + x2` specifica la struttura della media condizionata, ma non determina da sola:
+
+- la distribuzione condizionata dell'esito;
+- le distribuzioni a priori;
+- eventuali strutture di dipendenza tra osservazioni;
+- il significato causale dei coefficienti;
+- l'adeguatezza del modello ai dati.
+
+Nel modello bayesiano completo questi elementi devono essere specificati e controllati separatamente.
+:::
+
+## Un esempio con predittori correlati
+
+Per illustrare concretamente come cambia l'interpretazione dei coefficienti quando più predittori entrano nello stesso modello, ricorriamo a dati simulati. Consideriamo:
+
+- `negative_affect`: affetto negativo momentaneo, standardizzato;
+- `sleep_c`: durata del sonno centrata e standardizzata;
+- `stress`: indice di stress percepito.
+
+Costruiamo intenzionalmente due predittori correlati, in modo da mostrare perché il coefficiente di una regressione semplice (bivariata) e quello di una regressione multipla (condizionata) possano differire sostanzialmente.
+
+A scopo didattico, fissiamo i seguenti valori dei parametri generativi:
+
+$$
+\alpha = 5,
+\qquad
+\beta_{\text{affect}} = 0.8,
+\qquad
+\beta_{\text{sleep}} = -0.7,
+\qquad
+\sigma = 0.7.
+$$
 
 ```{r}
 #| label: simulate-stress-data
 
-set.seed(1234) # Per garantire la perfetta riproducibilità numerica
-N <- 300
-rho <- -0.65   # Grado di covariazione strutturale tra i predittori
+set.seed(1234)
 
-# Generazione di predittori correlati, poi centrati e standardizzati
+N <- 300
+rho <- -0.65
+
 negative_affect_raw <- rnorm(N)
 z <- rnorm(N)
-sleep_raw <- rho * negative_affect_raw + sqrt(1 - rho^2) * z
+
+sleep_raw <-
+  rho * negative_affect_raw +
+  sqrt(1 - rho^2) * z
 
 negative_affect <- as.numeric(scale(negative_affect_raw))
 sleep_c <- as.numeric(scale(sleep_raw))
 
-# Parametri teorici di popolazione
-alpha_true        <- 5
-beta_affect_true  <- 0.8
-beta_sleep_true   <- -0.7
-sigma_true        <- 0.7
+alpha_true       <- 5
+beta_affect_true <- 0.8
+beta_sleep_true  <- -0.7
+sigma_true       <- 0.7
 
-# Calcolo della media condizionata latente
-mu <- alpha_true +
+mu <-
+  alpha_true +
   beta_affect_true * negative_affect +
   beta_sleep_true * sleep_c
 
-# Generazione dell'outcome mediante perturbazione gaussiana
 stress_data <- tibble(
-  stress          = rnorm(N, mu, sigma_true),
+  stress = rnorm(N, mean = mu, sd = sigma_true),
   negative_affect = negative_affect,
-  sleep_c         = sleep_c
+  sleep_c = sleep_c
 )
 
-# Verifica delle statistiche descrittive campionarie
 stress_data |>
   summarise(
     cor_affect_sleep = cor(negative_affect, sleep_c),
-    mean_stress      = mean(stress),
-    sd_stress        = sd(stress)
+    mean_stress = mean(stress),
+    sd_stress = sd(stress)
   )
 ```
 
-Prima di procedere all'inferenza congiunta, esaminiamo graficamente come le variabili si associano se considerate singolarmente:
+Poiché in questo esempio i parametri generativi sono noti per costruzione, possiamo verificare se la procedura di stima sia in grado di recuperare ragionevolmente il processo simulato. Nei dati reali, naturalmente, tali parametri non sono noti a priori: il modello rimane una rappresentazione da valutare, e non una descrizione certa del processo generatore dei dati.
+
+Prima di adattare il modello multiplo osserviamo le associazioni marginali, cioè ciascun predittore considerato separatamente.
 
 ```{r}
 #| label: fig-stress-predictors
-#| fig-cap: "Associazioni bivariate marginali tra lo stress percepito e i due predittori simulati. Ciascun pannello mostra una retta di regressione lineare semplice, prima di condizionare rispetto alla presenza dell'altra variabile."
-#| fig-alt: "Due diagrammi a dispersione affiancati. Il primo mostra lo stress rispetto all'affetto negativo, con una tendenza crescente; il secondo mostra lo stress rispetto al sonno centrato, con una tendenza decrescente."
+#| fig-cap: "Associazioni marginali tra stress e ciascun predittore simulato. Le rette descrivono due regressioni semplici e non corrispondono ancora ai coefficienti del modello multiplo."
+#| fig-alt: "Due diagrammi a dispersione. Lo stress cresce con l'affetto negativo e diminuisce con il sonno; i pannelli mostrano associazioni marginali."
 #| fig-width: 8
 #| fig-height: 4.5
 
@@ -191,28 +205,90 @@ stress_data |>
   ) |>
   ggplot(aes(x = valore, y = stress)) +
   geom_point(alpha = 0.35) +
-  geom_smooth(method = "lm", se = FALSE, color = "black", linewidth = 0.8) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
   facet_wrap(~ predittore, scales = "free_x") +
-  labs(x = NULL, y = "Stress percepito")
+  labs(
+    x = NULL,
+    y = "Stress percepito"
+  )
 ```
 
-Per isolare il contributo di ciascuna variabile al netto dell'altra, definiamo la formula del modello di regressione multipla in `brms`:
+Il modello multiplo è invece:
 
 ```r
 stress ~ negative_affect + sleep_c
 ```
 
-Questa istruzione sintattica corrisponde all'equazione:
+ossia
 
 $$
-\mu_i = \alpha + \beta_{\text{affect}}\,\text{negative\_affect}_i + \beta_{\text{sleep}}\,\text{sleep\_c}_i.
+\mu_i =
+\alpha
++ \beta_{\text{affect}}\,\text{negative\_affect}_i
++ \beta_{\text{sleep}}\,\text{sleep\_c}_i.
 $$
+
+## Interpretare i coefficienti condizionati
+
+Nel modello multiplo, $\beta_{\text{affect}}$ esprime la variazione attesa nello stress associata a un incremento unitario di `negative_affect`, **controllando per `sleep_c`**. Analogamente, $\beta_{\text{sleep}}$ esprime la variazione attesa associata a un incremento unitario di `sleep_c`, controllando per `negative_affect`.
+
+L'espressione *controllando per* (o *a parità di*) richiede però un'interpretazione attenta. Non implica che il ricercatore abbia effettivamente manipolato una variabile mantenendo fisicamente costanti le altre: descrive piuttosto un confronto definito dal modello.
+
+::: {.callout-warning title="Condizionare non equivale a intervenire"}
+Un coefficiente di regressione multipla è una quantità condizionata all'insieme dei predittori inclusi. Questa proprietà algebrica non gli conferisce automaticamente un significato causale.
+
+Inoltre, l'aggiunta di una variabile al modello non corrisponde sempre a un "controllo più accurato". A seconda della domanda di ricerca e della struttura causale ipotizzata, tale aggiustamento può essere appropriato, irrilevante o addirittura introdurre una distorsione. La Parte **Causalità** affronterà sistematicamente questo problema; per il momento interpretiamo i coefficienti in senso puramente descrittivo e condizionato.
+:::
+
+### Perché il coefficiente può cambiare
+
+Quando due predittori sono correlati, una regressione semplice attribuisce al singolo predittore anche la porzione di informazione che esso condivide con altre variabili associate all'esito. Nel modello multiplo, invece, i coefficienti vengono stimati congiuntamente, e ciascuno riflette l'associazione *dopo* aver tenuto conto dell'altro.
+
+Per isolare questo aspetto geometrico, confrontiamo le stime puntuali ottenute dalle regressioni semplici con quelle del modello multiplo. Utilizziamo la funzione `lm()` come strumento algebrico di riferimento, senza impegnarci in una seconda prospettiva inferenziale.
+
+```{r}
+#| label: compare-bivariate-multiple
+
+fit_affect_only <- lm(
+  stress ~ negative_affect,
+  data = stress_data
+)
+
+fit_sleep_only <- lm(
+  stress ~ sleep_c,
+  data = stress_data
+)
+
+fit_multiple_lm <- lm(
+  stress ~ negative_affect + sleep_c,
+  data = stress_data
+)
+
+bind_rows(
+  broom::tidy(fit_affect_only) |>
+    mutate(modello = "Solo affetto negativo"),
+  broom::tidy(fit_sleep_only) |>
+    mutate(modello = "Solo sonno"),
+  broom::tidy(fit_multiple_lm) |>
+    mutate(modello = "Modello multiplo")
+) |>
+  filter(term != "(Intercept)") |>
+  select(modello, term, estimate)
+```
+
+Le differenze tra le stime marginali e quelle condizionate non indicano automaticamente quale modello sia "corretto": segnalano piuttosto che i due tipi di coefficienti rispondono a domande diverse. Nei dati reali, la scelta dei predittori deve essere giustificata dalla domanda scientifica e dal disegno di ricerca, non dal risultato che si desidera ottenere.
+
+Un secondo effetto della correlazione tra predittori riguarda l'**incertezza**. Se due variabili contengono informazioni molto simili, i dati non consentono di distinguere con chiarezza a quale coefficiente debba essere associata una determinata quota di informazione. La regressione multipla non elimina questa ambiguità, ma la incorpora nella distribuzione congiunta a posteriori, rendendola esplicitamente quantificabile.
 
 ## Dalla formula alla matrice del modello
 
-Dietro l'astrazione sintattica della formula R, il software traduce l'elenco dei predittori in una struttura matematica nota come **matrice del modello** (o *design matrix*), indicata convenzionalmente con il simbolo $\mathbf{X}$. Questa matrice organizza i dati numerici in modo che l'intero sistema di equazioni lineari possa essere risolto simultaneamente tramite l'algebra lineare.
+La formula specificata in R viene tradotta automaticamente in una **matrice del modello** (*design matrix*). Per la formula
 
-Possiamo ispezionare direttamente questa trasformazione strutturale richiamando la funzione `model.matrix()`:
+```r
+stress ~ negative_affect + sleep_c
+```
+
+R costruisce la seguente matrice:
 
 ```{r}
 #| label: build-design-matrix
@@ -221,41 +297,55 @@ X_full <- model.matrix(
   ~ negative_affect + sleep_c,
   data = stress_data
 )
-dim(X_full)
-```
 
-```{r}
+dim(X_full)
 head(X_full)
 ```
 
-```{r}
-tail(X_full)
-```
-L'output rivela che la matrice risultante si articola in tre colonne distinte:
+La matrice contiene tre colonne:
 
-1. `(Intercept)`: una colonna interamente composta da valori uguali a $1$, necessaria per stimare l'intercetta del modello;
-2. `negative_affect`: i valori standardizzati dell'affetto negativo per ciascun soggetto;
-3. `sleep_c`: le ore di sonno centrate.
+1. `(Intercept)`, composta da valori pari a $1$;
+2. `negative_affect`;
+3. `sleep_c`.
 
-Dato un campione di $N$ osservazioni, la matrice del modello assume una dimensione geometrica pari a $N \times 3$, strutturandosi come segue:
-
-$$\mathbf{X} = \begin{bmatrix} 1 & x_{11} & x_{12} \\ 1 & x_{21} & x_{22} \\ \vdots & \vdots & \vdots \\ 1 & x_{N1} & x_{N2} \end{bmatrix}$$
-
-Parallelamente, organizziamo i parametri geometrici del modello in un vettore colonna dei coefficienti, definito come $\boldsymbol{\theta}$:
-
-$$\boldsymbol{\theta} = \begin{bmatrix} \alpha \\ \beta_1 \\ \beta_2 \end{bmatrix}$$
-
-L'operazione fondamentale del modello lineare si riassume nel prodotto matrice-vettore:
+Per fissare una notazione chiara e coerente, d'ora in poi indicheremo con $\widetilde{\mathbf X}$ la **matrice completa**, che include l'intercetta:
 
 $$
-\boldsymbol{\mu}=\mathbf{X}\boldsymbol{\theta}.
+\widetilde{\mathbf X}
+=
+\begin{bmatrix}
+1 & x_{11} & x_{12}\\
+1 & x_{21} & x_{22}\\
+\vdots & \vdots & \vdots\\
+1 & x_{N1} & x_{N2}
+\end{bmatrix},
+\qquad
+\boldsymbol{\theta}
+=
+\begin{bmatrix}
+\alpha\\
+\beta_1\\
+\beta_2
+\end{bmatrix}.
+$$
+
+Il vettore delle medie condizionate per tutte le $N$ osservazioni si ottiene con una singola moltiplicazione matriciale:
+
+$$
+\boldsymbol{\mu}
+=
+\widetilde{\mathbf X}\boldsymbol{\theta}.
 $$ {#eq-design-matrix}
 
-Questa singola moltiplicazione algebrica genera istantaneamente un vettore colonna $\boldsymbol{\mu}$ di dimensione $N \times 1$, contenente il valore medio atteso per ogni singola osservazione del campione. Per un ripasso sistematico delle proprietà e delle operazioni geometriche tra matrici, si rimanda all'@sec-apx-matrix-algebra [@caudek2001statistica].
+Questa scrittura matriciale non è altro che la forma compatta delle $N$ equazioni scalari
+
+$$
+\mu_i
+=
+\alpha+\beta_1x_{1i}+\beta_2x_{2i}.
+$$
 
 ### Verificare la corrispondenza numerica
-
-Per dimostrare la perfetta equivalenza tra la formulazione analitica e quella matriciale, possiamo confrontare il calcolo computazionale eseguito precedentemente ciclo per ciclo con il prodotto interno delle matrici in R (ordinato tramite l'operatore `%*%`):
 
 ```{r}
 #| label: verify-matrix-predictor
@@ -266,125 +356,83 @@ theta_true <- c(
   beta_sleep_true
 )
 
-# Calcolo tramite prodotto matriciale
-mu_matrix <- as.vector(X_full %*% theta_true)
+mu_matrix <- as.vector(
+  X_full %*% theta_true
+)
 
-# Verifica dell'identità numerica
 all.equal(mu, mu_matrix)
 ```
 
-L'output dell'algoritmo (`TRUE`) conferma che l'equazione scalare applicata separatamente a ogni riga e l'operazione matriciale congiunta producono identici risultati numerici.
+Il risultato `TRUE` mostra che la formula scalare e il prodotto matriciale producono gli stessi valori.
 
-::: {.callout-tip title="Il ruolo concettuale della matrice del modello"}
-La struttura della matrice del modello rende esplicito quanto segue:
+::: {.callout-important title="Perché la matrice del modello è centrale"}
+La matrice del modello costituisce il ponte tra il linguaggio sostantivo della ricerca e il calcolo effettivo. Ogni sua componente ha un ruolo preciso:
 
-* **Generazione delle colonne:** Ogni singolo termine inserito nella formula R si traduce nella generazione di una o più colonne all'interno della matrice;
-* **Corrispondenza tra colonne e coefficienti:** Ciascuna colonna della matrice possiede un coefficiente; un singolo termine della formula può però generare più colonne, per esempio quando il predittore è categoriale;
-* **Codifica universale:** Informazioni complesse come le codifiche delle variabili categoriali (es. variabili *dummy*), i termini di interazione o le trasformazioni non lineari (es. polinomi) vengono interamente risolte e linearizzate dentro la matrice del modello prima del calcolo;
-* **Astrazione per il motore di stima:** Una volta costruita la matrice $\mathbf{X}$, i suoi valori numerici possono essere passati al motore di calcolo. Il significato sostantivo delle colonne, tuttavia, rimane responsabilità del ricercatore.
+- Ogni **riga** corrisponde a un'osservazione.
+- Ogni **colonna** corrisponde a un coefficiente da moltiplicare per un valore noto.
+- Un termine della formula può generare una o più colonne (ad esempio, un fattore con tre livelli produce due colonne di contrasti).
+- La codifica di fattori, contrasti e interazioni viene incorporata nelle colonne della matrice.
+- La procedura di stima opera esclusivamente su valori numerici; l'interpretazione sostantiva delle colonne — il loro significato psicologico — rimane interamente responsabilità del ricercatore.
+
+Nei capitoli dedicati ai gruppi e all'ANOVA, la struttura della matrice del modello cambierà in modo sostanziale, ma il principio di fondo, ovvero tradurre le ipotesi scientifiche in operazioni algebriche, rimarrà invariato. Comprendere questo passaggio è essenziale per passare dalla descrizione verbale di un modello alla sua implementazione computazionale.
 :::
 
-## Regressione multipla e matrice del modello {#sec-multiple-regression}
+### Leggere una singola riga
 
-La regressione multipla estende il modello lineare consentendo l'inclusione simultanea di due o più predittori. Al fine di allinearci alla logica computazionale dei moderni software di stima (incluso Stan), risulta utile separare il parametro dell'intercetta dalla matrice dei predittori propriamente detti. Questa scomposizione ci consente di formulare il modello in forma matriciale come:
-
-$$
-\mathbf{y} = \alpha\mathbf{1} + \mathbf{X}\boldsymbol{\beta} + \boldsymbol{\varepsilon}, \qquad \boldsymbol{\varepsilon} \sim \operatorname{Normal}(\mathbf{0},\sigma^2\mathbf{I}).
-$$ {#eq-multiple-matrix}
-
-Per facilitare la comprensione dell'equazione, isoliamo le dimensioni matematiche e il significato metodologico di ciascun operatore:
-
-| Oggetto | Dimensione | Significato Metodologico |
-| --- | --- | --- |
-| $\mathbf{y}$ | $N\times1$ | Vettore colonna dell'outcome osservato empiricamente |
-| $\mathbf{1}$ | $N\times1$ | Vettore colonna composto interamente da valori pari a $1$ |
-| $\mathbf{X}$ | $N\times K$ | Matrice del modello contenente i $K$ predittori (esclusa l'intercetta) |
-| $\boldsymbol{\beta}$ | $K\times1$ | Vettore colonna dei coefficienti parziali associati ai $K$ predittori |
-| $\alpha$ | Scalare | Intercetta globale del modello (valore atteso quando $\mathbf{X}\boldsymbol{\beta} = \mathbf{0}$) |
-| $\sigma$ | Scalare positivo | Deviazione standard condizionata (variabilità residua attorno alla media) |
-| $\mathbf{I}$ | $N\times N$ | Matrice identità (valori $1$ sulla diagonale principale, $0$ altrove) |
-
-### L'interpretazione dei coefficienti condizionati (*Partial Effects*)
-
-All'interno di un'architettura multipla definita dall'equazione scalare:
+Supponiamo che una riga della matrice sia
 
 $$
-\mu_i=\alpha+\beta_1x_{1i}+\beta_2x_{2i}
+[1,\;1.2,\;-0.5].
 $$
-la semantica dei parametri varia rispetto alla regressione semplice. Il coefficiente $\beta_1$ non esprime più l'associazione grezza tra le variabili, bensì rappresenta la differenza attesa nella media di $Y$ associata a un incremento unitario di $X_1$, **a parità di livello di $X_2$ all'interno del modello**. Specularmente, $\beta_2$ quantifica il contributo netto di $X_2$ condizionatamente alla presenza di $X_1$.
 
-Nel contesto della nostra simulazione sullo stress:
+Con i parametri generativi dell'esempio,
 
-* $\beta_{\text{affect}}$ mette a confronto l'esperienza di giornate che differiscono per intensità di affetto negativo, ma che condividono il medesimo quantitativo di ore di sonno;
-* $\beta_{\text{sleep}}$ isola la differenza nei livelli di stress tra giornate caratterizzate da una differente durata del sonno, ma stabili sul medesimo livello di affetto negativo.
+$$
+\alpha=5,\qquad
+\beta_{\text{affect}}=0.8,\qquad
+\beta_{\text{sleep}}=-0.7,
+$$
 
-::: {.callout-warning title="Limitazione epistemologica: condizionare non equivale a intervenire"}
-L'espressione tecnica "a parità degli altri predittori" descrive una proprietà geometrica e algebrica intrinseca alla proiezione nello spazio multidimensionale del modello. Lo studente deve evitare l'errore di interpretarla in senso manipolativo o sperimentale: essa non implica affatto che sia fisicamente possibile alterare il valore di un predittore lasciando realmente immutati gli altri nella realtà biologica o psicologica, né possiede la facoltà di convertire un coefficiente associativo in un effetto causale diretto.
+la media condizionata è
 
-La selezione dei predittori da includere nel sistema richiede una profonda conoscenza teorica del dominio e, qualora l'obiettivo scientifico sia di natura causale, necessita di un'esplicita analisi del disegno mediante grafici causali orientati (DAG) e dell'adempimento delle assunzioni di identificazione.
-:::
+$$
+5 + 0.8(1.2) - 0.7(-0.5)=6.31.
+$$
 
-### Modello bivariato vs. Modello multiplo: un confronto numerico
+Il valore $6.31$ non è una previsione certa dell'osservazione individuale. Il modello afferma invece
 
-Quando i predittori manifestano una covariazione strutturale, la stima prodotta da un modello lineare semplice (bivariato) può differire in modo drastico dal coefficiente parziale calcolato dal modello multiplo. Per apprezzare questa dinamica sul piano descrittivo, confrontiamo i parametri stimati sul nostro dataset simulato attraverso la funzione `lm()`:
-
-```{r}
-#| label: compare-bivariate-multiple
-
-# Stima dei modelli lineari semplici (bivariati)
-fit_affect_only <- lm(stress ~ negative_affect, data = stress_data)
-fit_sleep_only  <- lm(stress ~ sleep_c, data = stress_data)
-
-# Stima del modello lineare multiplo congiunto
-fit_multiple_lm <- lm(stress ~ negative_affect + sleep_c, data = stress_data)
-
-# Consolidamento e confronto dei coefficienti estratti
-bind_rows(
-  broom::tidy(fit_affect_only) |> mutate(modello = "Solo affetto negativo"),
-  broom::tidy(fit_sleep_only)  |> mutate(modello = "Solo sonno"),
-  broom::tidy(fit_multiple_lm) |> mutate(modello = "Modello multiplo")
-) |>
-  filter(term != "(Intercept)") |>
-  select(modello, term, estimate)
-```
-
-Avendo definito noi stessi il processo generativo dei dati, siamo in grado di comprendere questo risultato numerico: le discrepanze tra le stime bivariate e quelle multiple derivano matematicamente dalla forte correlazione esistente tra affetto e sonno ($\rho = -0.65$) e dal fatto che entrambi i predittori concorrono a determinare la media dello stress. Nel lavoro di ricerca con dati osservazionali reali, tuttavia, il manifestarsi di una variazione nei coefficienti non costituisce di per sé una prova logica per stabilire quale specificazione sia scientificamente corretta.
-
-La trattazione formale dei bias da variabili omesse, delle relazioni non lineari latenti e delle altre patologie da errata specificazione sarà oggetto di una discussione sistematica nel capitolo dedicato alla fase di revisione critica del modello.
-
-## Dalla domanda all'analisi: una mappa operativa
-
-La traduzione dalla formula al programma non è soltanto un esercizio informatico. Ogni passaggio corrisponde a una decisione scientifica:
-
-1. **Definire la domanda e la quantità di interesse.** Per esempio: qual è l'associazione tra sonno e stress a parità di affetto negativo?
-2. **Scegliere outcome e predittori.** La scelta deve essere motivata teoricamente; aggiungere variabili non è automaticamente un miglioramento.
-3. **Scrivere la formula.** `stress ~ negative_affect + sleep_c` specifica quali termini entrano nella media condizionata.
-4. **Controllare codifica e matrice del modello.** `model.matrix()` mostra quali colonne e quindi quali coefficienti verranno creati.
-5. **Specificare famiglia e prior.** Questi elementi completano il modello probabilistico, ma non sono contenuti nella formula.
-6. **Adattare e diagnosticare il modello.** Occorre distinguere la qualità del calcolo dalla capacità del modello di rappresentare i dati.
-7. **Interpretare e comunicare.** Ogni coefficiente deve essere descritto insieme alla propria incertezza, alla specificazione del modello e ai limiti dell'interpretazione causale.
-
-Questa sequenza aiuta anche a localizzare gli errori: una formula sintatticamente valida può corrispondere a una domanda mal formulata; una matrice corretta può codificare male un fattore; un campionamento impeccabile può approssimare un modello scientificamente inadeguato.
+$$
+Y_i \sim \operatorname{Normal}(6.31,0.7),
+$$
+quindi mantiene distinta la media condizionata dalla variabilità delle osservazioni attorno a essa. È la stessa distinzione introdotta nel capitolo precedente tra `posterior_epred()` e `posterior_predict()`.
 
 ## Adattare il modello multiplo con `brms`
 
-Dopo aver analizzato l'architettura matriciale della regressione multipla, approfondiamo ora la traduzione computazionale del modello, mantenendo esplicite la famiglia di verosimiglianza e la struttura delle distribuzioni a priori.
+Il workflow bayesiano è già stato introdotto nel capitolo precedente; qui lo applichiamo a un oggetto inferenziale più complesso: un modello con più coefficienti stimati congiuntamente.
 
-Definiamo in primo luogo il vettore dei *prior*, specificando le nostre assunzioni iniziali sui parametri strutturali:
+Poiché i predittori sono standardizzati e l'esito si aggira intorno a 5, adottiamo prior semplici e informativi, già definiti su una scala compatibile:
 
 ```{r}
 #| label: define-multiple-priors
 
 multiple_priors <- c(
-  prior(normal(5, 2), class = "Intercept"),  
+  prior(normal(5, 2), class = "Intercept"),
   prior(normal(0, 1), class = "b"),
   prior(lognormal(log(1), 0.5), class = "sigma")
 )
+
+multiple_priors
 ```
 
-In questa fase, l'assegnazione `class = "b"` senza ulteriori argomenti applica il medesimo prior gaussiano a tutti i coefficienti di regressione parziale associati alle colonne della matrice dei predittori (ovvero sia a $\beta_{\text{affect}}$ sia a $\beta_{\text{sleep}}$).
+La dichiarazione
 
-Procediamo quindi alla stima della distribuzione a posteriori congiunta mediante la funzione `brm()`:
+```r
+prior(normal(0, 1), class = "b")
+```
+
+assegna la stessa distribuzione a priori a tutti i coefficienti di popolazione. Ciò non implica che i coefficienti abbiano lo stesso significato sostantivo — ciascuno resta associato alla propria colonna nella matrice del modello — ma indica che, in assenza di informazioni differenziate, li trattiamo su una scala comune.
+
+Come nel capitolo precedente, in un'applicazione reale, questi prior dovrebbero essere verificati mediante un controllo predittivo a priori. In questa sede, invece, manteniamo il focus sulla struttura multipla.
 
 ```{r}
 #| label: fit-multiple-brms
@@ -393,33 +441,25 @@ Procediamo quindi alla stima della distribuzione a posteriori congiunta mediante
 #| output: false
 
 fit_multiple_brms <- brm(
-  stress ~ 1 + negative_affect + sleep_c,  
+  stress ~ negative_affect + sleep_c,
   family = gaussian(),
   prior = multiple_priors,
   data = stress_data,
   backend = "cmdstanr",
   seed = 4201,
   chains = 4,
-  cores = min(4, parallel::detectCores(logical = FALSE)),
   warmup = 1000,
-  iter = 3000,
+  iter = 2000,
   refresh = 0
 )
 ```
 
-Sul piano metodologico, la formula passata come primo argomento comunica a `brms` l'esatta geometria della componente sistematica. Gli argomenti successivi governano le restanti dimensioni del calcolo inferenziale:
-
-* `family = gaussian()` stabilisce la distribuzione condizionata dell'outcome;
-* `prior` vincola le distribuzioni iniziali dei parametri nello spazio geometrico;
-* Le opzioni MCMC (`chains`, `iter`, `warmup`) definiscono l'intensità e le modalità dell'esplorazione stocastica eseguita dall'algoritmo NUTS.
-
-Una volta completato il campionamento stocastico, possiamo estrarre una sintesi numerica delle distribuzioni a posteriori per verificare la precisione dell'approssimazione numerica rispetto ai parametri reali impostati nella simulazione ($\alpha=5$, $\beta_1=0.8$, $\beta_2=-0.7$, $\sigma=0.7$):
+Estrarre le distribuzioni a posteriori significa ora lavorare con l'intera **distribuzione congiunta** di intercetta, due pendenze e deviazione standard residua.
 
 ```{r}
 #| label: summarize-multiple-brms
 
-# Estrai i draw dei parametri desiderati
-draws_selected <- posterior::as_draws_df(
+draws_multiple <- posterior::as_draws_df(
   fit_multiple_brms,
   variable = c(
     "b_Intercept",
@@ -429,505 +469,324 @@ draws_selected <- posterior::as_draws_df(
   )
 )
 
-# Calcola le stesse statistiche di posterior_summary()
 posterior::summarise_draws(
-  draws_selected,
-  mean = mean,
-  sd = sd,
-  q2.5 = ~quantile(.x, probs = 0.025),
-  q97.5 = ~quantile(.x, probs = 0.975)
+  draws_multiple,
+  median,
+  sd,
+  ~ quantile2(.x, probs = c(0.025, 0.975)),
+  posterior::default_convergence_measures()
 )
 ```
 
-### Ispezionare la traduzione automatica: Standata e Stancode
+Poiché i dati sono simulati, è possibile confrontare le distribuzioni a posteriori con i parametri generativi noti. L'obiettivo non è ottenere una coincidenza puntuale, che sarebbe irrealistica anche in una simulazione a causa del campionamento finito, ma verificare che l'inferenza sia globalmente compatibile con il processo sottostante e che l'incertezza a ogni livello sia esplicitamente quantificabile.
 
-Possiamo chiedere esplicitamente al pacchetto `brms` di mostrarci la struttura dati esatta che ha formattato per Stan, richiamando la funzione `make_standata()`:
+### I coefficienti appartengono a una posterior congiunta
+
+Con predittori correlati, è essenziale non trattare le distribuzioni a posteriori dei coefficienti come oggetti indipendenti. Possiamo esaminare direttamente la loro associazione nei draw:
+
+```{r}
+#| label: posterior-correlation-multiple
+
+draws_multiple |>
+  transmute(
+    beta_affect = b_negative_affect,
+    beta_sleep = b_sleep_c
+  ) |>
+  cor()
+```
+
+La correlazione a posteriori tra i coefficienti non rappresenta un nuovo parametro di interesse psicologico. Esprime piuttosto come, data la matrice del modello e le osservazioni, diverse combinazioni di coefficienti possano produrre previsioni simili. Quanto maggiore è la sovrapposizione informativa tra i predittori, tanto più importante diventa interpretare i coefficienti come parte di una distribuzione congiunta, anziché isolatamente.
+
+::: {.callout-note title="Regressione multipla non significa sommare evidenze indipendenti"}
+Quando i predittori covariano, l'informazione sui coefficienti viene condivisa. Di conseguenza, i coefficienti marginali possono differire da quelli condizionati, l'incertezza su un coefficiente dipende anche dagli altri predittori, la distribuzione a posteriori può manifestare dipendenze tra i coefficienti e l'aggiunta di predittori non garantisce automaticamente stime più precise o interpretazioni più chiare.
+:::
+
+## Da `brms` alla matrice usata da Stan
+
+La formula di alto livello viene tradotta da `brms` in strutture numeriche e in codice Stan. Possiamo ispezionare il risultato di questa traduzione senza dover scrivere manualmente il programma sottostante.
 
 ```{r}
 #| label: inspect-brms-translation
 
 standata_multiple <- make_standata(
-  stress ~ 1 + negative_affect + sleep_c, 
+  stress ~ negative_affect + sleep_c,
   family = gaussian(),
   prior = multiple_priors,
   data = stress_data
 )
+
 names(standata_multiple)
 ```
 
-L'ispezione dei nomi rivela vettori e matrici (come la matrice del modello `X` e il vettore dell'outcome `Y`) pronti per essere elaborati dall'algebra lineare. Per esaminare il programma Stan completo generato automaticamente dietro le quinte, ricorriamo invece a `make_stancode()`:
+L'oggetto prodotto contiene, tra le altre componenti, il vettore dell'esito e la matrice dei predittori che verranno effettivamente utilizzati dal programma Stan.
+
+Possiamo anche generare il codice Stan completo:
 
 ```{r}
 #| label: inspect-generated-stan
 #| output: asis
 
 stancode_multiple <- make_stancode(
-  stress ~ 1 + negative_affect + sleep_c, 
+  stress ~ negative_affect + sleep_c,
   family = gaussian(),
   prior = multiple_priors,
   data = stress_data
 )
 
-cat("```stan\n", stancode_multiple, "\n```", sep = "")
-```
-
-Il codice prodotto è più articolato di quanto strettamente necessario per questo esempio. Questa complessità deriva dal fatto che `brms` adotta un'architettura software universale e generalizzata, progettata per scalare in modo efficiente ed estendersi a centinaia di famiglie di modelli differenti, complesse strutture di interazione, trasformazioni non lineari e calcoli automatici di quantità derivate. Questa complessità non implica che il modello statistico sia diverso: l'elemento centrale rimane il predittore lineare rappresentato dalla matrice del modello.
-
-::: {.callout-note title="L'astrazione come risorsa: il concetto di zucchero sintattico"}
-Nel dominio dell'informatica e della programmazione, l'espressione *zucchero sintattico* (*syntactic sugar*) identifica una convenzione o una notazione formale introdotta per rendere la stesura del codice più agile, leggibile e intuitiva per l'operatore umano, senza per questo modificarne minimamente il funzionamento logico di basso livello.
-
-Nell'ecosistema R, l'interfaccia di `brms` si comporta esattamente come una forma di zucchero sintattico: essa non sostituisce né bypassa il motore di calcolo probabilistico Stan, ma si assume l'onere di scriverne e compilarne il codice sorgente in modo automatico e matematicamente ottimizzato a partire dagli input forniti dal ricercatore (formula, famiglia, prior e data frame).
-:::
-
-## Scrivere lo stesso modello direttamente in Stan {#sec-formula-stan-direct}
-
-::: {.callout-tip appearance="minimal" .optional-section}
-**Approfondimento facoltativo.** Se lavori solo con `brms`, puoi saltare la scrittura, la compilazione e il confronto numerico del programma nativo e riprendere da [Che cosa guadagniamo e che cosa perdiamo](#sec-formula-tradeoffs). Resta invece richiesto saper leggere la traduzione prodotta da `make_stancode()` nella sezione precedente.
-:::
-
-Per meglio comprendere la struttura del modello depurata dalle sovrastrutture di `brms`, possiamo programmare l'algoritmo direttamente in codice Stan. Per fare questo, isoliamo i due predittori all'interno di una matrice del modello sprovvista del vettore costante dei valori $1$: in questo modo, l'intercetta non sarà codificata come colonna di $\mathbf{X}$ ma verrà gestita come un parametro scalare esplicito e separato.
-
-```{r}
-#| label: build-stan-matrix
-
-X <- model.matrix(
-  ~ 0 + negative_affect + sleep_c,
-  data = stress_data
-)
-
-stan_data_multiple <- list(
-  N = nrow(stress_data),
-  K = ncol(X),
-  X = X,
-  y = stress_data$stress
+cat(
+  "```stan\n",
+  stancode_multiple,
+  "\n```",
+  sep = ""
 )
 ```
 
-Il programma Stan nativo si articola nei seguenti blocchi:
+Il programma generato è più esteso del modello matematico perché include dichiarazioni dei dati, trasformazioni, calcolo delle prior, parametrizzazioni interne e quantità derivate. Il nucleo statistico, tuttavia, rimane immediatamente riconoscibile:
+
+$$
+\mu_i
+=
+\alpha+\beta_1x_{1i}+\beta_2x_{2i},
+\qquad
+y_i\sim\operatorname{Normal}(\mu_i,\sigma).
+$$
+
+::: {.callout-note title="Due convenzioni matriciali equivalenti"}
+Nel capitolo abbiamo usato $\widetilde{\mathbf X}$ per la matrice completa prodotta da `model.matrix()`, che include esplicitamente la colonna dell'intercetta.
+
+Invece, il pacchetto `brms` può separare internamente l'intercetta dai predittori e centrare le variabili per migliorare la stabilità numerica. Questa scelta non altera il modello statistico, ma è una decisione di natura computazionale. Per poter confrontare le due implementazioni, è quindi necessario allineare il significato dei parametri e non limitarsi a confrontare i nomi degli oggetti nel codice.
+:::
+
+### Che cosa dobbiamo saper leggere nel codice Stan
+
+Non è necessario comprendere ogni riga del programma generato. Per gli scopi di questo capitolo, è sufficiente saper riconoscere quattro componenti fondamentali:
+
+1. **Dati**: il vettore delle osservazioni $Y$ e la matrice dei predittori, che costituiscono l'input del modello;
+2. **Parametri**: i coefficienti di regressione e il parametro di scala $\sigma$, oggetto dell'inferenza;
+3. **Prior**: le distribuzioni assegnate ai parametri, che contribuiscono alla definizione della posteriori;
+4. **Verosimiglianza**: la distribuzione di $Y$ condizionata al predittore lineare, che lega i dati ai parametri.
+
+La funzione di `brms` è proprio questa: consentire al ricercatore di esprimere il modello a un livello sostantivo e leggibile, e tradurlo automaticamente in una rappresentazione pronta per il motore computazionale Stan.
+
+::: {.callout-tip collapse="true" title="Approfondimento: lo stesso nucleo scritto direttamente in Stan"}
+Una versione minimale, con intercetta separata dalla matrice dei due predittori, avrebbe la forma:
 
 ```stan
-data {
-  int<lower=1> N;       // Numero di osservazioni (righe)
-  int<lower=1> K;       // Numero di predittori (colonne di X)
-  matrix[N, K] X;       // Matrice del modello per i predittori
-  vector[N] y;          // Vettore colonna della variabile outcome
-}
-
-parameters {
-  real alpha;           // Intercetta globale
-  vector[K] beta;       // Vettore dei coefficienti di regressione parziale
-  real<lower=0> sigma;  // Deviazione standard residua (vincolata a valori positivi)
-}
-
-model {
-  // Assegnazione delle distribuzioni a priori (Prior)
-  alpha ~ normal(5, 2);
-  beta ~ normal(0, 1);
-  sigma ~ lognormal(log(1), 0.5);
-
-  // Verosimiglianza vettorializzata
-  y ~ normal(alpha + X * beta, sigma);
-}
-
-generated quantities {
-  vector[N] mu = alpha + X * beta;
-  vector[N] y_rep;
-  real bayes_R2;
-
-  // Campionamento dalla distribuzione predittiva a posteriori
-  for (n in 1:N) {
-    y_rep[n] = normal_rng(mu[n], sigma);
-  }
-
-  // Calcolo dell'R-quadrato bayesiano
-  bayes_R2 = variance(mu) / (variance(mu) + square(sigma));
-}
-```
-
-La riga
-
-```stan
-y ~ normal(alpha + X * beta, sigma);
-```
-
-sfrutta le proprietà di vettorializzazione di Stan. Dal punto di vista algebrico, essa equivale a eseguire un ciclo iterativo esplicito:
-
-```stan
-for (n in 1:N) {
-  y[n] ~ normal(alpha + X[n] * beta, sigma);
-}
-```
-
-Tuttavia, la formulazione matriciale risulta computazionalmente più efficiente.
-
-### Compilare e adattare il programma
-
-Procediamo alla compilazione del codice sorgente e alla generazione dell'eseguibile binario:
-
-```{r}
-#| label: compile-stan-multiple
-#| output: false
-
-stan_file_multiple <- cmdstanr::write_stan_file(
-  code = '
 data {
   int<lower=1> N;
   int<lower=1> K;
   matrix[N, K] X;
   vector[N] y;
 }
+
 parameters {
   real alpha;
   vector[K] beta;
   real<lower=0> sigma;
 }
+
 model {
   alpha ~ normal(5, 2);
   beta ~ normal(0, 1);
   sigma ~ lognormal(log(1), 0.5);
+
   y ~ normal(alpha + X * beta, sigma);
 }
-generated quantities {
-  vector[N] mu = alpha + X * beta;
-  vector[N] y_rep;
-  real bayes_R2;
-  for (n in 1:N) {
-    y_rep[n] = normal_rng(mu[n], sigma);
-  }
-  bayes_R2 = variance(mu) / (variance(mu) + square(sigma));
-}
-'
-)
-
-stan_model_multiple <- cmdstanr::cmdstan_model(stan_file_multiple)
 ```
 
-Una volta completata la compilazione, avviamo il campionamento stocastico MCMC richiamando il metodo `$sample()` dall'oggetto modello:
+Qui `X` contiene soltanto i due predittori, mentre l'intercetta è rappresentata da `alpha`. Rispetto alla matrice completa $\widetilde{\mathbf X}$ utilizzata altrove nel capitolo, la differenza è puramente notazionale: il predittore lineare rimane identico.
 
-```{r}
-#| label: sample-stan-multiple
-#| output: false
-
-fit_multiple_stan <- stan_model_multiple$sample(
-  data = stan_data_multiple,
-  seed = 4201,
-  chains = 4,
-  parallel_chains = min(4, parallel::detectCores(logical = FALSE)),
-  iter_warmup = 1000,
-  iter_sampling = 2000,
-  refresh = 0
-)
-```
-
-Possiamo ora esaminare gli indici diagnostici (come $\widehat{R}$ e il numero effettivo di campioni $ESS$) e i riassunti numerici della posterior nel modo seguente:
-
-```{r}
-#| label: summarize-stan-multiple
-
-fit_multiple_stan$summary(
-  variables = c(
-    "alpha",
-    "beta",
-    "sigma",
-    "bayes_R2"
-  )
-)
-```
-
-Se formula, dati, famiglia, prior e parametrizzazione coincidono, `brms` e il programma Stan diretto devono produrre distribuzioni posteriori compatibili, al netto della variabilità Monte Carlo. In questo esempio i predittori sono stati centrati esattamente sulla media campionaria: ciò rende confrontabile il prior sull'intercetta, perché `brms` applica normalmente il prior di classe `Intercept` all'intercetta del predittore internamente centrato. Con predittori non centrati, una traduzione Stan diretta deve riprodurre anche questa parametrizzazione, non soltanto copiare la formula della likelihood.
-
-### Confrontare le stime
-
-Per effettuare un confronto tra i due metodi, estraiamo i campioni della distribuzione a posteriori (*draws*) manipolandoli in modo standardizzato tramite le strutture dati del pacchetto `posterior`. Questo approccio ci consente di mantenere traccia dell'articolazione in catene (*chains*) e iterazioni prima di collassare i dati in fase di sintesi descrittiva:
-
-```{r}
-#| label: compare-brms-stan
-# Estrazione e formattazione dei draws da brms
-brms_draws <- posterior::as_draws_df(
-  fit_multiple_brms,
-  variable = c(
-    "b_Intercept",
-    "b_negative_affect",
-    "b_sleep_c",
-    "sigma"
-  )
-) |>
-  transmute(
-    alpha = b_Intercept,
-    beta_affect = b_negative_affect,
-    beta_sleep = b_sleep_c,
-    sigma = sigma,
-    motore = "brms"
-  )
-
-# Estrazione dei draws da Stan nativo
-stan_draws <- fit_multiple_stan$draws(
-  variables = c("alpha", "beta", "sigma"),
-  format = "draws_df"
-) |>
-  transmute(
-    alpha = alpha,
-    beta_affect = `beta[1]`,
-    beta_sleep = `beta[2]`,
-    sigma = sigma,
-    motore = "Stan diretto"
-  )
-
-# Consolidamento e calcolo dei riassunti descrittivi della posterior
-bind_rows(brms_draws, stan_draws) |>
-  pivot_longer(
-    cols = c(alpha, beta_affect, beta_sleep, sigma),
-    names_to = "parametro",
-    values_to = "valore"
-  ) |>
-  group_by(motore, parametro) |>
-  summarize(  
-    media = mean(valore),
-    q2.5 = quantile(valore, 0.025),
-    q97.5 = quantile(valore, 0.975),
-    .groups = "drop"
-  )
-```
-
-Il confronto serve solo come controllo della traduzione, non come competizione tra software. `brms` utilizza Stan come motore computazionale; la differenza riguarda soprattutto il livello al quale viene espressa la specificazione.
-
-## Che cosa guadagniamo e che cosa perdiamo {#sec-formula-tradeoffs}
-
-### Usare `brms`
-
-`brms` è generalmente preferibile quando:
-
-- il modello appartiene a una famiglia già supportata;
-- si desidera modificare rapidamente formula, famiglia o prior;
-- servono strumenti integrati per predizioni e controlli;
-- la priorità è comunicare chiaramente la struttura del modello;
-- si vuole ridurre la quantità di codice da mantenere.
-
-Per esempio, una verosimiglianza Student-$t$ robusta può essere richiesta cambiando un solo argomento:
-
-```r
-brm(
-  stress ~ negative_affect + sleep_c,
-  family = student(),
-  data = stress_data,
-  prior = ...
-)
-```
-
-Il cambio è sintatticamente piccolo, ma sostantivamente importante: modifica la distribuzione degli scarti e introduce il parametro dei gradi di libertà.
-
-### Scrivere Stan direttamente
-
-Stan diretto diventa utile quando:
-
-- il processo generativo non è esprimibile con le formule disponibili;
-- occorrono ricorrenze, vincoli o trasformazioni non standard;
-- si vogliono definire quantità latenti personalizzate;
-- è necessario controllare precisamente la parametrizzazione;
-- si costruiscono modelli processuali o cognitivi.
-
-Il prezzo è una maggiore responsabilità: il ricercatore deve costruire i dati, verificare le dimensioni, dichiarare i vincoli, definire le quantità generate e controllare personalmente la corrispondenza tra codice e modello.
-
-::: {.callout-warning title="Più esplicito non significa automaticamente migliore"}
-Un programma Stan scritto a mano può essere trasparente, ma anche contenere errori di indicizzazione, prior non calibrati o parametrizzazioni inefficienti. Analogamente, una formula `brms` può essere corretta sintatticamente ma rappresentare male la domanda scientifica.
-
-La qualità dipende dalla specificazione e dai controlli, non dalla quantità di codice visibile.
+Nella pratica ordinaria, non vi è alcun vantaggio nel riscrivere a mano un modello che `brms` già gestisce in modo trasparente. Il ricorso diretto a Stan diventa utile quando la struttura generativa non può essere espressa agevolmente attraverso l'interfaccia di alto livello.
 :::
 
-## Diagnostica e controllo predittivo
+## Il workflow non cambia
 
-Indipendentemente dalla strada scelta per stimare il modello — la sintesi immediata di `brms` o la scrittura analitica in Stan — i criteri di validazione scientifica rimangono gli stessi. Prima di trarre qualsiasi conclusione dai risultati, il workflow bayesiano richiede di seguire tre passaggi sequenziali:
+Aggiungere predittori non modifica i principi fondamentali del workflow bayesiano. Anche dopo l'adattamento del modello multiplo, occorre distinguere tre domande:
 
-1. **Diagnostica computazionale:** Verificare che l'algoritmo HMC abbia esplorato la distribuzione a posteriori in modo affidabile, senza incontrare transizioni divergenti o problemi di convergenza.
-2. **Controllo predittivo:** Accertarsi che il modello, una volta addestrato, sia in grado di generare dati simulati che somiglino a quelli reali.
-3. **Interpretazione scientifica:** Valutare se le quantità stimate rispondano in modo coerente alla domanda di ricerca.
+1. **Il campionamento ha approssimato adeguatamente la distribuzione a posteriori?**  
+   Si verificano $\widehat R$, ESS, divergenze e altre diagnostiche computazionali.
 
-Per una trattazione metodologica approfondita del workflow e delle diagnostiche MCMC, si rimanda rispettivamente al @sec-linmod-bayesian-reg e all'@sec-apx-mcmc-diagnostics.
+2. **Il modello riesce a riprodurre caratteristiche rilevanti dei dati?**  
+   Si conducono controlli predittivi mirati.
 
-Un controllo predittivo a posteriori (*posterior predictive check*, PPC) essenziale consiste nel confrontare la distribuzione dei dati osservati con quella delle repliche simulate dal modello. Possiamo visualizzare questa verifica formale con entrambi gli approcci:
+3. **I coefficienti rispondono effettivamente alla domanda scientifica?**  
+   Si valutano la specificazione del modello, la codifica dei predittori, il disegno di ricerca e i limiti di interpretazione.
 
-```{r}
-#| label: fig-ppc-brms-multiple
-#| fig-cap: "Controllo predittivo a posteriori del modello di regressione multipla stimato con `brms`. La densità osservata dello stress è confrontata con le densità di 50 dataset replicati dalla distribuzione predittiva a posteriori."
-#| fig-alt: "Grafico di densità con la distribuzione osservata dello stress evidenziata e cinquanta densità replicate sovrapposte, generate dal modello brms."
-#| fig-width: 8
-#| fig-height: 5.5
+Non ripetiamo qui l'intero apparato diagnostico già sviluppato nell'@sec-linmod-bayesian-reg. Vale però la pena ricordare che, all'aumentare del numero di predittori, un controllo puramente marginale sull'outcome diventa ancora meno informativo: un modello può riprodurre bene la distribuzione complessiva di $Y$ e tuttavia rappresentare in modo distorto la relazione condizionata con uno o più predittori. Il capitolo dedicato alla revisione del modello riprenderà questo punto in modo sistematico.
 
-pp_check(
-  fit_multiple_brms,
-  type = "dens_overlay",
-  ndraws = 50
-)
-```
+## Una grammatica che prepara i capitoli successivi
 
-Nel caso del modello Stan diretto, utilizziamo le funzionalità del pacchetto `posterior` per estrarre la matrice delle repliche dal blocco `generated quantities` e passarla agli strumenti grafici di `bayesplot`:
+La ragione per cui abbiamo introdotto la matrice del modello emerge chiaramente osservando i modelli che seguiranno.
 
-```{r}
-#| label: fig-ppc-stan-multiple
-#| fig-cap: "Controllo predittivo a posteriori dello stesso modello implementato direttamente in Stan. La densità osservata dello stress è confrontata con 50 repliche estratte da `y_rep`, consentendo di verificare la coerenza predittiva dell'implementazione."
-#| fig-alt: "Grafico di densità con la distribuzione osservata dello stress e cinquanta distribuzioni replicate sovrapposte, ottenute dal modello scritto direttamente in Stan."
-#| fig-width: 8
-#| fig-height: 5.5
-#| message: false
-# Estrazione dei draws come matrice bidimensionale (draws x osservazioni)
-y_rep_stan <- fit_multiple_stan$draws(
-  variables = "y_rep",
-  format = "draws_matrix"
-)
+- `y ~ 1`: la matrice contiene soltanto una colonna di $1$; l'unico parametro è una media.
+- `y ~ gruppo`: la matrice traduce l'appartenenza ai gruppi in colonne numeriche; i coefficienti dipendono dalla codifica scelta.
+- formule con più livelli o contrasti: ciò che cambia è la costruzione delle colonne, non la logica sottostante del predittore lineare.
+- modelli multilivello: alla componente di popolazione si aggiungono strutture che descrivono l'eterogeneità tra gruppi.
 
-# Visualizzazione del confronto grafico
-bayesplot::ppc_dens_overlay(
-  y = stress_data$stress,
-  yrep = y_rep_stan[1:50, ]
-)
-```
-
-> **Un avvertimento importante:** Una buona sovrapposizione tra la densità dei dati reali ($y$) e quella delle simulazioni ($y_{\text{rep}}$) indica che il modello ha catturato la forma della distribuzione marginale dell'outcome, ma non garantisce che le relazioni condizionate con i predittori siano corrette. Un modello può riprodurre perfettamente la variabilità globale del fenomeno pur fallendo nel descrivere l'effetto delle singole variabili esplicative. I controlli diagnostici mirati a verificare la corretta forma funzionale delle relazioni saranno l'oggetto centrale del prossimo capitolo sulla specificazione.
+Il modello lineare non è quindi un insieme di procedure separate, ma una **grammatica comune** in cui diverse domande scientifiche vengono rappresentate attraverso matrici e quantità di interesse diverse.
 
 ## Errori frequenti
 
 ::: {.callout-warning title="Errori di interpretazione e implementazione"}
 
-1. **Trattare la formula come il modello completo.** La formula specifica soprattutto il predittore lineare; famiglia e prior devono essere considerate separatamente.
+1. **Considerare la formula come il modello completo.**  
+   La formula specifica principalmente la struttura della media condizionata; la famiglia di distribuzione, i prior e l'eventuale struttura di dipendenza tra le osservazioni fanno parte integrante della specificazione completa.
 
-2. **Dimenticare l'intercetta implicita.** `y ~ x` include una colonna di 1. Per rimuoverla occorre usare `0 + x` oppure `x - 1`.
+2. **Interpretare un coefficiente multiplo come se fosse un'associazione marginale.**  
+   Il suo significato è condizionato agli altri termini inclusi nel modello e alla loro codifica; modificare l'insieme dei predittori può alterarne il valore e l'interpretazione.
 
-3. **Interpretare coefficienti multipli come associazioni marginali.** Ogni coefficiente dipende dagli altri termini inclusi e dalla loro codifica.
+3. **Confondere il condizionamento statistico con un effetto causale.**  
+   L'espressione "a parità di" descrive un confronto definito dal modello, non un intervento sperimentale. La regressione multipla aggiusta algebricamente per le variabili incluse, ma non garantisce identificazione causale.
 
-4. **Attribuire automaticamente un significato causale al verbo “controllare”.** Aggiungere una variabile può ridurre una distorsione, non avere utilità oppure introdurre un nuovo bias.
+4. **Utilizzare due convenzioni matriciali senza distinguerle.**  
+   La matrice del modello può includere l'intercetta come colonna di $1$ oppure no; entrambe le rappresentazioni sono matematicamente equivalenti, ma richiedono che il vettore dei coefficienti sia definito in modo coerente con la struttura scelta.
 
-5. **Passare a Stan senza controllare la matrice del modello.** Ordine e scala delle colonne devono corrispondere all'ordine e al significato dei coefficienti.
+5. **Sottovalutare l'effetto della correlazione tra predittori.**  
+   Predittori fortemente associati tra loro possono rendere le stime meno stabili, aumentare l'incertezza sui singoli coefficienti e modificare l'interpretazione sostantiva del modello.
 
-6. **Confrontare `brms` e Stan con prior diversi.** Risultati differenti possono derivare dalla specificazione, non dal motore computazionale.
+6. **Passare alla scrittura in Stan senza aver compreso la formula.**  
+   Un'implementazione più esplicita non corregge una domanda mal posta o una codifica inappropriata; la chiarezza concettuale precede la correttezza computazionale.
 
-7. **Usare prior generici senza considerarne la scala.** Un `normal(0, 1)` può essere moderato per un predittore standardizzato e molto restrittivo o molto ampio su altre scale.
-
-8. **Considerare un PPC marginale come convalida completa.** Occorre scegliere statistiche e grafici sensibili ai possibili fallimenti del modello.
 :::
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-Una formula in R, una matrice del modello e un programma in codice Stan non rappresentano tre modelli in competizione tra loro. Al contrario, costituiscono tre livelli di astrazione decrescenti della medesima struttura concettuale.
+La regressione multipla non rappresenta un paradigma nuovo rispetto alla regressione semplice, ma ne estende il concetto includendo simultaneamente più predittori. Questo passaggio, apparentemente modesto, modifica invece profondamente l'interpretazione: ogni coefficiente acquista un significato nel contesto dell'intera formula e la sua interpretazione non può prescindere dagli altri predittori inclusi.
 
-La formula rende immediatamente leggibile l'architettura delle nostre ipotesi. La matrice del modello rende chiaro il meccanismo algebrico sottostante, mostrando come ogni termine qualitativo o quantitativo venga convertito in vettori numerici per il calcolo. Stan, infine, rimuove qualsiasi barriera di astrazione rendendo espliciti i presupposti probabilistici: la verosimiglianza dei dati, la calibrazione dei *prior* e la derivazione delle quantità generate. In questo ecosistema, `brms` collega questi livelli traducendo automaticamente una specificazione di alto livello in un programma Stan.
+La matrice del modello rende questa dipendenza concreta. Le colonne codificano i termini della formula e il prodotto tra la matrice e il vettore dei coefficienti restituisce tutte le medie condizionate del modello. Da questo punto di vista, la formula R e il codice Stan non rappresentano modelli differenti, ma sono due diverse rappresentazioni dello stesso oggetto a diversi livelli di astrazione.
 
-Oltre agli aspetti puramente computazionali, il passaggio alla regressione multipla ha fatto emergere un principio interpretativo cruciale: in un modello lineare, nessun coefficiente vive in isolamento. Ogni parametro descrive un'associazione condizionata alla presenza degli altri termini inclusi nel predittore lineare. Di conseguenza, l'entità e persino il segno di un effetto possono mutare radicalmente al variare della specificazione complessiva. Questa dipendenza non costituisce un difetto del modello, ma segnala che il significato del coefficiente è inseparabile dalla domanda, dalla codifica e dall'insieme dei predittori.
+`brms` svolge il ruolo di ponte tra questi livelli. Consente di mantenere la specificazione scientifica leggibile, affidando a Stan la rappresentazione numerica necessaria per il campionamento. Comprendere questa traduzione rende il funzionamento del software più trasparente, senza che la scrittura di codice di basso livello diventi un fine a sé stante.
 
-Nei capitoli che seguono applicheremo la stessa grammatica generativa per mostrare come la stima di una singola media, il confronto tra due o più gruppi e i tradizionali modelli di ANOVA non siano altro che casi particolari del modello lineare. La matrice del modello cambierà per adattarsi a nuovi disegni sperimentali, ma il workflow bayesiano rimarrà lo stesso.
+Nel prossimo capitolo, utilizzeremo questa grammatica in un caso apparentemente più semplice: elimineremo tutti i predittori e conserveremo solo l'intercetta. Questo ci permetterà di vedere che inferire una media non è una procedura separata dalla regressione, ma il caso più elementare dello stesso modello lineare. Dal punto di vista della matrice del modello, il passaggio al confronto tra gruppi e all'ANOVA sarà quindi naturale e diretto.
 
 ## Esercizi {.unnumbered .unlisted}
 
-### Esercizio 1 — Comprendere: dalla domanda alla formula {.unnumbered .unlisted}
+### Esercizio 1 — Comprendere: da una a due variabili {.unnumbered .unlisted}
 
-Un gruppo di ricerca vuole studiare l'associazione tra stress percepito, affetto negativo e durata del sonno. Considera le formule:
+*Codice: no · 10 minuti*
 
-```r
-stress ~ negative_affect
-stress ~ negative_affect + sleep_c
-stress ~ negative_affect * sleep_c
-```
-
-Per ciascuna formula:
-
-1. indica quali coefficienti vengono stimati;
-2. traduci la formula nell'equazione della media condizionata;
-3. formula la domanda sostantiva alla quale risponde il coefficiente di `sleep_c`;
-4. spiega come cambia l'interpretazione di `sleep_c` quando compare l'interazione.
-
-::: {.callout-tip collapse=true title="Suggerimento"}
-Ricorda che `x1 * x2` si espande in `x1 + x2 + x1:x2`. Senza interazione, la pendenza di `sleep_c` è costante; con l'interazione dipende dal valore di `negative_affect`.
-:::
-
-::: {.callout-note collapse=true title="Soluzione commentata"}
-La prima formula stima intercetta e coefficiente di `negative_affect`. La seconda aggiunge il coefficiente parziale di `sleep_c`:
-
-$$
-\mu_i = \alpha + \beta_1\,\text{negative\_affect}_i + \beta_2\,\text{sleep\_c}_i.
-$$
-
-Qui $\beta_2$ descrive la differenza attesa nello stress associata a un incremento unitario di `sleep_c`, mantenendo costante `negative_affect` nel modello. La terza formula aggiunge $\beta_3\,x_{1i}x_{2i}$: la pendenza di `sleep_c` diventa $\beta_2 + \beta_3\,\text{negative\_affect}_i$. Non esiste quindi più un unico effetto di `sleep_c` valido a tutti i livelli dell'altro predittore.
-:::
-
-### Esercizio 2 — Prevedere: leggere una riga della matrice {.unnumbered .unlisted}
-
-Per una persona, una riga della matrice del modello è:
-
-$$
-[1,\; 1.2,\; -0.5],
-$$
-
-corrispondente a intercetta, `negative_affect` e `sleep_c`. Supponi che:
-
-$$
-\alpha=5, \qquad \beta_{\text{affect}}=0.8, \qquad \beta_{\text{sleep}}=-0.7, \qquad \sigma=0.7.
-$$
-
-1. Calcola la media condizionata prevista.
-2. Spiega perché questo valore non è la previsione certa del punteggio osservato.
-3. Prevedi cosa cambierebbe nella matrice usando `stress ~ 0 + negative_affect + sleep_c`.
-4. Spiega perché rimuovere l'intercetta è una scelta sostantiva, non un modo per “semplificare” automaticamente il modello.
-
-::: {.callout-tip collapse=true title="Suggerimento"}
-Moltiplica ogni elemento della riga per il coefficiente corrispondente. Il dato osservato include inoltre uno scarto con deviazione standard $\sigma$.
-:::
-
-::: {.callout-note collapse=true title="Soluzione commentata"}
-La media condizionata è:
-
-$$
-5 + 0.8(1.2) - 0.7(-0.5) = 6.31.
-$$
-
-Il modello afferma però $Y_i\sim\operatorname{Normal}(6.31,0.7)$: 6.31 è il centro della distribuzione predittiva condizionata, non un valore individuale certo. Con `0 +` scompare la colonna di 1 e il modello è vincolato ad avere media zero quando entrambi i predittori valgono zero. Tale vincolo deve essere plausibile sulla scala dell'outcome; altrimenti distorce l'intera relazione.
-:::
-
-### Esercizio 3 — Modificare ed eseguire: dalla formula al controllo {.unnumbered .unlisted}
-
-Parti dal modello:
+Considera le formule:
 
 ```r
-stress ~ negative_affect + sleep_c
+A: stress ~ sleep_c
+B: stress ~ negative_affect + sleep_c
 ```
 
-Esegui, usando il codice già fornito nel capitolo, le seguenti modifiche guidate:
-
-1. costruisci la matrice con `model.matrix()` e identifica la colonna associata a ciascun coefficiente;
-2. aggiungi l'interazione con `negative_affect * sleep_c` e verifica quali nuove colonne compaiono;
-3. usa `get_prior()` prima di assegnare i prior e individua i coefficienti population-level;
-4. adatta il modello con `brms` e scegli lo strumento appropriato per:
-   - controllare convergenza e campionamento;
-   - descrivere la media condizionata;
-   - generare possibili osservazioni individuali;
-   - verificare se il modello riproduce caratteristiche rilevanti dei dati.
+1. Scrivi la media condizionata corrispondente a ciascuna formula.
+2. Spiega perché il coefficiente di `sleep_c` non risponde esattamente alla stessa domanda nei due modelli.
+3. Indica quale ulteriore informazione è necessaria, oltre alla formula, per definire un modello bayesiano completo.
+4. Spiega perché una differenza tra i due coefficienti non dimostra, da sola, quale formula rappresenti meglio il fenomeno.
 
 ::: {.callout-tip collapse=true title="Suggerimento"}
-Distingui `summary()` o `summarise_draws()`, `posterior_epred()`, `posterior_predict()` e `pp_check()`. Nessuno di questi strumenti risponde da solo a tutte le domande.
+Nel modello B il coefficiente del sonno è definito condizionatamente al valore di `negative_affect`.
 :::
 
 ::: {.callout-note collapse=true title="Soluzione commentata"}
-L'interazione aggiunge una colonna contenente il prodotto dei due predittori e un coefficiente corrispondente. `get_prior()` mostra l'intercetta, i coefficienti di classe `b` e il parametro `sigma`. Le diagnostiche numeriche e grafiche valutano il calcolo; `posterior_epred()` riassume la distribuzione della media condizionata; `posterior_predict()` aggiunge la variabilità residua e produce possibili osservazioni; `pp_check()` confronta dati osservati e repliche posteriori. La corretta esecuzione richiede quindi una sequenza di strumenti, non un unico output finale.
+Per A,
+
+$$
+\mu_i = \alpha + \beta_{\text{sleep}}\,\text{sleep\_c}_i.
+$$
+
+Per B,
+
+$$
+\mu_i =
+\alpha
++\beta_{\text{affect}}\,\text{negative\_affect}_i
++\beta_{\text{sleep}}\,\text{sleep\_c}_i.
+$$
+
+Nel primo modello, $\beta_{\text{sleep}}$ descrive l'associazione marginale lineare tra sonno e stress. Nel secondo descrive l'associazione con il sonno tra osservazioni che hanno lo stesso livello di affetto negativo nel modello. Per definire il modello bayesiano completo servono almeno la distribuzione condizionata dell'esito e i prior. La scelta tra le formule deve dipendere dalla domanda e dalla plausibilità della specificazione, non soltanto dalla grandezza dei coefficienti ottenuti.
 :::
 
-### Esercizio 4 — Criticare e comunicare: livelli di astrazione {.unnumbered .unlisted}
+### Esercizio 2 — Prevedere: leggere la matrice {.unnumbered .unlisted}
+
+*Codice: no · 10 minuti*
+
+Una riga della matrice completa è
+
+$$
+[1,\;1.2,\;-0.5],
+$$
+
+corrispondente a intercetta, `negative_affect` e `sleep_c`. Supponi che
+
+$$
+\alpha=5,
+\qquad
+\beta_{\text{affect}}=0.8,
+\qquad
+\beta_{\text{sleep}}=-0.7,
+\qquad
+\sigma=0.7.
+$$
+
+1. Calcola la media condizionata.
+2. Spiega perché il risultato non è una previsione certa del punteggio osservato.
+3. Indica come cambierebbe la matrice con `stress ~ 0 + negative_affect + sleep_c`.
+4. Spiega perché rimuovere l'intercetta è una scelta sostantiva e non una semplice semplificazione del codice.
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+La media condizionata è
+
+$$
+5+0.8(1.2)-0.7(-0.5)=6.31.
+$$
+
+Il dato individuale rimane distribuito attorno a tale media con deviazione standard $\sigma=0.7$. Con `0 +` scompare la colonna di $1$: il modello impone quindi una struttura differente alla media condizionata. Questo vincolo deve essere giustificato sulla scala delle variabili.
+:::
+
+### Esercizio 3 — Modificare: osservare ciò che fa la formula {.unnumbered .unlisted}
+
+*Codice: guidato · 15 minuti*
+
+Usa `model.matrix()` con le formule seguenti:
+
+```r
+~ 1
+~ negative_affect
+~ negative_affect + sleep_c
+~ 0 + negative_affect + sleep_c
+```
+
+Per ciascuna:
+
+1. annota il numero e il nome delle colonne;
+2. indica quale coefficiente corrisponde a ciascuna colonna;
+3. scrivi l'equazione della media condizionata;
+4. spiega quale modello dei capitoli successivi è anticipato dalla formula `~ 1`.
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+Il modello con sola intercetta sarà il punto di partenza del prossimo capitolo.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+`~ 1` produce soltanto la colonna dell'intercetta. `~ negative_affect` produce intercetta e una colonna per il predittore. Aggiungendo `sleep_c` compare una terza colonna. Con `0 +` la colonna dell'intercetta viene rimossa.
+
+L'esercizio mostra che modificare la formula significa modificare la matrice e quindi il significato dei coefficienti. Il modello `~ 1` anticipa il modello a sola intercetta, nel quale l'unico parametro di posizione rappresenta la media dell'esito.
+:::
+
+### Esercizio 4 — Criticare e comunicare {.unnumbered .unlisted}
+
+*Codice: no · 15 minuti*
 
 Un ricercatore scrive:
 
-> Ho stimato `stress ~ negative_affect + sleep_c` con `brms`. Il coefficiente del sonno è negativo e il codice Stan generato non produce divergenze. Questo dimostra che dormire di più riduce causalmente lo stress. Poiché il programma Stan scritto a mano restituisce una media leggermente diversa, Stan diretto è più accurato di `brms`.
+> Ho stimato `stress ~ negative_affect + sleep_c`. Il coefficiente del sonno è negativo; dunque il modello dimostra che aumentare il sonno riduce lo stress, indipendentemente dall'affetto negativo. Inoltre, poiché `brms` ha prodotto un codice Stan senza divergenze, la specificazione è corretta.
 
-Individua almeno quattro problemi e riscrivi il resoconto in forma appropriata. Il testo corretto deve indicare:
-
-- che cosa rappresenta il coefficiente del sonno;
-- come comunicare la sua incertezza;
-- che cosa consentono di concludere le diagnostiche;
-- quali condizioni rendono confrontabili `brms` e Stan diretto;
-- quale limite causale rimane.
+Individua almeno quattro problemi e riscrivi l'interpretazione in forma metodologicamente appropriata.
 
 ::: {.callout-tip collapse=true title="Suggerimento"}
-Se due implementazioni descrivono davvero lo stesso modello, piccole differenze tra riassunti possono derivare dalla variabilità Monte Carlo. L'assenza di divergenze riguarda il calcolo, non l'identificazione causale.
+Distingui associazione condizionata, indipendenza, causalità, diagnostica computazionale e adeguatezza scientifica.
 :::
 
 ::: {.callout-note collapse=true title="Soluzione commentata"}
-Il coefficiente di `sleep_c` è un'associazione condizionata a `negative_affect` e alla specificazione adottata. Va comunicato con una sintesi della posterior, per esempio media o mediana e intervallo di credibilità, precisando scala e codifica. L'assenza di divergenze e valori adeguati di $\widehat R$ ed ESS sostengono l'affidabilità dell'approssimazione computazionale, non la verità del modello. `brms` e Stan diretto sono confrontabili soltanto se usano gli stessi dati, likelihood, prior, predittore lineare e quantità derivate; differenze residue compatibili con l'errore Monte Carlo non stabiliscono la superiorità di un'interfaccia. Infine, con dati osservazionali il coefficiente non dimostra che un intervento sul sonno produrrebbe una riduzione dello stress: servono disegno e assunzioni causali adeguati.
+Il coefficiente negativo descrive un'associazione tra sonno e media dello stress condizionatamente a `negative_affect` e alla specificazione adottata. Non dimostra l'effetto di un intervento sul sonno e non implica che sonno e affetto negativo siano indipendenti. L'assenza di divergenze riguarda la qualità dell'esplorazione numerica della posterior, non la correttezza sostantiva della formula.
+
+Una formulazione più appropriata potrebbe essere:
+
+> Nel modello considerato, valori maggiori di sonno sono associati a una media dello stress più bassa tra osservazioni con lo stesso livello di affetto negativo. L'ampiezza e l'incertezza di questa associazione devono essere descritte mediante la distribuzione a posteriori del coefficiente. Le diagnostiche computazionali possono indicare che il campionamento ha funzionato adeguatamente, ma non stabiliscono che la specificazione sia causalmente o scientificamente corretta.
 :::
 
 ::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
