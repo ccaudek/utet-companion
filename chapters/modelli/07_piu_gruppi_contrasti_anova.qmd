@@ -1,25 +1,30 @@
 # Più gruppi: medie di cella, contrasti e ANOVA {#sec-anova1via}
 
 ::: {.callout-note appearance="minimal"}
-Il confronto tra due gruppi può essere esteso in modo naturale a disegni sperimentali o osservazionali che prevedono tre o più condizioni, come nel caso della valutazione di trattamenti multipli, di fasce d'età differenti, di contesti scolastici eterogenei o di diversi livelli di esposizione a un fattore. Nella statistica classica, l'analisi di questi scenari viene tradizionalmente affidata alla procedura dell'analisi della varianza (ANOVA) a una via.
+Nel capitolo precedente abbiamo visto che il confronto tra due gruppi non richiede una procedura statistica separata: è un modello lineare con un predittore categoriale a due livelli. Passare a tre o più gruppi è lo sviluppo naturale della stessa idea.
 
-Dal punto di vista della modellistica statistica, questo passaggio non introduce una nuova classe di tecniche: formalmente, cambia solo il numero di livelli che compongono il predittore categoriale (o *fattore*). Il modello lineare consente inoltre di formulare domande di ricerca più informative rispetto alla generica domanda omnibus della statistica classica: "Le medie dei gruppi sono tutte uguali tra loro?".
+Con due gruppi avevamo due medie, $\mu_0$ e $\mu_1$, e un contrasto principale, $\Delta=\mu_1-\mu_0$. Con $G$ gruppi avremo semplicemente $G$ medie,
 
-In questo capitolo applicheremo l’inferenza bayesiana al caso di predittori politomici, ovvero con più di due livelli, concentrandoci sulle quantità di effettivo interesse scientifico: la stima della distribuzione a posteriori dei parametri di posizione per ciascun gruppo e la valutazione della loro plausibilità; la specificazione e la verifica di contrasti pianificati, definiti sulla base di ipotesi teoriche e non di esplorazioni post-hoc; la quantificazione dell’ampiezza delle differenze, sia nella scala metrica originale sia in forma standardizzata; la propagazione esplicita e coerente dell’incertezza associata a ciascun confronto; e, infine, la valutazione probabilistica della plausibilità che i contrasti superino una soglia di rilevanza pratica stabilita a priori.
+$$
+\mu_1,\mu_2,\ldots,\mu_G,
+$$
+e le domande scientifiche verranno espresse come **contrasti**, cioè combinazioni lineari di queste medie. La matrice del modello si amplia, ma la grammatica rimane la stessa.
+
+Questa è la prospettiva con cui leggeremo l'ANOVA a una via. L'obiettivo non è imparare un nuovo "test", ma comprendere come un fattore con più livelli venga rappresentato nel modello lineare, come le diverse parametrizzazioni cambino il significato immediato dei coefficienti e come le ipotesi scientifiche vengano tradotte in contrasti interpretabili.
 :::
 
 ::: {.callout-important appearance="minimal" .chapter-status}
-**Da sapere.** Il confronto tra più gruppi è un modello lineare con un predittore categoriale. Il test omnibus dell’ANOVA classica risponde alla domanda globale se almeno una media differisca dalle altre, ma non identifica quale differenza sia presente, in quale direzione e con quale ampiezza. I contrasti traducono invece le ipotesi scientifiche in quantità direttamente interpretabili. La codifica con gruppo di riferimento e la parametrizzazione a medie di cella descrivono le stesse medie, ma attribuiscono significati diversi ai coefficienti e ai prior. L’inferenza bayesiana non elimina automaticamente i problemi di selezione e molteplicità.
+**Da sapere.** L'ANOVA a una via è un modello lineare con un solo predittore categoriale, o *fattore*, che possiede più di due livelli. Le parametrizzazioni a riferimento, a somma zero (*effect coding*) e a medie di cella descrivono lo stesso sistema di medie quando modello e prior sono specificati in modo coerente, ma attribuiscono significati differenti ai coefficienti. Le quantità scientifiche fondamentali sono le medie di gruppo e i loro contrasti.
 
-**Da saper fare.** Specificare e stimare con `brms` un modello a più gruppi; scegliere prior plausibili; eseguire i controlli predittivi a priori e a posteriori; ricavare dai campioni posteriori le medie di gruppo e i contrasti pianificati; calcolare probabilità sostantive rispetto a zero e a una soglia di rilevanza pratica; comunicare i risultati mantenendo esplicita l’incertezza.
+**Da saper fare.** Passare da due a più gruppi senza cambiare la logica del modello; leggere le matrici del modello associate alle principali codifiche; ricostruire le medie di gruppo indipendentemente dalla parametrizzazione; formulare contrasti mediante pesi che sommano a zero; stimare con `brms` un modello a una via; derivare dai draw posteriori contrasti pianificati e probabilità rispetto a soglie sostantive; distinguere una domanda omnibus da una domanda specifica sui contrasti.
 
-**Approfondimento facoltativo.** La costruzione dettagliata delle matrici del modello, il confronto sistematico tra codifica *dummy* e medie di cella, l’uso di `emmeans`, la valutazione omnibus, la discussione formale della molteplicità e le estensioni a modelli robusti o multilivello possono essere rimandati. Nel percorso essenziale è sufficiente comprendere le medie di cella, formulare contrasti guidati dalla teoria e valutarli mediante la distribuzione a posteriori e i controlli predittivi.
+**Approfondimento facoltativo.** L'uso di `emmeans`, le verifiche omnibus alternative, la discussione formale della molteplicità e le estensioni eteroschedastiche possono essere rimandati. Nel percorso essenziale è necessario padroneggiare il passaggio medie di cella $\rightarrow$ contrasti e comprendere come la codifica modifichi le coordinate del modello, non le quantità sostantive.
 
 [Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
 :::
 
 ::: {.callout-tip collapse=true title="Prerequisiti"}
-Il capitolo estende il confronto tra due gruppi discusso in @sec-linear-models-two-groups e la costruzione di quantità derivate presentata in @sec-bayesian-effect-size. Il workflow bayesiano completo è stato introdotto in @sec-linmod-bayesian-reg. Come riferimento generale si veda anche il capitolo *Geocentric models* di *Statistical Rethinking* [@McElreath_rethinking].
+Il capitolo estende direttamente il confronto tra due gruppi discusso in @sec-linear-models-two-groups. La relazione tra formula e matrice del modello è stata sviluppata in @sec-linar-models-brms, mentre il workflow bayesiano completo con `brms` è stato introdotto in @sec-linmod-bayesian-reg. Come riferimento generale si veda anche *Statistical Rethinking* [@McElreath_rethinking].
 :::
 
 ::: {.callout-caution collapse=true title="Preparazione del notebook"}
@@ -31,53 +36,58 @@ Il capitolo estende il confronto tra due gruppi discusso in @sec-linear-models-t
 here::here("code", "_common.R") |>
   source()
 
-if (!requireNamespace("emmeans", quietly = TRUE)) {
-  stop("Per eseguire questo capitolo è necessario installare il pacchetto 'emmeans'.")
-}
-
-library(emmeans)
-
 set.seed(123)
 ```
 :::
 
 ## Dalla domanda scientifica alle quantità di interesse
 
-Per introdurre la formalizzazione dei contrasti pianificati, consideriamo un disegno sperimentale simulato in cui si confrontano tre condizioni indipendenti: un gruppo di controllo e due protocolli di psicoterapia (Terapia 1 e Terapia 2). La variabile dipendente è un punteggio continuo di depressione, con valori più elevati che indicano una maggiore sintomatologia. Supponiamo che gli interrogativi clinici di interesse si riducano a due domande:
+Consideriamo i dati simulati di un disegno con **un solo fattore**, `condizione`, articolato in tre livelli indipendenti: controllo, Psicoterapia 1 e Psicoterapia 2. L'outcome è un punteggio continuo di depressione, dove valori più elevati indicano una sintomatologia più grave.
 
-> **Quesito 1:** In media, i due trattamenti determinano una riduzione dei sintomi depressivi rispetto al gruppo di controllo?
+Le domande scientifiche non si riducono a chiedersi genericamente se "le medie siano diverse". Supponiamo invece di voler rispondere a due quesiti specifici, definiti in anticipo:
 
-> **Quesito 2:** I due protocolli differiscono tra loro in termini clinicamente rilevanti?
+> **Quesito 1:** nel complesso, i due gruppi di terapia presentano punteggi medi di depressione inferiori rispetto al gruppo di controllo?
 
-::: {.callout-important title="Dal test omnibus ai contrasti"}
-Il test $F$ omnibus dell’ANOVA classica valuta una domanda globale: i dati sono compatibili con l’ipotesi che tutte le medie siano uguali? Se il test porta a rifiutare tale ipotesi, sappiamo soltanto che almeno una differenza è presente. Non sappiamo ancora quali gruppi differiscano, in quale direzione, di quanti punti e se la differenza sia sostantivamente importante.
+> **Quesito 2:** i due protocolli terapeutici differiscono tra loro in misura sostantivamente rilevante?
 
-I contrasti, disponibili sia nell’inferenza frequentista sia in quella bayesiana, rispondono invece a domande formulate prima dell’analisi. Nel nostro esempio, non interessa genericamente sapere che “qualcosa cambia” tra i tre gruppi: interessa confrontare il controllo con l’insieme delle terapie e, separatamente, confrontare i due protocolli. Il risultato omnibus può fornire una sintesi globale, ma i contrasti costituiscono il vero oggetto dell’interpretazione scientifica; l’approccio bayesiano ne restituisce direttamente la distribuzione a posteriori.
-:::
-
-Queste domande definiscono due *contrasti pianificati*, ovvero confronti specificati prima di aver visto i dati. Specificare in anticipo i confronti di interesse consente di evitare un'analisi esplorativa di tutte le possibili differenze a coppie, riducendo il rischio di falsi positivi e concentrando l'inferenza sulle sole domande rilevanti.
-
-Siano $\mu_C$, $\mu_{P1}$ e $\mu_{P2}$ le medie condizionate dell’esito nei tre gruppi — controllo, Terapia 1 e Terapia 2 rispettivamente. I due interrogativi clinici si traducono nelle seguenti quantità sostantive di interesse, o *estimands*.
-
-Il primo contrasto confronta il gruppo di controllo con la media dei due trattamenti:
+Indichiamo con $\mu_C$, $\mu_{P1}$ e $\mu_{P2}$ le medie condizionate nelle tre condizioni. Il primo quesito si traduce nel contrasto
 
 $$
-\Delta_{C:T} = \mu_C - \frac{\mu_{P1} + \mu_{P2}}{2}
+\Delta_{C:T}
+=
+\mu_C-\frac{\mu_{P1}+\mu_{P2}}{2},
 $$ {#eq-anova-control-therapies}
-
-Un valore positivo di $\Delta_{C:T}$ indica che, nel loro insieme, i protocolli terapeutici sono associati a una sintomatologia depressiva mediamente inferiore rispetto alla condizione di controllo.
-
-Il secondo contrasto riguarda la differenza tra i due trattamenti:
+che confronta la media del gruppo di controllo con la media combinata dei due gruppi terapeutici. Il secondo quesito corrisponde invece al contrasto
 
 $$
-\Delta_{P1:P2} = \mu_{P1} - \mu_{P2}
+\Delta_{P1:P2}=\mu_{P1}-\mu_{P2}.
 $$ {#eq-anova-therapy-contrast}
 
-Un valore positivo di $\Delta_{P1:P2}$ segnala che il secondo protocollo è associato a un punteggio medio di depressione più basso — e quindi a una maggiore efficacia — rispetto al primo.
+Un valore positivo di $\Delta_{C:T}$ indica che il gruppo di controllo presenta una sintomatologia media più elevata rispetto alla media dei due gruppi di terapia. Un valore positivo di $\Delta_{P1:P2}$ indica che la Psicoterapia 1 presenta una sintomatologia media più elevata rispetto alla Psicoterapia 2. Entrambi i contrasti sono quantità lineari delle medie di gruppo e la loro incertezza può essere stimata direttamente dalla distribuzione congiunta a posteriori.
 
-## Simulazione di un disegno sperimentale a tre vie
+::: {.callout-important title="Da due gruppi a più gruppi: cambia il numero delle medie, non la logica"}
+Con due gruppi, un contrasto come $\mu_B - \mu_A$ può coincidere direttamente con un coefficiente del modello. Con tre o più gruppi, invece, le domande scientifiche richiedono più spesso **combinazioni lineari di medie** che non sono rappresentate da un singolo parametro elementare. La soluzione è il **contrasto lineare**, una quantità definita come
 
-Per esaminare il comportamento del modello, generiamo un dataset simulato bilanciato con trenta osservazioni per ciascuna condizione sperimentale. I valori veri sono scelti in modo da produrre una riduzione graduale dei sintomi dal gruppo di controllo alla seconda terapia, ma mantenendo una variabilità sufficiente perché i punteggi dei singoli partecipanti si sovrappongano tra i gruppi. In questo modo, l'effetto medio è distinguibile, ma l'incertezza rimane una componente rilevante del problema.
+$$
+L = \sum_{g=1}^{G} c_g \mu_g, \qquad \sum_{g=1}^{G} c_g = 0.
+$$
+
+I coefficienti $c_g$ sono i **pesi del contrasto** e specificano quali medie vengono confrontate e con quali pesi. Nel primo quesito, il confronto tra il controllo e la media delle terapie, i pesi sono $(1, -0.5, -0.5)$; nel secondo, il confronto tra i due protocolli terapeutici, i pesi sono $(0, 1, -1)$.
+
+Questa notazione dei contrasti diventerà il linguaggio centrale dell'ANOVA nel resto del capitolo e permetterà di tradurre le domande scientifiche in quantità stimabili dal modello, mantenendo la stessa struttura inferenziale già utilizzata per i due gruppi.
+:::
+
+::: {.callout-note title="Che ruolo ha allora il test omnibus?"}
+Il test $F$ dell'ANOVA classica risponde a una domanda globale: se tutte le medie fossero uguali, la separazione osservata tra i gruppi sarebbe compatibile con la variabilità all'interno dei gruppi? Una risposta omnibus può essere utile come sintesi, ma non permette di identificare il pattern delle differenze. I contrasti traducono invece direttamente le ipotesi scientifiche in quantità interpretabili.
+:::
+
+## Simulazione di un disegno a una via con tre gruppi
+
+Per esaminare il comportamento del modello, generiamo un dataset bilanciato con trenta osservazioni per ciascuna condizione. I parametri generativi sono scelti in modo da produrre una riduzione graduale dei punteggi medi dal controllo alla seconda terapia, mantenendo però una variabilità individuale sufficiente affinché le distribuzioni dei tre gruppi si sovrappongano. In questo modo, è possibile distinguere chiaramente le differenze tra le medie e la variabilità delle singole osservazioni.
+
+::: {.callout-caution title="Una via non significa un gruppo"}
+In **ANOVA a una via**, "una via" indica il numero di fattori, non il numero di gruppi. In questo caso abbiamo un solo fattore, "condizione", con tre livelli. Un'ANOVA a tre vie avrebbe invece tre fattori distinti e introdurrebbe anche il problema delle loro interazioni.
+:::
 
 ```{r}
 #| label: simulate-anova-data
@@ -133,62 +143,217 @@ anova_data |>
   )
 ```
 
-> **Valutazione metodologica:** i grafici suggeriscono una riduzione dei punteggi di depressione dal controllo verso la seconda terapia. Tuttavia, questa evidenza descrittiva non è sufficiente per trarre conclusioni inferenziali: non quantifica l'incertezza delle stime campionarie e non fornisce una misura probabilistica della rilevanza clinica delle differenze osservate. Per stabilire se le variazioni siano sostanziali e non solo visibili, occorre un'analisi che espliciti l'incertezza e valuti l'ampiezza degli effetti rispetto a una soglia di interesse pratico.
+> **Valutazione metodologica:** il grafico suggerisce una riduzione dei punteggi medi dal controllo alla seconda terapia, ma mostra anche un'ampia sovrapposizione delle osservazioni individuali. La rappresentazione grafica non quantifica l'incertezza relativa alle medie né ai contrasti. Il modello servirà a separare precisamente queste due componenti e, se disponiamo di una soglia sostantiva giustificata, a valutare quanto sia plausibile superarla.
 
-## Un unico modello, diverse parametrizzazioni algebriche
+## Tre parametrizzazioni, le stesse tre medie
 
-Un predittore categoriale a più di due livelli, o politomico, non può essere inserito direttamente in un modello lineare così com'è: occorre tradurre i suoi livelli in una rappresentazione numerica. Questa traduzione si realizza attraverso strategie di codifica diverse, matematicamente equivalenti ma non identiche nell'interpretazione dei coefficienti. La scelta della codifica influisce sulla forma delle quantità prodotte in output, ma non sul valore delle medie di gruppo né sulla possibilità di formulare contrasti sostantivi.
+Il fattore `condizione` contiene tre livelli. Per poter essere inserito nel modello lineare, deve essere tradotto in colonne numeriche della matrice del modello. Come nel capitolo precedente, la **codifica** stabilisce quali coordinate utilizzare per rappresentare lo stesso sistema di medie.
 
-### 1. Codifica Dummy con Categoria di Riferimento (*Treatment Coding*)
+Le tre parametrizzazioni più utili da confrontare sono:
 
-Una codifica molto diffusa è il **trattamento a categoria di riferimento** (*treatment coding*, o *dummy coding*): i livelli di un fattore vengono rappresentati da variabili binarie, con un livello scelto come riferimento. Con un fattore a tre livelli e ponendo il controllo come riferimento, si generano due variabili indicatrici, e il modello lineare si scrive come:
+| Parametrizzazione | Formula / contrasto | Significato immediato dei coefficienti |
+|---|---|---|
+| **Riferimento (dummy)** | `y ~ gruppo` | intercetta = media del riferimento; altri coefficienti = differenze dal riferimento |
+| **Somma zero (effect coding)** | `y ~ gruppo` con `contr.sum` | intercetta = media non ponderata delle medie di cella; coefficienti = deviazioni codificate rispetto a quel centro |
+| **Medie di cella** | `y ~ 0 + gruppo` | un coefficiente = una media di gruppo |
 
-$$
-\begin{aligned}
-y_i &\sim \operatorname{Normal}(\mu_i, \sigma) \\
-\mu_i &= \alpha + \gamma_1 D_{i,\text{P1}} + \gamma_2 D_{i,\text{P2}}
-\end{aligned}
-$$
+::: {.callout-note title="Due usi della parola contrasto"}
+In R, espressioni come `contr.sum()` o `contr.treatment()` definiscono **come un fattore viene codificato nella matrice del modello**. Nel ragionamento scientifico, invece, un **contrasto** è una combinazione lineare delle medie scelta per rispondere a una domanda, per esempio $\mu_C-(\mu_{P1}+\mu_{P2})/2$. I due concetti sono collegati, ma non sono sinonimi: una codifica può essere comoda per certi contrasti senza coincidere con le ipotesi che vogliamo testare o stimare.
+:::
 
-dove $D_{i,\text{P1}}$ e $D_{i,\text{P2}}$ assumono valore 1 se l’osservazione $i$ appartiene rispettivamente alla Terapia 1 o alla Terapia 2, e 0 altrimenti.
+### 1. Codifica a riferimento (*treatment coding*)
 
-La matrice del modello che ne deriva ha le seguenti righe uniche, che mostrano chiaramente la struttura di codifica:
+Con il controllo come livello di riferimento, R costruisce una matrice del modello con l'intercetta e due colonne indicatrici, una per ciascun livello attivo del fattore:
 
 ```{r}
 #| label: anova-treatment-design-matrix
+
 model.matrix(~ condizione, data = anova_data) |>
   as.data.frame() |>
   distinct()
 ```
 
-In questa parametrizzazione, l’intercetta $\alpha$ coincide con la media del gruppo di controllo ($\mu_C$); i coefficienti $\gamma_1$ e $\gamma_2$ rappresentano rispettivamente la differenza tra la Terapia 1 e il controllo, e tra la Terapia 2 e il controllo:
+Le tre righe uniche corrispondono alle tre condizioni e hanno la seguente struttura:
 
 $$
-\alpha = \mu_C, \qquad \gamma_1 = \mu_{P1} - \mu_C, \qquad \gamma_2 = \mu_{P2} - \mu_C.
+\begin{array}{c|ccc}
+& (\text{Intercept}) & D_{P1} & D_{P2} \\
+\hline
+C  & 1 & 0 & 0 \\
+P1 & 1 & 1 & 0 \\
+P2 & 1 & 0 & 1
+\end{array}
 $$
 
-Questa codifica è particolarmente utile quando l’interesse è confrontare ciascun trattamento con il controllo. Tuttavia, non fornisce in modo esplicito il contrasto tra i due trattamenti attivi ($\Delta_{P1:P2} = \mu_{P1} - \mu_{P2}$); per ottenerlo è necessario combinare linearmente i coefficienti stimati.
+Il predittore lineare si scrive quindi come
 
-### 2. Parametrizzazione a Medie di Cella (*Cell-Means Coding*)
+$$
+\mu_i = \alpha + \gamma_1 D_{i,P1} + \gamma_2 D_{i,P2},
+$$
 
-Un'alternativa alla codifica con categoria di riferimento è rappresentata dalla parametrizzazione a **medie di cella** (*cell-means coding*). Per ottenerla, si rimuove l'intercetta globale mediante l'operatore `0` nella formula; in questo modo R genera una variabile indicatrice separata per ciascun livello del fattore:
+dove $D_{i,P1}$ e $D_{i,P2}$ sono variabili indicatrici che valgono 1 se l'osservazione appartiene rispettivamente a Psicoterapia 1 o Psicoterapia 2, e 0 altrimenti. Sostituendo i tre possibili profili di colonne, otteniamo le medie di gruppo in funzione dei coefficienti:
+
+$$
+\mu_C = \alpha, \qquad \mu_{P1} = \alpha + \gamma_1, \qquad \mu_{P2} = \alpha + \gamma_2.
+$$
+
+Ne consegue che i coefficienti $\gamma_1$ e $\gamma_2$ rappresentano direttamente le differenze tra ciascun trattamento e il controllo:
+
+$$
+\gamma_1 = \mu_{P1} - \mu_C, \qquad \gamma_2 = \mu_{P2} - \mu_C.
+$$
+
+Questa parametrizzazione è particolarmente trasparente quando l'obiettivo è quello di confrontare ciascun trattamento con il gruppo di controllo. Gli altri contrasti rimangono comunque ricostruibili come combinazioni lineari di $\gamma_1$ e $\gamma_2$. Ad esempio, il confronto tra i due trattamenti è
+
+$$
+\Delta_{P1:P2} = \mu_{P1} - \mu_{P2} = \gamma_1 - \gamma_2,
+$$
+
+mentre il confronto tra il controllo e la media dei due trattamenti diventa
+
+$$
+\Delta_{C:T} = \mu_C - \frac{\mu_{P1} + \mu_{P2}}{2}
+= -\frac{\gamma_1 + \gamma_2}{2}.
+$$
+
+Quest'ultimo contrasto non corrisponde a un singolo coefficiente del modello, ma a una combinazione lineare dei coefficienti stimati.
+
+
+### 2. Codifica a somma zero (*effect coding*)
+
+Una seconda parametrizzazione, spesso utilizzata quando non esiste un gruppo di riferimento naturale, è la **codifica a somma zero** (detta anche *effect coding*). Con tre livelli, la codifica standard `contr.sum(3)` produce due colonne di contrasto:
+
+```{r}
+#| label: anova-sum-design-matrix
+
+model.matrix(
+  ~ condizione,
+  data = anova_data,
+  contrasts.arg = list(condizione = contr.sum(3))
+) |>
+  as.data.frame() |>
+  distinct()
+```
+
+Con l'ordine dei livelli utilizzato nel capitolo, le tre righe uniche hanno la seguente struttura:
+
+$$
+\begin{array}{c|ccc}
+& (\text{Intercept}) & S_1 & S_2 \\
+\hline
+C  & 1 & 1  & 0 \\
+P1 & 1 & 0  & 1 \\
+P2 & 1 & -1 & -1
+\end{array}
+$$
+
+Il predittore lineare si scrive quindi come
+
+$$
+\mu_i = \alpha_s + \delta_1 S_{1i} + \delta_2 S_{2i}.
+$$
+
+Dalla matrice si ricava il sistema di equazioni per le tre medie di gruppo:
+
+$$
+\begin{aligned}
+\mu_C  &= \alpha_s + \delta_1, \\
+\mu_{P1} &= \alpha_s + \delta_2, \\
+\mu_{P2} &= \alpha_s - \delta_1 - \delta_2.
+\end{aligned}
+$$
+
+Sommando le tre equazioni, si ottiene:
+
+$$
+\mu_C + \mu_{P1} + \mu_{P2} = 3\alpha_s,
+$$
+
+da cui
+
+$$
+\alpha_s = \frac{\mu_C + \mu_{P1} + \mu_{P2}}{3}.
+$$
+
+L'intercetta $\alpha_s$ rappresenta quindi la **media non ponderata delle tre medie di gruppo**. Se i gruppi hanno numerosità diverse, questa quantità non coincide necessariamente con la media empirica complessiva di tutte le osservazioni: è invece il centro del disegno fattoriale, non il centro del campione osservato.
+
+I coefficienti $\delta_1$ e $\delta_2$ esprimono le deviazioni codificate rispetto a questo centro. Il terzo scostamento, relativo al livello di riferimento della codifica, è determinato dal vincolo di somma zero e non compare esplicitamente tra i parametri del modello.
+
+::: {.callout-important title="La scala della codifica determina la scala dei coefficienti"}
+Come già visto per il caso a due gruppi, i valori numerici assegnati alle colonne di contrasto non sono arbitrari: determinano la grandezza dei coefficienti necessari per ricostruire le stesse medie di gruppo. Un coefficiente stimato con codifica a somma zero non è direttamente confrontabile con uno ottenuto con codifica a riferimento, a meno che non venga riportato sulla stessa scala. Perciò, un coefficiente deve essere interpretato solo dopo aver verificato la matrice del modello o i contrasti effettivamente assegnati al fattore.
+:::
+
+### 3. Parametrizzazione a medie di cella
+
+La parametrizzazione più trasparente per il confronto tra gruppi consiste nell'eliminare l'intercetta globale e includere una colonna indicatrice per ciascun livello del fattore. In R, la formula corrispondente è:
+
+```r
+punteggio ~ 0 + condizione
+```
+
+Il simbolo `0` sopprime l'intercetta e R costruisce una colonna per ogni livello del fattore `condizione`:
 
 ```{r}
 #| label: anova-cell-means-design-matrix
+
 model.matrix(~ 0 + condizione, data = anova_data) |>
   as.data.frame() |>
   distinct()
 ```
 
-Il predittore lineare è quindi espresso come combinazione lineare delle medie di gruppo:
+Le tre righe uniche corrispondono alle tre condizioni e hanno una struttura a uno caldo (*one-hot encoding*):
 
 $$
-\mu_i = \mu_C \, I_{i,C} + \mu_{P1} \, I_{i,P1} + \mu_{P2} \, I_{i,P2}.
+\begin{array}{c|ccc}
+& C & P1 & P2 \\
+\hline
+C  & 1 & 0 & 0 \\
+P1 & 0 & 1 & 0 \\
+P2 & 0 & 0 & 1
+\end{array}
 $$
 
-I coefficienti stimati coincidono direttamente con le medie condizionate di ciascuna condizione: non esprimono più scostamenti da un livello di riferimento, ma rappresentano i valori attesi dell’outcome in ogni cella del disegno. Ne consegue una lettura più immediata dei coefficienti, svincolata dalla scelta di una categoria baseline e più flessibile per la costruzione di contrasti arbitrari.
+Il predittore lineare si scrive quindi come
 
-Le due parametrizzazioni — con intercetta e dummy, e a medie di cella — sono algebricamente equivalenti: generano lo stesso sottospazio lineare, producono identici valori adattati e portano alla stessa distribuzione predittiva, purché le distribuzioni a priori siano coerenti con la parametrizzazione adottata. La differenza è quindi solo geometrica: cambia il sistema di coordinate, non la struttura del modello. La scelta tra le due codifiche va orientata in base alla chiarezza interpretativa e alla facilità con cui è possibile derivare le quantità sostantive di interesse.
+$$
+\mu_i =
+\mu_C I_{i,C} +
+\mu_{P1} I_{i,P1} +
+\mu_{P2} I_{i,P2},
+$$
+dove $I_{i,C}$ è una variabile indicatrice che vale 1 se l'osservazione appartiene al gruppo di controllo e 0 altrimenti, e analogamente per gli altri due gruppi.
+
+Con questa parametrizzazione, **i tre coefficienti coincidono direttamente con le medie di gruppo**:
+
+$$
+\mu_C, \quad \mu_{P1}, \quad \mu_{P2}.
+$$
+
+Non vi è alcuna differenza codificata come coefficiente elementare: i confronti tra gruppi devono essere costruiti esplicitamente come combinazioni lineari delle medie. Ad esempio, i due contrasti pianificati all'inizio del capitolo si ottengono come:
+
+$$
+\Delta_{C:T} = 1\mu_C - 0.5\mu_{P1} - 0.5\mu_{P2},
+$$
+
+e
+
+$$
+\Delta_{P1:P2} = 0\mu_C + 1\mu_{P1} - 1\mu_{P2}.
+$$
+
+Questa parametrizzazione è particolarmente utile quando il numero di gruppi cresce e le domande scientifiche sono formulate direttamente come confronti tra medie: i coefficienti stimati sono già sulla scala che interessa interpretare, e i contrasti possono essere definiti in modo flessibile senza dover ricostruire le medie a partire da intercetta e coefficienti di scostamento.
+
+### Che cosa cambia e che cosa rimane invariato
+
+Le tre parametrizzazioni descrivono lo stesso sistema di medie, a condizione che la specificazione probabilistica sia coerente, ovvero che i prior vengano trasformati di conseguenza in modo che le distribuzioni indotte sulle quantità sostantive rimangano invariate. Ciò che cambia è la veste algebrica: il significato immediato dell'intercetta, il significato dei coefficienti non intercetta, la forma con cui un contrasto compare nell'output e, soprattutto in un contesto bayesiano, i priori indotti sulle medie e sui contrasti quando vengono assegnati direttamente ai coefficienti.
+
+Ciò che invece rimane invariato, e che definisce la domanda scientifica, sono le quantità sostantive: le medie di gruppo $\mu_C$, $\mu_{P1}$ e $\mu_{P2}$ e qualunque contrasto lineare costruito coerentemente a partire da esse. Un contrasto come $\mu_{P1} - \mu_{P2}$ rimane invariato a prescindere dal fatto che lo si ricavi da una codifica a riferimento, da una codifica a somma zero o da una parametrizzazione a medie di cella. La scelta tra queste codifiche è una scelta di rappresentazione del modello e non incide sulla domanda di ricerca [@caudek2001statistica].
+
+Per questo motivo, nel prosieguo del capitolo adotteremo la parametrizzazione a medie di cella, che rende esplicite le medie che vogliamo confrontare e facilita la costruzione dei contrasti pianificati, senza richiedere al lettore di ricordare a quale domanda corrisponda una determinata combinazione lineare dei coefficienti.
+
+::: {.callout-note title="Perché questa è già la logica dell'ANOVA"}
+Con due gruppi avevamo due medie e una differenza. Con tre gruppi abbiamo tre medie e possiamo formulare più contrasti. Con $G$ gruppi, la parametrizzazione a medie di cella produce $G$ medie; le altre codifiche rappresentano lo stesso spazio con coordinate diverse. **L'ANOVA a una via è quindi il modello lineare applicato a un fattore con più livelli.**
+:::
 
 ## Specificare il modello bayesiano
 
@@ -214,14 +379,14 @@ anova_priors <- c(
 ```
 
 ::: {.callout-warning title="I prior dipendono dalla parametrizzazione"}
-Con `0 + condizione`, i coefficienti di classe `b` sono le tre medie di gruppo. Con la codifica a riferimento, invece, il prior dell'intercetta riguarda una media di riferimento, mentre i prior degli altri coefficienti riguardano differenze. Assegnare meccanicamente gli stessi prior ai coefficienti delle due parametrizzazioni non produce necessariamente lo stesso modello a priori sulle medie.
+Con `0 + condizione`, i coefficienti di classe `b` sono le tre medie di gruppo. Con la codifica a riferimento, invece, il prior dell'intercetta riguarda una media di riferimento, mentre i prior degli altri coefficienti riguardano le differenze. Assegnare meccanicamente gli stessi prior ai coefficienti delle due parametrizzazioni non produce necessariamente lo stesso modello a priori sulle medie.
 :::
 
 ## Controllo predittivo a priori
 
-Prima di condizionare il modello ai dati, controlliamo quali punteggi e quali configurazioni dei gruppi esso considera plausibili sulla base dei soli prior.
+Prima di condizionare il modello ai dati, verifichiamo quali punteggi e quali configurazioni dei gruppi esso considera plausibili sulla base dei soli prior.
 
-Eseguiamo quindi una simulazione predittiva a priori (*prior predictive check*) estraendo campioni esclusivamente dalle distribuzioni probabilistiche definite, senza considerare i dati osservati:
+Eseguiamo quindi un controllo predittivo a priori (*prior predictive check*). Le repliche vengono generate dai prior e dal modello dei dati: i valori osservati dell'outcome non intervengono nell'aggiornamento. Nel grafico possono comunque essere mostrati come riferimento per evidenziare eventuali incompatibilità macroscopiche.
 
 ```{r}
 #| label: fit-anova-prior-only
@@ -256,11 +421,11 @@ pp_check(
 )
 ```
 
-> **Valutazione diagnostica:** questo controllo non ha lo scopo di riprodurre fedelmente i dati osservati. La sua funzione è diagnostica: verificare che le distribuzioni a priori siano in grado di generare valori plausibili per il fenomeno in esame — ad esempio, punteggi di depressione compresi nell'intervallo teoricamente possibile e con una variabilità non manifestamente irrealistica. Se così non fosse, occorrerebbe rivedere i prior prima di procedere con l'inferenza.
+> **Valutazione diagnostica:** questo controllo non richiede che le repliche assomiglino già ai dati osservati. Ha lo scopo di verificare che le ipotesi a priori non assegnino una quota sostanziale di probabilità a scenari palesemente incompatibili con la scala o con il fenomeno. Se emergono molte configurazioni implausibili, è necessario riconsiderare i parametri a priori e, quando necessario, anche la scelta della distribuzione dei dati.
 
-## Stima del modello e verifiche computazionali
+## Adattare e controllare il modello
 
-Per procedere all'inferenza, adattiamo il modello ai dati simulati, includendo l'opzione `sample_prior = "yes"` in modo che Stan conservi anche i campioni tratti dalle distribuzioni a priori. Ciò consentirà, se necessario, di confrontare le distribuzioni *prior* e *posterior* per valutare l'impatto dei dati sulle stime.
+Adattiamo il modello a medie di cella ai dati. Il workflow computazionale è lo stesso già utilizzato nei capitoli precedenti; qui, ciò che interessa soprattutto è ciò che cambia nella struttura delle quantità stimate.
 
 ```{r}
 #| label: fit-anova-cell-means
@@ -280,226 +445,172 @@ anova_fit <- brm(
 )
 ```
 
-Estraiamo ora le stime marginali e gli indici di sintesi della distribuzione a posteriori:
-
 ```{r}
 #| label: summarize-anova-fit
 
 summary(anova_fit)
 ```
 
-Nella parametrizzazione a medie di cella qui adottata, i coefficienti `condizionecontrollo`, `condizionepsicoterapia1` e `condizionepsicoterapia2` corrispondono direttamente alle medie condizionate dei tre gruppi, $\mu_C$, $\mu_{P1}$ e $\mu_{P2}$. Il parametro `sigma` rappresenta invece la deviazione standard residua, assunta costante tra le condizioni e comune a tutti i gruppi.
+Con questa parametrizzazione, i coefficienti di classe `b` corrispondono direttamente alle tre medie di cella, mentre `sigma` descrive la dispersione residua comune all'interno dei gruppi.
 
-### Diagnostica algoritmica del campionamento
+Le diagnostiche MCMC — $\widehat R$, ESS, divergenze e altri avvisi del campionatore — devono sempre essere controllate, ma non verranno ripetute in questa sede in quanto fanno già parte del flusso di lavoro acquisito in @sec-linmod-bayesian-reg. Un campionamento numericamente affidabile è una condizione necessaria per interpretare la posterior, non una prova dell'adeguatezza scientifica del modello.
 
-Per verificare la stabilità numerica del campionamento MCMC, esaminiamo i *trace plot* delle catene per tutti i parametri liberi del modello:
+### Controllare il modello rispettando la struttura dei gruppi
+
+Poiché la domanda riguarda tre distribuzioni condizionate, un controllo predittivo aggregato potrebbe nascondere delle discrepanze presenti in una singola condizione. È quindi più informativo confrontare le osservazioni e le repliche separatamente per gruppo.
 
 ```{r}
-#| label: fig-anova-trace
-#| fig-cap: "Trace plot delle traiettorie MCMC per le tre medie di cella e per la deviazione standard residua. Catene stazionarie, ben mescolate e prive di separazioni persistenti sono compatibili con un campionamento adeguato."
+#| label: fig-anova-grouped-ppc
+#| fig-cap: "Controllo predittivo a posteriori separato per condizione. Le distribuzioni osservate sono confrontate con repliche generate dal modello all'interno di ciascun gruppo."
 #| fig-width: 8
-#| fig-height: 6
+#| fig-height: 5.5
 
-mcmc_trace(
-  as_draws_array(anova_fit),
-  pars = c(
-    "b_condizionecontrollo",
-    "b_condizionepsicoterapia1",
-    "b_condizionepsicoterapia2",
-    "sigma"
-  )
+pp_check(
+  anova_fit,
+  type = "dens_overlay_grouped",
+  group = "condizione",
+  ndraws = 20
 )
 ```
 
-L'ispezione visiva va integrata con il controllo sistematico degli indicatori quantitativi di convergenza:
-
-- il fattore $\widehat{R}$, che deve risultare inferiore a $1.01$ per tutti i parametri;
-- la dimensione campionaria effettiva (*Effective Sample Size*), sia *bulk* che *tail*, per garantire un numero di draw sostanzialmente indipendenti;
-- l'assenza di transizioni divergenti e di superamenti della massima profondità dell'albero (*max_treedepth*).
-
-Il superamento di queste verifiche attesta che l'algoritmo ha esplorato in modo affidabile la distribuzione a posteriori, ma non costituisce di per sé una certificazione della validità scientifica del modello, né dell'adeguatezza della verosimiglianza normale per il fenomeno in esame.
-
-## Controllare l'adeguatezza predittiva
-
-Per valutare se il modello a tre medie di cella riproduca adeguatamente la struttura dei dati osservati, si esegue un controllo predittivo a posteriori (*PPC*) sulla distribuzione marginale complessiva:
-
-```{r}
-#| label: fig-anova-posterior-predictive
-#| fig-cap: "Controllo predittivo a posteriori della distribuzione complessiva dei punteggi."
-#| fig-width: 7
-#| fig-height: 5
-
-pp_check(anova_fit, type = "dens_overlay", ndraws = 50)
-```
-
-Tuttavia, un buon allineamento sulla distribuzione aggregata può occultare discrepanze locali o asimmetrie sistematiche all'interno dei singoli gruppi. Per questo motivo, è utile disaggregare il controllo predittivo, confrontando le statistiche campionarie osservate con quelle generate dalle repliche predittive ($y^{\text{rep}}$) separatamente per ciascuna condizione:
-
-```{r}
-#| label: anova-groupwise-ppc
-
-anova_yrep <- posterior_predict(anova_fit, ndraws = 200)
-
-group_index <- split(
-  seq_len(nrow(anova_data)),
-  anova_data$condizione
-)
-
-observed_group_stats <- tibble(
-  condizione = names(group_index),
-  media_osservata = vapply(
-    group_index,
-    function(idx) mean(anova_data$punteggio[idx]),
-    numeric(1)
-  ),
-  sd_osservata = vapply(
-    group_index,
-    function(idx) sd(anova_data$punteggio[idx]),
-    numeric(1)
-  )
-)
-
-replicated_group_stats <- bind_rows(lapply(
-  names(group_index),
-  function(group_name) {
-    idx <- group_index[[group_name]]
-    tibble(
-      condizione = group_name,
-      media_rep = rowMeans(anova_yrep[, idx, drop = FALSE]),
-      sd_rep = apply(anova_yrep[, idx, drop = FALSE], 1, sd)
-    )
-  }
-))
-
-observed_group_stats
-```
-
-Il grafico seguente mostra, per ciascun gruppo, la distribuzione delle medie replicate, con la media osservata indicata da una linea verticale:
-
-```{r}
-#| label: fig-anova-groupwise-mean-ppc
-#| fig-cap: "Distribuzioni predittive a posteriori delle medie campionarie replicate, separate per condizione. I punti indicano le medie osservate."
-#| fig-width: 8
-#| fig-height: 5
-
-replicated_group_stats |>
-  ggplot(aes(x = media_rep)) +
-  geom_density(fill = "grey95", color = "grey40") +
-  geom_vline(
-    data = observed_group_stats,
-    aes(xintercept = media_osservata),
-    linetype = "dashed",
-    color    = "firebrick",
-    linewidth = 0.8
-  ) +
-  facet_wrap(~ condizione, scales = "free_x") +
-  labs(
-    x = "Media campionaria replicata",
-    y = "Densità predittiva"
-  )
-```
-
-Questo controllo disaggregato consente di valutare se il modello sia in grado di riprodurre le medie osservate in ciascuna condizione. Se le medie osservate ricadono in regioni non anomale delle distribuzioni replicate, il modello non mostra una discrepanza evidente rispetto a questa specifica caratteristica dei dati. La corretta riproduzione delle medie non implica tuttavia che l'assunzione di omoschedasticità — ovvero una varianza residua comune a tutti i gruppi — sia automaticamente valida. Per una verifica più completa, è opportuno estendere il controllo predittivo anche alla variabilità replicata.
+Questo controllo può evidenziare problemi specifici relativi alla posizione, alla dispersione o alla forma di un gruppo. Un buon accordo non dimostra che il modello sia vero, ma indica soltanto che, rispetto alle caratteristiche visualizzate, non emergono discrepanze evidenti.
 
 ## Dalle medie ai contrasti pianificati
 
-Se la parametrizzazione è scelta in modo che i coefficienti del modello corrispondano già ai contrasti di interesse, la stima di questi ultimi è immediata. L’inferenza si fonda sulla distribuzione a posteriori, che quantifica l’incertezza sulle differenze tra le medie e consente di rispondere direttamente ai quesiti scientifici, ad esempio calcolando la probabilità che un contrasto superi una certa soglia. Il codice seguente mostra come derivare i due contrasti pianificati a partire dalle medie di cella:
+Come nel capitolo sui due gruppi, è opportuno separare i coefficienti interni del modello dalle quantità che rispondono direttamente alla domanda scientifica. Per rendere questa separazione evidente, chiediamo al modello le tre medie attese tramite `posterior_epred()` e costruiamo poi i contrasti draw per draw.
 
 ```{r}
 #| label: derive-anova-contrasts
 
-# Estraiamo i draw posteriori in un formato esplicito e manipolabile
-draws_cell_means <- as_draws_df(anova_fit)
-
-# Deriviamo i contrasti pianificati tramite mutate_variables
-draws_contrasts <- posterior::mutate_variables(
-  draws_cell_means,
-  mu_ctrl         = b_condizionecontrollo,
-  mu_p1           = b_condizionepsicoterapia1,
-  mu_p2           = b_condizionepsicoterapia2,
-  ctrl_vs_terapie = mu_ctrl - (mu_p1 + mu_p2) / 2,
-  p1_vs_p2        = mu_p1 - mu_p2,
-  range_mu        = pmax(mu_ctrl, mu_p1, mu_p2) -
-                    pmin(mu_ctrl, mu_p1, mu_p2)
-)
-
-# Selezioniamo le sole variabili sostantive per il summary descrittivo
-subset_contrasts <- subset_draws(
-  draws_contrasts,
-  variable = c(
-    "mu_ctrl", "mu_p1", "mu_p2",
-    "ctrl_vs_terapie", "p1_vs_p2", "range_mu"
+group_grid <- tibble(
+  condizione = factor(
+    c("controllo", "psicoterapia1", "psicoterapia2"),
+    levels = levels(anova_data$condizione)
   )
 )
 
-summarise_draws(subset_contrasts)
+group_epred <- posterior_epred(
+  anova_fit,
+  newdata = group_grid
+)
+
+fit_draws <- as_draws_df(anova_fit)
+
+draws_contrasts <- tibble(
+  mu_ctrl = group_epred[, 1],
+  mu_p1   = group_epred[, 2],
+  mu_p2   = group_epred[, 3],
+  sigma   = fit_draws$sigma
+) |>
+  mutate(
+    ctrl_vs_terapie = mu_ctrl - (mu_p1 + mu_p2) / 2,
+    p1_vs_p2        = mu_p1 - mu_p2,
+    range_mu        = pmax(mu_ctrl, mu_p1, mu_p2) -
+                      pmin(mu_ctrl, mu_p1, mu_p2)
+  )
+
+draws_contrasts |>
+  summarise(
+    across(
+      c(mu_ctrl, mu_p1, mu_p2, ctrl_vs_terapie, p1_vs_p2, range_mu),
+      list(
+        median = median,
+        lower = ~ quantile(.x, 0.025),
+        upper = ~ quantile(.x, 0.975)
+      )
+    )
+  )
 ```
 
-Ogni contrasto è una distribuzione a posteriori completa, che riflette l’incertezza congiunta delle quantità coinvolte. Per un’interfaccia più dichiarativa si può usare il pacchetto `emmeans`; per maggiore flessibilità e trasparenza, il controllo diretto sui *draw* rimane lo strumento più generale.
+Il passaggio concettuale è lo stesso già visto con due gruppi:
 
-### Specificazione dei contrasti tramite il pacchetto `emmeans`
+$$
+\text{draw dei parametri}
+\longrightarrow
+(\mu_C,\mu_{P1},\mu_{P2})
+\longrightarrow
+\text{contrasti}.
+$$
 
-Il pacchetto `emmeans` (*estimated marginal means*) offre un'interfaccia dichiarativa per formalizzare i contrasti definiti manualmente. Questo approccio risulta particolarmente utile in modelli complessi, con più predittori o interazioni, dove il calcolo diretto sui draw diventa meno immediato. Il codice seguente mostra come calcolare le medie marginali attese per il fattore `condizione`:
+Per ogni draw otteniamo tre medie compatibili con il modello e i dati; da queste tre medie calcoliamo i contrasti. Ripetendo il calcolo per tutti i draw, si ottiene la distribuzione a posteriori completa di ciascun contrasto con la propagazione automatica dell'incertezza.
+
+::: {.callout-important title="Un contrasto è una domanda scritta come pesi sulle medie"}
+Per interpretare un contrasto, è sempre meglio leggere i suoi pesi. Nel contrasto controllo vs media delle terapie,
+
+$$
+(1,-0.5,-0.5),
+$$
+
+il peso positivo assegna il controllo a un lato del confronto e i due pesi negativi dividono equamente l'altro lato. Nel contrasto tra i protocolli,
+
+$$
+(0,1,-1),
+$$
+
+il controllo non partecipa alla domanda. I pesi rendono quindi esplicita l'ipotesi scientifica prima ancora del calcolo.
+:::
+
+::: {.callout-tip collapse=true title="Approfondimento: dichiarare i contrasti con emmeans"}
+Nei modelli con più predittori o interazioni può essere utile un'interfaccia dichiarativa come `emmeans`. Lo stesso sistema di pesi può essere espresso, per esempio, come:
 
 ```{r}
-#| label: anova-emmeans
+library(emmeans)
 
 anova_emmeans <- emmeans(anova_fit, specs = "condizione")
-anova_emmeans
-```
-
-Per riprodurre i contrasti pianificati definiti in precedenza, si specifica una lista di vettori di pesi:
-
-```{r}
-#| label: anova-planned-contrasts-emmeans
 
 planned_contrasts <- list(
-  "Controllo vs media terapie" = c(
-    controllo       = 1,
-    psicoterapia1   = -0.5,
-    psicoterapia2   = -0.5
-  ),
-  "Protocollo 1 vs protocollo 2" = c(
-    controllo       = 0,
-    psicoterapia1   = 1,
-    psicoterapia2   = -1
-  )
+  "Controllo vs media terapie" = c(1, -0.5, -0.5),
+  "Protocollo 1 vs protocollo 2" = c(0, 1, -1)
 )
 
 contrast(anova_emmeans, method = planned_contrasts)
 ```
 
-In ciascun vettore, la somma dei pesi è pari a zero: ciò garantisce che il contrasto isoli esclusivamente la differenza tra i gruppi considerati, senza essere influenzato dal livello medio generale. I confronti esaustivi a coppie sono disponibili tramite `pairs(anova_emmeans)`, ma vanno utilizzati solo quando l'esplorazione sistematica è giustificata; in presenza di ipotesi specifiche, i contrasti pianificati rappresentano la strategia più coerente con la domanda di ricerca.
+L'interfaccia cambia, ma la quantità matematica rimane la stessa combinazione lineare delle medie.
+:::
 
-## Probabilità sostantive e rilevanza clinica dei contrasti
+## Direzione, ampiezza e rilevanza sostantiva dei contrasti
 
-Per superare la logica binaria dei test di significatività, introduciamo una soglia di rilevanza pratica. Supponiamo che, nel dominio della scala CES-D, una variazione inferiore a tre punti sia considerata clinicamente irrilevante. Definiamo quindi la *SESOI* (*Smallest Effect Size of Interest*):
+Una distribuzione a posteriori permette di separare tre domande che non sono equivalenti: **in quale direzione va il contrasto?**, **quanto è grande?**, **supera una soglia sostantivamente importante?**
+
+A puro scopo didattico, poniamo una soglia di 3 punti sulla scala dell'outcome. Il valore non deve essere interpretato come una soglia clinica validata per la CES-D: serve soltanto a mostrare come una soglia motivata dal dominio entrerebbe nell'analisi.
+
+```{r}
+#| label: define-anova-sesoi
+
+SESOI <- 3
+```
+
+Per il contrasto controllo vs terapie possiamo calcolare, per esempio,
 
 $$
-\delta_{\min} = 3
+P(\Delta_{C:T}>0\mid y)
+\qquad\text{e}\qquad
+P(\Delta_{C:T}>3\mid y).
 $$
 
-Per calcolare le probabilità di interesse, estraiamo i draw dei contrasti dall'oggetto `subset_contrasts` sotto forma di matrice:
+La prima probabilità riguarda la **direzione**; la seconda richiede anche una determinata **ampiezza**. Per il confronto tra i due protocolli può invece essere scientificamente sensato chiedere se la differenza assoluta superi la soglia:
+
+$$
+P(|\Delta_{P1:P2}|>3\mid y).
+$$
 
 ```{r}
 #| label: summarize-anova-substantive-probabilities
 
-mat_contrasts <- as_draws_matrix(subset_contrasts)
-
-ctrl_vs_terapie_d <- mat_contrasts[, "ctrl_vs_terapie"]
-p1_vs_p2_d        <- mat_contrasts[, "p1_vs_p2"]
-range_mu_d        <- mat_contrasts[, "range_mu"]
-
-SESOI <- 3
+ctrl_vs_terapie_d <- draws_contrasts$ctrl_vs_terapie
+p1_vs_p2_d        <- draws_contrasts$p1_vs_p2
+range_mu_d        <- draws_contrasts$range_mu
 
 anova_probabilities <- tibble(
-  quesito_clinico = c(
-    "Almeno due medie differiscono di oltre 3 punti (R_mu > 3)",
-    "Le terapie riducono la sintomatologia rispetto al controllo (Δ > 0)",
-    "La riduzione media dovuta alle terapie supera la SESOI (Δ > 3)",
-    "Il protocollo 2 ha un punteggio medio inferiore al protocollo 1 (Δ > 0)",
-    "La differenza tra i due protocolli supera la SESOI (|Δ| > 3)"
+  quesito = c(
+    "Almeno due medie distano più di 3 punti",
+    "Il controllo ha media maggiore della media delle terapie",
+    "Il contrasto controllo-terapie supera 3 punti",
+    "Psicoterapia 1 ha media maggiore di Psicoterapia 2",
+    "La differenza assoluta tra i protocolli supera 3 punti"
   ),
-  probabilita_posterior = c(
+  probabilita_posteriore = c(
     mean(range_mu_d > SESOI),
     mean(ctrl_vs_terapie_d > 0),
     mean(ctrl_vs_terapie_d > SESOI),
@@ -510,7 +621,6 @@ anova_probabilities <- tibble(
 
 anova_probabilities
 ```
-
 
 ```{r}
 #| label: anova-report-values
@@ -527,78 +637,83 @@ p12_upper  <- quantile(p1_vs_p2_d, 0.975, names = FALSE)
 p12_prob_sesoi <- mean(abs(p1_vs_p2_d) > SESOI)
 ```
 
-I cinque indici così ottenuti rispondono a domande distinte. Un contrasto può avere un'elevata probabilità di essere positivo, ma una probabilità modesta di superare la soglia di rilevanza pratica; viceversa, due trattamenti possono differire in modo stimabile, ma non in misura sufficiente da orientare una decisione clinica.
+Le probabilità ottenute rispondono a domande diverse. Un contrasto può avere un'elevata probabilità di essere positivo e, allo stesso tempo, una probabilità più modesta di superare una soglia sostantiva. Direzione e rilevanza non devono quindi essere fuse in un unico giudizio.
 
-In un’analisi confermativa, la SESOI dovrebbe essere motivata e specificata prima di esaminare i risultati, sulla base di considerazioni teoriche, cliniche o decisionali. È possibile esplorare soglie alternative dopo l’analisi, ma tali valutazioni devono essere dichiarate come analisi di sensibilità o approfondimenti post hoc, non presentate come criteri fissati in anticipo.
+In un’analisi confermativa, la SESOI dovrebbe essere motivata e specificata prima di esaminare i risultati, sulla base di considerazioni teoriche, cliniche o decisionali. È possibile esplorare soglie alternative dopo l’analisi, ma tali valutazioni devono essere dichiarate come analisi di sensibilità o approfondimenti post hoc e non presentate come criteri fissati in anticipo.
 
-## Il ruolo della valutazione omnibus
+## Che cosa resta della domanda omnibus
 
-Il test $F$ dell’ANOVA classica è un test omnibus: confronta la variabilità tra le medie dei gruppi con la variabilità entro i gruppi e valuta l’ipotesi che tutte le medie siano uguali. È utile come domanda globale e, in alcuni workflow frequentisti, come primo passaggio prima dei confronti successivi. Il suo limite interpretativo è che un risultato omnibus non identifica il pattern responsabile della differenza.
+Il termine **ANOVA** deriva dalla costruzione classica del test $F$, che confronta una componente di variabilità associata alle differenze tra gruppi con la variabilità residua entro i gruppi. Da qui l'espressione *analisi della varianza*.
 
-Nel framework bayesiano, l’uguaglianza esatta di parametri continui non è normalmente valutata osservando la probabilità che le medie assumano precisamente lo stesso valore. È più utile formulare una domanda globale sostantiva. Per esempio,
+Dal punto di vista del modello lineare, tuttavia, ciò che specifichiamo direttamente è soprattutto la **struttura delle medie**:
 
 $$
-R_\mu = \max(\mu_C,\mu_{P1},\mu_{P2})-
-       \min(\mu_C,\mu_{P1},\mu_{P2})
+Y_i\sim\operatorname{Normal}(\mu_{g[i]},\sigma).
 $$
 
-misura la massima separazione tra le medie. La probabilità $P(R_\mu>3\mid y)$ risponde alla domanda se almeno due gruppi differiscano di oltre la soglia pratica di tre punti. Questa sintesi è più interpretabile di una semplice decisione omnibus, ma non dice quali gruppi producano la separazione. Per rispondere ai quesiti clinici occorrono ancora i contrasti pianificati.
+Questa prospettiva chiarisce un'apparente stranezza terminologica: usiamo un'"analisi della varianza" per porre domande sulle medie perché, nella formulazione classica, l'evidenza sulle differenze tra le medie viene valutata attraverso una scomposizione della variabilità. Nel modello bayesiano, invece, possiamo invece lavorare direttamente con la posterior delle medie e dei loro contrasti.
 
-::: {.callout-tip title="Messaggio centrale"}
-La valutazione omnibus e i contrasti non sono concorrenti. La prima offre una sintesi globale; i secondi identificano il pattern, la direzione e l’ampiezza delle differenze che interessano scientificamente. I contrasti non sono esclusivi dell’approccio bayesiano, ma la distribuzione a posteriori consente di interpretarli in termini di ampiezza, direzione e soglie sostantive. Un’analisi informativa non si ferma alla frase “esiste almeno una differenza”.
+Una domanda globale può comunque essere utile. Per esempio,
+
+$$
+R_\mu
+=
+\max(\mu_C,\mu_{P1},\mu_{P2})
+-
+\min(\mu_C,\mu_{P1},\mu_{P2})
+$$
+
+misura la distanza massima tra le medie. La probabilità
+
+$$
+P(R_\mu>3\mid y)
+$$
+quantifica quanto sia plausibile, date le assunzioni del modello, che almeno due medie siano separate da più di tre punti.
+
+::: {.callout-important title="Omnibus e contrasti rispondono a domande diverse"}
+Una sintesi globale può affermare che il sistema delle medie presenta una separazione non trascurabile, ma non specifica **quale pattern** la produca. I contrasti pianificati, invece, identificano invece la direzione e l'ampiezza delle differenze che corrispondono alle ipotesi scientifiche. Per questo motivo, l'interpretazione non dovrebbe limitarsi alla sola conclusione omnibus.
 :::
 
-## Molteplicità: che cosa cambia e che cosa non cambia
+## Molteplicità e selezione dei contrasti
 
-All’aumentare del numero di livelli, cresce rapidamente anche il numero dei confronti possibili. Nell’approccio frequentista, quando si desidera controllare una specifica frequenza di errori in una famiglia di test, si usano procedure come Tukey o Bonferroni.
+Con $G$ gruppi il numero di confronti possibili cresce rapidamente. L'inferenza bayesiana non richiede una correzione meccanica delle probabilità posteriori, come quella di Bonferroni, ma **non elimina il problema della selezione**. Se si calcolano molti contrasti e se ne riportano soltanto quelli più estremi, il resoconto tende comunque a enfatizzare risultati fortuiti o eccezionali.
 
-L’analisi bayesiana non richiede automaticamente una correzione dei valori posteriori analoga a Bonferroni: ogni contrasto conserva la propria distribuzione a posteriori. Rimane però il problema scientifico della molteplicità. Se si esaminano molti contrasti e si riportano soltanto quelli più estremi, i risultati selezionati tendono a sovrastimare le differenze e il resoconto non rappresenta più l’insieme delle analisi svolte.
+Per questo motivo è utile distinguere tra:
 
-Le strategie principali sono:
+1. **contrasti pianificati**, derivati dalla teoria o dal disegno prima di esaminare i risultati;
+2. **contrasti esplorativi**, legittimi ma da riportare come tali;
+3. **famiglie numerose di gruppi correlati**, per le quali una struttura gerarchica può rappresentare meglio l'eterogeneità e introdurre *partial pooling*.
 
-1. **pianificare i contrasti** sulla base della teoria;
-2. **riportare l’insieme delle analisi effettuate**, distinguendo conferma ed esplorazione;
-3. **valutare la sensibilità** delle conclusioni alle soglie e alle specificazioni;
-4. **usare modelli gerarchici** quando i gruppi possono essere rappresentati come unità provenienti da una popolazione comune. Il partial pooling stabilizza le stime estreme, ma non sostituisce la trasparenza sulla selezione dei risultati.
+L'ultimo punto prepara il terreno per il capitolo successivo: quando i gruppi non sono soltanto poche condizioni nominate, ma realizzazioni di una popolazione più ampia (scuole, cliniche, terapeuti, stimoli, studi), diventa naturale modellare anche la distribuzione delle loro differenze.
 
-## Assunzioni del modello ed estensioni metodologiche
+## Assunzioni e possibili estensioni
 
-Il modello a medie di cella assume che, condizionatamente al gruppo, le osservazioni siano indipendenti e seguano una distribuzione normale con deviazione standard comune $\sigma$. I controlli predittivi possono mostrare se il modello riproduce adeguatamente posizione, dispersione, asimmetria e code delle distribuzioni osservate. L’indipendenza dipende soprattutto dal disegno e dalla struttura dei dati: misure ripetute, partecipanti raggruppati in centri o altri cluster richiedono una modellazione esplicita. L’assenza di confondimento non è invece un’assunzione diagnostica della likelihood: riguarda la possibilità di interpretare causalmente i contrasti e deve essere valutata attraverso il disegno di ricerca e le conoscenze sostantive.
+Il modello essenziale del capitolo assume che, condizionatamente al gruppo, le osservazioni siano indipendenti e seguano una distribuzione normale con deviazione standard comune $\sigma$. I controlli predittivi possono mettere in evidenza discrepanze nella forma o nella dispersione, ma alcune assunzioni, in particolare l'indipendenza delle osservazioni e la validità di un'interpretazione causale, dipendono soprattutto dal disegno della ricerca.
 
-Quando queste assunzioni risultano eccessivamente restrittive, il framework bayesiano offre estensioni naturali: l’adozione di una verosimiglianza Student-$t$ per distribuzioni con code pesanti o valori estremi; modelli con varianza eterogenea tra gruppi; l’inclusione di covariate e interazioni per controllare variabili di disturbo; e strutture gerarchiche per dati clusterizzati o misure ripetute.
-
-A titolo di esempio, nel pacchetto `brms` è possibile rilassare l’assunzione di omoschedasticità modellando esplicitamente il parametro di scala in funzione del fattore categoriale:
+Se i gruppi mostrano dispersioni sostanzialmente differenti, `brms` permette di modellare anche $\sigma$ in funzione della condizione:
 
 ```r
-#| label: anova-heteroscedastic-example
-#| eval: false
-
-heteroscedastic_fit <- brm(
-  formula = bf(
-    punteggio ~ 0 + condizione,
-    sigma     ~ 0 + condizione
-  ),
-  data    = anova_data,
-  family  = gaussian(),
-  backend = "cmdstanr"
+bf(
+  punteggio ~ 0 + condizione,
+  sigma     ~ 0 + condizione
 )
 ```
 
-Questa specificazione stima un parametro $\sigma$ distinto per ciascun gruppo (attraverso una funzione di legame logaritmica che garantisce la positività), ma deve essere giustificata da ipotesi teoriche o da evidenze diagnostiche, per evitare un inutile sovraccarico di parametri. Le estensioni qui descritte verranno riprese e approfondite nei capitoli dedicati alla verifica e all’espansione del modello.
+Se invece le osservazioni sono raggruppate, ripetute o provengono da unità correlate, è necessario rappresentare esplicitamente tale struttura. Queste estensioni verranno sviluppate nei capitoli successivi, dedicati rispettivamente al modello multilivello e alla revisione del modello; qui è sufficiente riconoscere che l'ANOVA a una via rappresenta soltanto una particolare specificazione del modello lineare.
 
-## Conclusioni ed epistemologia del disegno di ricerca
+## Interpretazione e disegno di ricerca
 
-In questo studio simulato, il modello bayesiano ha consentito di stimare le differenze tra le tre condizioni sperimentali e di quantificarne l’incertezza in modo coerente. Tuttavia, è importante ricordare che la qualità delle inferenze non dipende dalla complessità del modello, ma dal disegno di ricerca che ha generato i dati. Un’analisi statistica, per quanto raffinata, non può trasformare un’associazione osservazionale in un effetto causale.
+Nel nostro esempio, i dati sono simulati come tre condizioni sperimentali. In uno studio reale, tuttavia, una differenza tra le medie non acquista un significato causale solo perché è stata stimata con un'ANOVA o con un modello bayesiano.
 
-Per attribuire un significato causale ai contrasti stimati, occorre che il disegno sperimentale controlli le principali minacce alla validità interna: randomizzazione, fedeltà al trattamento, gestione delle perdite e assenza di contaminazione tra i bracci dello studio. In assenza di queste condizioni — come avviene tipicamente nei disegni osservazionali — le differenze osservate tra i gruppi potrebbero riflettere distorsioni da selezione, differenze iniziali di gravità o altri fattori confondenti, e non possono essere interpretate come effetti dei trattamenti.
+Un'interpretazione in termini di effetto del trattamento richiede un disegno sperimentale che sostenga tale lettura, ad esempio l'assegnazione casuale, un'adeguata gestione delle deviazioni dal protocollo e l'assenza di interferenze rilevanti tra le condizioni. Nei gruppi osservazionali, i contrasti descrivono differenze condizionate al modello; per una spiegazione causale sono necessarie assunzioni ulteriori che verranno affrontate nella Parte dedicata alla causalità.
 
 ## Linee guida per la comunicazione dei risultati
 
-Una rendicontazione scientifica trasparente ed efficace deve strutturarsi attorno alle stime dei parametri di posizione dei gruppi, alla quantificazione metrica dei contrasti pianificati e alla valutazione probabilistica rispetto alle soglie di rilevanza clinica, rifiutando la riduzione del capitolo Risultati a una generica e dicotomica dichiarazione omnibus.
+Una rendicontazione informativa dovrebbe partire dalle **medie di gruppo e dai contrasti che corrispondono alle domande scientifiche**, non dai nomi dei coefficienti né da una sola conclusione omnibus. È utile riportare l'ampiezza dei contrasti sulla scala originale, la loro incertezza e, quando esiste una soglia sostantiva giustificata, la probabilità di superarla.
 
 Un possibile modello di stesura per la sezione dei Risultati è il seguente:
 
-> Per esaminare le differenze tra le condizioni, abbiamo specificato un modello lineare bayesiano normale a medie di cella. Il contrasto pianificato tra il controllo e la media dei due protocolli ha stimato una differenza di `r sprintf("%.1f", ctrl_median)` punti (intervallo di credibilità al 95%: `r sprintf("[%.1f, %.1f]", ctrl_lower, ctrl_upper)`). La probabilità a posteriori che tale differenza superi la soglia sostantiva di 3 punti è `r sprintf("%.1f%%", 100 * ctrl_prob_sesoi)`. Il confronto diretto tra i protocolli ha stimato una differenza di `r sprintf("%.1f", p12_median)` punti (intervallo di credibilità al 95%: `r sprintf("[%.1f, %.1f]", p12_lower, p12_upper)`), con probabilità `r sprintf("%.1f%%", 100 * p12_prob_sesoi)` che la differenza assoluta superi 3 punti. Questi risultati rispondono ai contrasti specificati e non implicano che ogni coppia di gruppi differisca, né autorizzano da soli un’interpretazione causale. Le conclusioni dipendono dall’adeguatezza del modello e dal disegno sperimentale.
+> Per esaminare le differenze tra le condizioni, abbiamo specificato un modello lineare bayesiano normale a medie di cella. Il contrasto pianificato tra il controllo e la media dei due protocolli ha stimato una differenza di `r sprintf("%.1f", ctrl_median)` punti (intervallo di credibilità al 95%: `r sprintf("[%.1f, %.1f]", ctrl_lower, ctrl_upper)`). Usando a scopo illustrativo una soglia di 3 punti, la probabilità a posteriori che tale differenza la superi è `r sprintf("%.1f%%", 100 * ctrl_prob_sesoi)`. Il confronto diretto tra i protocolli ha stimato una differenza di `r sprintf("%.1f", p12_median)` punti (intervallo di credibilità al 95%: `r sprintf("[%.1f, %.1f]", p12_lower, p12_upper)`), con probabilità `r sprintf("%.1f%%", 100 * p12_prob_sesoi)` che la differenza assoluta superi 3 punti. Questi risultati rispondono ai contrasti specificati e non implicano che ogni coppia di gruppi differisca, né autorizzano da soli un’interpretazione causale. Le conclusioni dipendono dall’adeguatezza del modello e dal disegno sperimentale.
 
 ## Errori frequenti
 
@@ -607,7 +722,7 @@ Un fattore a più livelli entra nel modello lineare attraverso la matrice del mo
 :::
 
 ::: {.callout-warning collapse=true title="Interpretare i coefficienti senza controllare la codifica"}
-Con la codifica a riferimento, l'intercetta è la media del gruppo di riferimento e gli altri coefficienti sono differenze. Con `0 + fattore`, i coefficienti sono medie di cella.
+Con la codifica a riferimento, l'intercetta è la media del gruppo di riferimento e gli altri coefficienti sono differenze. Con la codifica a somma zero, l'intercetta rappresenta il centro non ponderato delle medie e i coefficienti dipendono dalla matrice dei contrasti. Con `0 + fattore`, i coefficienti sono medie di cella.
 :::
 
 ::: {.callout-warning collapse=true title="Eseguire automaticamente tutti i confronti a coppie"}
@@ -628,11 +743,13 @@ $\widehat R$, effective sample size e assenza di divergenze riguardano il calcol
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-L’analisi della varianza a una via non introduce un nuovo paradigma statistico, ma si inserisce  nel quadro del modello lineare: un predittore categoriale con più di due livelli viene tradotto in vettori numerici all’interno della matrice del modello. La codifica con categoria di riferimento rende immediata la lettura degli scostamenti rispetto al gruppo baseline; la parametrizzazione a medie di cella esplicita invece direttamente i parametri di posizione di ciascuna condizione. Le due formulazioni descrivono il medesimo sottospazio lineare e producono identici valori adattati, purché le distribuzioni a priori siano specificate in modo coerente con la parametrizzazione adottata.
+Il passaggio da due a più gruppi non richiede una nuova teoria statistica. Con un fattore a $G$ livelli, il modello deve rappresentare $G$ medie; la matrice del modello stabilisce le coordinate con cui queste medie vengono codificate, mentre i contrasti traducono le domande scientifiche in combinazioni lineari delle medie.
 
-Il messaggio principale è che la domanda omnibus e i contrasti hanno ruoli diversi. Una sintesi globale può indicare che le medie non sono tutte praticamente equivalenti, ma non identifica il pattern responsabile. I **contrasti pianificati** traducono invece le ipotesi scientifiche in combinazioni lineari delle medie e ne restituiscono l’intera distribuzione a posteriori. È così possibile valutare direzione, ampiezza e rilevanza pratica sulla scala originaria, anziché arrestarsi alla conclusione generica che “esiste almeno una differenza”.
+Le parametrizzazioni a riferimento, a somma zero e a medie di cella rendono visibili aspetti diversi dello stesso sistema. La prima privilegia i confronti con un livello di riferimento, la seconda rappresenta gli scostamenti rispetto al centro non ponderato delle medie e la terza rende direttamente disponibili le medie di ciascun gruppo. Nessuna di queste è universalmente "corretta": la scelta deve rendere trasparenti sia l'interpretazione dei coefficienti sia la specificazione dei prior.
 
-Infine, la presenza di molteplici livelli solleva una questione metodologica cruciale, che sarà al centro dei prossimi capitoli. Quando le condizioni o le unità da confrontare sono numerose e tra loro collegate — come avviene con dati provenienti da scuole, centri clinici, stimoli o studi diversi — stimare ciascun parametro in isolamento rischia di produrre stime instabili e scarsamente generalizzabili. I modelli gerarchici rispondono a questa vulnerabilità introducendo una distribuzione comune di secondo livello, in grado di rappresentare simultaneamente la variabilità tra i gruppi e le regolarità condivise dell’intera popolazione.
+In questa prospettiva, l'ANOVA a una via rappresenta un'estensione naturale del modello lineare già studiato. La domanda omnibus può fornire una sintesi globale, ma sono spesso i contrasti pianificati a esprimere le ipotesi scientifiche più informative. L'inferenza bayesiana permette di mantenere l'intera incertezza su medie e contrasti e di separare chiaramente direzione, ampiezza e rilevanza sostantiva.
+
+Il passo successivo nasce da un'altra domanda: che cosa cambia quando i gruppi non sono soltanto poche condizioni fisse da confrontare, ma unità appartenenti a una popolazione più ampia? È qui che il modello gerarchico introduce una nuova struttura: le medie dei gruppi diventano a loro volta realizzazioni di una distribuzione comune e possono condividere informazione attraverso il *partial pooling*.
 
 ## Esercizi {.unnumbered .unlisted}
 
@@ -685,46 +802,47 @@ Ricorda che punteggi più elevati indicano maggiore sintomatologia e che i contr
 Il primo contrasto indica che il controllo presenta, in media, circa 8 punti di sintomatologia in più rispetto alla media delle terapie; la probabilità che la differenza superi 3 punti è quasi uno. Il secondo indica che la Terapia 2 è associata a punteggi medi inferiori alla Terapia 1 di circa 4.7 punti; la probabilità che la differenza assoluta superi 3 punti è elevata ma non certa. Queste sono affermazioni sulle medie dei gruppi: non implicano che ogni paziente migliori, né dimostrano un effetto causale senza un disegno adeguato.
 :::
 
-### Esercizio 3 — Impostare ed eseguire: medie di cella e contrasti {.unnumbered .unlisted}
+### Esercizio 3 — Confrontare le parametrizzazioni {.unnumbered .unlisted}
 
 *Codice guidato · 15 minuti*
 
-Completa il codice seguente per stimare direttamente le tre medie di gruppo e derivare i due contrasti pianificati:
+Considera tre gruppi A, B e C con medie
 
-```r
-fit <- brm(
-  formula = punteggio ~ ___ + condizione,
-  data = anova_data,
-  family = gaussian(),
-  prior = anova_priors,
-  backend = "cmdstanr"
-)
+$$
+\mu_A=20,\qquad \mu_B=24,\qquad \mu_C=30.
+$$
 
-draws <- as_draws_df(fit) |>
-  posterior::mutate_variables(
-    mu_ctrl = ___,
-    mu_p1 = ___,
-    mu_p2 = ___,
-    ctrl_vs_terapie = ___,
-    p1_vs_p2 = ___
-  )
-```
-
-Spiega inoltre come cambierebbe il significato dei coefficienti usando `punteggio ~ condizione`.
+1. Con codifica a riferimento e A come baseline, calcola intercetta e due coefficienti.
+2. Con parametrizzazione a medie di cella, indica i tre coefficienti.
+3. Con codifica `contr.sum(3)`, calcola l'intercetta non ponderata
+   $$
+   \alpha_s=(\mu_A+\mu_B+\mu_C)/3
+   $$
+   e le deviazioni associate ad A e B; ricostruisci poi la media di C dal vincolo di somma zero.
+4. In tutte e tre le parametrizzazioni calcola il contrasto
+   $$
+   \mu_C-\frac{\mu_A+\mu_B}{2}.
+   $$
+5. Spiega quali numeri cambiano con la codifica e quale quantità rimane invariata.
 
 ::: {.callout-tip collapse=true title="Suggerimento"}
-Per ottenere le medie di cella occorre rimuovere l’intercetta. I nomi dei coefficienti sono quelli mostrati da `variables(fit)` o dal riepilogo del modello.
+Con il trattamento a riferimento, i coefficienti sono differenze da A. Con le medie di cella, i coefficienti sono direttamente le tre medie. Con `contr.sum(3)`, il terzo scostamento è l'opposto della somma dei primi due.
 :::
 
 ::: {.callout-note collapse=true title="Soluzione commentata"}
-La formula è `punteggio ~ 0 + condizione`. I coefficienti sono `b_condizionecontrollo`, `b_condizionepsicoterapia1` e `b_condizionepsicoterapia2`. I contrasti sono:
+Con A come riferimento, $\alpha=20$, $\gamma_B=4$ e $\gamma_C=10$. Con le medie di cella, i coefficienti sono 20, 24 e 30. Con la codifica a somma zero,
 
-```r
-ctrl_vs_terapie = mu_ctrl - (mu_p1 + mu_p2) / 2
-p1_vs_p2 = mu_p1 - mu_p2
-```
+$$
+\alpha_s=\frac{20+24+30}{3}=\frac{74}{3}\approx24.67,
+$$
 
-Con `punteggio ~ condizione`, l’intercetta rappresenta la media del gruppo di riferimento e gli altri coefficienti rappresentano differenze rispetto a quel gruppo. Le medie adattate e i contrasti rimangono ricostruibili, ma i coefficienti hanno un significato diverso e richiedono prior coerenti con la nuova parametrizzazione.
+quindi gli scostamenti di A e B sono circa $-4.67$ e $-0.67$; quello di C è $5.33$, cioè l'opposto della loro somma. In ogni parametrizzazione,
+
+$$
+\mu_C-\frac{\mu_A+\mu_B}{2}=30-22=8.
+$$
+
+Cambiano quindi le coordinate del modello; non cambia il contrasto sostantivo correttamente ricostruito. In un'analisi bayesiana, per ottenere modelli sostantivamente equivalenti occorre inoltre trasformare coerentemente i prior quando cambia la parametrizzazione.
 :::
 
 ### Esercizio 4 — Criticare e comunicare {.unnumbered .unlisted}
@@ -733,7 +851,7 @@ Con `punteggio ~ condizione`, l’intercetta rappresenta la media del gruppo di 
 
 Valuta il seguente resoconto:
 
-> L’ANOVA bayesiana ha dimostrato che tutti e tre i gruppi sono significativamente diversi. Poiché la probabilità omnibus supera il 99%, entrambe le terapie sono clinicamente efficaci e la Terapia 2 è migliore per ogni paziente. Nell’approccio bayesiano non esiste alcun problema di confronti multipli.
+> L’ANOVA bayesiana ha dimostrato che tutti e tre i gruppi sono diversi. Poiché la probabilità omnibus supera il 99%, entrambe le terapie sono clinicamente efficaci e la Terapia 2 è migliore per ogni paziente. Nell’approccio bayesiano non esiste alcun problema di confronti multipli.
 
 Individua almeno quattro problemi e riscrivi il resoconto in modo appropriato, facendo riferimento ai contrasti pianificati.
 
