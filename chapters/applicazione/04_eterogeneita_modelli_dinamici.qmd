@@ -1,20 +1,17 @@
 # Lo stesso meccanismo per tutti? Eterogeneità e generalizzazione {#sec-formal-models-developments}
 
 ::: {.callout-note appearance="minimal"}
-Nel capitolo su Rescorla--Wagner abbiamo visto che un modello processuale può essere messo alla prova confrontandolo con spiegazioni rivali. Resta però una domanda ulteriore: **lo stesso processo, con gli stessi parametri, può descrivere tutte le persone?**
+Nel capitolo dedicato al modello di Rescorla–Wagner abbiamo visto che un modello processuale può essere sottoposto a verifica confrontandolo con spiegazioni rivali. Resta però aperta una questione ulteriore: **lo stesso processo, con gli stessi parametri, può descrivere adeguatamente tutte le persone?**
 
-Una media di popolazione può riassumere il comportamento collettivo senza rappresentare bene alcun individuo. All'estremo opposto, stimare ogni persona separatamente può trasformare il rumore in differenze psicologiche apparenti. I modelli gerarchici cercano una via intermedia: descrivono simultaneamente ciò che le persone condividono, ciò per cui differiscono e ciò che ancora non conosciamo.
-
-In questo capitolo il modello dinamico degli obiettivi viene riutilizzato deliberatamente come caso semplice. Lo scopo non è introdurre un nuovo meccanismo, ma isolare la domanda sulla **struttura della popolazione**.
+Una media della popolazione può riassumere il comportamento collettivo senza rappresentare adeguatamente alcun individuo. All'estremo opposto, stimare ogni persona separatamente rischia di trasformare il rumore in differenze psicologiche apparenti. I modelli gerarchici percorrono una via intermedia: descrivono simultaneamente ciò che le persone hanno in comune, ciò su cui divergono e ciò che rimane ancora sconosciuto. In questo capitolo, il modello dinamico degli obiettivi viene riutilizzato deliberatamente come caso semplice. Lo scopo non è introdurre un nuovo meccanismo, ma isolare la questione relativa alla struttura della popolazione.
 :::
 
-
 ::: {.callout-important appearance="minimal" .chapter-status}
-**Da sapere.** Complete pooling, no pooling e partial pooling rappresentano ipotesi differenti sulla popolazione, non soltanto tecniche di stima. Un modello gerarchico distingue la posizione e la dispersione della popolazione dall'incertezza sui parametri delle singole persone. Lo shrinkage riflette quanta informazione individuale è disponibile e non modifica la persona. Il modello può prevedere persone già osservate e persone nuove, ma assume ancora che tutti condividano la stessa regola processuale.
+**Da sapere.** Complete pooling, no pooling e partial pooling non sono semplici tecniche di stima: corrispondono a ipotesi sostanzialmente diverse sulla struttura della popolazione. Un modello gerarchico separa esplicitamente la posizione e la dispersione della popolazione dall’incertezza sui parametri individuali. Lo shrinkage riflette la quantità di informazioni disponibili per ciascuna persona, e non modifica la persona stessa. Il modello consente di prevedere sia le persone già osservate sia quelle nuove, ma presuppone che tutti gli individui condividano la stessa regola processuale.
 
-**Da saper fare.** Distinguere eterogeneità tra persone e incertezza sulla singola persona; spiegare le conseguenze di complete pooling, no pooling e partial pooling; prevedere quali stime saranno maggiormente regolarizzate; interpretare separatamente quantità di popolazione e posterior individuali; distinguere la previsione per una persona osservata dalla generalizzazione a una persona nuova; riconoscere quando differenze quantitative nei parametri potrebbero nascondere strategie qualitative differenti.
+**Da saper fare.** Distinguere tra eterogeneità tra persone e incertezza sul singolo individuo; spiegare le implicazioni delle strategie complete pooling, no pooling e partial pooling; anticipare quali stime subiranno maggiore regolarizzazione; interpretare separatamente i parametri di popolazione e le posterior individuali; distinguere la previsione per un soggetto osservato dalla generalizzazione a un soggetto nuovo; riconoscere quando differenze quantitative nei parametri potrebbero mascherare differenze qualitative nelle strategie.
 
-**Approfondimento facoltativo.** Il benchmark no pooling, il controllo predittivo a priori, il programma Stan gerarchico, le visualizzazioni dello shrinkage e la simulazione di traiettorie per persone nuove mostrano come l'analisi possa essere realizzata. Non è richiesto scrivere autonomamente il modello gerarchico né riprodurre tutti i passaggi computazionali.
+**Approfondimento facoltativo.** Il benchmark no pooling, il controllo predittivo a priori, il programma Stan gerarchico, le visualizzazioni dello shrinkage e la simulazione di traiettorie per persone nuove mostrano come l’analisi possa essere realizzata. Non è richiesto scrivere autonomamente il modello gerarchico né riprodurre tutti i passaggi computazionali.
 
 [Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
 :::
@@ -22,7 +19,7 @@ In questo capitolo il modello dinamico degli obiettivi viene riutilizzato delibe
 ::: {.callout-tip collapse=true title="Prerequisiti"}
 - Il modello dinamico degli obiettivi sviluppato in @sec-dynamic-models-goal-updating.
 - La distinzione tra teoria processuale e modello osservazionale.
-- Il significato generale del partial pooling introdotto nella Parte **Modelli**.
+- Il capitolo della Parte **Modelli** dedicato ai modelli multilivello, dal quale questo capitolo dà per acquisiti complete pooling, no pooling, partial pooling e shrinkage. Qui non vengono reintrodotti: vengono applicati ai parametri di un processo.
 :::
 
 ::: {.callout-caution collapse=true title="Preparazione del notebook"}
@@ -42,7 +39,7 @@ set.seed(8061)
 
 ## Dal processo medio alla popolazione dei processi
 
-La regola individuale rimane:
+La regola di aggiornamento a livello individuale conserva la struttura già introdotta:
 
 $$
 G_{s,t}
@@ -54,79 +51,33 @@ G_{s,t-1}
 \beta_s.
 $$
 
-Per la persona $s$:
+Per il soggetto $s$, $G_{s,t}$ indica lo stato previsto al trial $t$, mentre $P_{s,t-1}-G_{s,t-1}$ rappresenta la discrepanza osservata al passo precedente. Il parametro $\alpha_s$ modula la sensibilità a tale discrepanza, e $\beta_s$ esprime una deriva sistematica non riconducibile all'errore di previsione.
 
-- $G_{s,t}$ è lo stato previsto al trial $t$;
-- $P_{s,t-1}-G_{s,t-1}$ è la discrepanza precedente;
-- $\alpha_s$ regola la sensibilità alla discrepanza;
-- $\beta_s$ rappresenta una deriva sistematica non spiegata dalla discrepanza.
-
-Nel modello più semplice avevamo imposto:
-
-$$
-\alpha_s=\alpha,
-\qquad
-\beta_s=\beta
-$$
-
-per tutte le persone. Questa non è soltanto una scelta parsimoniosa: è un'ipotesi sulla popolazione. Afferma che ogni partecipante segue la stessa dinamica e che le differenze osservate derivano soltanto dagli input e dal rumore.
-
-Il passaggio a parametri individuali modifica quindi l'oggetto dell'inferenza. Non chiediamo più soltanto:
-
-> Qual è la sensibilità media alla discrepanza?
-
-Chiediamo anche:
-
-> Quanto differiscono le persone, quanto sappiamo di ciascuna e fino a che punto possiamo generalizzare a una persona nuova?
+Nel modello più elementare si era imposta l'uguaglianza di questi parametri per tutti i soggetti ponendo $\alpha_s=\alpha$ e $\beta_s=\beta$. Tale vincolo, tuttavia, non costituisce un mero espediente di parsimonia: esso incorpora un'ipotesi precisa sulla natura della popolazione, secondo la quale ogni partecipante segue una dinamica identica e le divergenze osservate dipendono esclusivamente dalle variazioni degli input e dal rumore di misura. Rilassare tale vincolo, consentendo a ciascun soggetto di avere un proprio $\alpha_s$ e un proprio $\beta_s$, modifica l'obiettivo stesso dell'inferenza. L'analisi non si limita più a stimare la sensibilità media alla discrepanza, ma deve ora stabilire l'entità delle differenze interindividuali, il grado di precisione con cui è possibile caratterizzare ciascun profilo e l'estensione delle generalizzazioni possibili verso un individuo non ancora osservato.
 
 ::: {.callout-important title="Una media non è un individuo"}
-Il valore medio di un parametro processuale descrive il centro di una popolazione modellata. Non implica che una persona concreta possieda quel valore, né che la dinamica media coincida con la traiettoria di qualcuno.
-
-L'eterogeneità è quindi parte della domanda scientifica, non soltanto una complicazione statistica.
+Il valore medio di un parametro descrive il centro della distribuzione della popolazione e non implica che esso coincida con il parametro di una persona reale, né che la traiettoria media corrisponda all'andamento di un singolo partecipante. L'eterogeneità diventa quindi parte integrante della domanda scientifica e non una semplice complicazione tecnica da gestire.
 :::
 
 ## Tre ipotesi sulla popolazione
 
-### Complete pooling
+Le tre strategie di pooling sono già note dalla Parte **Modelli**. Applicate ai parametri di un processo, però, cambiano statuto: non sono tre modi per stimare la stessa quantità, ma tre ipotesi diverse su come è fatta la popolazione dei processi.
 
-Nel complete pooling tutti condividono gli stessi parametri:
+Nel **complete pooling** (con $\alpha_s=\alpha$ e $\beta_s=\beta$) tutte le osservazioni informano una sola coppia di valori: è il modello del capitolo precedente, stabile e parsimonioso, ma che può nascondere differenze persistenti. Nel **no pooling**, invece, ogni persona viene stimata separatamente, con la massima libertà individuale, ma usando solo i propri trial: quando le sequenze sono brevi, i valori estremi possono riflettere soprattutto rumore, condizioni iniziali particolari o compensazioni tra parametri.
 
-$$
-\alpha_s=\alpha,
-\qquad
-\beta_s=\beta.
-$$
-
-Tutte le osservazioni informano una sola coppia di valori. Il modello è stabile e parsimonioso, ma può nascondere differenze persistenti tra persone.
-
-### No pooling
-
-Nel no pooling ogni persona viene stimata separatamente:
-
-$$
-\alpha_s,\beta_s
-\quad\text{indipendenti tra persone.}
-$$
-
-Questa strategia lascia massima libertà individuale, ma usa soltanto i trial della singola persona. Quando le sequenze sono brevi, valori estremi possono riflettere soprattutto rumore, condizioni iniziali particolari o compensazioni tra parametri.
-
-### Partial pooling
-
-Nel partial pooling i parametri individuali sono descritti da distribuzioni di popolazione:
+Nel **partial pooling**, infine, i parametri individuali sono descritti da distribuzioni di popolazione:
 
 $$
 \operatorname{logit}(\alpha_s)
 \sim
 \operatorname{Normal}(\mu_\alpha,\tau_\alpha),
-$$
-
-$$
+\qquad
 \beta_s
 \sim
 \operatorname{Normal}(\mu_\beta,\tau_\beta).
 $$
 
-I dati della persona informano i suoi parametri, mentre i dati delle altre persone informano la distribuzione da cui tali parametri sono generati. Le due fonti di informazione vengono combinate.
+I dati della persona informano i suoi parametri, mentre i dati delle altre persone informano la distribuzione da cui tali parametri sono generati.
 
 | Strategia | Ipotesi sostantiva | Vantaggio | Rischio |
 |---|---|---|---|
@@ -138,52 +89,37 @@ Il partial pooling non afferma che le persone siano uguali. Afferma che le loro 
 
 ## Eterogeneità e incertezza
 
-Queste due idee rispondono a domande differenti.
+Queste due idee rispondono a domande diverse.
 
-- **Eterogeneità:** quanto differiscono realmente i parametri tra le persone nella popolazione modellata?
+- **Eterogeneità:** quanto differiscono realmente i parametri delle persone nella popolazione modellata?
 - **Incertezza individuale:** quanto precisamente conosciamo il parametro di una persona specifica?
 
-Una persona può avere un intervallo posteriore ampio anche quando l'eterogeneità della popolazione è piccola. Viceversa, una popolazione può essere molto eterogenea e ogni parametro individuale può essere stimato con grande precisione se ogni partecipante fornisce molti dati informativi.
+Una persona può avere un intervallo posteriore ampio anche quando l'eterogeneità della popolazione è bassa. Viceversa, una popolazione può essere molto eterogenea e ogni parametro individuale può essere stimato con grande precisione, se ogni partecipante fornisce molti dati informativi.
 
 ::: {.callout-important title="Non leggere l'eterogeneità dai soli punti individuali"}
 La dispersione delle stime separate combina almeno quattro componenti:
 
-1. differenze reali tra persone;
+1. differenze reali tra le persone;
 2. incertezza dovuta a sequenze brevi;
 3. differenze negli input sperimentati;
-4. compensazioni tra parametri del modello.
+4. compensazioni tra i parametri del modello.
 
-Per questo la variabilità delle stime no pooling non costituisce una misura diretta della variabilità psicologica.
+Per questo motivo, la variabilità delle stime no pooling non costituisce una misura diretta della variabilità psicologica.
 :::
 
 ## Che cosa esprime il modello gerarchico
 
-La distribuzione di popolazione introduce due livelli di quantità.
+La distribuzione della popolazione introduce due livelli di quantità: la sua **posizione** — $\operatorname{logit}^{-1}(\mu_\alpha)$ come valore tipico di $\alpha$, $\mu_\beta$ come deriva media — e la sua **dispersione**, ovvero $\tau_\alpha$ per l'eterogeneità di $\alpha$ sulla scala logit e $\tau_\beta$ per quella di $\beta$ sulla scala originale.
 
-### Posizione della popolazione
+Una posterior di $\tau_\beta$ concentrata vicino a zero indica che il modello rileva poca eterogeneità nella deriva. Ciò non significa che tutte le persone siano identiche. Con pochi trial, infatti, una dispersione piccola e una dispersione moderata potrebbero essere difficili da distinguere.
 
-- $\operatorname{logit}^{-1}(\mu_\alpha)$ descrive un valore tipico di $\alpha$;
-- $\mu_\beta$ descrive la deriva media.
+Inoltre, $\tau_\alpha$ non è la deviazione standard di $\alpha$ sulla scala $0$--$1$. La trasformazione logistica è non lineare: la stessa dispersione sulla scala logit può produrre conseguenze differenti a seconda della posizione di $\mu_\alpha$.
 
-### Dispersione della popolazione
+## Shrinkage: perché qui merita una precisazione
 
-- $\tau_\alpha$ descrive l'eterogeneità di $\alpha$ sulla scala logit;
-- $\tau_\beta$ descrive l'eterogeneità di $\beta$ sulla scala originale.
+Nel modello gerarchico le stime individuali tendono a essere meno estreme delle stime separate. Il fenomeno è lo stesso già incontrato nella Parte **Modelli**, ma qui i parametri contratti hanno nomi psicologici e questo può portare a fraintendimenti.
 
-Una posterior di $\tau_\beta$ concentrata vicino a zero indica che il modello rileva poca eterogeneità nella deriva. Non dimostra che tutte le persone siano identiche. Con pochi trial, infatti, una dispersione piccola e una dispersione moderata potrebbero essere difficili da distinguere.
-
-Inoltre, $\tau_\alpha$ non è la deviazione standard di $\alpha$ sulla scala $0$--$1$. La trasformazione logistica è non lineare: la stessa dispersione sulla scala logit produce conseguenze differenti a seconda della posizione di $\mu_\alpha$.
-
-## Shrinkage: che cosa significa
-
-Nel modello gerarchico le stime individuali tendono a essere meno estreme delle stime separate. Questo fenomeno è chiamato *shrinkage*.
-
-Lo shrinkage non viene applicato dopo la stima. Deriva dal modello congiunto:
-
-- una persona con molti trial informativi può essere descritta soprattutto dai propri dati;
-- una persona con pochi dati o una sequenza ambigua viene informata maggiormente dalla popolazione;
-- un valore estremo sostenuto da dati forti può restare estremo;
-- un valore estremo sostenuto debolmente viene regolarizzato maggiormente.
+La contrazione non viene applicata dopo la stima, ma deriva dal modello congiunto, e la sua entità dipende da quanta informazione la singola persona fornisce. Un valore estremo sostenuto da molti trial coerenti può restare estremo, mentre un valore estremo sostenuto da una sequenza breve o ambigua viene regolarizzato maggiormente.
 
 ::: {.callout-note title="Shrinkage non significa normalizzare le persone"}
 Il modello non corregge le persone affinché assomiglino alla media. Esprime il fatto che, quando le informazioni individuali sono limitate, non possiamo sapere se una stima estrema rappresenti una caratteristica persistente o una fluttuazione campionaria.
@@ -235,7 +171,7 @@ Con soli nove aggiornamenti informativi per persona, una stima completamente sep
 
 ### Un benchmark senza condivisione
 
-Le stime seguenti vengono ottenute separatamente per ciascuna persona. Non costituiscono il modello inferenziale finale: rendono visibile quanto possano apparire diverse le persone quando nessuna informazione viene condivisa.
+Le stime seguenti sono state ottenute separatamente per ciascuna persona. Tali stime non costituiscono il modello inferenziale finale, ma rendono visibile quanto possano apparire diverse le persone quando nessuna informazione viene condivisa.
 
 ::: {.callout-note collapse=true title="Approfondimento applicativo: stime no pooling"}
 
@@ -308,7 +244,7 @@ no_pool_estimates |>
 ```
 :::
 
-Il grafico non mostra direttamente “tipi di persone”. Mostra stime prodotte da sequenze brevi entro una particolare specificazione.
+Il grafico non mostra direttamente diversi “tipi di persone”. Mostra stime prodotte da sequenze brevi all'interno di una particolare specificazione.
 
 ## Una dimostrazione del modello gerarchico
 
@@ -330,7 +266,7 @@ $$
 \mu_\beta+\tau_\beta z_{\beta,s}.
 $$
 
-Questa scrittura separa la posizione della popolazione, la dispersione e la deviazione standardizzata di ciascun individuo. È una strategia computazionale utile; non aggiunge, da sola, contenuto psicologico alla teoria.
+Questa scrittura separa la posizione della popolazione, la dispersione e la deviazione standardizzata di ciascun individuo. Si tratta di una strategia computazionale utile, ma da sola non aggiunge contenuto psicologico alla teoria.
 
 ### Prima dei dati: popolazioni e traiettorie plausibili
 
@@ -428,7 +364,7 @@ prior_hierarchical_paths |>
 
 ### Implementazione e stima
 
-Il programma seguente realizza il modello. Per comprendere il capitolo non è necessario seguire ogni istruzione: è sufficiente riconoscere la corrispondenza tra distribuzioni di popolazione, parametri individuali, dinamica e modello osservazionale.
+Il programma seguente realizza il modello. Per comprendere il capitolo, non è necessario seguire ogni istruzione, ma è sufficiente riconoscere la corrispondenza tra le distribuzioni della popolazione, i parametri individuali, la dinamica e il modello osservazionale.
 
 ::: {.callout-note collapse=true title="Approfondimento computazionale: modello gerarchico in Stan"}
 
@@ -566,7 +502,7 @@ fit_goal_hierarchical$summary(
 ```
 :::
 
-La convergenza del campionatore risponde alla domanda se la posterior sia stata esplorata adeguatamente. Non stabilisce se la distribuzione gerarchica sia una buona descrizione della popolazione o se i parametri possiedano il significato psicologico attribuito loro.
+La convergenza del campionatore risponde alla domanda se la posterior sia stata esplorata adeguatamente. Tuttavia, non stabilisce se la distribuzione gerarchica sia una buona descrizione della popolazione o se i parametri possiedano il significato psicologico loro attribuito.
 
 ## Dalla popolazione alle persone
 
@@ -673,7 +609,7 @@ shrinkage_goal |>
 ```
 :::
 
-Ordinare le persone usando soltanto le mediane posteriori può produrre classificazioni troppo nette. Due partecipanti con centri differenti ma intervalli ampi non costituiscono necessariamente due profili psicologici distinti.
+Ordinare le persone usando soltanto le mediane posteriori può produrre classificazioni troppo nette. Due partecipanti con centri differenti, ma con intervalli ampi, non costituiscono necessariamente due profili psicologici distinti.
 
 ## Una persona osservata e una persona nuova
 
@@ -681,7 +617,7 @@ Le due previsioni rispondono a domande diverse.
 
 ### Persona già osservata
 
-Per una persona inclusa nel campione, la previsione utilizza la sua posterior di $\alpha_s$ e $\beta_s$. La distribuzione beneficia dei suoi trial e del partial pooling.
+Per ogni persona inclusa nel campione, la previsione utilizza la sua posterior di $\alpha_s$ e $\beta_s$. La distribuzione beneficia dei suoi trial e del partial pooling.
 
 ### Persona nuova
 
@@ -764,7 +700,7 @@ new_person_paths |>
 ```
 :::
 
-Una buona previsione per partecipanti già osservati non garantisce una buona generalizzazione a nuovi individui. Nel primo caso il modello ha già appreso qualcosa su ciascuna persona; nel secondo deve affidarsi interamente alla struttura di popolazione.
+Una buona previsione per i partecipanti già osservati non garantisce una buona generalizzazione ai nuovi individui. Nel primo caso, il modello ha già acquisito informazioni su ciascuna persona; nel secondo, invece, deve fare affidamento esclusivamente sulla struttura della popolazione.
 
 ## Differenze tra condizioni
 
@@ -803,12 +739,12 @@ $$
 Il modello non deve limitarsi a chiedere se i gruppi differiscano. Deve chiarire **in quale componente del processo** si ipotizza la differenza e quali pattern temporali dovrebbero derivarne.
 
 ::: {.callout-warning title="Differenza tra condizioni ed effetto causale"}
-Una differenza tra distribuzioni di parametri riceve un'interpretazione causale soltanto se il disegno identifica l'effetto della condizione e le altre assunzioni causali sono plausibili.
+Una differenza tra distribuzioni di parametri riceve un'interpretazione causale soltanto se il disegno identifica l'effetto della condizione e se le altre assunzioni causali sono plausibili.
 
-La gerarchia quantifica la differenza. Non crea l'identificazione causale.
+La gerarchia quantifica la differenza. Tuttavia, non crea l'identificazione causale.
 :::
 
-Inoltre, una differenza tra parametri processuali non è automaticamente più “profonda” di una differenza tra medie osservate. La sua interpretazione dipende dalla validità della regola dinamica, dalla recuperabilità dei parametri e dalla capacità di escludere processi alternativi.
+Inoltre, una differenza tra parametri processuali non è necessariamente più "profonda" di una differenza tra medie osservate. La sua interpretazione dipende dalla validità della regola dinamica, dalla recuperabilità dei parametri e dalla capacità di escludere processi alternativi.
 
 ## Differenze quantitative o strategie differenti?
 
@@ -820,55 +756,21 @@ Questa è una tesi forte. Potrebbe essere falsa in almeno tre modi:
 2. la stessa persona potrebbe cambiare strategia nel corso del compito;
 3. una variabile non osservata potrebbe produrre sottogruppi distinti.
 
-Una distribuzione unimodale di parametri non rappresenta naturalmente strategie qualitative. Se metà delle persone aggiorna soprattutto dopo i successi e metà soprattutto dopo i fallimenti, una media gerarchica può descrivere una persona “intermedia” che in realtà non esiste.
+Una distribuzione unimodale di parametri non rappresenta naturalmente strategie qualitative. Se, per esempio, metà delle persone aggiorna soprattutto dopo i successi e l'altra metà soprattutto dopo i fallimenti, una media gerarchica può descrivere una persona "intermedia" che, in realtà, non esiste.
 
 ::: {.callout-important title="Un parametro individuale non è ancora un tratto"}
-Per interpretare $\alpha_s$ come una caratteristica psicologica stabile servirebbero almeno:
-
-- recuperabilità sufficiente;
-- stabilità attraverso sessioni o compiti pertinenti;
-- validazione rispetto a misure esterne;
-- robustezza a specificazioni alternative;
-- evidenza che il parametro non stia assorbendo un processo omesso;
-- capacità di prevedere nuovi dati della stessa persona.
-
-La semplice presenza di variabilità tra stime non soddisfa questi requisiti.
+Per interpretare $\alpha_s$ come una caratteristica psicologica stabile e significativa, la sua stima dovrebbe mostrare un recupero sufficiente, rivelarsi stabile attraverso sessioni o compiti pertinenti e trovare conferma in misure esterne indipendenti. Occorrerebbe inoltre che il parametro sia robusto a specificazioni alternative del modello, che non assorba semplicemente la varianza di un processo omesso e che sia in grado di prevedere nuovi dati raccolti dalla stessa persona. La mera presenza di variabilità tra le stime individuali non soddisfa questi requisiti.
 :::
 
 ## Recuperabilità e disegno
 
-Con dieci trial per persona, $\alpha_s$ e $\beta_s$ possono essere difficili da distinguere. Entrambi modificano la traiettoria e possono compensarsi: una sensibilità maggiore alla discrepanza può, in alcune sequenze, essere controbilanciata da una deriva differente.
-
-Un controllo di recuperabilità gerarchico dovrebbe chiedere:
-
-- le posizioni e le dispersioni di popolazione vengono recuperate?
-- gli intervalli individuali hanno copertura adeguata?
-- quali persone o quali regioni dei parametri sono scarsamente informate?
-- gli errori di recupero di $\alpha_s$ e $\beta_s$ sono correlati?
-- il partial pooling migliora l'inferenza o nasconde una specificazione inadeguata?
-
-La soluzione non consiste sempre in un modello più complesso. Spesso occorre un disegno più informativo: più trial, sequenze di discrepanze più varie, manipolazioni che separino le conseguenze dei parametri o misure ripetute in contesti differenti.
+Il quinto passo del flusso di lavoro modellistico (@sec-workflow-modellazione) solleva una questione preliminare: il disegno sperimentale consente realmente di distinguere le quantità che ci si propone di interpretare? Con dieci trial per soggetto, parametri come $\alpha_s$ e $\beta_s$ potrebbero rivelarsi difficilmente separabili. Entrambi influenzano la traiettoria e possono compensarsi a vicenda: in determinate sequenze, una maggiore sensibilità alla discrepanza può essere controbilanciata da una deriva di segno opposto. Un controllo di recuperabilità in contesto gerarchico dovrebbe pertanto verificare se le posizioni e le dispersioni della popolazione sono stimate correttamente, se gli intervalli individuali presentano una copertura adeguata, quali soggetti o quali regioni dello spazio parametrico sono scarsamente informati, se gli errori di recupero dei due parametri sono correlati e, infine, se il partial pooling migliora l'inferenza o finisce per mascherare una specificazione inadeguata. La soluzione, però, non è sempre un modello più complesso, ma più spesso occorre un disegno più informativo, con un maggior numero di prove, sequenze di discrepanze più variabili, manipolazioni che disambiguano gli effetti dei parametri o misure ripetute in contesti diversi.
 
 ## A quale popolazione vogliamo generalizzare?
 
-La validazione deve lasciare fuori l'unità corrispondente all'enunciato che intendiamo formulare.
+La Parte **Valutazione** tornerà in modo sistematico su che cosa significhi generalizzare e su come misurarla. Qui è sufficiente il principio che governa la struttura gerarchica: la validazione deve escludere l'unità corrispondente all'enunciato che vogliamo formulare, come i trial futuri della stessa persona, un individuo intero, una condizione o un'intera popolazione.
 
-- **Futuri trial della stessa persona:** si stimano i parametri sui trial iniziali e si prevedono quelli successivi.
-- **Una persona nuova della stessa popolazione:** si lasciano fuori interi individui.
-- **Una nuova condizione o un nuovo contesto:** si lascia fuori il livello pertinente.
-- **Una nuova popolazione:** servono dati e assunzioni che colleghino esplicitamente le popolazioni.
-
-Lasciare fuori un singolo trial non verifica automaticamente la capacità di generalizzare a una persona nuova, perché i parametri di quella persona sono già stati informati dagli altri suoi trial.
-
-::: {.callout-note title="La generalizzazione è parte dell'ipotesi"}
-Dire che un modello “predice bene” è incompleto. Occorre specificare:
-
-- che cosa viene previsto;
-- per chi;
-- in quale contesto;
-- con quali informazioni già disponibili;
-- rispetto a quale modello rivale.
-:::
+La conseguenza è immediata e facile da trascurare. Lasciare fuori un singolo trial non verifica la capacità di generalizzare a una persona nuova, perché i parametri di quest'ultima sono già stati influenzati dagli altri trial. Dire che il modello "predice bene" resta quindi incompleto finché non si specifica cosa viene previsto, per chi e rispetto a quale alternativa.
 
 ## Limiti della specificazione
 
@@ -883,40 +785,26 @@ Il modello gerarchico rappresenta differenze quantitative tra persone, ma conser
 - la prestazione è trattata come input esterno;
 - la stessa scala osservazionale è appropriata per tutti.
 
-Queste assunzioni possono essere estese mediante correlazioni tra parametri, modelli di mistura, stati nascosti, parametri variabili nel tempo o regole processuali differenti. Ogni estensione, tuttavia, deve rispondere a un problema empirico riconoscibile. Aggiungere flessibilità senza previsioni discriminanti può rendere il modello più adattabile ma meno interpretabile.
+Queste assunzioni possono essere estese mediante correlazioni tra parametri, modelli di mistura, stati nascosti, parametri variabili nel tempo o regole processuali differenti. Ogni estensione, tuttavia, deve rispondere a un problema empirico riconoscibile. Aggiungere flessibilità senza previsioni discriminanti può rendere il modello più adattabile ma anche meno interpretabile.
 
 ## Errori comuni
 
 - Trattare la dispersione delle stime separate come eterogeneità vera.
-- Presentare mediane individuali senza intervalli di incertezza.
+- Presentare le mediane individuali senza intervalli di incertezza.
 - Descrivere lo shrinkage come una correzione arbitraria verso la media.
 - Interpretare $\tau_\alpha$ sulla scala logit come deviazione standard di $\alpha$ sulla scala $0$--$1$.
 - Classificare le persone usando parametri scarsamente recuperabili.
 - Chiamare un parametro “tratto” soltanto perché varia tra persone.
 - Usare previsioni condizionate a persone osservate come prova di generalizzazione a persone nuove.
 - Applicare la validazione a singoli trial ignorando la struttura gerarchica.
-- Interpretare differenze tra condizioni come causali senza considerare il disegno.
+- Interpretare le differenze tra le condizioni come causali senza considerare il disegno.
 - Concludere che tutti condividano lo stesso meccanismo perché il modello gerarchico converge.
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-Il passaggio dal parametro comune ai parametri individuali non consiste semplicemente nell'aggiungere coefficienti. Cambia la domanda scientifica. Vogliamo conoscere simultaneamente:
+Il passaggio dai parametri comuni a quelli individuali non equivale a un semplice aumento del numero di coefficienti, ma trasforma la natura stessa della domanda scientifica. L'analisi deve ora restituire simultaneamente ciò che le persone hanno in comune, l'entità delle loro differenze, il grado di incertezza su ciascun profilo individuale e la capacità di generalizzare a soggetti non ancora osservati. La strategia del no pooling rende visibili le differenze, ma rischia di confondere l'eterogeneità reale con il rumore di misura; il complete pooling, al contrario, stabilizza le stime, ma può occultare divergenze sistematiche. Il partial pooling opera una sintesi tra l'informazione individuale e quella di popolazione, offrendo una rappresentazione più prudente e bilanciata delle differenze.
 
-- ciò che le persone condividono;
-- quanto differiscono;
-- quanto sappiamo di ciascuna;
-- come generalizzare a persone non ancora osservate.
-
-Il no pooling rende visibili le differenze, ma può confondere eterogeneità e rumore. Il complete pooling stabilizza le stime, ma può nascondere differenze sistematiche. Il partial pooling combina informazione individuale e informazione di popolazione, producendo una rappresentazione più prudente delle differenze.
-
-Questa soluzione rimane però condizionata a un'ipotesi importante: tutte le persone seguono la stessa regola processuale e differiscono soltanto nei suoi parametri. Un buon modello gerarchico non dimostra tale ipotesi. Deve essere confrontato con possibilità più severe: strategie differenti, cambiamenti nel tempo, processi omessi e popolazioni multimodali.
-
-Il messaggio epistemologico è quindi duplice:
-
-1. una media di popolazione non descrive automaticamente l'individuo;
-2. una distribuzione di parametri individuali non dimostra automaticamente l'esistenza di tratti psicologici stabili.
-
-Il capitolo successivo compirà un ulteriore passaggio: dalla previsione dei comportamenti alla scelta di un'azione, mostrando che comprendere una dinamica e quantificarne l'eterogeneità non basta ancora per decidere che cosa fare.
+Tale soluzione rimane tuttavia subordinata a un'ipotesi forte: tutti gli individui seguono la medesima regola processuale e differiscono unicamente nei valori dei parametri. Un buon modello gerarchico non dimostra tale assunzione, che deve essere messa alla prova confrontandola con alternative più radicali, quali strategie qualitative differenti, cambiamenti temporali, processi omessi o popolazioni multimodali. Il messaggio epistemologico è dunque duplice: una media di popolazione non descrive automaticamente l'individuo e una distribuzione di parametri individuali non prova automaticamente l'esistenza di tratti psicologici stabili. Il capitolo successivo compirà un ulteriore passo, spostandosi dalla previsione dei comportamenti alla scelta dell'azione, e mostrerà che comprendere una dinamica e quantificarne l'eterogeneità non è sufficiente per decidere cosa fare.
 
 ## Esercizi {.unnumbered .unlisted}
 
