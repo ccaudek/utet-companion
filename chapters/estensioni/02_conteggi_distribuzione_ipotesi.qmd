@@ -1,0 +1,483 @@
+# Quando la distribuzione è un'ipotesi: conteggi, Poisson e revisione del modello {#sec-poisson-model}
+
+::: {.callout-note appearance="minimal"}
+Nel capitolo precedente abbiamo introdotto i modelli lineari generalizzati distinguendo tre componenti: una distribuzione osservazionale, un predittore lineare e una funzione di legame. In questo capitolo, la stessa architettura viene applicata a un nuovo tipo di esito: i conteggi.
+
+Il modello di Poisson ci interessa per una sua proprietà molto particolare: non si limita a descrivere il valore atteso dei conteggi, ma impone che, a parità di valore atteso, la media e la varianza coincidano. La distribuzione osservazionale, quindi, non è una formalità tecnica, ma un'**ipotesi sulla variabilità dei dati** che, come ogni ipotesi, può essere messa alla prova dalle sue implicazioni predittive. Quando i dati mostrano una variabilità maggiore di quella che il modello riesce a generare, un fenomeno noto come sovradispersione, il problema non si risolve reinterpretando i parametri, ma rivedendo il modello stesso.
+
+Il capitolo utilizza il modello di Poisson come banco di prova del principio
+
+$$
+\boxed{
+\text{specificare}
+\rightarrow
+\text{generare implicazioni}
+\rightarrow
+\text{controllare}
+\rightarrow
+\text{rivedere}
+}
+$$
+
+che governa il flusso di lavoro bayesiano, e si chiude mostrando che cosa il conteggio, per costruzione, non può rappresentare: l'ordine temporale degli eventi. È questo limite a motivare il capitolo successivo.
+:::
+
+::: {.callout-important appearance="minimal" .chapter-status}
+**Da sapere.** Un modello di Poisson rappresenta conteggi interi non negativi e collega il loro valore atteso a un predittore lineare mediante il link logaritmico. La distribuzione osservazionale non specifica soltanto quali valori sono possibili, ma impone anche che, a parità di valore atteso, media e varianza coincidano. Questa è un'ipotesi del modello che può essere criticata attraverso le sue implicazioni predittive.
+
+**Da saper fare.** Riconoscere l'architettura comune tra GLM logistico e GLM di Poisson; distinguere il conteggio atteso dalla singola osservazione; interpretare $\exp(\beta)$ come variazione moltiplicativa del valore atteso; riconoscere quando il modello di Poisson genera dati troppo regolari e spiegare perché una distribuzione più flessibile migliora la descrizione senza costituire una spiegazione.
+
+**Approfondimento facoltativo.** La specificazione completa in `brms` con i prior, la gestione delle diverse esposizioni tramite offset e l'adattamento della binomiale negativa sono riportati in sezioni collassabili. Nel percorso essenziale, è importante comprendere perché la distribuzione osservazionale costituisca un'ipotesi controllabile e perché la revisione debba rispondere alla discrepanza osservata.
+
+[Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
+:::
+
+::: {.callout-tip collapse="true" title="Prerequisiti"}
+Il capitolo presuppone l'architettura dei GLM introdotta in @sec-reg-logistic-stan e il flusso di lavoro bayesiano sviluppato nelle Parti precedenti. Non ricostruiremo da zero i prior, il campionamento MCMC e la diagnostica, ma li useremo solo quando servono a comprendere il comportamento del modello.
+:::
+
+::: {.callout-caution collapse="true" title="Preparazione del notebook"}
+```{r}
+#| output: false
+
+here::here("code", "_common.R") |>
+  source()
+
+set.seed(2026)
+```
+:::
+
+## Dallo 0/1 al conteggio: stessa architettura, nuovo esito
+
+Supponiamo di osservare, per ciascun partecipante, il numero di episodi di *mind-wandering* registrati durante un compito di attenzione sostenuta della durata di venti minuti. I valori possibili sono $0, 1, 2, 3, \ldots$, senza un limite superiore predefinito. Un modello gaussiano è inappropriato: la normale è continua, simmetrica e assegna probabilità anche a valori negativi, mentre i conteggi sono discreti, non negativi e spesso asimmetrici, con molti zeri.
+
+La distribuzione naturale per questi dati è la Poisson:
+
+$$
+Y_i \mid \lambda_i \sim \operatorname{Poisson}(\lambda_i),
+$$ {#eq-poisson-model}
+
+dove $\lambda_i > 0$ è il **conteggio atteso** per l'unità $i$. Porre $\lambda_i = 4$ non significa che una data persona produrrà esattamente quattro episodi: significa che, ripetendo l'osservazione in condizioni equivalenti per soggetti con gli stessi predittori, ci aspetteremmo in media 4 episodi, mentre le singole osservazioni continuerebbero a variare. È la stessa distinzione tra **valore atteso** e **nuova osservazione** incontrata nei modelli precedenti.
+
+Per collegare $\lambda_i$ ai predittori incontriamo lo stesso problema risolto nel capitolo sulla regressione logistica. Il predittore lineare $\eta_i = \alpha + \beta x_i$ può assumere qualsiasi valore reale; $\lambda_i$, invece, deve essere strettamente positivo. Come il logit trasformava una probabilità vincolata in $[0,1]$ in una quantità libera su tutta la retta reale, così il logaritmo trasforma una quantità positiva in una quantità libera:
+
+$$
+\log(\lambda_i)=\alpha+\beta x_i
+\quad\Longleftrightarrow\quad
+\lambda_i=\exp(\alpha+\beta x_i)>0.
+$$
+
+Il GLM di Poisson è tutto qui:
+
+$$
+Y_i\sim\operatorname{Poisson}(\lambda_i),
+\qquad
+\log(\lambda_i)=\alpha+\beta x_i.
+$$
+
+Il confronto con il modello del capitolo precedente rende evidente l'architettura comune:
+
+| Outcome   | Distribuzione osservazionale | Predittore            | Link  | Quantità attesa                     |
+| --------- | ---------------------------- | --------------------- | ----- | ----------------------------------- |
+| binario   | Bernoulli                    | $\eta=\alpha+\beta x$ | logit | $p=\operatorname{logit}^{-1}(\eta)$ |
+| conteggio | Poisson                      | $\eta=\alpha+\beta x$ | log   | $\lambda=\exp(\eta)$                |
+
+In entrambi i casi la funzione legame risolve lo stesso problema concettuale: rende il predittore lineare, libero su tutta la retta reale, compatibile con i vincoli della quantità da modellare. Il punto qui non è memorizzare una nuova formula, ma riconoscere **perché il link deve cambiare quando cambiano i vincoli imposti dalla natura dell'outcome**.
+
+
+
+C'è anche una seconda conseguenza importante, sul piano interpretativo. Il modello è additivo sulla scala logaritmica,
+
+$$
+\log(\lambda_i)=\alpha+\beta x_i,
+$$
+ma diventa moltiplicativo sulla scala originale:
+
+$$
+\lambda_i
+=
+\exp(\alpha)\exp(\beta x_i).
+$$
+
+Per questo, nel modello di Poisson, gli effetti dei predittori vengono naturalmente interpretati come **variazioni relative o moltiplicative del conteggio atteso**, anziché come semplici variazioni additive.
+
+Per esempio, se
+
+$$
+\exp(\beta)=1.20,
+$$
+un incremento unitario di $x$ è associato, nel modello, a un conteggio atteso maggiore del 20%. Se
+
+$$
+\exp(\beta)=0.80,
+$$
+il conteggio atteso è minore del 20%. Ancora una volta, il coefficiente non descrive ciò che deve accadere a ogni singola persona. Descrive come cambia la **media condizionata** della distribuzione. Una persona può produrre zero eventi e un'altra otto eventi anche quando il loro valore atteso modellato è lo stesso.
+
+Per interpretare l'intercetta, osserviamo che
+
+$$
+\lambda(0)=\exp(\alpha).
+$$
+
+Conviene quindi centrare o codificare i predittori in modo che $x=0$ corrisponda a una condizione osservata e sostantivamente interpretabile.
+
+::: {.callout-note collapse="true" title="Approfondimento: quando i conteggi non sono confrontabili (offset)"}
+I conteggi sono direttamente confrontabili solo se le unità sono state osservate per la stessa "quantità di occasione" (stesso tempo, stesso numero di prove). Se una persona è osservata per dieci minuti e un'altra per trenta, la seconda ha più occasioni di produrre eventi: il conteggio maggiore non implica una maggiore propensione.
+
+In questi casi si distingue il **tasso atteso** $r_i$ per unità di esposizione $E_i$ dal conteggio atteso $\lambda_i = E_i\, r_i$. Modellando il tasso, $\log(r_i)=\alpha+\beta x_i$, si ottiene
+
+$$
+\log(\lambda_i)
+=
+\log(E_i)+\alpha+\beta x_i.
+$$
+
+Il termine $\log(E_i)$ è chiamato **offset**: incorpora nel modello una differenza di esposizione già nota, con coefficiente fissato a 1 anziché stimato. In `brms`:
+
+```r
+count ~ predictor + offset(log(exposure))
+```
+
+Senza offset, i coefficienti descrivono differenze nei **conteggi attesi**; con l'offset, differenze nel **tasso atteso per unità di esposizione**. L'offset è appropriato quando è ragionevole assumere che, a parità di tasso, il conteggio atteso cresca proporzionalmente all'esposizione.
+
+Nell'esempio di questo capitolo tutti i partecipanti sono osservati per venti minuti, quindi l'offset non serve; è però una componente frequente nei modelli di conteggio applicati (per esempio con tempi di osservazione o numerosità a rischio differenti).
+:::
+
+## Il Poisson dice più di "il dato è un conteggio"
+
+Come abbiamo anticipato, la distribuzione di Poisson possiede una proprietà particolarmente importante:
+
+$$
+\mathbb E(Y_i\mid \lambda_i)=\lambda_i,
+\qquad
+\operatorname{Var}(Y_i\mid \lambda_i)=\lambda_i.
+$$ {#eq-poisson-property}
+
+Media e varianza sono determinate dallo stesso parametro: questa proprietà è detta **equidispersione**.
+
+Per comprendere il significato dell'@eq-poisson-property è necessario distinguere due modi di intendere la variabilità. Se calcoliamo la media e la varianza di tutti i conteggi osservati in un campione eterogeneo, ad esempio misurando il numero di errori in un gruppo di persone con abilità diverse, non è affatto detto che queste due quantità coincidano. Anzi, è probabile che la varianza complessiva sia molto più grande della media, semplicemente perché i valori attesi $\lambda_i$ delle persone sono differenti.
+
+Il vincolo dell'equidispersione non riguarda la varianza **marginale** (calcolata su tutto il campione), ma la varianza **condizionata**. Il modello di Poisson afferma che, se si isola un sottogruppo di individui a cui si attribuisce lo stesso valore atteso $\lambda$ (cioè con gli stessi predittori), allora le osservazioni all'interno di quel sottogruppo dovrebbero mostrare una variabilità pari a $\lambda$. In altre parole, la dispersione attorno alla media, una volta considerati i predittori, deve essere uguale al valore atteso.
+
+Questa precisazione trasforma la scelta della distribuzione in qualcosa di più interessante di una decisione tra famiglie statistiche. Scegliere la distribuzione di Poisson significa formulare una **previsione verificabile** sulla variabilità condizionata dei dati.
+
+::: {.callout-important title="Una distribuzione è una parte della teoria del dato"}
+Scrivere $Y_i\sim\operatorname{Poisson}(\lambda_i)$ non è un espediente tecnico per evitare valori negativi. È un'affermazione sulla struttura della variabilità: una volta fissato $\lambda_i$, la varianza residua coincide con la media. Come ogni altra assunzione del modello, la scelta della famiglia distributiva produce implicazioni controllabili e può essere messa in discussione dai dati.
+:::
+
+## Un caso di studio: episodi di mind-wandering
+
+Consideriamo un esempio in cui un modello di Poisson si rivelerà insufficiente. Supponiamo che 240 partecipanti svolgano un compito di attenzione della durata di venti minuti. Per ciascuno registriamo il numero di episodi di *mind-wandering* e un indice standardizzato di fatica soggettiva. La domanda è descrittiva: **come varia il numero atteso di episodi al variare della fatica?**
+
+Soggetti con lo stesso livello di fatica possono però differire per caratteristiche non incluse nel modello, come abitudini attentive, motivazione, qualità del sonno o strategie adottate durante il compito. Per rendere esplicita questa possibilità, generiamo i dati includendo una propensione individuale che escluderemo deliberatamente dal modello. Per l'analista, questa componente rappresenta eterogeneità non osservata.
+
+```{r}
+set.seed(2026)
+
+n <- 240
+
+mind_wandering_data <- tibble(
+  fatigue = rnorm(n),
+  latent_propensity = rnorm(n, 0, 0.65),
+  lambda = exp(log(3) + 0.35 * fatigue + latent_propensity),
+  episodes = rpois(n, lambda)
+)
+
+glimpse(mind_wandering_data)
+```
+
+Il primo modello che consideriamo è
+
+$$
+Y_i \sim \operatorname{Poisson}(\lambda_i),
+\qquad
+\log(\lambda_i) = \alpha + \beta,\text{fatigue}_i.
+$$
+
+Il modello descrive la relazione media tra fatica e conteggio atteso, ma assume che tutti i soggetti con lo stesso livello di fatica abbiano lo stesso $\lambda_i$. Nel modello di Poisson, inoltre, la varianza condizionata è fissata da quello stesso parametro:
+
+$$
+\operatorname{Var}(Y_i\mid \lambda_i)=\lambda_i.
+$$
+
+Di conseguenza, ogni differenza residua tra soggetti con la stessa fatica viene attribuita alla sola variabilità prevista dalla distribuzione di Poisson. Il modello non rappresenta un'ulteriore eterogeneità individuale.
+
+```{r}
+#| label: fig-count-mind-wandering-observed
+#| fig-cap: "Numero di episodi di mind-wandering rispetto alla fatica standardizzata nei dati simulati. A livelli simili di fatica si osservano conteggi molto differenti, indicando una notevole eterogeneità tra partecipanti."
+#| fig-alt: "Diagramma di punti con la fatica standardizzata sull'asse orizzontale e il numero di episodi di mind-wandering sull'asse verticale. I conteggi aumentano mediamente con la fatica ma mostrano ampia dispersione."
+#| fig-width: 8
+#| fig-height: 5.5
+
+ggplot(mind_wandering_data, aes(fatigue, episodes)) +
+  geom_jitter(width = 0, height = 0.08, alpha = 0.45) +
+  labs(
+    x = "Fatica standardizzata",
+    y = "Episodi di mind-wandering"
+  )
+```
+
+Poiché `fatigue` è standardizzata, possiamo assegnare prior direttamente interpretabili sulla scala del logaritmo del conteggio atteso. Un'intercetta prossima a $\log(3)$ corrisponde a circa tre episodi attesi per un soggetto con fatica media.
+
+$$
+\alpha \sim \operatorname{Normal}(\log 3, 0.7),
+\qquad
+\beta \sim \operatorname{Normal}(0, 0.5).
+$$
+
+```{r}
+poisson_priors <- c(
+  prior(normal(log(3), 0.7), class = "Intercept"),
+  prior(normal(0, 0.5), class = "b")
+)
+
+fit_poisson <- brm(
+  episodes ~ 1 + fatigue,
+  data = mind_wandering_data,
+  family = poisson(link = "log"),
+  prior = poisson_priors,
+  chains = 4,
+  iter = 2500,
+  warmup = 1000,
+  seed = 2026,
+  refresh = 0
+)
+
+summary(fit_poisson)
+```
+
+Come di consueto, $\widehat R$ e le dimensioni campionarie effettive riguardano l'affidabilità numerica dell'approssimazione della distribuzione a posteriori, non l'adeguatezza della distribuzione di Poisson ai dati.
+
+
+Una volta stimato il modello, $\exp(\beta)$ rappresenta il rapporto tra i conteggi attesi associato a un aumento di una deviazione standard nella fatica.
+
+```{r}
+as_draws_df(fit_poisson) |>
+  transmute(expected_ratio = exp(b_fatigue)) |>
+  summarise(
+    median_ratio = median(expected_ratio),
+    lower_ratio = quantile(expected_ratio, 0.025),
+    upper_ratio = quantile(expected_ratio, 0.975)
+  )
+```
+
+Questo risultato descrive la relazione media stimata. Ma riprodurre bene la media non basta: dobbiamo verificare se il modello genera anche una **variabilità** simile a quella osservata.
+
+### Un controllo sensibile al possibile errore
+
+Ci serve quindi una statistica sensibile alla dispersione. Una scelta semplice è la deviazione standard dei conteggi: la calcoliamo nei dati osservati e in molte repliche generate dal modello, quindi confrontiamo i risultati.
+
+```{r}
+#| label: fig-ppcheck-sd-poisson
+#| fig-cap: "Controllo predittivo sulla deviazione standard dei conteggi per il modello di Poisson. L'istogramma riporta la statistica calcolata sulle repliche generate dal modello; la linea verticale indica il valore osservato."
+#| fig-alt: "Istogramma delle deviazioni standard delle repliche Poisson, concentrato su valori inferiori alla deviazione standard osservata, indicata da una linea verticale ben separata dall'istogramma."
+
+pp_check(fit_poisson, type = "stat", stat = "sd", ndraws = 1000)
+```
+
+Il modello riproduce la relazione media con la fatica, ma genera dati sistematicamente **troppo regolari**: la deviazione standard osservata è maggiore di quelle tipicamente prodotte dalle repliche Poisson. Abbiamo quindi identificato una discrepanza precisa: il modello sottostima la variabilità dei conteggi.
+
+::: {.callout-tip collapse="true" title="Perché la varianza marginale non è un test sufficiente"}
+Confrontare direttamente media e varianza grezze del campione può essere fuorviante. Il vincolo di Poisson riguarda infatti la varianza *condizionata* ai predittori. Anche un modello di Poisson corretto può avere una varianza marginale maggiore della media quando i $\lambda_i$ differiscono tra soggetti. Il controllo predittivo tiene conto di questa struttura: confronta i dati con repliche generate dal modello completo, predittori inclusi. Se la variabilità osservata rimane irraggiungibile, il problema riguarda la capacità del modello di rappresentare la dispersione.
+:::
+
+## La revisione: una distribuzione più flessibile
+
+Nel nostro esempio, soggetti con la stessa fatica hanno propensioni diverse al *mind-wandering*, ma il modello non rappresenta questa eterogeneità. Il parametro $\lambda_i$ deve descrivere sia la media attesa sia, attraverso la distribuzione di Poisson, la variabilità residua. I dati mostrano che questo vincolo è troppo restrittivo.
+
+Una possibile revisione consiste quindi nel cambiare la distribuzione osservazionale mantenendo invariata la relazione media. La distribuzione **binomiale negativa** consente una maggiore dispersione:
+
+$$
+Y_i \sim \operatorname{NegBinomial}(\mu_i, \phi),
+\qquad
+\mathbb E(Y_i) = \mu_i,
+\qquad
+\operatorname{Var}(Y_i) = \mu_i + \frac{\mu_i^2}{\phi}.
+$$
+
+Il parametro $\phi>0$ introduce la flessibilità che manca al Poisson: per $\phi\to\infty$ la varianza si avvicina a quella del Poisson; valori più piccoli consentono maggiore dispersione. La componente sistematica resta
+
+$$
+\log(\mu_i)=\alpha+\beta,\text{fatigue}_i.
+$$
+
+Non abbiamo quindi cambiato la domanda né la relazione media: abbiamo modificato **il modello distributivo delle osservazioni**, perché quello precedente generava dati troppo poco variabili.
+
+::: {.callout-note collapse="true" title="Approfondimento: adattare la binomiale negativa"}
+
+```{r}
+negative_binomial_priors <- c(
+  poisson_priors,
+  prior(gamma(2, 0.5), class = "shape")
+)
+
+fit_negative_binomial <- brm(
+  episodes ~ 1 + fatigue,
+  data = mind_wandering_data,
+  family = negbinomial(link = "log"),
+  prior = negative_binomial_priors,
+  chains = 4,
+  iter = 2500,
+  warmup = 1000,
+  seed = 2026,
+  refresh = 0
+)
+
+summary(fit_negative_binomial)
+```
+
+:::
+
+La revisione deve essere valutata ripetendo lo stesso controllo predittivo che aveva evidenziato il limite del modello di Poisson:
+
+```{r}
+#| label: fig-ppcheck-sd-negbin
+#| fig-cap: "Controllo predittivo sulla deviazione standard dei conteggi per il modello binomiale negativo. Il valore osservato è ora compatibile con la distribuzione delle repliche."
+#| fig-alt: "Istogramma delle deviazioni standard delle repliche del modello binomiale negativo, con la linea verticale del valore osservato collocata all'interno dell'istogramma."
+
+pp_check(fit_negative_binomial, type = "stat", stat = "sd", ndraws = 1000)
+```
+
+Il valore osservato è ora compatibile con quelli generati dal modello. La logica è importante: la binomiale negativa non è preferibile semplicemente perché è più flessibile, ma perché corregge **la specifica discrepanza diagnosticata** senza modificare gli aspetti del modello che già funzionavano.
+
+::: {.callout-tip collapse="true" title="E se la discrepanza fosse stata un'altra?"}
+La sovradispersione non implica automaticamente l'uso della binomiale negativa. Prima di cambiare famiglia distributiva, bisogna chiedersi dove si trovi la discrepanza. Una relazione media curvilinea richiede di rivedere la funzione media; osservazioni annidate in soggetti o contesti suggeriscono una struttura gerarchica; esposizioni diverse richiedono di distinguere il conteggio dal tasso, introducendo un offset; una dipendenza sistematica nel tempo mette in discussione l'indipendenza condizionale. Una distribuzione più flessibile è appropriata quando la relazione media appare adeguata, ma la variabilità condizionata è maggiore di quella consentita dal Poisson. La complessità è utile quando corregge un limite diagnosticato, non di per sé.
+:::
+
+## Un modello più flessibile non è ancora una spiegazione
+
+Supponiamo che la binomiale negativa riproduca bene la dispersione. Abbiamo ottenuto un modello descrittivo migliore: ma che cosa abbiamo imparato sul processo psicologico?
+
+Meno di quanto potrebbe sembrare. Nel dataset simulato conosciamo la risposta perché abbiamo generato noi i dati: esiste una propensione individuale latente che il primo modello non rappresenta. In uno studio reale, la stessa sovradispersione potrebbe derivare da molte fonti: differenze stabili tra persone, sottogruppi, covariate omesse, dipendenza tra eventi o variazioni temporali della propensione. La binomiale negativa può **assorbire** questa variabilità senza identificarne la causa.
+
+::: {.callout-important title="Descrivere meglio non significa spiegare di più"}
+Se il Poisson genera dati troppo regolari e la binomiale negativa riproduce meglio la dispersione, abbiamo evidenza che la prima distribuzione osservazionale era troppo restrittiva. Non abbiamo però dimostrato l'esistenza di uno specifico meccanismo psicologico: una distribuzione più flessibile può rappresentare l'effetto aggregato di processi differenti.
+:::
+
+Questo punto è centrale per l'architettura della Parte *Estensioni*: migliorare il modello osservazionale permette di generare dati più simili a quelli osservati, ma non trasforma automaticamente una distribuzione più flessibile in una spiegazione meccanicistica. Per spiegare, il modello deve **rappresentare il processo**.
+
+
+## Che cosa il conteggio perde
+
+C'è infine qualcosa che nessuna distribuzione dei conteggi, per quanto flessibile, può recuperare. Immaginiamo due partecipanti che producano entrambi sei episodi. Per il modello di conteggio i due outcome sono identici:
+
+$$
+Y_A=6,
+\qquad
+Y_B=6.
+$$
+
+La loro organizzazione temporale, però, potrebbe essere completamente diversa: una persona potrebbe produrre un episodio ogni pochi minuti, l'altra trascorrere quasi tutto il compito senza episodi e poi mostrarne sei in rapida successione. Il conteggio complessivo non conserva questa informazione.
+
+Questo non rende il Poisson un modello sbagliato. Significa che la sua unità di previsione è il **numero di eventi nell'intervallo**, non la sequenza con cui gli eventi si producono. Se la domanda scientifica riguarda la persistenza, l'accumulo, l'adattamento, o il modo in cui uno stato corrente dipende da ciò che è accaduto poco prima, non basta modificare la distribuzione marginale dei conteggi: **l'ordine temporale deve entrare nel modello**. È il passaggio che affronteremo nel capitolo successivo.
+
+::: {.callout-note title="Dal modello osservazionale al processo"}
+Bernoulli, binomiale, Poisson e binomiale negativa ampliano il repertorio dei **modelli osservazionali**: ci permettono di rappresentare meglio diversi tipi di outcome e diverse forme di variabilità.
+
+Il passo successivo è qualitativamente diverso. Quando la storia delle osservazioni contiene informazione, il modello deve rappresentare come lo stato del sistema evolve e come questa evoluzione genera le risposte successive. È qui che iniziamo a passare da un GLM statico a un modello dinamico.
+:::
+
+## Riflessioni conclusive {.unnumbered .unlisted}
+
+Il modello di Poisson conserva l'architettura del GLM: il predittore lineare descrive la struttura sistematica, il link logaritmico trasforma il predittore in un valore atteso positivo e la distribuzione osservazionale genera i conteggi. La lezione più importante del capitolo, tuttavia, non riguarda il link logaritmico, ma il ruolo della distribuzione osservazionale. Scegliere il modello di Poisson equivale a formulare un'ipotesi precisa sulla variabilità condizionata dei dati e i controlli predittivi permettono di verificarla e di individuare eventuali limiti del modello. Una volta diagnosticato il limite, la revisione può essere mirata, nel nostro caso, alla distribuzione binomiale negativa. Anche in tale revisione, tuttavia, il modello migliorato continua a descrivere senza spiegare: assorbe l'eterogeneità senza risalire alla sua origine.
+
+Finora abbiamo esteso la descrizione di come le osservazioni vengono generate **condizionatamente a parametri e predittori**, mantenendo l'assunzione di indipendenza condizionale. Nel prossimo capitolo, questa assunzione verrà meno: l'ordine delle osservazioni conterrà informazione, e il modello dovrà imparare a rappresentare un processo che si svolge nel tempo, e non più soltanto una relazione statica.
+
+
+## Esercizi {.unnumbered .unlisted}
+
+### Esercizio 1 — Comprendere: che cosa assume il Poisson? {.unnumbered .unlisted}
+
+*Codice: no · 10 minuti*
+
+Considera
+
+$$
+Y_i\sim\operatorname{Poisson}(\lambda_i),
+\qquad
+\log(\lambda_i)=\alpha+\beta x_i.
+$$
+
+Spiega con parole tue che cosa rappresentano $Y_i$, $\lambda_i$, il predittore lineare e la distribuzione di Poisson. Chiarisci inoltre perché l'uguaglianza tra media e varianza non deve essere verificata confrontando meccanicamente la media e la varianza grezze dell'intero campione.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Il vincolo di equidispersione riguarda unità che, secondo il modello, condividono lo stesso valore atteso condizionato.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+$Y_i$ è il conteggio osservato. $\lambda_i$ è il conteggio medio atteso per un'unità con i predittori corrispondenti. Il predittore $\alpha+\beta x_i$ descrive la struttura sistematica sulla scala logaritmica. La Poisson descrive come una nuova osservazione varia attorno a $\lambda_i$ e impone $\operatorname{Var}(Y_i\mid\lambda_i)=\lambda_i$.
+
+Se $\lambda_i$ varia tra persone, la distribuzione marginale dei conteggi è una miscela di Poisson con medie diverse e può avere varianza molto superiore alla media. Per questo il confronto tra media e varianza grezze non costituisce da solo un test di sovradispersione condizionata.
+:::
+
+### Esercizio 2 — Interpretare: dalla scala log al conteggio atteso {.unnumbered .unlisted}
+
+*Codice: no · 10 minuti*
+
+Supponi che
+
+$$
+\alpha=\log(3),
+\qquad
+\beta=\log(1.25).
+$$
+
+Calcola il conteggio atteso per $x=0$ e $x=1$. Spiega che cosa significa $\exp(\beta)=1.25$ e perché non implica che ogni persona con $x=1$ produca esattamente il 25% di eventi in più rispetto a una persona con $x=0$.
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+Per $x=0$,
+
+$$
+\lambda(0)=\exp[\log(3)]=3.
+$$
+
+Per $x=1$,
+
+$$
+\lambda(1)
+=
+\exp[\log(3)+\log(1.25)]
+=
+3\times1.25
+=
+3.75.
+$$
+
+Il coefficiente descrive quindi un incremento del 25% del **valore atteso** associato a una variazione unitaria di $x$. Le singole osservazioni continuano a variare secondo la distribuzione osservazionale.
+:::
+
+### Esercizio 3 — Criticare: un modello migliore spiega il fenomeno? {.unnumbered .unlisted}
+
+*Codice: no · 15 minuti*
+
+Un ricercatore adatta un modello di Poisson ai conteggi di episodi di *mind-wandering*. Il modello riproduce bene la media ma sottostima fortemente la dispersione. Una binomiale negativa riproduce invece sia la media sia la variabilità osservata. Il ricercatore conclude:
+
+> «La binomiale negativa si adatta meglio, quindi abbiamo dimostrato che esiste un meccanismo psicologico individuale che genera la sovradispersione.»
+
+Spiega perché la conclusione è troppo forte e indica quali interpretazioni alternative rimangono possibili.
+
+::: {.callout-tip collapse="true" title="Suggerimento"}
+Distingui tra una distribuzione osservazionale capace di assorbire eterogeneità e un modello che specifica la fonte di quella eterogeneità.
+:::
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+Il migliore comportamento predittivo della binomiale negativa indica che, per gli aspetti controllati, il Poisson era troppo rigido e che una maggiore dispersione migliora la rappresentazione dei dati. Non identifica però la fonte della dispersione. Questa potrebbe derivare da differenze stabili tra persone, covariate omesse, sottogruppi, dipendenza tra eventi, variazioni temporali, errori di misurazione o una forma sbagliata della relazione media. Per sostenere un meccanismo psicologico specifico occorrono una struttura teorica che lo rappresenti e dati capaci di discriminare quella spiegazione dalle alternative.
+:::
+
+### Esercizio 4 (facoltativo) — Modificare la domanda: conteggio o tasso? {.unnumbered .unlisted}
+
+*Codice: no · 10–15 minuti · richiede l'approfondimento sull'offset*
+
+Una persona produce 4 episodi durante 10 minuti di osservazione; un'altra ne produce 8 durante 40 minuti. Spiega perché il secondo conteggio è maggiore ma il primo tasso è più elevato. Descrivi quale domanda risponde un modello dei conteggi grezzi e quale domanda risponde un modello con il logaritmo del tempo di osservazione come offset.
+
+::: {.callout-note collapse="true" title="Soluzione commentata"}
+I tassi osservati sono $4/10=0.40$ e $8/40=0.20$ episodi al minuto. Il conteggio totale risponde alla domanda su quanti eventi siano stati osservati nell'intero periodo; il modello con offset confronta invece la frequenza attesa per unità di esposizione, tenendo conto della diversa durata di osservazione.
+:::
+
+::: {.callout-note collapse="true" title="Informazioni sull'ambiente di sviluppo"}
+```{r}
+sessionInfo()
+```
+:::
+
+## Bibliografia {.unnumbered .unlisted}

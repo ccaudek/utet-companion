@@ -1,23 +1,35 @@
-# Dal GLM statico al modello dinamico: un ponte verso i modelli processuali {#sec-ar1}
+# Quando l'ordine contiene informazione: dal GLM statico al modello dinamico {#sec-ar1}
 
 ::: {.callout-note appearance="minimal"}
-I capitoli precedenti hanno mostrato come descrivere una risposta binaria mediante una distribuzione Bernoulli e un predittore lineare collegato alla probabilità attraverso il logit. Questa struttura è sufficiente quando la domanda riguarda una probabilità media condizionata ai predittori. Diventa invece incompleta quando l'ordine delle risposte contiene informazione: una scelta può dipendere da ciò che è accaduto poco prima, uno stato emotivo può persistere nel tempo e l'esperienza accumulata può modificare le decisioni successive.
+Nei capitoli precedenti abbiamo esteso il modello lineare modificando il **modello osservazionale**. Con un esito binario abbiamo usato una distribuzione Bernoulli e il link logit; con un conteggio abbiamo usato una distribuzione di Poisson e il link logaritmico. In entrambi i casi la domanda rimaneva, nella sua forma essenziale: *come cambia la distribuzione dell'osservazione al variare dei predittori?*
 
-Questo capitolo introduce il passaggio da un GLM statico a un modello dinamico con stato latente. L'obiettivo non è offrire una trattazione generale delle serie temporali, ma mostrare come una probabilità osservabile possa diventare l'uscita di una struttura che evolve nel tempo. Il capitolo conclude la Parte *Estensioni* e prepara la Parte successiva, dedicata ai modelli meccanicistici. Il passaggio è importante, ma non automatico: rappresentare una dinamica non equivale ancora a spiegare il meccanismo psicologico che la produce.
+Questo capitolo introduce un'estensione di natura diversa. Supponiamo che due persone producano la stessa proporzione di risposte corrette, ma che una alterni quasi continuamente tra successo ed errore mentre l'altra attraversi lunghi periodi di risposte simili. Un modello che rappresenta bene la probabilità media può non distinguere affatto queste due sequenze. Se però il nostro oggetto scientifico riguarda persistenza, adattamento, memoria o apprendimento, **l'ordine delle osservazioni diventa informazione**.
+
+Il passaggio decisivo può essere espresso così:
+
+$$
+\text{GLM statico: genera osservazioni}
+\;\longrightarrow\;
+\text{modello dinamico: genera sequenze}
+\;\longrightarrow\;
+\text{modello processuale: genera sequenze mediante una regola teorica}.
+$$
+
+Useremo un semplice stato autoregressivo AR(1) per compiere il primo passaggio. Il suo scopo non è fornire una teoria generale delle serie temporali né identificare automaticamente un meccanismo psicologico. Serve a mostrare che cosa cambia quando la probabilità presente dipende anche da una storia latente. Proprio per questo il modello AR(1) costituisce un ponte utile verso la Parte *Applicazione*: rappresenta una dinamica, ma non spiega ancora quale processo psicologico la generi.
 :::
 
 ::: {.callout-important appearance="minimal" .chapter-status}
-**Da sapere.** Un GLM statico descrive come la probabilità media di una risposta binaria varia con i predittori, ma non rappresenta necessariamente l’ordine delle osservazioni. Quando la sequenza contiene informazione, si può introdurre uno stato latente che evolve nel tempo. Nel modello AR(1), $\phi$ descrive la persistenza dello stato e $\sigma_z$ la nuova variabilità introdotta a ogni passo. Questo rende il modello dinamico, non automaticamente meccanicistico: collegare lo stato ad attenzione, fiducia o apprendimento richiede una regola teorica di aggiornamento e verifiche ulteriori.
+**Da sapere.** Un GLM statico può descrivere correttamente la distribuzione marginale delle risposte e tuttavia perdere l'informazione contenuta nella loro sequenza. Un modello dinamico introduce uno stato che evolve nel tempo: nel caso AR(1), $\phi$ descrive quanta parte dello stato precedente persiste e $\sigma_z$ quanta nuova variabilità entra a ogni passo. Il guadagno principale è che il modello genera sequenze e può essere controllato mediante proprietà temporali. Questo non rende però lo stato automaticamente interpretabile come attenzione, fiducia o apprendimento.
 
-**Da saper fare.** Riconoscere quando una domanda richiede un modello dinamico anziché un GLM statico; interpretare $\phi$, $\sigma_z$ e i principali casi limite; distinguere differenze stabili tra persone e variazioni temporanee entro la stessa persona; spiegare perché i controlli predittivi devono includere proprietà sequenziali; distinguere un modello che descrive dipendenza temporale da un modello che formalizza un meccanismo psicologico.
+**Da saper fare.** Riconoscere quando l'ordine delle osservazioni è parte della domanda scientifica; spiegare la differenza tra una proprietà marginale e una proprietà sequenziale; interpretare intuitivamente $\phi$ e $\sigma_z$; confrontare un GLM statico e un modello dinamico mediante controlli predittivi mirati; spiegare perché una dinamica statistica non costituisca ancora un meccanismo psicologico.
 
-**Approfondimento facoltativo.** La preparazione degli indici temporali, la compilazione e l’esecuzione del programma Stan con `cmdstanr`, lo studio sistematico del recupero dei parametri e l’analisi delle dipendenze posteriori tra $\phi$ e $\sigma_z$ possono essere rimandati. Nel percorso essenziale è sufficiente comprendere il passaggio dal GLM al modello di stato, interpretarne i parametri e valutare perché la proporzione complessiva delle risposte non descriva adeguatamente una sequenza temporale.
+**Approfondimento facoltativo.** La costruzione degli indici temporali, la compilazione e l'esecuzione del modello Stan, la scelta dettagliata dei prior dinamici e il recupero dei parametri sono mantenuti come supporto all'implementazione. Non sono necessari per seguire il filo essenziale del capitolo.
 
 [Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
 :::
 
 ::: {.callout-tip collapse="true" title="Prerequisiti"}
-Sono sufficienti la regressione logistica e i concetti di modello multilivello, distribuzione predittiva e diagnostica MCMC. La Parte successiva svilupperà modelli nei quali stati, input e regole di aggiornamento ricevono un significato psicologico più specifico.
+Sono sufficienti l'architettura dei GLM, i concetti di modello multilivello e distribuzione predittiva, e l'idea che un modello debba essere controllato sulle caratteristiche dei dati che intende rappresentare. La Parte successiva svilupperà modelli nei quali stati, input e regole di aggiornamento ricevono un significato psicologico più specifico.
 :::
 
 ::: {.callout-caution collapse="true" title="Preparazione del notebook"}
@@ -35,44 +47,30 @@ set.seed(2026)
 ```
 :::
 
-## Il valore aggiunto di un modello dinamico
+## Quando cambia l'unità della previsione
 
-Una regressione logistica risponde a una domanda del tipo:
+Un GLM risponde tipicamente a una domanda del tipo
 
 $$
 \Pr(Y_{it}=1\mid x_{it}).
 $$
 
-Il modello descrive come la probabilità di risposta vari al cambiare dei predittori. Se le osservazioni sono ripetute, possiamo aggiungere intercette o pendenze individuali, ma la struttura rimane essenzialmente statica: una volta condizionato sui parametri e sui predittori, il modello non attribuisce un ruolo specifico alla sequenza temporale.
+Il modello descrive come varia la probabilità della risposta quando cambiano i predittori. Se abbiamo osservazioni ripetute, possiamo aggiungere intercette e pendenze individuali per rappresentare differenze stabili tra persone. Anche in questo caso, però, una volta condizionato sui predittori e sui parametri, il modello non attribuisce necessariamente un ruolo alla posizione della risposta nella sequenza.
 
-Un modello dinamico formula una domanda ulteriore. Suppone che tra i predittori osservati e la risposta esista uno stato interno che cambia nel tempo:
+Questo significa che il modello può generare correttamente **quante** risposte positive ci aspettiamo senza generare correttamente **come esse si dispongono nel tempo**.
 
-$$
-\text{input}_{it}
-\longrightarrow
-\text{stato}_{it}
-\longrightarrow
-\Pr(Y_{it}=1).
-$$
-
-Nel seguito useremo un processo autoregressivo di primo ordine come esempio minimo. I modelli AR(1) sono un punto di partenza classico per rappresentare persistenza e dipendenza temporale [@chatfield2019analysis]. Non interpreteremo però automaticamente lo stato latente come attenzione, motivazione o fiducia. Esso è anzitutto un costrutto statistico: descrive una componente persistente non osservata. Per trasformarlo in una variabile psicologica occorrono una teoria sostantiva, manipolazioni o misure pertinenti e previsioni capaci di distinguere spiegazioni alternative.
-
-## Che cosa non vede un GLM statico
-
-Consideriamo una sequenza di risposte corrette e scorrette. Due persone possono avere la stessa proporzione complessiva di risposte corrette, ma produrre sequenze molto diverse. La prima può alternare frequentemente tra 0 e 1; la seconda può mostrare lunghi periodi di risposte uguali. Una regressione logistica che modella soltanto la probabilità media può rappresentare correttamente la proporzione complessiva e tuttavia non riprodurre l'organizzazione temporale delle risposte.
-
-Per esempio, le due sequenze seguenti contengono entrambe sei risposte positive su dodici:
+Consideriamo due sequenze di dodici risposte:
 
 | Sequenza | Risposte | Proporzione di 1 | Organizzazione temporale |
 |---|---|---:|---|
 | A | `010101010101` | 0.50 | alternanza quasi perfetta |
 | B | `000000111111` | 0.50 | due lunghi periodi omogenei |
 
-Un modello che considera soltanto il numero totale di 1 vede la stessa informazione in entrambi i casi. Un modello dinamico deve invece spiegare anche perché le risposte si dispongono in quel particolare ordine.
+Entrambe contengono sei risposte positive. Se la domanda riguarda soltanto la probabilità media di risposta, questa uguaglianza può essere tutto ciò che ci interessa. Se invece studiamo persistenza, fluttuazioni dell'attenzione, adattamento o memoria, le due sequenze rappresentano fenomeni molto diversi.
 
-Il punto non è che il GLM sia errato. È adeguato alla domanda per la quale è stato costruito. Se la domanda riguarda la probabilità media condizionata a un predittore, la sequenza può essere irrilevante. Se invece vogliamo studiare persistenza, adattamento o memoria, l'ordine temporale diventa parte dell'oggetto scientifico.
+Qui emerge il limite che motiva il capitolo. **La stessa distribuzione marginale può essere compatibile con organizzazioni temporali differenti.** Un controllo predittivo che confronti soltanto la proporzione di risposte positive potrebbe quindi giudicare adeguato un modello incapace di riprodurre la caratteristica che interessa scientificamente.
 
-Un modello logistico gerarchico può essere scritto come
+Un modello logistico gerarchico, per esempio, può essere scritto come
 
 $$
 Y_{it}\sim\operatorname{Bernoulli}(p_{it}),
@@ -80,11 +78,60 @@ Y_{it}\sim\operatorname{Bernoulli}(p_{it}),
 \operatorname{logit}(p_{it})=\alpha_i+\beta x_{it}.
 $$
 
-L'intercetta $\alpha_i$ descrive differenze stabili tra persone; $\beta$ descrive l'associazione tra il predittore e la probabilità di risposta. Condizionatamente a questi termini, le osservazioni della stessa persona sono trattate come indipendenti. La dipendenza seriale non è rappresentata.
+L'intercetta $\alpha_i$ rappresenta differenze relativamente stabili tra persone e $\beta$ l'associazione con il predittore osservato. Ma due risposte consecutive della stessa persona non sono collegate da una regola esplicita. Il modello genera risposte condizionate agli stessi parametri; non genera una **storia** che evolve.
 
-## Aggiungere uno stato latente
+Un modello dinamico aggiunge precisamente questa possibilità. Introduce uno stato interno $z_{it}$ che cambia nel tempo e contribuisce alla probabilità della risposta presente:
 
-Introduciamo uno stato $z_{it}$ che rappresenta una deviazione temporanea dalla propensione media prevista dal GLM:
+$$
+\text{predittori osservati}
+\;\longrightarrow\;
+\text{stato corrente}
+\;\longrightarrow\;
+\Pr(Y_{it}=1).
+$$
+
+Lo stato rende la probabilità presente dipendente, indirettamente, da ciò che è accaduto prima. Di conseguenza, l'oggetto generato dal modello non è più soltanto una collezione di osservazioni: è una sequenza.
+
+::: {.callout-important title="Il cambiamento essenziale"}
+Il passaggio da statico a dinamico non consiste semplicemente nell'aggiungere un parametro. Cambia **l'unità della previsione**.
+
+Un modello statico viene criticato chiedendo se riproduce bene distribuzioni e relazioni tra variabili. Un modello dinamico deve essere criticato anche chiedendo se riproduce proprietà della sequenza: persistenza, alternanza, durata dei periodi omogenei, autocorrelazione o altre caratteristiche temporali rilevanti per la teoria.
+:::
+
+## Aggiungere uno stato che conserva memoria
+
+Per introdurre la dinamica usiamo il modello più semplice che permetta allo stato corrente di dipendere da quello precedente. Scriviamolo dapprima nella forma intuitiva
+
+$$
+z_{it}=\phi z_{i,t-1}+\epsilon_{it},
+\qquad
+\epsilon_{it}\sim\operatorname{Normal}(0,\sigma_z).
+$$
+
+Questa equazione contiene l'idea essenziale. Lo stato corrente è formato da due parti: una quota dello stato precedente, controllata da $\phi$, e una nuova perturbazione $\epsilon_{it}$, la cui ampiezza è controllata da $\sigma_z$.
+
+Se $\phi$ è positivo e relativamente grande, una deviazione temporaneamente elevata tende a persistere: uno stato alto oggi rende più plausibile uno stato alto al passo successivo. Se $\phi$ è vicino a zero, il passato lascia poca traccia. Valori negativi producono invece una tendenza all'alternanza. Il parametro $\sigma_z$ stabilisce quanta nuova variabilità entra nel sistema a ogni passaggio.
+
+Colleghiamo ora lo stato alla risposta binaria:
+
+$$
+Y_{it}\sim\operatorname{Bernoulli}(p_{it}),
+$$
+
+$$
+\operatorname{logit}(p_{it})
+=
+\alpha_i+\beta x_{it}+z_{it}.
+$$
+
+La parte $\alpha_i+\beta x_{it}$ svolge la funzione già nota del GLM: rappresenta differenze relativamente stabili tra persone e associazioni con predittori osservati. Il termine $z_{it}$ aggiunge una deviazione che possiede una storia. Se lo stato è alto in una prova, tenderà — quando $\phi>0$ — a rimanere almeno in parte alto nella prova successiva.
+
+Questa distinzione permette di separare due fonti di variazione che un modello statico tende a confondere. Una persona può avere una propensione media stabilmente più elevata di un'altra, rappresentata da $\alpha_i$, e può inoltre attraversare periodi temporanei nei quali la probabilità di risposta aumenta o diminuisce, rappresentati da $z_{it}$.
+
+È utile osservare i casi limite. Se $\phi=0$ ma $\sigma_z>0$, esistono deviazioni latenti prova per prova, ma non conservano memoria. Se anche $\sigma_z=0$, lo stato scompare e il modello torna al GLM gerarchico statico. Il modello dinamico contiene quindi il modello statico come caso limite.
+
+::: {.callout-note collapse="true" title="Approfondimento: inizializzazione stazionaria dell'AR(1)"}
+Nell'implementazione useremo una versione stazionaria del processo AR(1). Il modello completo è
 
 $$
 \begin{aligned}
@@ -107,20 +154,12 @@ Y_{it}
 \end{aligned}
 $$
 
-Questa formulazione separa tre componenti. La parte $\alpha_i+\beta x_{it}$ svolge la funzione già nota del GLM: descrive differenze stabili tra persone e associazioni con predittori osservati. Lo stato $z_{it}$ introduce una deviazione che evolve nel tempo. La distribuzione Bernoulli traduce infine la propensione sulla scala logit in una risposta osservabile pari a 0 o 1.
+La condizione $|\phi|<1$ consente di definire la distribuzione stazionaria usata per il primo stato. Questo dettaglio è importante per l'implementazione, ma non modifica l'intuizione centrale: lo stato presente conserva una parte dello stato passato e riceve nuova variabilità.
+:::
 
-Il parametro $\phi$ regola la dipendenza tra stati consecutivi. Quando è positivo, uno stato temporaneamente elevato tende a rimanere elevato nel passo successivo. Quando è vicino a zero, la deviazione corrente conserva poca memoria di quella precedente. Valori negativi produrrebbero invece una tendenza all'alternanza. Il parametro $\sigma_z$ controlla la quantità di nuova variabilità che entra nel processo a ogni passo. La condizione $|\phi|<1$ rende stazionaria la componente autoregressiva utilizzata in questo esempio.
-
-È utile distinguere due casi limite. Porre $\phi=0$ elimina la dipendenza temporale, ma lascia una deviazione latente indipendente a ogni prova. Porre anche $\sigma_z=0$ elimina lo stato dinamico e riconduce il modello al GLM gerarchico statico.
-
-
-| Componente | Che cosa rappresenta nel modello | Che cosa non dimostra da sola |
-|---|---|---|
-| $\alpha_i$ | propensione relativamente stabile della persona | un tratto psicologico puro e invariabile |
-| $\beta$ | associazione del predittore osservato con i log-odds della risposta | un effetto causale, in assenza di un disegno adeguato |
-| $z_{it}$ | deviazione temporanea e latente dalla propensione prevista | attenzione, motivazione o fiducia come costrutti identificati |
-| $\phi$ | persistenza o alternanza dello stato tra prove consecutive | il processo psicologico responsabile della dipendenza |
-| $\sigma_z$ | ampiezza delle innovazioni dello stato | rumore di misura separato da ogni altra fonte di variabilità |
+::: {.callout-warning title="Uno stato latente non è ancora un costrutto psicologico"}
+Il simbolo $z_{it}$ rappresenta una componente persistente non osservata. Chiamarla *attenzione*, *motivazione* o *fiducia* non rende vera quell'interpretazione. Per attribuire allo stato un significato psicologico occorrono una teoria sostantiva e previsioni che distinguano tale interpretazione da processi alternativi.
+:::
 
 ## Simulare prima di stimare
 
@@ -220,7 +259,10 @@ summary(sequence_summary)
 
 Questa statistica non identifica da sola un processo psicologico. Serve però a illustrare un principio generale: quando il modello contiene una dinamica, i controlli predittivi devono riguardare anche le proprietà della sequenza, non soltanto la distribuzione marginale di 0 e 1.
 
-## Preparare i dati sequenziali
+::: {.callout-note collapse="true" title="Approfondimento computazionale: dal modello al programma Stan"}
+Questa sezione mostra come tradurre il modello concettuale in una sequenza di dati, prior e istruzioni per Stan. Può essere saltata in una prima lettura: il punto essenziale è che l'implementazione deve conservare esplicitamente l'ordine delle osservazioni e generare repliche che rispettino quella struttura.
+
+### Preparare i dati sequenziali
 
 Stan deve sapere quale osservazione precede ogni prova all'interno della stessa persona. Ordiniamo quindi i dati e costruiamo un indice `prev`. Il valore 0 indica l'inizio di una nuova sequenza.
 
@@ -240,7 +282,7 @@ stopifnot(
 
 L'indice temporale non è un dettaglio informatico. Esprime una parte del modello: stabilisce quali osservazioni appartengono alla stessa storia e quale stato precedente può influenzare quello corrente.
 
-## Prior e controllo predittivo a priori
+### Prior e controllo predittivo a priori
 
 I prior devono produrre sia probabilità marginali plausibili sia sequenze plausibili. Usiamo prior moderatamente regolarizzanti per la propensione media, l'effetto del predittore, la variabilità tra persone, la persistenza e l'innovazione dello stato.
 
@@ -328,7 +370,7 @@ prior_checks |>
 
 Il controllo può rivelare prior che producono quasi sempre sequenze costanti oppure alternanze troppo rapide. In tal caso non basta ricalibrare l'intercetta: occorre intervenire sui prior di $\phi$ e $\sigma_z$, perché sono questi parametri a governare la struttura temporale.
 
-## Stimare il modello dinamico
+### Stimare il modello dinamico
 
 Per passare dal controllo a priori all'inferenza impostiamo `prior_only = 0`.
 
@@ -361,7 +403,10 @@ Poiché i dati sono simulati, conosciamo i valori generativi: $\mu_\alpha=-0.40$
 
 È inoltre necessario controllare convergenza, dimensione campionaria effettiva, divergenze e possibili dipendenze posteriori tra $\phi$ e $\sigma_z$. Una sequenza relativamente breve può rendere difficile distinguere una persistenza elevata con innovazioni piccole da una persistenza più moderata con innovazioni maggiori.
 
-## Un modello statico come riferimento
+
+:::
+
+## Il confronto decisivo: statico contro dinamico
 
 Stimiamo ora un modello logistico gerarchico che rappresenta le differenze stabili tra persone, ma non introduce uno stato dinamico.
 
@@ -387,11 +432,11 @@ fit_static <- brm(
 )
 ```
 
-Il modello statico non deve essere giudicato soltanto osservando se il coefficiente di `x` è vicino a quello generativo. La domanda decisiva è quale aspetto dei dati intendiamo riprodurre. Entrambi i modelli possono descrivere bene la proporzione complessiva di risposte positive; soltanto il modello di stato è costruito per riprodurre la persistenza sequenziale.
+Il modello statico non è qui un concorrente "sbagliato". È un modello più semplice che risponde bene a una domanda più limitata. Se entrambi i modelli riproducono la proporzione complessiva di risposte positive, non abbiamo ancora mostrato il vantaggio della dinamica. Il confronto diventa informativo solo quando chiediamo ai modelli di generare la proprietà che li distingue: **l'organizzazione della sequenza**.
 
-## Controlli predittivi mirati al processo
+## Controllare ciò che distingue davvero i modelli
 
-Confrontiamo i due modelli mediante la proporzione di risposte positive e il tasso di cambiamento. Queste statistiche rappresentano rispettivamente una proprietà marginale e una proprietà sequenziale.
+Per questo confrontiamo i due modelli mediante due statistiche volutamente semplici. La proporzione di risposte positive descrive una proprietà **marginale**: ignora l'ordine. Il tasso di cambiamento descrive invece una proprietà **sequenziale**: registra quanto spesso una risposta differisce da quella precedente. Non pretendiamo che il tasso di cambiamento sia una misura generale della dinamica; lo usiamo perché rende immediatamente visibile il principio secondo cui il controllo predittivo deve essere sensibile alla caratteristica che ha motivato l'estensione del modello.
 
 ```{r}
 set.seed(2026)
@@ -470,33 +515,75 @@ Questo confronto non dimostra che il processo AR(1) sia il meccanismo psicologic
 
 ## Dinamico non significa ancora meccanicistico
 
-Lo stato $z_{it}$ è una variabile latente utile, ma non possiede da solo un significato psicologico univoco. Il modello afferma che esiste una componente persistente non spiegata dai predittori osservati. Non stabilisce se tale componente rappresenti fiducia, umore, fatica, attenzione o una miscela di processi.
+Il modello dinamico ha risolto un problema preciso: ora la probabilità presente può dipendere da uno stato che conserva memoria del passato. Ma questa conquista non deve essere interpretata come se avessimo già scoperto il meccanismo psicologico responsabile della dipendenza temporale.
 
-Per trasformare un modello dinamico in un modello processuale sostantivo occorre specificare almeno tre elementi. Il primo è **che cosa aggiorna lo stato**: un esito, un errore di previsione, una discrepanza o l'evidenza sensoriale. Il secondo è **secondo quale regola lo stato cambia**. Il terzo è **come lo stato produce la risposta osservata**. Questi passaggi possono essere rappresentati come
+Il modello AR(1) afferma essenzialmente che **il passato conta**. Non specifica ancora *perché* conti.
+
+La differenza può essere vista confrontando due tipi di equazione. Nell'AR(1) abbiamo
+
+$$
+z_{t+1}=\phi z_t+\epsilon_{t+1}.
+$$
+
+Questa regola rappresenta persistenza: lo stato successivo dipende in modo regolare dallo stato precedente. È però deliberatamente generica. Non ci dice quale evento psicologico produca l'aggiornamento né perché una particolare esperienza debba modificare lo stato.
+
+Un modello processuale sostantivo introduce invece un **input** e una **regola teorica di trasformazione**:
 
 $$
 S_{t+1}=f(S_t,I_t;\theta),
 \qquad
-Y_t\sim p(Y_t\mid S_t;\psi),
+Y_t\sim p(Y_t\mid S_t;\psi).
 $$
 
-dove $S_t$ è lo stato, $I_t$ l'input, $f$ la regola di aggiornamento e $p(Y_t\mid S_t)$ il modello osservazionale.
+Qui $S_t$ è uno stato con un significato teorico proposto, $I_t$ rappresenta l'informazione che può modificarlo, $f$ specifica come avviene l'aggiornamento e il modello osservazionale collega lo stato alla risposta. La dinamica non è più soltanto una regolarità temporale: diventa un'ipotesi eseguibile su come il sistema cambia.
 
-L'AR(1) usato in questo capitolo specifica una regola di persistenza molto generale. La Parte successiva introdurrà regole teoricamente più informative. In un modello di revisione degli obiettivi, per esempio, lo stato può cambiare in funzione della discrepanza tra prestazione e obiettivo; nel modello di Rescorla--Wagner, il valore atteso viene aggiornato mediante l'errore di previsione. In questi casi la dinamica non serve soltanto a riprodurre autocorrelazione: formalizza un'ipotesi sul processo che genera il comportamento.
+Per esempio, se interpretiamo uno stato come aspettativa, non basta osservare che esso persiste. Dobbiamo specificare quale esito modifica l'aspettativa e secondo quale regola. Un modello di apprendimento basato sull'errore di previsione e un modello di semplice perseverazione possono produrre entrambi sequenze persistenti, ma fanno previsioni differenti quando cambiano improvvisamente le contingenze. È questo genere di previsione discriminante che permette di attribuire contenuto teorico alla dinamica.
 
-## Che cosa abbiamo guadagnato, e che cosa no
+Possiamo quindi collocare il modello di questo capitolo in una posizione intermedia:
 
-Il passaggio dal GLM statico al modello di stato produce un guadagno preciso. La probabilità di risposta non è più una funzione soltanto dei predittori osservati e delle differenze stabili tra persone; dipende anche da una storia latente. Di conseguenza, il modello genera intere sequenze e può essere criticato sulla base di proprietà temporali.
+$$
+\boxed{
+\text{descrizione statica}
+\;\longrightarrow\;
+\text{descrizione dinamica}
+\;\longrightarrow\;
+\text{modello processuale sostantivo}
+}
+$$
 
-Non abbiamo però identificato automaticamente un meccanismo psicologico. Un modello più complesso può adattarsi meglio perché dispone di maggiore flessibilità. Per sostenere un'interpretazione processuale occorrono recuperabilità dei parametri, predizioni che distinguano modelli rivali, validazione su dati nuovi e una corrispondenza teoricamente giustificata tra parametri e costrutti. Questi temi costituiscono il centro della Parte successiva, dedicata ai modelli meccanicistici.
+Il primo passaggio riconosce che l'ordine contiene informazione. Il secondo chiede **quale processo genera quell'ordine**.
+
+::: {.callout-important title="Che cosa abbiamo guadagnato, e che cosa no"}
+Abbiamo guadagnato un modello capace di generare intere sequenze e di essere criticato mediante proprietà temporali. Non abbiamo ancora identificato automaticamente attenzione, apprendimento, motivazione o un altro meccanismo psicologico.
+
+Un modello dinamico può adattarsi meglio semplicemente perché è più flessibile. L'interpretazione processuale richiede invece parametri recuperabili, previsioni che distinguano modelli rivali, validazione su dati nuovi e una corrispondenza teoricamente giustificata tra stati, parametri e costrutti.
+:::
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-I modelli lineari generalizzati estendono il modello lineare a nuovi tipi di outcome, ma conservano una struttura essenzialmente condizionata: specificano come la distribuzione della risposta cambi al variare dei predittori. Questo capitolo ha mostrato un passaggio ulteriore. Quando l'ordine delle osservazioni è informativo, possiamo introdurre uno stato latente che evolve nel tempo e collega la storia passata alla probabilità presente.
+La Parte *Estensioni* è iniziata chiedendo come modificare un modello quando cambia la natura dell'outcome. I GLM hanno mostrato che possiamo conservare una struttura sistematica relativamente semplice e cambiare il modello osservazionale: Bernoulli per risposte binarie, Poisson o distribuzioni più flessibili per conteggi. Il capitolo precedente ha inoltre mostrato che la distribuzione scelta non è un dettaglio tecnico, ma un insieme di ipotesi sulle repliche che il modello deve essere capace di generare.
 
-La differenza non riguarda soltanto il numero dei parametri. Cambia l'unità della previsione. Un GLM statico genera osservazioni individuali condizionate ai predittori; un modello dinamico genera sequenze. Per questo la sua adeguatezza deve essere valutata mediante statistiche che conservano la struttura temporale. Riprodurre la proporzione media di risposte positive non basta se il fenomeno di interesse riguarda persistenza, alternanza o adattamento.
+In questo capitolo il problema è cambiato ancora. Anche una distribuzione osservazionale adeguata può essere insufficiente quando **l'ordine delle osservazioni contiene informazione scientificamente rilevante**. Due sequenze possono avere la stessa media, la stessa proporzione di successi e perfino relazioni simili con i predittori, ma differire per persistenza, alternanza o adattamento. Per rappresentare queste proprietà abbiamo introdotto uno stato che evolve nel tempo.
 
-Lo stato autoregressivo rimane tuttavia una rappresentazione generale. Esso segnala che il passato conta, ma non specifica necessariamente *perché* conti. La modellazione processuale in senso più forte inizia quando la dinamica viene collegata a una teoria: uno stato ha un significato definito, un input produce un aggiornamento secondo una regola esplicita e il modello osservazionale collega quello stato al comportamento. La Parte successiva svilupperà precisamente questo passaggio, mostrando come una regola di cambiamento possa diventare una teoria eseguibile del processo psicologico.
+Il guadagno non consiste soltanto nell'avere un modello più complesso. **Cambia l'unità della previsione:** il GLM statico genera osservazioni condizionate ai predittori; il modello dinamico genera sequenze. Di conseguenza, anche il controllo del modello deve cambiare. Se la dinamica è ciò che motiva il modello, non basta verificare che le repliche riproducano correttamente la distribuzione marginale: devono riprodurre anche le caratteristiche temporali rilevanti.
+
+L'AR(1), tuttavia, è intenzionalmente un punto di passaggio. Introduce memoria senza attribuirle ancora un significato psicologico specifico. Dice che lo stato presente dipende dallo stato passato, ma non specifica quale informazione aggiorni lo stato, quale trasformazione produca il cambiamento o perché quella dinamica debba essere interpretata come apprendimento, attenzione o regolazione emotiva.
+
+È proprio qui che termina la funzione della Parte *Estensioni*. Abbiamo progressivamente arricchito ciò che il modello deve essere capace di generare: prima nuovi tipi di osservazioni, poi forme di variabilità più realistiche, infine sequenze. La Parte *Applicazione* compirà il passo successivo: **trasformare una dinamica descrittiva in un'ipotesi esplicita sul processo**, specificando stati, input e regole di aggiornamento capaci di produrre previsioni discriminanti.
+
+$$
+\boxed{
+\text{osservazioni}
+\longrightarrow
+\text{distribuzioni}
+\longrightarrow
+\text{sequenze}
+\longrightarrow
+\text{processi}
+}
+$$
+
+Il messaggio da portare con sé non è che i modelli dinamici siano sempre preferibili ai GLM. Un modello deve diventare più ricco **solo quando la domanda scientifica richiede che generi una struttura che il modello più semplice non rappresenta**. L'estensione ha valore quando corrisponde a un guadagno esplicativo o predittivo ben definito, non quando aggiunge complessità per se stessa.
 
 ## Esercizi {.unnumbered .unlisted}
 
