@@ -1,9 +1,9 @@
 # Dalla teoria verbale alla teoria eseguibile: costruire un modello dinamico {#sec-dynamic-models-goal-updating}
 
 ::: {.callout-note appearance="minimal"}
-Nel capitolo precedente abbiamo discusso che cosa richiede una spiegazione basata su un modello del processo. Ora compiamo il passo successivo: prendiamo una teoria verbale semplice e la trasformiamo in una regola capace di generare una sequenza di comportamenti.
+Nel capitolo precedente abbiamo discusso che cosa richiede una spiegazione basata su un modello del processo. Ora compiamo il passo successivo: prendiamo una teoria verbale semplice e la trasformiamo in una regola quantitativa in grado di generare una sequenza di comportamenti.
 
-L'esempio riguarda la revisione degli obiettivi. Una persona stabilisce un obiettivo, osserva la propria prestazione e decide quanto modificare l'obiettivo successivo. Il modello è volutamente elementare: proprio per questo permette di vedere con chiarezza che cosa si guadagna, e che cosa si rischia, quando una spiegazione verbale diventa una teoria eseguibile.
+L'esempio riguarda la revisione degli obiettivi [@knight2023tutorial]. Una persona stabilisce un obiettivo, osserva la propria prestazione e decide quanto modificare l'obiettivo successivo. Il modello è volutamente elementare: proprio per questo permette di vedere con chiarezza che cosa si guadagna, e che cosa si rischia, quando una spiegazione verbale si traduce in un modello formale in grado di compiere predizioni quantitative.
 :::
 
 ::: {.callout-important appearance="minimal" .chapter-status}
@@ -46,22 +46,11 @@ set.seed(4817)
 
 ## Il fenomeno e la teoria verbale
 
-Consideriamo un compito ripetuto. Prima di ogni prova una persona dichiara il risultato che intende raggiungere; dopo la prova osserva la prestazione ottenuta e può modificare l'obiettivo successivo.
+Pensiamo a un compito che si ripete. A ogni prova, la persona fissa un obiettivo, esegue il compito, osserva il risultato e, sulla base di questo, decide come rivedere l'obiettivo per la volta successiva. La spiegazione intuitiva, quella che potremmo dare a voce, è semplice: se la prestazione supera l'obiettivo, lo si alza; se rimane al di sotto, lo si abbassa. A questo meccanismo si può aggiungere un'eventuale tendenza sistematica a spostare gli obiettivi verso l'alto o verso il basso, indipendentemente dall'esito appena registrato. Una storia plausibile, finché non si cerca di applicarla.
 
-Una teoria verbale minima potrebbe essere formulata così:
+Quanto dell'errore osservato viene preso in considerazione per l'aggiustamento? La correzione è proporzionale alla distanza o segue un'altra logica? La sensibilità cambia con il ripetersi delle prove? Un fallimento pesa quanto un successo o uno dei due prevale? E il primo obiettivo, in assenza di uno storico, da dove spunta? Infine, c'è una domanda che si annida nella struttura stessa: la prestazione guida l'obiettivo, ma è davvero indipendente da esso o sono due variabili che si influenzano a vicenda?
 
-> Le persone confrontano la prestazione ottenuta con l'obiettivo precedente. Se la prestazione supera l'obiettivo, tendono ad alzarlo; se è inferiore, tendono ad abbassarlo. Può inoltre esistere una tendenza sistematica ad aumentare o diminuire gli obiettivi indipendentemente dalla discrepanza appena osservata.
-
-Questa formulazione è plausibile, ma lascia aperte domande decisive:
-
-- Quanto dell'errore viene incorporato?
-- L'aggiustamento è proporzionale alla discrepanza?
-- La sensibilità rimane costante nel tempo?
-- Successi e fallimenti hanno lo stesso peso?
-- Il primo obiettivo da che cosa viene prodotto?
-- La prestazione influenza l'obiettivo senza essere, a sua volta, influenzata dall'obiettivo?
-
-Formalizzare la teoria significa scegliere risposte precise. La formalizzazione non garantisce che siano corrette; impedisce però di lasciarle implicite.
+Formalizzare significa prendere posizione su ciascuna di queste domande e darsi risposte precise, assumendosene le responsabilità. La formalizzazione, di per sé, non rende vere quelle risposte, ma ha il merito insostituibile di non lasciarle sullo sfondo, dove le parole possono nasconderle a piacere.
 
 ## Una regola di aggiornamento
 
@@ -85,7 +74,9 @@ dove:
 - $\alpha$ determina quanta parte della discrepanza viene incorporata;
 - $\beta$ rappresenta una deriva sistematica per trial.
 
-La teoria eseguibile contiene quindi gli elementi elencati nell'anatomia minima del @sec-bayes-stat-models, con la sola eccezione del modello osservazionale, che aggiungeremo più avanti:
+La regola descrive quindi un processo semplice: l'obiettivo corrente parte dal valore precedente, viene corretto in direzione della prestazione appena osservata e può inoltre aumentare o diminuire sistematicamente attraverso il termine $\beta$. Se, per esempio, la prestazione supera l'obiettivo, $P_{t-1}-G_{t-1}>0$, e con $\alpha>0$ l'obiettivo viene rivisto verso l'alto. Se la prestazione è inferiore all'obiettivo, la stessa regola lo spinge verso il basso. Il parametro $\alpha$ controlla la forza di questa revisione.
+
+La teoria eseguibile contiene così quasi tutti gli elementi dell'anatomia minima descritta nel @sec-bayes-stat-models. Manca ancora il modello osservazionale, che introdurremo più avanti:
 
 | Componente | Ruolo nel modello | Domanda sostantiva |
 |---|---|---|
@@ -121,7 +112,11 @@ La revisione dovuta alla discrepanza sarebbe pari a $-5$, parzialmente compensat
 
 ## Dal parametro alla traiettoria
 
-I parametri di un modello dinamico non si comprendono isolatamente. Devono essere letti attraverso le sequenze che generano: è il terzo passo del workflow (@sec-linmod-bayesian-reg), simulare prima di stimare.
+I parametri di un modello dinamico non si comprendono isolatamente. Devono essere letti attraverso le sequenze che generano: è il terzo passo del workflow bayesiano, ovvero simulare prima di stimare.
+
+::: {.callout-note collapse=true title="Approfondimento computazionale: il simulatore e i tre scenari"}
+
+La funzione traduce direttamente l'Equazione @eq-knight2023: parte dalla condizione iniziale e applica la ricorsione trial dopo trial, aggiungendo il rumore osservativo quando `sigma` è maggiore di zero.
 
 ```{r}
 #| label: simulate-goal-path-function
@@ -159,7 +154,7 @@ simulate_goal_path <- function(
 }
 ```
 
-Usiamo la stessa sequenza di prestazioni con tre combinazioni dei parametri.
+La stessa sequenza di prestazioni viene poi usata con tre combinazioni dei parametri.
 
 ```{r}
 #| label: simulate-goal-paths
@@ -188,6 +183,10 @@ simulated_paths <- parameter_scenarios |>
   select(scenario, simulation) |>
   tidyr::unnest(simulation)
 ```
+
+:::
+
+Applichiamo la regola a una stessa sequenza di prestazioni con tre combinazioni dei parametri: revisione lenta ($\alpha=0.15$), revisione rapida ($\alpha=0.75$) e revisione con deriva ($\alpha=0.45$, $\beta=0.20$).
 
 ```{r}
 #| label: fig-goal-parameter-scenarios
@@ -229,7 +228,6 @@ Se la prestazione rimane costante, $P_t=P$, e $\alpha>0$, il punto di equilibrio
 $$
 G^*=G^*+\alpha(P-G^*)+\beta,
 $$
-
 da cui:
 
 $$
@@ -249,7 +247,6 @@ Y_{s,t}\sim
 \operatorname{Normal}(G_{s,t},\sigma),
 \qquad t>1,
 $$ {#eq-knight-stat}
-
 dove $Y_{s,t}$ è l'obiettivo osservato e $G_{s,t}$ è lo stato implicato dalla ricorsione.
 
 Il primo obiettivo viene trattato come **condizione iniziale osservata**. Il modello descrive le transizioni dal secondo trial in avanti, ma non spiega come si formi $G_{s,1}$.
@@ -260,12 +257,7 @@ In questa specificazione, $G_{s,t}$ non contiene un'innovazione casuale propria:
 Di conseguenza, $\sigma$ può raccogliere errore di misura, approssimazione della scala, variabilità decisionale e processi omessi. Non identifica un singolo meccanismo psicologico.
 :::
 
-La distinzione tra processo e osservazione è essenziale. Due teorie possono produrre la stessa media ma differire nel modo in cui rappresentano:
-
-- cambiamento dello stato;
-- rumore del processo;
-- errore di misura;
-- variabilità tra persone.
+La distinzione tra processo e osservazione è essenziale. Due teorie possono produrre la stessa media ma differire nel modo in cui rappresentano il cambiamento dello stato, il rumore del processo, l'errore di misura e la variabilità tra le persone.
 
 ## Dal problema diretto al problema inverso
 
@@ -291,6 +283,8 @@ Il secondo problema è più difficile. Traiettorie simili possono essere prodott
 
 Il dataset contiene 60 partecipanti, ciascuno osservato in 10 trial, appartenenti alle condizioni *approach* e *avoidance*. In questo capitolo ignoriamo temporaneamente la condizione e assumiamo che l'intero campione condivida gli stessi parametri. L'ipotesi è intenzionalmente forte: serve a mostrare il modello più semplice prima di discutere alternative più articolate.
 
+::: {.callout-note collapse=true title="Approfondimento computazionale: caricamento e controllo dei dati"}
+
 ```{r}
 #| label: load-goal-data
 
@@ -313,6 +307,10 @@ trial_check <- goal_data |>
 
 stopifnot(all(trial_check$sequence_ok))
 ```
+
+:::
+
+La @fig-observed-goal-trajectories mostra obiettivi e prestazioni per dodici partecipanti.
 
 ```{r}
 #| label: fig-observed-goal-trajectories
@@ -368,6 +366,8 @@ $$
 
 Questi prior non vanno valutati soltanto come distribuzioni sui parametri. Occorre osservare le traiettorie che generano.
 
+::: {.callout-note collapse=true title="Approfondimento computazionale: campionamento dai prior"}
+
 ```{r}
 #| label: prior-predictive-goal-sample
 
@@ -398,6 +398,8 @@ prior_paths_goal <- prior_draws_goal |>
   select(draw, simulation) |>
   tidyr::unnest(simulation)
 ```
+
+:::
 
 ```{r}
 #| label: fig-prior-predictive-goal-sample
@@ -517,6 +519,7 @@ Il codice non aggiunge una teoria psicologica ulteriore. È la traduzione operat
 
 ```{r}
 #| label: summary-goal-sample
+#| echo: false
 
 fit_goal_sample$summary(
   variables = c("alpha", "beta", "sigma")
@@ -534,6 +537,8 @@ L'interpretazione dei parametri deve rimanere condizionata al modello:
 
 Non possiamo concludere che tutti i partecipanti condividano davvero questi valori, né che $\alpha$ misuri un tratto generale di flessibilità.
 
+::: {.callout-note collapse=true title="Approfondimento computazionale: estrarre le traiettorie posteriori"}
+
 ```{r}
 #| label: posterior-expected-trajectories-goal-sample
 
@@ -546,6 +551,8 @@ mu_goal_summary <- fit_goal_sample |>
     by = "row_id"
   )
 ```
+
+:::
 
 ```{r}
 #| label: fig-posterior-trajectories-goal-sample
@@ -566,36 +573,6 @@ mu_goal_summary |>
 
 Le discrepanze sistematiche per alcuni partecipanti sono scientificamente più informative di un singolo indice aggregato: possono indicare eterogeneità, cambiamenti di strategia, asimmetrie o processi mancanti.
 
-```{r}
-#| label: ppc-goal-sample-data
-
-transition_rows <- which(goal_data$trial > 1)
-y_rep_goal_sample <- fit_goal_sample$draws(
-  variables = "y_rep",
-  format = "matrix"
-)
-
-set.seed(4817)
-y_rep_goal_sample_small <- y_rep_goal_sample[
-  sample(seq_len(nrow(y_rep_goal_sample)), 100),
-  transition_rows,
-  drop = FALSE
-]
-```
-
-```{r}
-#| label: fig-ppc-density-goal-sample
-#| fig-cap: "Distribuzione degli obiettivi osservati e repliche posteriori, escludendo le condizioni iniziali. Il controllo marginale non valuta da solo la dinamica."
-#| fig-width: 8
-#| fig-height: 5
-#| echo: false
-
-ppc_dens_overlay(
-  y = goal_data$goal[transition_rows],
-  yrep = y_rep_goal_sample_small
-)
-```
-
 ::: {.callout-warning title="Un buon controllo aggregato può nascondere un fallimento processuale"}
 Un modello può riprodurre la distribuzione complessiva degli obiettivi e rappresentare male l'ordine delle revisioni, l'autocorrelazione o le traiettorie individuali.
 
@@ -607,7 +584,6 @@ Prima di interpretare parametri stimati su dati reali è utile verificare se, qu
 
 ```{r}
 #| label: parameter-recovery-goal-sample
-#| eval: false
 
 simulate_goal_dataset <- function(data, alpha, beta, sigma) {
   data |>
@@ -644,13 +620,14 @@ fit_goal_recovery <- model_goal_sample$sample(
   chains = 4,
   parallel_chains = min(4, parallel::detectCores(logical = FALSE)),
   iter_warmup = 1000,
-  iter_sampling = 2000
+  iter_sampling = 2000,
+  show_messages = FALSE
 )
 
 fit_goal_recovery$summary(c("alpha", "beta", "sigma"))
 ```
 
-Il recupero dei valori noti è una condizione necessaria, non sufficiente. Qui modello generatore e modello stimato coincidono; nei dati reali il processo potrebbe essere differente.
+Il recupero dei valori noti è una condizione necessaria, ma non sufficiente. Qui la coincidenza tra il modello generatore e il modello stimato è artificiale; nei dati reali, il meccanismo che produce le osservazioni potrebbe essere radicalmente diverso da quello ipotizzato.
 :::
 
 ## Che cosa il modello assume e che cosa lascia fuori
@@ -669,16 +646,9 @@ La scala osservata è inoltre limitata, mentre la distribuzione normale permette
 
 ### Quali alternative potrebbero produrre dati simili?
 
-Una traiettoria apparentemente compatibile con l'Equazione @eq-knight2023 potrebbe derivare anche da:
+Una traiettoria che si adatta perfettamente all'Equazione @eq-knight2023 potrebbe, tuttavia, essere il prodotto di altre storie ugualmente plausibili. La stessa evoluzione degli obiettivi potrebbe nascere da un'asimmetria tra il peso attribuito ai successi e quello riservato agli insuccessi, oppure da una memoria che non si ferma all'ultimo errore ma integra le prestazioni più recenti. Potrebbe riflettere un cambio di strategia sopraggiunto a metà del compito, o l'esistenza di limiti psicologici, ovvero un tetto massimo o un pavimento, oltre i quali la revisione non osa spingersi. Un'altra possibilità è la semplice eterogeneità tra individui, che rende i parametri medi una finzione statistica, così come l'idea che la prestazione non sia indipendente dall'obiettivo dichiarato, ma ne subisca a sua volta l'influenza, in un gioco di rimandi che l'equazione, nella sua linearità, non può cogliere.
 
-- sensibilità diversa ai successi e ai fallimenti;
-- una finestra di memoria che integra più prestazioni recenti;
-- un cambiamento di strategia durante il compito;
-- limiti superiori o inferiori nella revisione degli obiettivi;
-- parametri differenti tra individui;
-- feedback sulla prestazione influenzato dall'obiettivo precedente.
-
-Per distinguere queste spiegazioni non basta stimare con maggiore precisione lo stesso modello. Servono modelli rivali e sequenze di input che producano previsioni divergenti.
+Per districarsi tra queste ipotesi, non basta stimare con maggiore precisione lo stesso modello, ma occorre costruire modelli rivali e progettare sequenze di input che li mettano l'uno contro l'altro, producendo previsioni divergenti. Solo così i dati possono cominciare a parlare a favore di una spiegazione piuttosto che di un'altra.
 
 ::: {.callout-important title="Dal modello semplice al test della teoria"}
 Questo capitolo mostra come costruire una teoria eseguibile. Non ha ancora mostrato che la teoria sia la migliore spiegazione disponibile.
