@@ -1,27 +1,25 @@
 # Rescorla--Wagner: una teoria processuale messa alla prova {#sec-dynamic-models-rescorla-wagner}
 
 ::: {.callout-note appearance="minimal"}
-Nel capitolo precedente, una teoria verbale è stata trasformata in una regola dinamica eseguibile. Il modello di Rescorla-Wagner permette ora di compiere un passo ulteriore: non solo costruire e stimare un modello del processo, ma anche valutare quanto sia informativa la spiegazione che esso fornisce e cosa accade quando un processo omesso produce gli stessi pattern che attribuiamo ai parametri del modello.
+Nel capitolo precedente, una teoria formulata in termini verbali è stata formalizzata in un modello dinamico capace di generare previsioni quantitative. Il modello di Rescorla-Wagner consente ora di spingersi oltre: non soltanto di specificare un processo, ma anche di confrontarlo con modelli alternativi che, pur diversi, generano predizioni osservazionalmente equivalenti.
 
-Questo caso può essere considerato paradigmatico, in quanto separa chiaramente tre livelli:
+Questo caso è paradigmatico, poiché articola chiaramente tre livelli:
 
 $$
-\text{feedback}
-\longrightarrow
-\text{aggiornamento dei valori}
-\longrightarrow
-\text{probabilità di scelta}
-\longrightarrow
-\text{risposta osservata}.
+\begin{aligned}
+\text{feedback} & \longrightarrow \text{aggiornamento dei valori} \\
+& \longrightarrow \text{probabilità di scelta} \\
+& \longrightarrow \text{risposta osservata}.
+\end{aligned}
 $$
 
-Questa catena è più ricca di una regressione sulle risposte, ma non diventa vera solo perché è stata formalizzata. La sua forza scientifica dipende dalle conseguenze che genera, dai modelli rivali con cui viene confrontata e dai disegni in grado di distinguerli.
+Questa sequenza di fasi è più ricca di una semplice regressione sulle risposte, ma la formalizzazione non ne sancisce necessariamente la veridicità. Il suo valore scientifico risiede soprattutto nelle conseguenze che genera, nei modelli alternativi con cui viene messa a confronto e nei disegni sperimentali in grado di distinguerli.
 :::
 
 ::: {.callout-important appearance="minimal" .chapter-status}
-**Da sapere.** Il modello combina una regola di apprendimento, che aggiorna valori latenti mediante l'errore di previsione, e un modello osservazionale che trasforma le differenze tra valori in probabilità di scelta. Il parametro $\alpha$ governa la velocità di aggiornamento, mentre $\tau$ determina la coerenza con cui la scelta segue i valori correnti. Questi due parametri possono tuttavia compensarsi reciprocamente e assorbire processi omessi, rendendo talvolta ambigua l'interpretazione dei singoli effetti. 
+**Da sapere.** Il modello combina una regola di apprendimento, che aggiorna valori latenti mediante l'errore di previsione, e un modello osservazionale che trasforma le differenze tra valori in probabilità di scelta. Il parametro $\alpha$ governa la velocità di aggiornamento, mentre $\tau$ determina la coerenza con cui la scelta segue i valori correnti. Questi due parametri possono tuttavia compensarsi reciprocamente e assorbire processi omessi, rendendo talvolta ambigua l'interpretazione dei singoli effetti.
 
-**Da saper fare.** Occorre saper descrivere qualitativamente le conseguenze di $\alpha$ e $\tau$, distinguere tra stati latenti, parametri e risposte osservate, e separare i problemi di convergenza del campionatore, di recuperabilità dei parametri e di adeguatezza teorica del modello. Si deve inoltre essere in grado di proporre un disegno sperimentale o una previsione che discrimini il modello di base da una sua alternativa plausibile. 
+**Da saper fare.** Occorre saper descrivere qualitativamente le conseguenze di $\alpha$ e $\tau$, distinguere tra stati latenti, parametri e risposte osservate, e separare i problemi di convergenza del campionatore, di recuperabilità dei parametri e di adeguatezza teorica del modello. Si deve inoltre essere in grado di proporre un disegno sperimentale o una previsione che discrimini il modello di base da una sua alternativa plausibile.
 
 **Approfondimento facoltativo.** Il codice Stan, i dettagli di compilazione, il recupero sistematico dei parametri e l'estensione del modello con una componente di perseverazione sono presentati a titolo esemplificativo, per mostrare come l'analisi possa essere condotta; non è richiesto di scrivere autonomamente il codice né di riprodurre tutti i passaggi computazionali.
 
@@ -55,71 +53,180 @@ set.seed(6741)
 
 :::
 
-Il modello di Rescorla–Wagner [@rescorla1972theory] fu originariamente formulato come teoria dell'apprendimento associativo. Il suo nucleo teorico risiede nell'idea che l’apprendimento non sia determinato dalla semplice co-occorrenza tra stimolo ed esito, ma piuttosto dalla **discrepanza tra l’esito effettivo e quanto previsto**. Nei compiti di scelta ripetuta, tale principio viene spesso tradotto in una regola delta che aggiorna il valore dell’alternativa selezionata. In questa sede si utilizzerà l’espressione *modello Rescorla–Wagner* in questa accezione più ampia, pur ricordando che l’implementazione trial-by-trial qui adottata non coincide puntualmente con la versione originale.
+Consideriamo un compito di **scelta ripetuta tra due alternative**, $A$ e $B$, svolto da un agente (ad esempio, un soggetto umano o animale in un esperimento). A ogni prova (*trial*) l'agente sceglie una delle due alternative e, dopo la scelta, riceve un feedback. L'obiettivo del modello è descrivere come l'agente utilizzi i feedback ricevuti nel corso delle prove per **aggiornare le proprie aspettative riguardo alle due alternative** e come queste aspettative influenzino le scelte successive.
 
-Perché la teoria diventi operativa, è necessario specificare un insieme di componenti: i valori attribuiti alle alternative ($Q_t$), l’errore di previsione ($\delta_t$) e i parametri che governano l’aggiornamento ($\alpha$) e la scelta ($\tau$), tutte quantità latenti, non osservabili direttamente. Sono invece osservabili il feedback ricevuto ($R_t$) e la scelta effettuata ($Y_t$). La tabella seguente riassume ruoli e l'osservabilità di ciascun elemento.
+Il modello di Rescorla–Wagner [@rescorla1972theory] è stato originariamente formulato come una teoria dell'apprendimento associativo. Il suo principio centrale è che l'apprendimento non dipende semplicemente dalla co-occorrenza tra uno stimolo e un esito (feedback), ma dalla **discrepanza tra ciò che accade e ciò che ci si aspettava che accadesse**. Un esito perfettamente atteso contiene poca informazione nuova e produce un cambiamento ridotto, mentre un esito inatteso genera un aggiustamento più marcato delle aspettative.
 
-| Componente | Ruolo nel modello | Osservata direttamente? |
-|---|---|---|
-| $Q_t(A), Q_t(B)$ | valori attribuiti alle alternative | no |
-| $R_t$ | feedback ricevuto | sì |
-| $\delta_t$ | errore di previsione | no (calcolato dal modello) |
-| $\alpha$ | sensibilità dell’aggiornamento al feedback | no |
-| $\tau$ | sensibilità della scelta alle differenze di valore | no |
-| $Y_t$ | scelta | sì |
+Nei compiti di scelta ripetuta, questa idea può essere espressa attraverso una *regola delta*. A ciascuna alternativa viene associata, in ogni prova $t$, un'**aspettativa di valore**, indicata con $Q_t(A)$ e $Q_t(B)$. Queste quantità rappresentano ciò che, sulla base dell'esperienza accumulata fino a quel momento, l'agente si aspetta di ottenere scegliendo rispettivamente $A$ o $B$. Le aspettative di valore non sono fisse: **cambiano nel tempo in funzione dell'esperienza**, in risposta alla discrepanza tra il feedback atteso e quello effettivamente ricevuto.
 
-La tabella mette in luce una distinzione fondamentale: il comportamento osservato non corrisponde al processo ipotizzato per generarlo; tra i due si frappone l'intero apparato del modello che trasforma gli stati latenti e i parametri in probabilità di risposta osservabile.
+Le aspettative così apprese vengono poi utilizzate per descrivere la scelta. Il modello assume che un'alternativa con un valore atteso maggiore abbia una probabilità maggiore di essere selezionata, senza però imporre che l'agente scelga sempre l'alternativa con il valore più alto. Il parametro $\tau$ regola la **sensibilità della scelta alle differenze di valore** tra le alternative. Infine, indichiamo con $Y_t$ la scelta effettivamente osservata alla prova $t$.
+
+Qui utilizzeremo l'espressione *modello Rescorla–Wagner* in questa accezione più ampia, riferendoci alla combinazione di una regola di aggiornamento basata sull'errore di previsione e di una regola probabilistica di scelta, anche se questa implementazione "trial-by-trial" non corrisponde esattamente alla formulazione originale.
+
+È utile distinguere fin da subito le quantità che osserviamo direttamente dai processi che il modello assume avvengano internamente all'agente:
+
+| Componente       | Ruolo nel modello                                                    | Osservata direttamente?     |
+| ---------------- | -------------------------------------------------------------------- | --------------------------- |
+| $Q_t(A), Q_t(B)$ | aspettative di valore associate alle due alternative                 | no                          |
+| $R_t$            | feedback ricevuto dopo la scelta                                     | sì                          |
+| $\delta_t$       | errore di previsione, cioè differenza tra feedback ricevuto e atteso | no, è calcolato dal modello |
+| $\alpha$         | tasso di apprendimento, che regola l'ampiezza dell'aggiornamento     | no                          |
+| $\tau$           | sensibilità della scelta alle differenze di valore                   | no                          |
+| $Y_t$            | scelta effettuata                                                    | sì                          |
+
+Questa distinzione è fondamentale. I dati osservati consistono nelle **scelte** e nei **feedback**, mentre le aspettative di valore, gli errori di previsione e i parametri del modello sono quantità latenti. Il modello specifica precisamente il collegamento tra questi due livelli: i feedback modificano nel tempo le aspettative attraverso l'errore di previsione e le aspettative, una volta aggiornate, determinano le probabilità delle scelte successive.
 
 ## Il modello di apprendimento
 
-All'inizio del trial $t$, i valori $Q_t(A)$ e $Q_t(B)$ rappresentano l'aspettativa corrente associata a ciascuna alternativa. Una volta osservate la scelta $a_t$ e il rinforzo $R_t$, si determina l'errore di previsione:
+Esaminiamo più in dettaglio il processo di aggiornamento delle aspettative di valore, ovvero l'apprendimento, secondo il modello Rescorla-Wagner. All'inizio della prova $t$, i valori $Q_t(A)$ e $Q_t(B)$ rappresentano le aspettative correnti associate alle due alternative. Riassumono ciò che l'agente ha appreso fino a quel momento, prima che il nuovo feedback intervenga a modificarli.
+
+Supponiamo che alla prova $t$ l'agente scelga l'alternativa $a_t$ e riceva il feedback $R_t$. Il primo passaggio consiste nel confrontare il feedback effettivamente ricevuto con quello che era atteso sulla base del valore corrente dell'alternativa scelta. Questa discrepanza è l'**errore di previsione**:
 
 $$
-\delta_t = R_t - Q_t(a_t),
+\delta_t = R_t - Q_t(a_t).
 $$
 
-e si aggiorna unicamente il valore dell'alternativa selezionata:
+L'errore di previsione indica non solo se il feedback è positivo o negativo, ma anche se è **migliore o peggiore rispetto a quanto previsto**. Se $R_t > Q_t(a_t)$, l'esito è migliore del previsto e $\delta_t$ è positivo; se $R_t < Q_t(a_t)$, l'esito è peggiore del previsto e $\delta_t$ è negativo. Quando invece il feedback coincide esattamente con l'aspettativa, $\delta_t=0$: l'esito non fornisce informazioni nuove rispetto a quanto previsto dal modello e il valore dell'alternativa non viene modificato.
+
+L'errore di previsione viene poi utilizzato per aggiornare il valore dell'alternativa selezionata:
 
 $$
-Q_{t+1}(a_t) = Q_t(a_t) + \alpha \delta_t, \qquad 0 < \alpha < 1.
+Q_{t+1}(a_t)
+=
+Q_t(a_t)+\alpha\delta_t,
+\qquad 0<\alpha<1.
 $$
 
-Con un valore di $\alpha$ contenuto, ogni nuovo esito produce una modesta correzione e la traiettoria passata conserva a lungo la propria influenza; con un valore di $\alpha$ elevato, invece, i valori reagiscono prontamente agli esiti più recenti. Nessuna delle due condizioni è intrinsecamente preferibile: la scelta dipende dalla stabilità e dalla rumorosità dell'ambiente.
+Sostituendo la definizione di $\delta_t$, la stessa regola può essere scritta come
+
+$$
+Q_{t+1}(a_t)
+=
+Q_t(a_t)
++
+\alpha\left[R_t-Q_t(a_t)\right].
+$$
+
+Questa seconda forma rende particolarmente evidente il funzionamento della regola: il nuovo valore viene ottenuto a partire dall'aspettativa precedente, correggendola di una certa frazione della distanza che la separa dal feedback appena osservato. Il parametro $\alpha$, chiamato **tasso di apprendimento**, determina l'entità di questa correzione.
+
+Per piccoli valori di $\alpha$, ogni singolo feedback modifica debolmente l'aspettativa. Di conseguenza, i valori cambiano lentamente e conservano a lungo l'influenza delle esperienze precedenti. Per valori elevati di $\alpha$, invece, il feedback più recente produce una correzione più ampia e le aspettative si adattano rapidamente ai nuovi esiti. Per esempio, se $Q_t(A)=0.40,$ il feedback osservato è $R_t=1$ e $\alpha=0.20$, allora
+
+$$
+\delta_t=1-0.40=0.60
+$$
+e il nuovo valore sarà
+
+$$
+Q_{t+1}(A)
+=  0.40+0.20(0.60) =
+0.52.
+$$
+
+L'agente ha ricevuto un esito migliore di quanto si aspettasse e ha aumentato il valore attribuito ad $A$, ma non lo ha portato immediatamente a $1$: l'entità dell'aggiornamento dipende dal tasso di apprendimento.
+
+Nella specificazione qui adottata viene aggiornato **soltanto il valore dell'alternativa scelta**. Se alla prova $t$ viene selezionata $A$, avremo quindi
+
+$$
+Q_{t+1}(A)
+=
+Q_t(A)+\alpha\delta_t,
+$$
+mentre
+
+$$
+Q_{t+1}(B)=Q_t(B).
+$$
+
+Il valore dell'alternativa non scelta rimane invariato perché, in questa versione del modello, il feedback ricevuto viene interpretato come informazione relativa unicamente all'opzione effettivamente selezionata.
+
+Nel corso delle prove, la ripetizione di questo processo genera due sequenze di valori $Q_t(A)$ e $Q_t(B)$ che evolvono nel tempo. Queste traiettorie rappresentano, all'interno del modello, ciò che l'agente ha imparato sulle due alternative. Queste sequenze non sono direttamente osservabili: vengono ricostruite dal modello a partire dalla sequenza di scelte, dai feedback ricevuti, dai valori iniziali assegnati alle alternative e dal parametro $\alpha$.
+
+Né un tasso di apprendimento elevato né uno basso sono intrinsecamente preferibili. Un valore elevato di $\alpha$ consente di adattarsi rapidamente quando le caratteristiche dell'ambiente cambiano, ma rende anche le aspettative più sensibili alle fluttuazioni casuali del feedback. Un valore basso, invece, produce stime più stabili, ma può rendere più lento l'adattamento quando le condizioni effettivamente cambiano. Il significato del parametro deve quindi essere interpretato in relazione alla struttura del compito e alla dinamica dell'ambiente.
 
 ::: {.callout-note title="Una regola semplice contiene assunzioni forti"}
-La specificazione qui adottata presuppone, tra l'altro, un unico tasso di apprendimento, l'aggiornamento della sola alternativa scelta, valori iniziali fissi e assenza di decadimento per l'alternativa non scelta. Queste scelte non costituiscono vincoli matematici necessari, ma ipotesi sostantive sul processo sottostante.
+La semplicità della regola di aggiornamento non implica che il modello sia privo di assunzioni. La specificazione qui adottata presuppone, tra l'altro, un unico tasso di apprendimento $\alpha$ per feedback positivi e negativi, l'aggiornamento della sola alternativa scelta, valori iniziali fissati a priori e l'assenza di decadimento per l'alternativa non selezionata. Nessuna di queste proprietà è un vincolo matematico necessario; si tratta piuttosto di ipotesi sostantive sul processo di apprendimento. Modelli alternativi possono, per esempio, utilizzare tassi distinti per errori di previsione positivi e negativi, aggiornare anche l'alternativa non scelta o introdurre un decadimento dei valori.
 :::
 
 ## Il modello di scelta
 
-I valori latenti prodotti dal meccanismo di apprendimento non sono direttamente osservabili; per generare le risposte è necessario un modello osservazionale che specifichi la probabilità di ciascuna alternativa. Il collegamento è definito dalla funzione logistica:
+La regola di apprendimento descrive come cambiano nel tempo le aspettative di valore, ma non specifica ancora direttamente quale alternativa verrà scelta. Conoscere $Q_t(A)$ e $Q_t(B)$, infatti, non significa assumere che l'agente selezioni sempre e necessariamente l'alternativa con il valore maggiore. Per collegare i valori latenti alle risposte effettivamente osservate occorre introdurre un **modello di scelta**.
+
+Indichiamo con $Y_t$ la risposta osservata alla prova $t$, codificata come
 
 $$
-\Pr(Y_t=B)
-=
-\operatorname{logit}^{-1}
-\left[
-\tau \{ Q_t(B) - Q_t(A) \}
-\right],
-\qquad
+Y_t =
+\begin{cases}
+0 & \text{se viene scelta } A,\\
+1 & \text{se viene scelta } B.
+\end{cases}
+$$
+
+Il modello assume che la probabilità di scegliere $B$ dipenda dalla differenza tra il valore attribuito a $B$ e quello attribuito ad $A$:
+
+$$
+p_t = \Pr(Y_t = 1) = \operatorname{logit}^{-1} \left[ \tau \left( Q_t(B) - Q_t(A) \right) \right],
+$$
+con
+
+$$
 Y_t \sim \operatorname{Bernoulli}(p_t).
 $$
 
-Il parametro $\tau > 0$, noto come *inverse temperature*, regola la sensibilità della scelta alla differenza tra i valori: per valori $\tau$ prossimi a zero, anche discrepanze rilevanti producono preferenze temperate e la risposta tende alla casualità; all'aumentare di $\tau$, l'asimmetria nei valori viene amplificata e il comportamento diventa progressivamente più deterministico, fino ad approssimare una regola di massimizzazione.
+La funzione logistica trasforma la differenza tra i due valori, che può assumere valori positivi o negativi, in una probabilità compresa tra $0$ e $1$. Se le due alternative hanno lo stesso valore,
+
+$$
+Q_t(B)-Q_t(A)=0,
+$$
+allora
+$$
+p_t=0.5,
+$$
+e il modello non esprime alcuna preferenza tra $A$ e $B$. Se $Q_t(B)>Q_t(A)$, la probabilità di scegliere $B$ diventa maggiore di $0.5$; se invece $Q_t(A)>Q_t(B)$, tale probabilità diventa inferiore a $0.5$.
+
+Il parametro $\tau>0$, spesso chiamato **inverse temperature**, determina quanto fortemente le differenze di valore si traducono in differenze nelle probabilità di scelta. È un parametro di **sensibilità della scelta ai valori appresi**.
+
+Quando $\tau$ è prossimo a zero, anche differenze consistenti tra $Q_t(A)$ e $Q_t(B)$ hanno un effetto ridotto sulla probabilità di risposta. Nel limite $\tau\rightarrow 0$,
+
+$$
+p_t \rightarrow 0.5,
+$$
+e le scelte diventano quasi casuali rispetto ai valori stimati dal modello. All'aumentare di $\tau$, la funzione logistica diventa invece più ripida: anche differenze relativamente piccole tra i valori producono una forte preferenza per l'alternativa con il valore maggiore. Per valori molto elevati di $\tau$, il comportamento si avvicina a una regola deterministica in cui viene quasi sempre selezionata l'alternativa con il valore atteso più alto.
+
+$\tau$ non determina **quale** alternativa abbia valore maggiore: questo dipende dal processo di apprendimento e quindi dalla storia dei feedback e dal parametro $\alpha$. Il parametro $\tau$ determina invece quanto coerentemente le scelte riflettano le differenze tra i valori che il modello ha appreso.
+
+Il modello completo descrive pertanto due passaggi distinti che si ripetono nel corso delle prove. Da un lato, il meccanismo di apprendimento utilizza il feedback per aggiornare le aspettative di valore:
+
+$$
+R_t \longrightarrow \delta_t \longrightarrow Q_{t+1}.
+$$
+
+Dall'altro, i valori disponibili all'inizio di una prova vengono trasformati in probabilità di scelta:
+
+$$
+Q_t(A), Q_t(B) \longrightarrow p_t \longrightarrow Y_t.
+$$
+
+Questa separazione tra **apprendimento** e **scelta** è essenziale per l'interpretazione del modello: il parametro $\alpha$ descrive quanto rapidamente cambiano le aspettative in risposta ai nuovi feedback; il parametro $\tau$ descrive invece quanto le scelte osservate siano sensibili alle differenze tra tali aspettative.
 
 ::: {.callout-important title="Apprendimento e scelta sono processi distinti"}
-La proporzione di risposte ottimali non è un indicatore diretto del tasso di apprendimento. Un soggetto può aggiornare i propri valori lentamente, eppure scegliere in modo rigorosamente coerente con essi; un altro può apprendere rapidamente ma introdurre un'ampia variabilità nella selezione. La stessa prestazione aggregata può così risultare compatibile con diverse architetture cognitive, e solo la specificazione separata dei due processi consente di disambiguare il contributo di ciascuno.
+Una buona prestazione nel compito non implica necessariamente un apprendimento rapido, così come una prestazione variabile non implica necessariamente che l'agente non abbia appreso le differenze tra le alternative. Un soggetto può avere un tasso di apprendimento basso e quindi modificare lentamente le proprie aspettative, ma scegliere in modo molto coerente con i valori che ha appreso, se $\tau$ è elevato. Al contrario, un soggetto può aggiornare rapidamente i propri valori, con un $\alpha$ elevato, ma mostrare scelte molto variabili se $\tau$ è basso.
+
+Di conseguenza, la stessa proporzione complessiva di scelte dell'alternativa migliore può essere prodotta da combinazioni differenti dei due parametri. È proprio la modellizzazione separata della dinamica dell'apprendimento e del processo di scelta, prova per prova, che consente di distinguere questi meccanismi e di attribuire loro interpretazioni differenti.
 :::
+
+Nel suo insieme, il modello può essere letto come una semplice catena generativa. A ogni prova l'agente entra con determinate aspettative $Q_t(A)$ e $Q_t(B)$; queste aspettative determinano, attraverso $\tau$, le probabilità delle possibili scelte. Dopo aver effettuato una scelta e osservato il feedback $R_t$, il modello calcola l'errore di previsione $\delta_t$ e utilizza $\alpha$ per aggiornare il valore dell'alternativa selezionata. I nuovi valori diventano le aspettative con cui l'agente affronta la prova successiva. È questa successione di **aspettativa, scelta, feedback e aggiornamento** che permette al modello di descrivere l'evoluzione del comportamento nel tempo.
 
 ## Simulare le conseguenze della teoria
 
-Consideriamo un classico compito di *probabilistic reversal learning*. Nella fase iniziale, l'alternativa $A$ produce una ricompensa con probabilità $0.70$, mentre $B$ con probabilità $0.30$; dopo il trial 80 le contingenze si invertono. Data questa struttura ambientale e una coppia di parametri $\alpha$ e $\tau$, la simulazione determina l'evoluzione congiunta degli stati latenti e delle scelte osservate, incarnando il problema diretto del modello:
+Per comprendere quali comportamenti il modello possa generare, consideriamo un classico compito di *probabilistic reversal learning*, in cui le probabilità di ricompensa associate alle due alternative si invertono dopo un certo numero di prove e la ricompensa è incerta (cioè l'alternativa migliore non è sempre premiata) -- si veda, per esempio @caudek2020cognitive. Nella fase iniziale, l'alternativa $A$ produce una ricompensa con probabilità $0.70$, mentre $B$ con probabilità $0.30$; dopo il trial 80 le contingenze si invertono. Data questa struttura ambientale e una coppia di parametri $\alpha$ e $\tau$, la simulazione determina l'evoluzione congiunta degli stati latenti e delle scelte osservate, incarnando il problema diretto del modello:
 
 $$
 (\alpha,\tau,\text{ambiente})
 \longrightarrow
 \text{stati latenti e scelte}.
 $$
+
+Prima di esaminare una traiettoria specifica, è utile esplorare l'impatto dei parametri sul comportamento aggregato. La @fig-rw-parameter-grid mostra la proporzione mobile di scelte dell'alternativa attualmente più ricca per quattro combinazioni estreme di $\alpha$ e $\tau$: apprendimento lento o rapido, abbinato a scelta variabile o coerente.
 
 ::: {.callout-note collapse=true title="Implementazione guidata: simulatore del compito"}
 
@@ -208,8 +315,6 @@ simulate_prl_rw <- function(
 
 :::
 
-### Che cosa cambia modificando i parametri?
-
 ::: {.callout-note collapse=true title="Codice della simulazione per quattro scenari"}
 
 ```{r}
@@ -277,9 +382,9 @@ Le quattro traiettorie non si dispongono lungo una sola dimensione di prestazion
 - un valore elevato di $\alpha$ può facilitare l'adattamento dopo il reversal, ma può anche amplificare la reazione ai feedback casuali;
 - un valore elevato di $\tau$ rende la scelta coerente con i valori correnti, anche quando questi valori non si sono ancora adattati;
 - un valore basso di $\tau$ può nascondere nel comportamento una differenziazione già presente negli stati latenti;
-- combinazioni differenti possono produrre percentuali complessive simili.
+- combinazioni differenti possono produrre percentuali complessive simili, pur corrispondendo a dinamiche cognitive molto diverse.
 
-Generiamo quindi una traiettoria di riferimento con $\alpha=0.20$ e $\tau=3$.
+Per fissare le idee e osservare il funzionamento interno del modello, generiamo ora una traiettoria di riferimento con $\alpha=0.20$ e $\tau=3$ — un valore intermedio che produce un apprendimento graduale e una scelta moderatamente sensibile alle differenze di valore. La @fig-rw-reference-values mostra l'evoluzione dei valori latenti $Q_t(A)$ e $Q_t(B)$ prima di ogni scelta.
 
 ::: {.callout-note collapse=true title="Codice della traiettoria di riferimento"}
 
@@ -321,17 +426,31 @@ sim_rw |>
   )
 ```
 
-Le linee rappresentano quantità generate dal modello, non misure dirette delle aspettative del partecipante. Anche quando una traiettoria appare psicologicamente plausibile, il suo significato dipende dalla specificazione che l'ha prodotta.
+Durante la prima fase, $Q_t(A)$ cresce progressivamente verso la probabilità di ricompensa effettiva di $A$ ($0.70$), mentre $Q_t(B)$ si stabilizza intorno a $0.30$. Dopo il reversal, le traiettorie si invertono: $Q_t(A)$ diminuisce e $Q_t(B)$ aumenta, ma l'adattamento richiede alcune decine di prove.
+
+Queste linee rappresentano però quantità generate dal modello, non misure dirette delle aspettative del partecipante. Anche quando una traiettoria appare psicologicamente plausibile, il suo significato dipende dalla specificazione che l'ha prodotta.
 
 ## Prima della stima: tre scelte con implicazioni sostanziali
 
-Tre decisioni, che a prima vista potrebbero sembrare mere questioni tecniche, condizionano in realtà ciò che il modello consentirà di concludere.
+Prima di procedere alla stima è necessario considerare tre aspetti che possono sembrare semplici dettagli tecnici, ma che influenzano l'interpretazione dei parametri e le conclusioni che il modello può sostenere.
 
-La prima riguarda la **scala** dei valori e dei rinforzi, la quale risulta intrinsecamente legata al parametro $\tau$: moltiplicando valori e ricompense per una costante, si può ottenere la medesima probabilità di scelta agendo semplicemente su $\tau$. Ne consegue che l'inverse temperature non possiede un significato assoluto, ma è strettamente legato al contesto sperimentale. 
+Il primo riguarda la **scala dei valori e dei rinforzi**. Nel modello di scelta, la differenza tra i valori delle alternative viene moltiplicata per il parametro $\tau$. Se tutti i valori e i feedback vengono riscalati moltiplicandoli per una costante, la stessa probabilità di scelta può essere ottenuta modificando opportunamente $\tau$. Per questo motivo, l'*inverse temperature* non ha un significato assoluto indipendente dalla codifica dei feedback: il suo valore deve sempre essere interpretato rispetto alla scala utilizzata nel compito. Un valore di $\tau$, preso isolatamente, non è direttamente confrontabile tra studi che utilizzano scale di rinforzo differenti.
 
-La seconda scelta riguarda le **condizioni iniziali**, qui fissate convenzionalmente a $Q_1(A)=Q_1(B)=0.5$. In linea di principio, queste condizioni potrebbero essere stimate dai dati, ma ciò richiederebbe al modello di disambiguare simultaneamente il punto di partenza, la velocità di apprendimento e la sensibilità della scelta, un compito che i dati spesso non consentono di risolvere in modo univoco.
+Un secondo aspetto riguarda le **condizioni iniziali**. Qui assumiamo convenzionalmente
 
-La terza decisione è la più rilevante per il proseguimento del capitolo: i parametri $\alpha$ e $\tau$ **possono compensarsi** a vicenda. La questione cruciale non riguarda solo la capacità del modello di riprodurre le scelte osservate, ma anche se il disegno sperimentale contenga pattern sufficientemente informativi da poter attribuire le scelte ai due processi – apprendimento e scelta – che esso governa.
+$$
+Q_1(A)=Q_1(B)=0.5.
+$$
+
+Questi valori rappresentano le aspettative attribuite alle due alternative prima che sia stato osservato alcun feedback. In linea di principio, anche le aspettative iniziali potrebbero essere trattate come parametri da stimare. Ciò renderebbe però più difficile distinguere tre componenti diverse: il valore da cui l'agente parte, la rapidità con cui modifica tale valore attraverso $\alpha$ e la misura in cui le differenze di valore influenzano le scelte attraverso $\tau$. Quando il numero di prove è limitato, in particolare, comportamenti simili nelle prime fasi del compito possono essere spiegati da combinazioni differenti di valori iniziali e tasso di apprendimento. Fissare le condizioni iniziali riduce la complessità del problema di stima, al prezzo di un'assunzione da tenere presente nell'interpretazione dei risultati.
+
+La terza questione è la più importante per il proseguimento del capitolo: i parametri $\alpha$ e $\tau$ **possono compensarsi parzialmente a vicenda**. Per esempio, una sequenza di scelte poco sensibile alle differenze tra le alternative potrebbe dipendere da un apprendimento lento, che mantiene i valori $Q_t(A)$ e $Q_t(B)$ relativamente simili, oppure da una bassa sensibilità della scelta, che produce risposte variabili anche quando i valori differiscono.
+
+Non basta allora chiedersi se il modello sia in grado di riprodurre le scelte osservate: occorre anche chiedersi se i dati contengano abbastanza informazione per distinguere il contributo di $\alpha$ da quello di $\tau$.
+
+Questo dipende in parte dal **numero di prove disponibili**, perché sequenze molto brevi offrono poche occasioni per osservare come le aspettative cambiano nel tempo. Ma il numero di prove da solo non basta: serve anche che nel corso del compito vi siano variazioni nei feedback e nelle differenze di valore tali da rendere osservabili sia la dinamica dell'apprendimento sia la relazione tra valori appresi e scelte. Se, per esempio, per quasi tutto il compito una delle due alternative è nettamente migliore dell'altra, diverse combinazioni di $\alpha$ e $\tau$ possono produrre sequenze di risposta molto simili.
+
+La questione che dovremo affrontare è dunque se, dato un certo numero di prove e una certa struttura dei feedback, i parametri del modello possano essere **recuperati separatamente dai dati**. Questa non è soltanto una proprietà del metodo di stima: dipende dall'interazione tra modello, quantità di dati e struttura del disegno sperimentale.
 
 ::: {.callout-warning title="Fit e identificazione parametrica non coincidono"}
 Un modello può prevedere accuratamente la sequenza delle risposte e tuttavia lasciare ampie regioni dello spazio parametrico ($\alpha$, $\tau$) sostanzialmente equivalenti. In tal caso, la bontà predittiva può essere soddisfacente, ma l'interpretazione dei singoli parametri rimane intrinsecamente fragile.
@@ -339,23 +458,23 @@ Un modello può prevedere accuratamente la sequenza delle risposte e tuttavia la
 
 ## Inferenza inversa e ruolo dell'approccio bayesiano
 
-Nei dati reali sono osservabili solo le scelte e i feedback che le hanno seguite; i parametri $\alpha$ e $\tau$, così come l'intera traiettoria dei valori latenti $Q_t$, restano inaccessibili. Pertanto, l'inferenza inverte la direzione del modello: invece di generare comportamenti a partire da parametri e ambiente, si tratta di risalire dalle risposte osservate alle quantità ignote che le hanno prodotte:
+Finora il modello è stato descritto nella sua direzione generativa: dati i parametri e le condizioni iniziali, esso specifica come le aspettative di valore cambiano nel tempo e come queste aspettative si traducono in probabilità di scelta. Con dati reali, però, il problema procede nella direzione opposta. Osserviamo le scelte e i feedback, mentre i parametri $\alpha$ e $\tau$, così come la traiettoria dei valori latenti $Q_t$, non sono direttamente accessibili. L'inferenza consiste nel risalire dai dati osservati alle quantità che, secondo il modello, potrebbero averli generati:
 
 $$
 \text{(scelte, feedback)} \longrightarrow p(\alpha,\tau \mid \text{dati}, \text{modello}) \longrightarrow p(Q_t \mid \text{dati}, \text{modello}).
 $$
 
-La clausola condizionale "dato il modello" è qui decisiva. La distribuzione a posteriori quantifica l'incertezza esclusivamente **nell'ambito della specificazione adottata**; essa non conferisce automaticamente una realtà psicologica ai parametri stimati, né attesta che il processo ipotizzato corrisponda a quello effettivamente operante nel soggetto. L'inferenza bayesiana fornisce uno strumento potente per caratterizzare l'incertezza residua dopo l'osservazione dei dati, ma non risolve il problema fondamentale di confrontare il modello con alternative plausibili e, prima ancora, di stabilire se i dati stessi contengano informazioni sufficienti per distinguere i processi che il modello cerca di rappresentare.
+Nell'approccio bayesiano, questa incertezza viene rappresentata attraverso una distribuzione a posteriori. Non otteniamo semplicemente una stima puntuale di $\alpha$ e $\tau$, ma una distribuzione dei valori compatibili con i dati, alla luce delle assunzioni del modello e dei prior specificati.
+
+La precisazione *dato il modello* è fondamentale. La distribuzione a posteriori ci dice quali valori dei parametri sono plausibili **all'interno della specificazione adottata**; non dimostra, da sola, che i parametri corrispondano a processi psicologici reali né che il modello rappresenti correttamente il meccanismo che ha generato il comportamento. L'inferenza bayesiana permette di quantificare l'incertezza sui parametri, ma non sostituisce né la verifica dell'adeguatezza del modello né la valutazione della sua capacità di distinguere i processi che intende rappresentare.
 
 ### I prior sono ipotesi sul comportamento
 
-Per ragioni computazionali, si adottano parametri non vincolati e trasformazioni che riportano le quantità nel dominio appropriato:
+Prima di osservare i dati è necessario stabilire quali valori dei parametri siano plausibili. Nel nostro caso, i prior esprimono ipotesi iniziali sulla velocità di apprendimento e sulla sensibilità della scelta.
 
-$$
-\alpha = \operatorname{logit}^{-1}(\alpha_{\mathrm{raw}}), \qquad \tau = \exp(\log\tau).
-$$
+È però utile non interpretare queste distribuzioni soltanto sulla scala astratta dei parametri. Ciò che conta, in ultima analisi, è il tipo di comportamento che esse rendono plausibile. Un insieme di valori di $\alpha$ e $\tau$ apparentemente ragionevoli può infatti generare sequenze di scelte quasi casuali, quasi deterministiche oppure caratterizzate da adattamenti estremamente rapidi o estremamente lenti.
 
-La logit inversa costringe $\alpha$ nell'intervallo $(0,1)$, mentre l'esponenziale assicura che $\tau > 0$. Tuttavia, queste trasformazioni non esauriscono il controllo sulla plausibilità del modello. Il passo decisivo consiste nel valutare i prior *attraverso le sequenze che essi generano*: un valore di $\alpha$ o di $\tau$ che appare moderato sulla scala parametrica può tradursi, una volta applicato alla dinamica di apprendimento e al modello di scelta, può tradursi in comportamenti quasi casuali o quasi deterministici. La distribuzione a priori di ciascun parametro deve quindi essere interpretata non in isolamento, ma alla luce delle proprietà temporali delle traiettorie che genera. Solo un'ispezione predittiva delle sequenze simulate può accertare se le ipotesi iniziali siano compatibili con il fenomeno che si intende studiare.
+Per questo motivo, prima della stima è utile effettuare un **controllo predittivo a priori**: si simulano dati dal modello utilizzando valori estratti dai prior e si verifica se le sequenze risultanti assomigliano, almeno qualitativamente, ai comportamenti che consideriamo plausibili nel compito. In questo senso, i prior non sono soltanto distribuzioni sui parametri, ma implicano vere e proprie ipotesi sulle possibili traiettorie comportamentali.
 
 ::: {.callout-note collapse=true title="Approfondimento computazionale: controllo predittivo a priori"}
 
@@ -469,7 +588,25 @@ rw_prior_stats |>
 
 ### Implementazione del modello
 
-L'aggiornamento ricorsivo, che procede prova per prova, richiede che il programma costruisca gli stati nel corso stesso del calcolo della verosimiglianza. Il codice seguente presenta una possibile implementazione in Stan; il suo scopo è rendere esplicita la corrispondenza tra la specificazione teorica, gli stati latenti e le osservazioni; non è oggetto di apprendimento autonomo in questo capitolo.
+Una volta specificati il modello e i prior, resta da tradurre la struttura teorica in una forma che permetta di stimare i parametri dai dati osservati.
+
+Nel modello Rescorla–Wagner, questo richiede di rispettare la natura sequenziale del processo. I valori disponibili a una certa prova dipendono infatti dagli aggiornamenti avvenuti nelle prove precedenti. Il modello va ricostruito prova per prova: dai valori correnti si determina la probabilità della scelta, si osserva il feedback e si aggiornano i valori che verranno utilizzati nella prova successiva.
+
+L'implementazione computazionale non introduce una logica nuova, ma traduce direttamente il meccanismo già descritto:
+
+$$
+\text{valori correnti}
+\rightarrow
+\text{probabilità di scelta}
+\rightarrow
+\text{feedback}
+\rightarrow
+\text{aggiornamento}
+\rightarrow
+\text{nuovi valori}.
+$$
+
+Il codice nel callout seguente mostra una possibile implementazione in Stan. Non è necessario seguirne ogni dettaglio per comprendere il resto del capitolo: il punto essenziale è che il programma ricostruisce internamente, una prova dopo l'altra, la traiettoria dei valori latenti e utilizza questa traiettoria per valutare quanto le scelte osservate siano compatibili con diversi valori di $\alpha$ e $\tau$.
 
 ::: {.callout-note collapse=true title="Approfondimento computazionale: programma Stan e campionamento"}
 
@@ -610,15 +747,21 @@ fit_rw <- rw_model$sample(
 
 ## Tre domande che non devono essere confuse
 
-Al termine della stima è necessario distinguere almeno tre livelli di controllo, ciascuno dei quali risponde a un interrogativo diverso e richiede strumenti specifici.
+Una volta stimato il modello, è importante non trattare tutti i controlli come se rispondessero alla stessa domanda. In realtà, occorre distinguere almeno tre problemi diversi: **se il calcolo è stato eseguito correttamente**, **se i parametri possono essere distinti dai dati** e **se il modello riesce a riprodurre gli aspetti rilevanti del comportamento osservato**.
 
-| Domanda | Strumento | Che cosa può concludere? |
-|---|---|---|
-| Il campionatore ha esplorato la posterior specificata? | diagnostica MCMC | affidabilità del calcolo |
-| Il disegno permette di distinguere i parametri? | *parameter recovery* | recuperabilità entro scenari simulati |
-| Il modello riproduce le proprietà del comportamento? | controlli predittivi | adeguatezza rispetto alle discrepanze scelte |
+| Domanda                                                | Strumento            | Che cosa può concludere?                     |
+| ------------------------------------------------------ | -------------------- | -------------------------------------------- |
+| Il campionatore ha esplorato la posterior specificata? | diagnostica MCMC     | affidabilità del calcolo                     |
+| Il disegno permette di distinguere i parametri?        | *parameter recovery* | recuperabilità entro scenari simulati        |
+| Il modello riproduce le proprietà del comportamento?   | controlli predittivi | adeguatezza rispetto alle discrepanze scelte |
 
-Nessuno di questi controlli, però, può da solo dimostrare che il meccanismo psicologico proposto corrisponda a quello effettivamente all'opera. Essi concorrono a escludere spiegazioni alternative o a individuare limiti della modellizzazione, ma la validità sostantiva di un modello processuale richiede un confronto più ampio, che includa previsioni discriminanti, validazione esterna e replicazione in condizioni diverse.
+La **diagnostica MCMC** riguarda innanzitutto l'affidabilità della procedura di stima. Un buon esito di questi controlli indica che il campionatore ha esplorato adeguatamente la distribuzione a posteriori definita dal modello. Non ci dice, però, se i parametri siano realmente ben identificati dai dati o se il modello descriva bene il comportamento.
+
+Il **parameter recovery** affronta invece una domanda diversa: se conoscessimo i valori veri dei parametri e generassimo dati con il modello, riusciremmo poi a recuperarli attraverso la procedura di stima? Questo controllo è particolarmente importante quando, come nel nostro caso, parametri diversi possono produrre effetti comportamentali parzialmente simili.
+
+Infine, i **controlli predittivi** chiedono se il modello, una volta stimato, sia in grado di generare dati che riproducano le caratteristiche del comportamento che riteniamo importanti. Un modello può essere stimato senza problemi computazionali e avere parametri recuperabili, ma risultare comunque inadeguato nel riprodurre alcuni aspetti sistematici dei dati osservati.
+
+Questi tre livelli di controllo sono complementari, ma nessuno di essi dimostra da solo che il processo psicologico ipotizzato dal modello corrisponda a quello effettivamente utilizzato dai soggetti. Possono mostrare che il calcolo è affidabile, che i parametri sono recuperabili e che alcune proprietà dei dati vengono riprodotte; la validità sostantiva del modello richiede però evidenze ulteriori, come il confronto con modelli alternativi, previsioni capaci di distinguerli e replicazioni in condizioni diverse.
 
 ::: {.callout-note collapse=true title="Approfondimento computazionale: diagnostica e posterior"}
 
@@ -665,9 +808,13 @@ rw_draws |>
 
 :::
 
-La dipendenza posteriore tra $\alpha$ e $\tau$ non è necessariamente un difetto del campionatore, ma può indicare che il comportamento osservato non separa nettamente apprendimento e scelta.
+Un aspetto utile da osservare nella posterior è la relazione tra $\alpha$ e $\tau$. Se i due parametri mostrano una forte dipendenza, non significa necessariamente che il campionatore abbia funzionato male. Può invece riflettere una proprietà del problema inferenziale: combinazioni differenti di velocità di apprendimento e sensibilità della scelta possono spiegare in modo simile la stessa sequenza comportamentale. È precisamente questo tipo di difficoltà che motiva, oltre alla diagnostica computazionale, un'analisi esplicita della recuperabilità dei parametri.
 
 ### Ricostruire gli stati latenti
+
+La stima dei parametri permette anche di ricostruire, prova per prova, le aspettative di valore $Q_t(A)$ e $Q_t(B)$ implicate dal modello. Queste traiettorie possono essere particolarmente informative perché mostrano come, secondo il modello, le aspettative si siano modificate durante il compito: per esempio, quanto rapidamente una differenza tra le alternative venga appresa o come i valori si riorganizzino dopo un *reversal*.
+
+Queste quantità vanno però interpretate con cura. I valori $Q_t$ non sono stati osservati direttamente e successivamente recuperati dal calcolo. Sono **inferenze prodotte dal modello** sulla base della sequenza di scelte e feedback e dell'incertezza sui parametri. Per questo motivo, anche le traiettorie dei valori devono essere rappresentate insieme alla loro incertezza.
 
 ::: {.callout-note collapse=true title="Approfondimento computazionale: traiettorie posteriori"}
 
@@ -751,15 +898,23 @@ q_posterior |>
 
 :::
 
-Le traiettorie posteriori sono inferenze condizionate alle scelte, ai feedback, ai prior e alla struttura del modello. Non sono osservazioni nascoste che il calcolo ha semplicemente "rivelato".
+Le traiettorie posteriori vanno lette come una ricostruzione **condizionata al modello**: dipendono dalle scelte e dai feedback osservati, ma anche dai prior, dai parametri stimati e dalle assunzioni che definiscono il processo di apprendimento. Non sono, in altre parole, stati psicologici nascosti che l'analisi ha semplicemente portato alla luce.
 
 ## Controllare ciò che la teoria intende spiegare
 
-La verifica di un modello dinamico non può limitarsi a statistiche marginali, ma deve investire le proprietà temporali che la teoria si propone di cogliere. La sola proporzione complessiva di scelte ottimali, infatti, non consente di distinguere tra processi di apprendimento, perseverazione, alternanza e sensibilità della scelta. In un compito di reversal, il potere esplicativo del modello si gioca invece su indicatori quali la rapidità di adattamento al cambio di contingenza, la frequenza con cui si inverte la risposta, la probabilità di perseverare dopo un esito positivo o negativo e, più in generale, l'evoluzione temporale delle preferenze.
+Un controllo predittivo è utile solo se riguarda aspetti del comportamento che il modello è effettivamente chiamato a spiegare. Nel caso di un modello dinamico come Rescorla–Wagner, non basta verificare che esso riproduca alcune caratteristiche aggregate dei dati. Due sequenze di scelte possono avere, per esempio, la stessa proporzione complessiva di risposte ottimali pur derivando da dinamiche temporali molto diverse.
 
-La verifica empirica di questi aspetti richiede il confronto dei dati osservati con le repliche generate dal modello. Il blocco seguente mostra il calcolo di tali statistiche sulle repliche posteriori.
+In un compito di *reversal*, ciò che interessa è soprattutto **come il comportamento cambia nel tempo in risposta ai feedback**. Un modello adeguato dovrebbe riprodurre non soltanto quante volte viene scelta l'alternativa migliore, ma anche la rapidità con cui la preferenza si modifica dopo il cambiamento delle contingenze, la frequenza con cui il soggetto cambia risposta e la tendenza a ripetere o abbandonare una scelta dopo un esito positivo o negativo.
+
+I controlli predittivi posteriori permettono di verificare proprio questo. Dopo aver stimato il modello, si generano nuove sequenze compatibili con la distribuzione a posteriori e si confrontano le loro caratteristiche con quelle della sequenza effettivamente osservata. Se il comportamento reale appare sistematicamente atipico rispetto alle repliche del modello su una proprietà teoricamente rilevante, questo segnala un limite della specificazione adottata, anche quando altri aspetti dei dati sono riprodotti correttamente.
+
+Non esiste un unico controllo predittivo genericamente «buono»: **le statistiche da confrontare devono essere scelte in funzione della teoria e del compito**. Nel nostro caso, le statistiche dinamiche sono più informative di una sola misura aggregata perché permettono di verificare separatamente diversi aspetti dell'adattamento alle contingenze.
 
 ::: {.callout-note collapse=true title="Approfondimento computazionale: controlli predittivi dinamici"}
+
+Nel controllo seguente vengono considerate cinque statistiche: la proporzione complessiva di scelte ottimali, la prestazione nelle prime prove successive al *reversal*, il tasso di cambiamento tra risposte consecutive e la probabilità di mantenere la stessa scelta dopo una ricompensa o dopo una mancata ricompensa.
+
+Per ciascuna replica posteriore vengono simulate sia le scelte sia i feedback. Le statistiche calcolate sulle sequenze simulate vengono quindi confrontate con i corrispondenti valori osservati.
 
 ```{r}
 #| label: rw-posterior-replication-statistics
@@ -860,32 +1015,49 @@ rw_rep_long |>
   )
 ```
 
+Esistono diverse forme di controllo predittivo, a seconda di quali componenti del processo si desidera replicare. Nel codice precedente vengono simulati nuovamente anche i feedback: il controllo riguarda quindi la dinamica complessiva prodotta dall'interazione tra ambiente, apprendimento e scelta.
+
+Un'alternativa consiste nel mantenere fissa la sequenza dei feedback osservati e simulare soltanto nuove scelte. In questo caso il controllo è condizionato alla storia di rinforzo effettivamente osservata e consente di concentrare maggiormente l'attenzione sulla relazione tra i valori costruiti dal modello e le risposte generate.
+
+Le due strategie rispondono a domande differenti. La prima chiede se il modello sia in grado di riprodurre sequenze plausibili dell'intero sistema agente-ambiente; la seconda chiede se, data una specifica storia di feedback, il meccanismo decisionale del modello produca pattern di scelta compatibili con quelli osservati.
 :::
 
-Un controllo predittivo risponde sempre a una domanda specifica. Simulare ex novo anche i feedback, come avviene in questo caso, consente di valutare il comportamento dell'intero sistema agente-ambiente nella sua integrità, includendo sia l'apprendimento che la scelta. Se invece si condizionano le repliche sui feedback osservati, si isola prevalentemente il modello di scelta, verificando se, a parità di storia di rinforzi, il soggetto riproduce le scelte effettive. Le due strategie non sono intercambiabili: la scelta dipende dall'oggetto che si intende sottoporre a controllo, ossia se l'interesse verte sulla dinamica congiunta di apprendimento e comportamento o sulla sola componente decisionale.
+Il principio generale è che la verifica deve seguire la stessa logica della teoria. Se il modello pretende di spiegare **l'adattamento nel tempo**, allora è proprio la struttura temporale del comportamento — e non soltanto la sua media complessiva — che deve essere sottoposta a controllo.
 
 ## Mettere alla prova il modello con un rivale
 
-Il modello di base assume che, una volta incorporati i valori appresi, la scelta nel trial corrente non dipenda ulteriormente dalla risposta immediatamente precedente. Tuttavia, si può ipotizzare che il comportamento includa anche una tendenza autonoma a ripetere o invertire la scelta appena effettuata. Per formalizzare questa possibilità, si estende il modello osservazionale aggiungendo un termine che codifica la risposta passata:
+Finora abbiamo assunto che la scelta corrente dipenda soltanto dai valori appresi delle due alternative. In altre parole, una volta noti $Q_t(A)$ e $Q_t(B)$, la risposta effettuata nella prova precedente non dovrebbe avere alcun effetto aggiuntivo sulla scelta successiva. Anche questa, però, è un'ipotesi del modello e può essere messa alla prova.
+
+È plausibile, per esempio, che un soggetto mostri una tendenza autonoma a **ripetere la scelta precedente**, indipendentemente dai valori appresi. Oppure, al contrario, potrebbe mostrare una tendenza ad alternare frequentemente tra le due alternative. Per rappresentare questa possibilità possiamo costruire un modello rivale che mantiene invariata la regola di apprendimento, ma estende il modello di scelta introducendo un nuovo parametro, $\kappa$:
 
 $$
-\Pr(Y_t=B)
+p_t
 =
 \operatorname{logit}^{-1}
 \left[
-\tau\,\{Q_t(B)-Q_t(A)\}
-+ \kappa \, S_{t-1}
-\right],
+\tau\left(Q_t(B)-Q_t(A)\right)
++
+\kappa S_{t-1}
+\right].
 $$
-dove $S_{t-1}$ assume valore $+1$ se al trial precedente è stata scelta $B$, $-1$ se è stata scelta $A$, e $0$ al primo trial. Con $\kappa > 0$, il modello favorisce la perseverazione; con $\kappa < 0$, l'alternanza.
 
-La questione epistemologica che questo confronto solleva, tuttavia, non si riduce a stabilire se il modello più complesso si adatti meglio ai dati. Il punto cruciale è piuttosto se l'omissione di $\kappa$ alteri l'interpretazione dei parametri $\alpha$ e $\tau$ e se cioè una componente perseverativa non modellata possa essere assorbita da una diversa calibrazione della velocità di apprendimento o della temperatura di scelta, portando a conclusioni distorte sul processo psicologico che si intende studiare. Solo un confronto esplicito tra i modelli, condotto su dimensioni predittive che li discriminano, può consentire di valutare se la struttura aggiuntiva sia teoricamente necessaria o se si tratti solo di un affinamento descrittivo.
+Qui $S_{t-1}$ rappresenta la scelta precedente: vale $+1$ se è stata scelta $B$, $-1$ se è stata scelta $A$ e $0$ nella prima prova. Con questa codifica, $\kappa>0$ favorisce la **perseverazione**, cioè la ripetizione della risposta precedente, mentre $\kappa<0$ favorisce l'**alternanza**.
+
+Il confronto tra i due modelli pone una domanda precisa: **le scelte possono essere spiegate interamente dai valori appresi, oppure è necessario introdurre anche una dipendenza dalla risposta precedente?**
+
+La questione è importante soprattutto per l'interpretazione degli altri parametri. Se nei dati è presente una tendenza alla perseverazione ma il modello di base non la rappresenta, esso può tentare di spiegare quella regolarità modificando $\alpha$ o $\tau$. In questo modo, una caratteristica del comportamento dovuta alla dipendenza dalla scelta precedente potrebbe essere erroneamente attribuita alla velocità di apprendimento o alla sensibilità alle differenze di valore.
+
+Il valore di un modello rivale non consiste soltanto nel verificare se una specificazione più complessa si adatti meglio ai dati. Il confronto serve soprattutto a chiedersi se **l'interpretazione dei parametri del modello di base rimanga stabile quando viene introdotta un'alternativa psicologicamente plausibile**.
 
 ### Un esperimento di misspecificazione
 
-Generiamo i dati con $\kappa=0.90$ e adattiamo prima il modello di base. Quest'ultimo può tentare di riprodurre la persistenza alterando i parametri di apprendimento e scelta. Un parametro apparentemente psicologico può quindi assorbire un processo che il modello non rappresenta.
+Possiamo rendere concreto il problema attraverso un semplice esperimento di simulazione. Generiamo dati da un processo nel quale, oltre all'apprendimento e alla sensibilità della scelta, è presente anche una moderata perseverazione, ponendo $\kappa=0.90$. Successivamente analizziamo questi stessi dati con due modelli: prima con il Rescorla–Wagner di base, che ignora la perseverazione, e poi con il modello esteso che include $\kappa$.
 
-::: {.callout-note collapse=true title="Approfondimento computazionale: dati con perseverazione e modello di base"}
+Poiché sappiamo come sono stati generati i dati, possiamo verificare direttamente che cosa accade quando il modello utilizzato per l'analisi **omette un processo realmente presente nel meccanismo generatore**. Se il modello di base modifica le stime di $\alpha$ o $\tau$ per compensare l'assenza di $\kappa$, avremo un esempio di *misspecificazione*: il modello può riuscire a descrivere almeno in parte i dati, ma attribuire il comportamento ai processi sbagliati.
+
+::: {.callout-note collapse=true title="Approfondimento computazionale: simulazione e adattamento del modello di base"}
+
+Nel codice seguente i dati vengono generati con $\alpha=0.20$, $\tau=3$ e $\kappa=0.90$. Gli stessi dati vengono poi analizzati con il modello Rescorla–Wagner di base, che contiene soltanto $\alpha$ e $\tau$.
 
 ```{r}
 #| label: simulate-rw-perseveration-data
@@ -930,7 +1102,7 @@ fit_rw_misspecified <- rw_model$sample(
 
 :::
 
-Introduciamo poi il modello rivale con $\kappa$.
+Introduciamo quindi il modello rivale. La regola di apprendimento rimane la stessa; ciò che cambia è il modello di scelta, nel quale la differenza tra i valori appresi e la risposta precedente contribuiscono separatamente alla probabilità della scelta corrente.
 
 ::: {.callout-note collapse=true title="Approfondimento computazionale: modello rivale con perseverazione"}
 
@@ -1070,6 +1242,8 @@ fit_rw_perseveration <- rw_perseveration_model$sample(
 )
 ```
 
+Per confrontare i due modelli è particolarmente utile utilizzare statistiche sensibili alla dipendenza seriale, come la probabilità di ripetere una scelta dopo una ricompensa o una mancata ricompensa e il tasso complessivo di cambiamento della risposta.
+
 ```{r}
 #| label: rw-model-comparison-ppc
 
@@ -1091,8 +1265,6 @@ observed_perseveration_stats <- behavioral_statistics(
   rich_is_A = sim_rw_perseveration$rich_is_A
 )
 ```
-
-:::
 
 ```{r}
 #| label: fig-rw-model-comparison-ppc
@@ -1147,7 +1319,11 @@ bind_rows(
   )
 ```
 
-::: {.callout-note collapse=true title="Posterior del modello esteso"}
+:::
+
+Se il modello esteso riproduce meglio proprio quelle proprietà del comportamento che dipendono dalla storia recente delle risposte, abbiamo evidenza che l'aggiunta di $\kappa$ catturi una regolarità che il modello di base non riesce a rappresentare adeguatamente. È inoltre utile verificare se la posterior del modello esteso recuperi un valore positivo di $\kappa$ e come l'introduzione di questo parametro modifichi le stime di $\alpha$ e $\tau$.
+
+::: {.callout-note collapse=true title="Approfondimento computazionale: posterior del modello esteso"}
 
 ```{r}
 #| label: rw-perseveration-posterior
@@ -1162,47 +1338,51 @@ fit_rw_perseveration$summary(
 
 :::
 
-Se il modello esteso riproduce con maggiore fedeltà le statistiche seriali e la distribuzione a posteriori attribuisce una massa consistente a $\kappa > 0$, allora si può dedurre che la perseverazione costituisca una componente utile per questi dati simulati e relativamente al rivale considerato. Ciò non significa, tuttavia, che sia stato dimostrato che la perseverazione sia il meccanismo effettivamente in atto. Lapsus attentivi, inerzia motoria, il valore attribuito all'azione precedente o altre forme di dipendenza seriale possono generare pattern osservativi simili. Il confronto tra i modelli restringe lo spazio delle spiegazioni plausibili, ma non lo annulla.
+Se il modello esteso riproduce più fedelmente le dipendenze seriali e la distribuzione a posteriori attribuisce una massa consistente a $\kappa>0$, possiamo concludere che una componente di perseverazione è utile per spiegare **questi dati simulati, rispetto al modello rivale considerato**. La conclusione deve però fermarsi qui.
+
+Il parametro $\kappa$ descrive una regolarità comportamentale — la dipendenza della scelta corrente da quella precedente — ma non identifica da solo il meccanismo psicologico che la produce. Perseverazione cognitiva, inerzia motoria, valore attribuito all'azione precedente o altre forme di dipendenza seriale potrebbero generare pattern osservativi simili. Il confronto tra modelli consente di restringere lo spazio delle spiegazioni plausibili, non di identificare automaticamente quella vera.
 
 ::: {.callout-important title="Il valore di un modello rivale"}
-Il modello rivale non serve solo a migliorare l'adattamento ai dati. Serve a verificare se l'interpretazione dei parametri del modello di base resiste all'introduzione di un'alternativa plausibile e se le conclusioni che se ne traggono sono valide anche in caso di tentativo esplicito di disconferma.
+Un modello rivale non serve semplicemente a ottenere un adattamento migliore ai dati. Serve a verificare se le conclusioni tratte dal modello di base resistono quando viene introdotta un'alternativa plausibile. Se l'interpretazione di $\alpha$ e $\tau$ cambia sostanzialmente dopo l'aggiunta di $\kappa$, allora quella interpretazione dipendeva almeno in parte da una specificazione incompleta del processo.
 :::
 
 ## Dal buon adattamento a un test più severo
 
-La credibilità di un modello processuale cresce in misura proporzionale alla severità dei controlli che è in grado di superare. L’idea, già emersa nella discussione sulle evidenze bayesiane, si traduce qui in una progressione operativa di difficoltà crescente. Il primo passo consiste nel verificare che il modello sia in grado di generare il fenomeno di interesse in modo qualitativamente adeguato; segue poi un controllo di recuperabilità parametrica nel disegno previsto per accertarsi che i dati possano effettivamente informare le quantità che si desidera interpretare. Superata questa fase, il modello deve riprodurre proprietà dinamiche non utilizzate per la stima, come pattern seriali o tempi di risposta, e produrre previsioni divergenti da quelle di modelli rivali, mostrando così di saper discriminare tra ipotesi alternative. Il passo successivo richiede di anticipare il comportamento in una nuova fase sperimentale, in un nuovo contesto o in un nuovo reversal; ancora oltre, si chiede che il modello risponda correttamente a manipolazioni dirette al processo ipotizzato. Infine, la sua interpretabilità si consolida quando i parametri mantengono un significato stabile attraverso studi e compiti pertinenti.
-
-Tale sequenza non conduce a una verifica definitiva: nessun modello può essere verificato in assoluto. Tuttavia, trasforma una storia plausibile in una congettura progressivamente più esposta alla possibilità di fallire e, quindi, più solida se resiste ai tentativi di disconferma.
+Un buon adattamento ai dati osservati rappresenta solo un primo controllo. La credibilità di un modello processuale aumenta quando esso supera verifiche progressivamente più esigenti: quando i suoi parametri sono recuperabili, quando riproduce proprietà del comportamento che non sono riassunte dalla sola qualità dell'adattamento, quando produce previsioni diverse da quelle di modelli rivali e, soprattutto, quando riesce a prevedere il comportamento in nuove condizioni. Nessuno di questi passaggi dimostra che il modello sia «vero», ma ciascuno aumenta la possibilità che possa fallire e rende più informativa l'evidenza ottenuta quando il modello resiste al controllo.
 
 ::: {.callout-warning title="La validazione deve rispettare il tempo"}
-La log-verosimiglianza di un trial dipende dagli stati costruiti mediante i trial precedenti. Una *leave-one-out* che tratti i trial come osservazioni scambiabili, quindi, potrebbe non rappresentare la generalizzazione scientifica desiderata. Spesso sono più pertinenti la previsione di blocchi futuri, di un nuovo reversal, di un nuovo partecipante o di un nuovo compito.
+Nei modelli di apprendimento, la probabilità della scelta al trial $t$ dipende dagli stati costruiti attraverso i trial precedenti. Una procedura di validazione che tratti i trial come osservazioni scambiabili può quindi non corrispondere alla forma di generalizzazione che interessa scientificamente. In molti casi è più informativo chiedere al modello di prevedere un blocco successivo, un nuovo reversal, un nuovo partecipante o una nuova condizione sperimentale.
 :::
 
 ## Estensioni: quando aggiungere un parametro
 
-Il modello di base si presta a numerose estensioni: si possono introdurre tassi di apprendimento distinti per esiti positivi e negativi, aggiungere un decadimento dei valori delle alternative non scelte, separare una probabilità di *lapse* dalla sensibilità della scelta, estendere la regola a più alternative mediante una Softmax multinomiale, o far dipendere i parametri dal contesto sperimentale. Il criterio per accogliere una di queste varianti rimane comunque lo stesso già incontrato a proposito del parametro $\kappa$: l'aggiunta deve corrispondere a un'ipotesi sostantiva sul processo, e il disegno deve contenere informazioni sufficienti per distinguere la nuova specificazione da quella più parsimoniosa. Far dipendere i parametri dal contesto, per esempio, consente di verificare se la dinamica dell'apprendimento cambi selettivamente in base al contenuto del compito [@colpizzi2025food]; aggiungere flessibilità senza una previsione discriminante, invece, produce invece un modello che assorbe più pattern senza migliorare la comprensione del fenomeno.
+Il modello di base si presta a numerose estensioni: tassi di apprendimento distinti per esiti positivi e negativi, un decadimento dei valori delle alternative non scelte, una probabilità di *lapse* separata dalla sensibilità della scelta, la generalizzazione a più alternative mediante una Softmax multinomiale, parametri dipendenti dal contesto sperimentale.
+
+Il criterio per accogliere una di queste varianti rimane lo stesso già incontrato a proposito del parametro $\kappa$: l'aggiunta deve corrispondere a un'ipotesi sostantiva sul processo, e il disegno deve contenere informazioni sufficienti per distinguere la nuova specificazione da quella più parsimoniosa. Far dipendere i parametri dal contesto, per esempio, consente di verificare se la dinamica dell'apprendimento cambi selettivamente in base al contenuto del compito [@colpizzi2025food]; aggiungere flessibilità senza una previsione discriminante produce invece un modello che assorbe più pattern senza migliorare la comprensione del fenomeno.
 
 ::: {.callout-note collapse=true title="Approfondimento facoltativo: Rescorla–Wagner è un modello bayesiano?"}
-La regola $Q_{t+1}=Q_t+\alpha(R_t-Q_t)$ condivide con l'aggiornamento bayesiano l'idea che una previsione venga corretta in base alla discrepanza con l'evidenza, ma l'analogia termina presto. Il modello standard mantiene un valore puntuale, impiega un valore di $\alpha$ costante e non rappresenta l'incertezza sull'ambiente, mentre modelli come il filtro di Kalman aggiornano anche la stima della varianza e possono modificare dinamicamente il peso del nuovo esito. È necessario, quindi, distinguere l'inferenza bayesiana del ricercatore, qui utilizzata per stimare i parametri del modello, dall'ipotesi bayesiana sull'agente, secondo cui il processo psicologico stesso rappresenterebbe e aggiornerebbe distribuzioni di probabilità. La prima non implica la seconda.
+La regola $Q_{t+1}=Q_t+\alpha(R_t-Q_t)$ condivide con l'aggiornamento bayesiano l'idea che una previsione venga corretta in base alla discrepanza con l'evidenza, ma l'analogia termina presto. Il modello standard mantiene un valore puntuale, impiega un valore di $\alpha$ costante e non rappresenta l'incertezza sull'ambiente, mentre modelli come il filtro di Kalman aggiornano anche la stima della varianza e possono modificare dinamicamente il peso del nuovo esito. Conviene distinguere l'inferenza bayesiana del ricercatore, qui utilizzata per stimare i parametri del modello, dall'ipotesi bayesiana sull'agente, secondo cui il processo psicologico stesso rappresenterebbe e aggiornerebbe distribuzioni di probabilità. La prima non implica la seconda.
 :::
 
 ## Interpretare i parametri senza trasformarli in etichette
 
-Una comunicazione prudente dei risultati può formulare affermazioni del tipo: *nel modello specificato, $\alpha$ descrive la rapidità con cui i valori latenti vengono aggiornati a seguito dei feedback, mentre $\tau$ quantifica il peso che le differenze tra tali valori esercitano sulle scelte*. Si precisa inoltre che l'attribuzione di un significato psicologico a questi parametri, intesi come caratteristiche stabili della persona, richiede ulteriori evidenze di recuperabilità, stabilità temporale, validità esterna e robustezza rispetto a specifiche alternative del modello.
+I parametri vanno interpretati innanzitutto **all'interno del modello che li definisce**. Nel modello specificato, $\alpha$ descrive la rapidità con cui i valori vengono aggiornati in seguito ai feedback, mentre $\tau$ descrive quanto le differenze tra questi valori influenzino le scelte. Attribuire a tali parametri un significato psicologico più generale richiede però evidenze ulteriori: che siano recuperabili dai dati, sufficientemente stabili e robusti rispetto a specificazioni alternative del modello.
 
-Non è invece lecito concludere automaticamente che un valore basso di $\alpha$ indichi un deficit generale di apprendimento, che $\tau$ misuri direttamente l'esplorazione, la razionalità o l'impulsività, che la traiettoria $Q_t$ corrisponda all'aspettativa soggettiva effettiva, che il modello risultato migliore tra due candidati abbia identificato il vero meccanismo o che un parametro stimato in una singola sessione costituisca un tratto stabile della persona.
+Occorre evitare di trasformare direttamente i parametri in etichette psicologiche. Un valore basso di $\alpha$, per esempio, non dimostra di per sé un deficit generale di apprendimento; allo stesso modo, $\tau$ non misura direttamente concetti come razionalità, impulsività o esplorazione. Anche le traiettorie $Q_t$ rimangono quantità latenti ricostruite dal modello, non osservazioni dirette delle aspettative soggettive.
 
-Il prossimo capitolo affronterà proprio quest'ultimo problema: anche quando un modello processuale risulta plausibile, resta da stabilire se lo stesso meccanismo e gli stessi parametri possano descrivere tutti gli individui – e come si debba procedere quando l'eterogeneità interindividuale diventa parte integrante della domanda scientifica.
+In generale, un parametro stimato acquista significato nella misura in cui **l'interpretazione che gli attribuiamo resiste ai controlli sul modello e generalizza oltre i dati sui quali è stato stimato**.
+
+Il prossimo capitolo estenderà questa questione al confronto tra individui: anche quando un modello processuale risulta plausibile, resta infatti da stabilire se gli stessi parametri possano essere interpretati nello stesso modo per persone diverse e come rappresentare l'eterogeneità interindividuale.
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-Il modello di Rescorla–Wagner esemplifica in modo efficace la struttura di una spiegazione processuale: essa richiede almeno due componenti distinte, una regola che aggiorna stati latenti e una che lega tali stati alle osservazioni. Questa separazione consente di formulare ipotesi più precise di una semplice associazione tra variabili, e rende il modello suscettibile di controllo empirico lungo dimensioni che una regressione tradizionale non coglie.
+Il modello di Rescorla–Wagner esemplifica bene la struttura di una spiegazione processuale: richiede almeno una regola che descriva come cambiano nel tempo gli stati latenti e una regola che colleghi tali stati al comportamento osservato. Questa separazione permette di formulare ipotesi esplicite sulla dinamica del processo, andando oltre una descrizione puramente associativa tra variabili.
 
-La precisione formale, tuttavia, non elimina l'ambiguità scientifica. I parametri $\alpha$ e $\tau$ possono compensarsi a vicenda; le loro stime dipendono dalla scala, dal disegno sperimentale e dai processi effettivamente inclusi nel modello. Inoltre, una componente perseverativa omessa può essere assorbita dai parametri della specificazione di base, alterandone l'interpretazione. Il significato di una stima, dunque, non risiede nel nome attribuito al parametro, ma emerge dal confronto esplicito tra specifiche alternative e dalla capacità del modello di discriminare tra ipotesi rivali.
+La precisione formale, tuttavia, non elimina l'ambiguità scientifica. I parametri $\alpha$ e $\tau$ possono compensarsi a vicenda e le loro stime dipendono dalla scala dei feedback, dal disegno sperimentale e dai processi inclusi nel modello. Come abbiamo visto introducendo la perseverazione, un processo omesso può essere in parte assorbito dagli altri parametri, modificandone l'interpretazione. Il significato di una stima non deriva semplicemente dal nome attribuito al parametro, ma dalla struttura del modello e dai controlli ai quali tale interpretazione riesce a resistere.
 
-In questo quadro, l'apporto principale dell'inferenza bayesiana è duplice: quantificare l'incertezza residua e generare conseguenze predittive dell'intera architettura processuale. La credibilità di una spiegazione aumenta quando il modello riproduce il fenomeno qualitativamente, i parametri sono recuperabili nel disegno adottato, le proprietà dinamiche vengono riprodotte, i modelli rivali falliscono su previsioni discriminanti e i risultati si estendono oltre i dati utilizzati per la stima.
+In questo quadro, l'approccio bayesiano consente di rappresentare esplicitamente l'incertezza sui parametri e sugli stati latenti e di tradurla in distribuzioni predittive sul comportamento. Ma una posterior ben stimata non basta: la credibilità della spiegazione dipende anche dalla recuperabilità dei parametri, dalla capacità del modello di riprodurre le proprietà rilevanti dei dati, dal confronto con modelli rivali e dalla possibilità di generalizzare oltre le osservazioni utilizzate per la stima.
 
-Il risultato scientificamente più rilevante, tuttavia, non è una singola distribuzione a posteriori di $\alpha$ o di $\tau$. Si tratta di una teoria sufficientemente precisa da poter essere confrontata con alternative, sottoposta a controlli informativi e riformulata quando le sue previsioni vengono smentite. La modellizzazione processuale non fornisce risposte definitive, ma un linguaggio per formulare congetture sempre più esposte alla possibilità di fallire e, pertanto, se sopravvivono, sempre più solide.
+Il risultato scientificamente più importante non è una singola stima di $\alpha$ o di $\tau$, ma una teoria sufficientemente precisa da poter essere confrontata con alternative, sottoposta a controlli informativi e modificata quando le sue previsioni falliscono. La modellizzazione processuale non fornisce risposte definitive: fornisce un linguaggio per formulare ipotesi sul meccanismo che genera il comportamento e per esporle in modo esplicito alla possibilità di essere smentite.
 
 ## Esercizi {.unnumbered .unlisted}
 

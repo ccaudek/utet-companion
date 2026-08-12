@@ -1,27 +1,23 @@
 # Dalla previsione causale all'azione: decisione, utilità e conseguenze {#sec-decision-analysis}
 
 ::: {.callout-note appearance="minimal"}
-Nei capitoli precedenti, sono state formulate ipotesi sul processo che genera il comportamento, sono stati confrontati modelli alternativi ed è stata rappresentata l'eterogeneità tra individui. Tuttavia, per determinare le azioni da intraprendere, è necessario un ulteriore approfondimento. Una decisione richiede la combinazione di una previsione delle conseguenze delle azioni disponibili con una valutazione di tali conseguenze. Il primo elemento è di natura empirica e causale: quali sarebbero le conseguenze se si optasse per un'alternativa anziché un'altra? Il secondo approccio è normativo: quali esiti vengono considerati desiderabili, costosi o inaccettabili? La formalizzazione non annulla il giudizio, ma rende evidenti le credenze, i valori e i vincoli che sottendono la raccomandazione.
+I capitoli precedenti hanno formulato ipotesi sul processo che genera il comportamento, le hanno confrontate con alternative e hanno rappresentato l'eterogeneità tra individui. Resta un ultimo passaggio, che chiude la Parte: dalla comprensione di un fenomeno alla scelta di un'azione.
+
+Questo capitolo è volutamente breve. Non intende introdurre la teoria della decisione, ma chiarire un punto essenziale: una raccomandazione richiede due ingredienti diversi, una previsione delle conseguenze e una valutazione di quelle conseguenze. Nessuno dei due può essere ricavato dall'altro.
 :::
 
 ::: {.callout-important appearance="minimal" .chapter-status}
-**Da sapere.** Una decisione combina distribuzioni predittive pertinenti agli interventi e una funzione di utilità o perdita. Un'alternativa non è ottimale in assoluto, ma rispetto a specifiche opzioni, popolazioni, conseguenze, preferenze, vincoli e orizzonti temporali.
+**Da sapere.** Una decisione combina una distribuzione predittiva pertinente all'intervento con una funzione di utilità. La prima riguarda ciò che potrebbe accadere, la seconda quanto valgono le possibili conseguenze. Nessuna alternativa è ottimale in assoluto: lo è rispetto alle opzioni considerate, alla popolazione, alle conseguenze rilevanti e alle preferenze adottate.
 
-**Da saper fare.** Distinguere associazione, previsione, previsione causale e decisione; separare il modello degli esiti dalla funzione di utilità; interpretare l'utilità attesa; riconoscere quando una raccomandazione dipende da assunzioni causali non giustificate; condurre concettualmente un'analisi di sensibilità; comunicare una scelta senza presentarla come universale o neutrale.
-
-**Approfondimento facoltativo.** La compilazione del programma Stan, i controlli predittivi, l'estrazione delle simulazioni congiunte e il calcolo numerico dell'utilità mostrano come l'analisi possa essere realizzata in pratica. Non è richiesto scrivere o modificare autonomamente il programma.
+**Da saper fare.** Distinguere previsione e decisione; riconoscere che la funzione di utilità non è determinata dai dati sugli esiti; capire perché una raccomandazione può cambiare al variare delle preferenze senza che cambi l'evidenza empirica.
 
 [Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
 :::
 
 ::: {.callout-tip collapse=true title="Prerequisiti"}
-- La distinzione tra associazione ed effetto causale sviluppata in @sec-causality-propedeutics e @sec-eda-causality.
-- La distinzione tra modello probabilistico e modello processuale discussa in @sec-bayes-stat-models.
-- Il significato delle distribuzioni predittive posteriori.
-- Il ruolo dell'eterogeneità individuale discusso in @sec-formal-models-developments.
+- La distinzione tra associazione ed effetto causale sviluppata nella Parte **Causalità**.
+- La tabella dei cinque livelli introdotta nel @sec-cinque-livelli.
 :::
-
-::: {.callout-caution collapse=true title="Preparazione del notebook"}
 
 ```{r}
 #| label: setup-decision-analysis
@@ -29,568 +25,214 @@ Nei capitoli precedenti, sono state formulate ipotesi sul processo che genera il
 
 here::here("code", "_common.R") |>
   source()
-
-available_cores <- parallel::detectCores(logical = FALSE)
-n_parallel_chains <- if (is.na(available_cores)) {
-  1L
-} else {
-  min(4L, available_cores)
-}
-
-set.seed(2026)
-```
-:::
-
-## Dalla spiegazione all'azione
-
-
-Una teoria processuale cerca di spiegare come un sistema cambi e produca un determinato comportamento. Una decisione, invece, pone una domanda diversa: quale azione dovremmo scegliere, date le conseguenze plausibili e il valore che attribuiamo a tali conseguenze? Le due domande sono collegate, ma non coincidono. La tabella dei cinque livelli introdotta nel @sec-cinque-livelli si specializza qui in una progressione che va dalla descrizione alla previsione, dal modello processuale alla causalità e infine alla valutazione normativa. Un modello processuale può aiutare a prevedere gli effetti di nuovi interventi e a capire quando una regolarità dovrebbe cambiare, ma non sostituisce la definizione della funzione di utilità. Allo stesso modo, una regola decisionale non rende causali le previsioni che derivano soltanto da associazioni osservate.
-
-| Livello | Oggetto principale | Esempio di conclusione |
-|---|---|---|
-| Descrizione e previsione | $p(y\mid x)$ | chi usa il metodo A tende ad avere voti più alti |
-| Processuale | stati e regole di trasformazione | l'apprendimento cambia mediante un errore di previsione |
-| Causale | $p(y\mid do(d))$ | assegnare il metodo A modifica la distribuzione dei voti |
-| Normativo | conseguenze e utilità | date queste preferenze, conviene scegliere il metodo A |
-
-::: {.callout-important title="La quantità rilevante per una decisione"}
-Per scegliere un'azione $d$ non basta conoscere $p(y\mid d,\mathcal D)$, che descrive gli esiti osservati tra le persone associate a $d$. Serve una distribuzione pertinente all'intervento, ovvero $p(y\mid do(d),\mathcal D)$. In un esperimento randomizzato, la distribuzione condizionata può identificare questa quantità. Nei dati osservazionali, il passaggio richiede assunzioni causali esplicite. La teoria della decisione non risolve autonomamente il problema dell'identificazione.
-:::
-
-## Anatomia di un problema decisionale
-
-Secondo la teoria della decisione bayesiana [@gelman1995bayesian; @McElreath_rethinking], una decisione si forma in uno spazio definito da almeno sei elementi. Le alternative sono le azioni realmente disponibili, mentre le conseguenze sono gli esiti rilevanti prodotti da ciascuna alternativa. Per valutare tali conseguenze, sono necessarie distribuzioni causali predittive che descrivono ciò che potrebbe accadere scegliendo ciascuna azione e una funzione di utilità o perdita che esprime il valore attribuito alle conseguenze. Tutto ciò deve essere specificato rispetto a una popolazione e a un orizzonte temporale e, infine, una regola decisionale stabilisce il criterio da utilizzare per la scelta.
-
-Indichiamo con $d$ una decisione e con $y$ un insieme di conseguenze. L'utilità attesa è data dall'integrale $\operatorname{EU}(d) = \int U(y,d)\, p(y\mid do(d),\mathcal D)\,dy$. La regola standard prescrive di scegliere l'alternativa che massimizza questa quantità, ovvero $d^* = \arg\max_d \operatorname{EU}(d)$. Equivalentemente, si può minimizzare la perdita attesa. Quando l'integrale non è disponibile analiticamente, si ricorre a simulazioni: si generano $y_d^{(s)} \sim p(y\mid do(d),\mathcal D)$ per $s=1,\dots,S$ e si calcola $\widehat{\operatorname{EU}}(d) = \frac{1}{S}\sum_{s=1}^{S} U(y_d^{(s)},d)$.
-
-::: {.callout-important title="Credenze e preferenze svolgono ruoli differenti"}
-La distribuzione predittiva rappresenta ciò che riteniamo possa accadere. La funzione di utilità rappresenta invece il modo in cui valutiamo ciò che potrebbe accadere. Nuovi dati possono modificare le nostre credenze riguardo agli esiti. Persone o istituzioni diverse possono attribuire valori diversi agli stessi esiti. Separare le due componenti impedisce di presentare una scelta di valore come se fosse una proprietà oggettiva dei dati.
-:::
-
-## Caso di studio: scegliere un metodo di studio
-
-Per rendere più concreto il percorso appena descritto, prendiamo in considerazione tre alternative: il metodo classico, basato sullo studio individuale di testi ed esercizi; l'AI tutor, che fornisce spiegazioni interattive e propone esercizi adattivi; e lo studio di gruppo, basato sulla discussione e sul confronto tra pari. Per semplicità, ci concentriamo su due conseguenze: il voto d'esame $G$ e le ore di studio $H$. Il problema non consiste nello stabilire quale metodo abbia il voto medio più alto in astratto. Uno studente può accettare un incremento modesto del voto, a condizione che non richieda molto più tempo; un altro può invece attribuire priorità quasi esclusiva alla prestazione.
-
-Usiamo inizialmente una funzione di utilità lineare $U(g,h;\lambda)=g-\lambda h$, dove $\lambda\geq 0$ rappresenta il costo di un'ora di studio espresso in punti di voto equivalenti. Se $\lambda=0$, conta soltanto il voto; se $\lambda=0.5$, due ore hanno un costo equivalente a un punto di voto; se $\lambda$ è elevato, il tempo diventa più importante nella decisione. Questa funzione non pretende di rappresentare tutte le preferenze reali, ma serve a rendere esplicito un compromesso che altrimenti rimarrebbe nascosto.
-
-::: {.callout-warning title="L'utilità non è una proprietà naturale degli esiti"}
-Il valore di $\lambda$ non può essere ricavato automaticamente dai dati relativi a ore e voti. Esprime una preferenza, un vincolo o una scelta normativa. Una raccomandazione valida per $\lambda=0.5$ potrebbe non esserlo per $\lambda=1.5$. Per questo motivo, l'analisi di sensibilità è parte integrante dell'analisi decisionale.
-:::
-
-## Un modello delle conseguenze
-
-Per ciascun metodo $k$, modelliamo dapprima le ore con una distribuzione lognormale, $H_i\mid d_i=k \sim \operatorname{Lognormal}(\mu_{H,k},\sigma_{H,k})$. Il voto dipende quindi dal metodo e dalle ore attraverso una regressione normale, $G_i\mid H_i,d_i=k \sim \operatorname{Normal}[\alpha_k+\beta_k\log(1+H_i),\sigma_G]$. La fattorizzazione congiunta $p(h,g\mid d=k) = p(h\mid d=k)\,p(g\mid h,d=k)$ permette di generare congiuntamente tempo e voto. La trasformazione $\log(1+H)$ rappresenta rendimenti decrescenti: le prime ore possono produrre incrementi maggiori di ore aggiunte dopo una preparazione già intensa.
-
-::: {.callout-note title="Che tipo di modello è questo?"}
-Il modello di ore e voto è principalmente descrittivo e predittivo. Non rappresenta il processo cognitivo mediante il quale lo studente apprende durante ogni ora di studio. Nel mondo simulato, l'assegnazione del metodo è casuale, pertanto le differenze tra i metodi possono ricevere un'interpretazione causale. In un'applicazione osservazionale, la stessa formula potrebbe riassumere soltanto la selezione e le associazioni. Un modello meccanicistico non è sempre indispensabile per una decisione locale, se le conseguenze degli interventi sono identificate direttamente. Diventa però particolarmente importante quando si vogliono estrapolare a interventi nuovi, contesti differenti o condizioni in cui le associazioni osservate potrebbero cambiare.
-:::
-
-::: {.callout-note collapse=true title="Approfondimento applicativo: simulare il caso di studio"}
-Costruiamo un mondo simulato nel quale il metodo viene assegnato casualmente. Conoscere il processo generativo consente di verificare se il modello produce conseguenze plausibili e se l'analisi recupera la struttura introdotta.
-
-```{r}
-#| label: simulate-study-methods
-
-N <- 300
-method_names <- c("Classico", "AI tutor", "Gruppo")
-K <- length(method_names)
-
-method <- sample(seq_len(K), N, replace = TRUE)
-
-mu_log_h_true <- log(c(10, 12, 16))
-sigma_log_h_true <- c(0.30, 0.36, 0.45)
-
-alpha_true <- c(55, 62, 60)
-beta_true <- c(5.5, 7.5, 6.5)
-sigma_g_true <- 7
-
-h <- rlnorm(
-  N,
-  meanlog = mu_log_h_true[method],
-  sdlog = sigma_log_h_true[method]
-)
-
-mu_g <- alpha_true[method] + beta_true[method] * log1p(h)
-g <- rnorm(N, mu_g, sigma_g_true)
-
-study_dat <- tibble(
-  method_id = method,
-  method = factor(method_names[method], levels = method_names),
-  hours = h,
-  grade = g
-)
 ```
 
-```{r}
-#| label: plot-simulated-outcomes
-#| fig-cap: "Distribuzioni simulate delle ore e relazione tra ore e voto nei tre metodi."
+## Due ingredienti, non uno
 
-p_hours <- ggplot(study_dat, aes(hours, fill = method)) +
-  geom_density(alpha = 0.35) +
-  labs(x = "Ore di studio", y = "Densità", fill = "Metodo")
+Supponiamo di sapere, con ragionevole certezza, che un certo metodo di studio produce in media voti più alti di un altro. Questa informazione, da sola, non basta per raccomandarlo. Manca la risposta a una domanda diversa: **quanto vale un punto di voto in più, se richiede alcune ore di studio aggiuntive?**
 
-p_grade <- ggplot(study_dat, aes(hours, grade, color = method)) +
-  geom_point(alpha = 0.45) +
-  geom_smooth(method = "lm", formula = y ~ log1p(x), se = FALSE) +
-  labs(x = "Ore di studio", y = "Voto", color = "Metodo")
+Una decisione richiede quindi due componenti.
 
-p_hours
-p_grade
-```
+La prima è **empirica e causale**: quali conseguenze avrebbe ciascuna azione disponibile? Per decidere serve la distribuzione degli esiti **sotto l'intervento**, non semplicemente quella osservata tra persone che hanno compiuto scelte diverse.
 
-Il modello normale non impone formalmente i limiti 0--100. Nei dati reali occorrerebbe controllare la frequenza di repliche fuori scala e, se necessario, scegliere un modello osservazionale differente.
+La seconda è **normativa**: quanto valgono quelle conseguenze? Possiamo rappresentarla con una funzione di utilità $U(y)$, che assegna un valore ai possibili esiti [si veda, ad esempio, @McElreath_rethinking]. Combinando le due componenti otteniamo l'**utilità attesa** di un'azione $d$:
+
+$$
+\operatorname{EU}(d)
+=
+\int U(y)\,p\big(y\mid do(d)\big)\,dy.
+$$
+
+La regola è scegliere, tra le alternative considerate, quella con utilità attesa maggiore. In pratica, possiamo generare molti esiti possibili sotto ciascuna azione, calcolarne l'utilità e farne la media.
+
+::: {.callout-important title="Credenze e preferenze fanno cose diverse"}
+La distribuzione predittiva rappresenta **ciò che pensiamo possa accadere**; la funzione di utilità rappresenta **come valutiamo ciò che potrebbe accadere**.
+
+Nuovi dati sugli esiti possono modificare le nostre previsioni, ma non determinano da soli quanto dobbiamo valutare quegli esiti. Due persone che concordano sulle conseguenze previste possono quindi preferire azioni diverse.
+
+Tenere separate le due componenti evita di presentare una scelta di valore come se fosse un risultato empirico.
 :::
 
-## Dal modello ai dati
+## Un esempio minimo
 
-Il programma Stan è contenuto nel file esterno `chapters/applicazione/study_method_decision.stan` e stima soltanto la distribuzione congiunta di ore e voto. La funzione di utilità non appartiene alla verosimiglianza e viene applicata successivamente alle simulazioni predittive.
-
-::: {.callout-note collapse=true title="Approfondimento computazionale: prior, stima e controlli predittivi"}
-
-```{r}
-#| label: compile-study-decision-model
-#| output: false
-
-stan_file <- here::here(
-  "chapters", "applicazione", "study_method_decision.stan"
-)
-
-study_model <- cmdstanr::cmdstan_model(stan_file)
-```
-
-```{r}
-#| label: prepare-study-decision-data
-
-stan_data <- list(
-  N = nrow(study_dat),
-  K = K,
-  method = study_dat$method_id,
-  h = study_dat$hours,
-  g = study_dat$grade,
-  prior_only = 0L
-)
-```
-
-Prima della stima, lo stesso programma può generare dati dai prior.
-
-```{r}
-#| label: fit-prior-study-decision
-#| output: false
-
-prior_data <- stan_data
-prior_data$prior_only <- 1L
-
-prior_fit <- study_model$sample(
-  data = prior_data,
-  seed = 2026,
-  chains = 4,
-  parallel_chains = n_parallel_chains,
-  iter_warmup = 500,
-  iter_sampling = 500,
-  refresh = 0
-)
-```
-
-```{r}
-#| label: inspect-prior-predictions-study
-
-prior_draws <- prior_fit$draws(
-  variables = c("h_new", "g_new"),
-  format = "draws_matrix"
-)
-
-prior_h <- prior_draws[
-  , paste0("h_new[", seq_len(K), "]"), drop = FALSE
-]
-prior_g <- prior_draws[
-  , paste0("g_new[", seq_len(K), "]"), drop = FALSE
-]
-
-colnames(prior_h) <- method_names
-colnames(prior_g) <- method_names
-
-apply(prior_h, 2, quantile, probs = c(.01, .5, .99))
-apply(prior_g, 2, quantile, probs = c(.01, .5, .99))
-```
-
-Il controllo deve esaminare le conseguenze **congiunte** dei prior, non soltanto ciascun parametro separatamente.
-
-```{r}
-#| label: fit-study-decision
-#| output: false
-
-fit <- study_model$sample(
-  data = stan_data,
-  seed = 2027,
-  chains = 4,
-  parallel_chains = n_parallel_chains,
-  iter_warmup = 1000,
-  iter_sampling = 1500,
-  refresh = 200
-)
-```
-
-```{r}
-#| label: diagnose-study-decision
-
-fit$diagnostic_summary()
-
-fit$summary(
-  variables = c(
-    "mu_log_h",
-    "sigma_log_h",
-    "alpha",
-    "beta",
-    "sigma_g"
-  )
-)
-```
-
-Un buon campionamento è necessario per interpretare i draw, ma non dimostra che il modello sia adeguato o causalmente pertinente.
-
-```{r}
-#| label: posterior-predictive-study-decision
-
-h_rep <- posterior::as_draws_matrix(
-  fit$draws(variables = "h_rep")
-)
-g_rep <- posterior::as_draws_matrix(
-  fit$draws(variables = "g_rep")
-)
-
-bayesplot::ppc_dens_overlay(
-  y = log(study_dat$hours),
-  yrep = log(h_rep[1:100, , drop = FALSE])
-)
-
-bayesplot::ppc_dens_overlay(
-  y = study_dat$grade,
-  yrep = g_rep[1:100, , drop = FALSE]
-)
-```
-
-Poiché la decisione dipende dalla relazione tra ore e voto, i controlli marginali non sono sufficienti. Occorre anche verificare statistiche congiunte e specifiche per metodo.
-:::
-
-## Distribuzioni predittive per le alternative
-
-Per ogni nuovo utente, il programma genera una coppia congiunta (H, G) per ciascun metodo. Ogni coppia conserva la dipendenza tra il tempo simulato e il voto corrispondente. Le simulazioni propagano almeno tre fonti di variabilità: l'incertezza sui parametri, le differenze tra gli studenti e la variabilità residua degli esiti. Nel caso simulato, l'assegnazione casuale consente di interpretare le variabilità come conseguenze delle alternative. Con i dati osservazionali, gli stessi draw rappresenterebbero soltanto delle distribuzioni condizionate, finché non si giustifica l'identificazione causale.
-
-::: {.callout-note collapse=true title="Approfondimento applicativo: estrarre le simulazioni congiunte"}
-
-```{r}
-#| label: extract-joint-predictions-study
-
-pred_draws <- fit$draws(
-  variables = c("h_new", "g_new"),
-  format = "draws_matrix"
-)
-
-H_new <- pred_draws[
-  , paste0("h_new[", seq_len(K), "]"), drop = FALSE
-]
-G_new <- pred_draws[
-  , paste0("g_new[", seq_len(K), "]"), drop = FALSE
-]
-
-colnames(H_new) <- method_names
-colnames(G_new) <- method_names
-```
-:::
-
-::: {.callout-warning title="Previsione di popolazione e decisione individuale"}
-Il modello non contiene parametri individuali né informazioni specifiche su un nuovo studente. La raccomandazione riguarda quindi una persona estratta dalla popolazione simulata. Personalizzare la decisione richiederebbe covariate o dati individuali pertinenti, un modello validato per quella forma di generalizzazione e una funzione di utilità riferita alla persona concreta.
-:::
-
-## Dalla previsione all'utilità
-
-Applichiamo la funzione di utilità a ogni coppia predittiva: $U_k^{(s)} = G_k^{(s)}-\lambda H_k^{(s)}$. La media dei draw approssima l'utilità attesa del metodo $k$. La dispersione delle utilità descrive l'incertezza e la variabilità delle conseguenze. Non implica automaticamente avversione al rischio: con utilità lineare, il criterio usa la media; per rappresentare avversione al rischio occorre una funzione concava o un criterio differente.
-
-::: {.callout-note collapse=true title="Approfondimento applicativo: calcolare l'utilità attesa"}
-
-```{r}
-#| label: compute-utility-study
-
-lambda <- 0.65
-U <- G_new - lambda * H_new
-
-expected_utility <- colMeans(U)
-expected_utility
-
-recommended_method <- names(which.max(expected_utility))
-recommended_method
-```
-
-```{r}
-#| label: plot-utility-study
-#| fig-cap: "Distribuzioni predittive dell'utilità per i tre metodi di studio."
-
-utility_long <- as_tibble(U) |>
-  mutate(.draw = row_number()) |>
-  pivot_longer(
-    -.draw,
-    names_to = "method",
-    values_to = "utility"
-  )
-
-ggplot(utility_long, aes(utility, fill = method)) +
-  geom_density(alpha = 0.35) +
-  labs(x = "Utilità", y = "Densità", fill = "Metodo")
-```
-:::
-
-Per ciascun draw possiamo anche registrare quale alternativa possiede l'utilità maggiore. La proporzione di draw vinti produce la probabilità posteriore di essere l'alternativa migliore entro il confronto modellato. È importante distinguere tra due quantità differenti: l'utilità attesa considera sia la frequenza sia l'ampiezza dei vantaggi e degli svantaggi, mentre la probabilità di essere migliore conta in quale proporzione dei draw un'alternativa supera le altre, senza considerare quanto grande sia il margine. Le due classifiche possono divergere e, nel quadro standard della teoria dell'utilità attesa, il criterio normativo è la prima quantità.
-
-### Utilità attesa e probabilità di essere migliore
-
-Per ciascun draw possiamo anche registrare quale alternativa possiede l'utilità maggiore. La proporzione di draw vinti produce la probabilità posteriore di essere l'alternativa migliore entro il confronto modellato.
-
-::: {.callout-note collapse=true title="Approfondimento applicativo: probabilità di essere migliore"}
-
-```{r}
-#| label: probability-best-study
-
-best_draw <- max.col(U, ties.method = "random")
-
-prob_best <- prop.table(
-  table(
-    factor(
-      best_draw,
-      levels = seq_len(K),
-      labels = method_names
-    )
-  )
-)
-
-prob_best
-```
-:::
-
-::: {.callout-important title="Due quantità differenti"}
-**Utilità attesa:** considera sia la frequenza sia l'ampiezza dei vantaggi e degli svantaggi.
-
-**Probabilità di essere migliore:** conta in quale proporzione dei draw un'alternativa supera le altre, senza considerare quanto grande sia il margine.
-
-Le due classifiche possono divergere. Nel quadro standard della teoria dell'utilità attesa, il criterio normativo è la prima quantità. La seconda è una sintesi supplementare.
-:::
-
-## Sensibilità alle preferenze
-
-Una raccomandazione dipende dalla funzione di utilità. Per renderlo visibile, ripetiamo il calcolo per una griglia di valori di $\lambda$, senza ristimare il modello empirico. I punti di intersezione indicano regioni delle preferenze nelle quali cambia la raccomandazione. Una conclusione è relativamente robusta rispetto a $\lambda$ quando la stessa alternativa domina in un intervallo ampio, ma non è automaticamente robusta a una diversa popolazione, a conseguenze non incluse, a un modello causale alternativo, all'eterogeneità individuale o a un diverso orizzonte temporale.
-
-::: {.callout-note collapse=true title="Approfondimento applicativo: analisi di sensibilità"}
-
-```{r}
-#| label: sensitivity-lambda-study
-
-lambda_grid <- seq(0, 2, by = 0.05)
-
-sensitivity <- purrr::map_dfr(lambda_grid, function(lam) {
-  U_lam <- G_new - lam * H_new
-
-  tibble(
-    lambda = lam,
-    method = method_names,
-    expected_utility = colMeans(U_lam),
-    probability_best = as.numeric(
-      prop.table(
-        table(
-          factor(
-            max.col(U_lam, ties.method = "random"),
-            levels = seq_len(K)
-          )
-        )
-      )
-    )
-  )
-})
-```
-
-```{r}
-#| label: plot-lambda-sensitivity
-#| fig-cap: "Utilità attesa dei metodi al variare del costo attribuito al tempo."
-
-ggplot(sensitivity, aes(lambda, expected_utility, color = method)) +
-  geom_line(linewidth = 1) +
-  labs(
-    x = expression(lambda),
-    y = "Utilità attesa",
-    color = "Metodo"
-  )
-```
-:::
-
-::: {.callout-note title="Incertezza empirica e incertezza sulle preferenze"}
-L'incertezza empirica riguarda le conseguenze delle azioni. L'incertezza sulle preferenze riguarda il modo in cui tali conseguenze vengono valutate. Se $\lambda$ non è noto con precisione, si possono esplorare scenari, definire un intervallo plausibile o rappresentarlo mediante una distribuzione. Le due forme di incertezza possono essere propagate insieme, ma non devono essere confuse.
-:::
-
-## Condizionare non significa intervenire
-
-Il modello consente di calcolare il voto previsto per studenti che hanno studiato 15 ore tramite $p(G\mid H=15,d=k,\mathcal D)$. Questa quantità non coincide automaticamente con il voto che otterremmo imponendo 15 ore, ovvero $p(G\mid do(H=15),do(d=k),\mathcal D)$. Le persone che spontaneamente studiano 15 ore possono differire da quelle che ne studiano meno per motivazione, preparazione iniziale, difficoltà del corso o altre caratteristiche. Anche quando il metodo è randomizzato, le ore possono essere una variabile post-trattamento non randomizzata.
-
-::: {.callout-warning title="Un'inversione della regressione non è una prescrizione"}
-Risolvere l'equazione media per calcolare "quante ore servono per ottenere 80" non dimostra che assegnare quelle ore produrrà quel voto. L'inversione può essere utile come descrizione del modello, ma una raccomandazione richiede una relazione causale identificata tra ore e voto, il controllo dell'estrapolazione, la propagazione della variabilità individuale, la considerazione di feedback e aderenza e una funzione di utilità che valuti anche i costi dell'intervento.
-:::
-
-Questo punto riassume il legame tra le Parti **Causalità** e **Applicazione**: una procedura decisionale sofisticata non può compensare una previsione causalmente irrilevante.
-
-## Vincoli, soglie e conseguenze multiple
-
-La funzione lineare $g-\lambda h$ è soltanto un punto di partenza. Un decisore può avere un limite rigido, per esempio non più di 12 ore, nel qual caso le alternative incompatibili con il vincolo possono essere escluse o ricevere una perdita elevata. Un voto sotto la sufficienza può avere una conseguenza molto maggiore di una differenza analoga sopra la soglia, come in $U(g,h)=g-\lambda h-C\,\mathbb I(g<g_{\min})$. La fatica marginale può crescere con le ore, portando a costi non lineari come $U(g,h)=g-\lambda h^p$ con $p>1$. Inoltre, benessere, apprendimento a lungo termine, accessibilità, privacy, equità e dipendenza dallo strumento possono essere conseguenze rilevanti. Includerle richiede di dichiarare come vengono misurate, pesate e aggregate.
-
-::: {.callout-important title="Ciò che non entra nella funzione di utilità non scompare"}
-Una funzione di utilità semplifica deliberatamente il problema. Le conseguenze escluse continuano a esistere, ma diventano invisibili al calcolo. La trasparenza richiede quindi di documentare non soltanto i pesi scelti, ma anche gli esiti che non sono stati rappresentati.
-:::
-
-## Perché i modelli meccanicistici possono migliorare le decisioni
-
-Una decisione non richiede sempre una teoria completa del meccanismo: un esperimento ben progettato può identificare direttamente le conseguenze delle alternative nella popolazione studiata. La comprensione del processo diventa però particolarmente importante quando vogliamo prevedere un intervento mai osservato, trasferire la raccomandazione a una nuova popolazione, capire perché l'effetto cambia tra contesti, progettare un intervento più mirato, prevedere conseguenze a lungo termine o riconoscere condizioni nelle quali il modello dovrebbe fallire. Un modello meccanicistico credibile può quindi sostenere l'extrapolazione e la progettazione, ma non elimina la necessità di validazione causale, confronto con modelli rivali e valutazione normativa delle conseguenze.
-
-## Nessun livello sostituisce gli altri
-
-Arrivati in fondo alla Parte, i livelli distinti nel @sec-cinque-livelli sono stati percorsi tutti. Vale la pena ricordare che restano irriducibili l'uno all'altro. Un modello predittivo accurato può non essere causalmente interpretabile; un effetto causale può essere identificato senza conoscere completamente il meccanismo; un modello processuale plausibile può non includere tutte le conseguenze rilevanti; una regola normativa dipende da valori e vincoli che i dati non determinano.
-
-::: {.callout-note title="Una deviazione dalla raccomandazione non prova irrazionalità"}
-Una persona può scegliere diversamente perché possiede informazioni non incluse nel modello, attribuisce valori differenti agli esiti, considera conseguenze omesse, affronta vincoli specifici, non ritiene credibili le previsioni o usa un diverso criterio decisionale. Il modello normativo rende esplicita una regola, non descrive necessariamente il modo in cui le persone decidono.
-:::
-
-## Decisioni assistite e agency
-
-L'uso di modelli statistici o sistemi di intelligenza artificiale nel supporto decisionale non elimina la responsabilità del decisore. Una procedura trasparente rende verificabili gli stessi elementi che questo capitolo ha reso espliciti — il modello degli esiti e la sua giustificazione causale, la popolazione di riferimento, le alternative considerate, le conseguenze incluse ed escluse, la funzione di utilità e la sensibilità della raccomandazione — e aggiunge due domande che riguardano chi decide: per quali gruppi l'errore predittivo è maggiore, e chi può contestare o modificare la decisione. La formalizzazione può quindi rafforzare l'agency, quando rende visibili assunzioni e compromessi; può indebolirla quando una funzione di utilità scelta da altri viene presentata come criterio neutrale e inevitabile.
-
-## Comunicare una raccomandazione
-
-Una comunicazione adeguata dovrebbe specificare la popolazione e le alternative considerate, il modello usato per prevedere le conseguenze, la giustificazione causale, la funzione di utilità, l'incertezza e l'eterogeneità, e le condizioni nelle quali cambia la raccomandazione. Una formulazione possibile è: "Nel modello e nella popolazione considerati, il metodo AI tutor massimizza l'utilità attesa quando un'ora di studio viene valutata come $0.65$ punti di voto. La raccomandazione cambia per altri valori attribuiti al tempo e dipende dall'assegnazione casuale, dal modello congiunto di ore e voto e dalle conseguenze incluse nella funzione di utilità. Le distribuzioni predittive mostrano inoltre che la scelta non garantisce lo stesso esito a ogni studente." È preferibile evitare formulazioni come "l'AI è il metodo migliore", che occultano le condizioni della scelta.
-
-## Errori comuni
-
-**Confondere previsione e decisione**  
-Un metodo con voto atteso maggiore non è necessariamente preferibile quando richiede più tempo o produce altre conseguenze indesiderate.
-
-**Usare associazioni come conseguenze degli interventi**  
-Le differenze osservate tra persone che scelgono metodi differenti non identificano automaticamente ciò che accadrebbe assegnando loro un altro metodo.
-
-**Inserire le preferenze nel modello empirico**  
-Il parametro $\lambda$ non appartiene alla verosimiglianza di ore e voto. Tenerlo separato permette di distinguere evidenza e valori.
-
-**Usare la probabilità di essere migliore come unico criterio**  
-Questa probabilità non considera l'ampiezza dei vantaggi e delle perdite. Può essere informativa, ma non sostituisce automaticamente l'utilità attesa.
-
-**Trattare la funzione di utilità come oggettiva**  
-La funzione incorpora scelte sostantive e normative. Deve essere motivata, discussa e sottoposta ad analisi di sensibilità.
-
-**Nascondere l'eterogeneità dietro la media**  
-La scelta che massimizza l'utilità media della popolazione può non essere la migliore per una persona specifica.
-
-**Confondere un modello meccanicistico con una decisione**  
-Comprendere un processo non stabilisce automaticamente quale esito debba essere preferito né quale costo sia accettabile.
-
-## Riflessioni conclusive {.unnumbered .unlisted}
-
-Questo capitolo completa l'arco della Parte **Applicazione**. Il primo capitolo ha chiarito che una spiegazione richiede una teoria eseguibile; il secondo ha mostrato come tradurre una teoria verbale in un modello dinamico; Rescorla-Wagner ha illustrato il confronto tra processi rivali; il capitolo sull'eterogeneità ha chiesto se lo stesso meccanismo e gli stessi parametri valgano per tutti; l'analisi decisionale ha infine collegato previsioni, interventi e conseguenze. Il passaggio all'azione non dissolve i problemi epistemologici incontrati lungo il percorso. Una raccomandazione può fallire perché il modello descrive male il fenomeno, perché la struttura causale è errata, perché non generalizza alla persona o al contesto, oppure perché la funzione di utilità omette conseguenze importanti. L'ottimalità non è quindi una proprietà intrinseca di un metodo, ma una relazione tra alternative, credenze causali, valori, vincoli e popolazioni. Il contributo della formalizzazione consiste nel rendere questa relazione esplicita, verificabile e modificabile. I modelli meccanicistici mantengono un ruolo centrale: possono aiutare a prevedere quando un intervento funzionerà, perché potrebbe fallire e come progettarne uno nuovo. Ma anche la migliore spiegazione del processo non decide quali conseguenze debbano essere preferite. La conoscenza empirica informa l'azione; non sostituisce la deliberazione normativa.
-
-## Esercizi {.unnumbered .unlisted}
-
-### 1. Comprendere: quattro passaggi in una raccomandazione {.unnumbered .unlisted}
-
-Considera la seguente affermazione:
-
-> “Gli studenti che usano un tutor AI ottengono in media voti più alti. Assegnare un tutor AI aumenterà quindi il voto di un nuovo studente e questa è la scelta migliore, perché il voto conta più del tempo impiegato.”
-
-Individua separatamente:
-
-1. l'affermazione associativa;
-2. il passaggio causale;
-3. la previsione individuale;
-4. il giudizio di valore.
-
-Quali informazioni o assunzioni mancano in ciascun passaggio?
-
-::: {.callout-tip collapse=true title="Suggerimento"}
-Chiediti quali parti possono essere stimate dai dati osservati e quali richiedono disegno causale, generalizzazione o preferenze.
-:::
-
-::: {.callout-note collapse=true title="Soluzione commentata"}
-“Gli studenti che usano un tutor AI ottengono voti più alti” è un'associazione. Per concludere che assegnare il tutor aumenterà il voto occorre identificare l'effetto dell'assegnazione, per esempio mediante randomizzazione o assunzioni causali difendibili.
-
-Passare dall'effetto medio alla previsione per un nuovo studente richiede inoltre una popolazione target appropriata e un modello capace di rappresentare l'eterogeneità. Infine, dire che la scelta è “migliore” introduce un giudizio di valore: occorre specificare quanto contano voto, tempo, benessere, costi e altre conseguenze. Nessuno di questi passaggi è garantito dalla sola associazione iniziale.
-:::
-
-### 2. Prevedere: quando cambia la scelta? {.unnumbered .unlisted}
-
-Supponi che le conseguenze attese siano:
+Consideriamo tre metodi di studio valutati rispetto a due conseguenze: il voto atteso all'esame e le ore necessarie per prepararsi. Supponiamo che le stime provengano da uno studio randomizzato:
 
 | Metodo | Voto atteso | Ore attese |
 |---|---:|---:|
-| Classico | 78 | 10 |
-| AI tutor | 84 | 20 |
-| Gruppo | 81 | 13 |
+| Studio classico | 24 | 12 |
+| AI tutor | 27 | 14 |
+| Studio di gruppo | 28 | 20 |
 
-Usando $U=G-\lambda H$, determina qualitativamente o numericamente quale metodo massimizza l'utilità attesa per:
+Il gruppo produce il voto atteso più alto, ma richiede otto ore in più rispetto al metodo classico; l'AI tutor si colloca tra i due. La domanda «Quale metodo conviene?» non ha ancora una risposta, perché non abbiamo specificato quanto conta il tempo.
 
-1. $\lambda=0$;
-2. $\lambda=0.5$;
-3. $\lambda=1$.
+Usiamo una semplice funzione di utilità lineare:
 
-Perché questa tabella non sarebbe sufficiente se l'utilità includesse una forte penalità per voti inferiori a 60?
+$$
+U(g,h;\lambda)=g-\lambda h,
+$$
 
-::: {.callout-tip collapse=true title="Suggerimento"}
-Calcola $G-\lambda H$ per ogni riga. Poi considera che una penalità di soglia dipende dall'intera distribuzione, non soltanto dalla media.
-:::
+dove $\lambda$ rappresenta il costo attribuito a un'ora di studio, espresso in punti di voto. Se $\lambda=0.5$, per esempio, due ore aggiuntive devono essere compensate da almeno un punto di voto.
 
-::: {.callout-note collapse=true title="Soluzione commentata"}
-Per $\lambda=0$, conta soltanto il voto e viene preferito AI tutor. Per $\lambda=0.5$ le utilità sono 73, 74 e 74.5: viene preferito il gruppo. Per $\lambda=1$ le utilità sono 68, 64 e 68: classico e gruppo risultano equivalenti sulla base delle sole medie.
+Con $\lambda=0.5$:
 
-Con una penalità per voti inferiori a 60, conoscere soltanto il voto medio non basta. Due metodi con la stessa media possono avere probabilità molto differenti di scendere sotto la soglia. Occorre quindi usare le distribuzioni predittive complete.
-:::
+- **Classico**: $24-(0.5\times12)=18$
+- **AI tutor**: $27-(0.5\times14)=20$
+- **Gruppo**: $28-(0.5\times20)=18$
 
-### 3. Progettare: da associazione a decisione {.unnumbered .unlisted}
+In questo caso l'**AI tutor** ha l'utilità maggiore.
 
-In uno studio osservazionale, gli studenti scelgono liberamente il metodo di studio. La motivazione iniziale influenza il metodo scelto, le ore studiate e il voto. L'abilità iniziale influenza sia il metodo sia il voto.
+Ma questa conclusione non è una proprietà intrinseca dell'AI tutor. Dipende dall'interazione tra le conseguenze previste e il valore attribuito al tempo. Se $\lambda=1$, le utilità diventano 12, 13 e 8; se invece $\lambda=0.1$, il gruppo prevale con 26 punti, contro 25.6 dell'AI tutor e 22.8 del metodo classico.
 
-Proponi:
+Non esiste quindi un metodo «migliore» indipendentemente dalle preferenze. La raccomandazione richiede di specificare quanto peso attribuiamo alle diverse conseguenze.
 
-1. un DAG essenziale;
-2. una strategia per identificare l'effetto dell'assegnazione del metodo;
-3. una ragione per cui randomizzare il metodo non identifica automaticamente l'effetto causale di imporre 15 ore di studio;
-4. un'informazione processuale che potrebbe aiutare a trasferire la raccomandazione a un nuovo contesto.
+## Dove cambia la raccomandazione
 
-::: {.callout-tip collapse=true title="Suggerimento"}
-Distingui l'intervento sul metodo dall'intervento sulle ore, che sono una conseguenza post-trattamento.
-:::
+Poiché l'utilità è lineare in $\lambda$, ciascun metodo corrisponde a una retta nel piano $(\lambda,U)$. Le intersezioni indicano i valori delle preferenze in corrispondenza dei quali cambia la raccomandazione.
 
-::: {.callout-note collapse=true title="Soluzione commentata"}
-Un DAG minimo contiene frecce da motivazione a metodo, ore e voto; da abilità a metodo e voto; da metodo a ore e voto; da ore a voto. L'effetto del metodo può essere identificato mediante assegnazione casuale oppure, nei dati osservazionali, mediante un insieme di aggiustamento giustificato e assunzioni di assenza di confondimento non misurato.
-
-Randomizzare il metodo non randomizza le ore. Le ore rimangono una variabile post-trattamento e possono essere influenzate da motivazione, difficoltà percepita e aderenza. L'effetto di imporre 15 ore richiede quindi un'ulteriore strategia causale.
-
-Un modello del processo di apprendimento potrebbe aiutare a trasferire la raccomandazione descrivendo come qualità del feedback, pratica distribuita o difficoltà degli esercizi trasformino il tempo in apprendimento. Tale modello dovrebbe comunque essere validato nel nuovo contesto.
-:::
-
-### 4. Criticare e comunicare: “il metodo migliore” {.unnumbered .unlisted}
-
-Un rapporto conclude:
-
-> “Il modello converge, l'AI tutor ha il 70% di probabilità di essere il metodo migliore e quindi dovrebbe essere raccomandato a tutti gli studenti. La decisione è oggettiva perché deriva dai dati.”
-
-Individua almeno cinque problemi e riscrivi la conclusione in forma più difendibile.
-
-::: {.callout-tip collapse=true title="Suggerimento"}
-Considera calcolo, criterio decisionale, causalità, eterogeneità, funzione di utilità e popolazione target.
-:::
-
-::: {.callout-note collapse=true title="Soluzione commentata"}
-La convergenza riguarda il calcolo, non la validità del modello. La probabilità di essere migliore non coincide con l'utilità attesa. La raccomandazione richiede previsioni causalmente pertinenti, non soltanto differenze osservate. Una media di popolazione non garantisce che l'alternativa sia migliore per ogni individuo. La funzione di utilità incorpora valori e conseguenze selezionate, quindi la decisione non deriva dai dati soltanto. Infine, la conclusione vale soltanto per la popolazione, le alternative e l'orizzonte considerati.
-
-Una formulazione più prudente potrebbe essere:
-
-> Nel modello, nella popolazione e tra le alternative considerate, l'AI tutor riceve maggiore supporto secondo la funzione di utilità specificata. La raccomandazione dipende dalla validità causale delle previsioni, dal peso attribuito a voto e tempo e dalle conseguenze incluse. L'eterogeneità predittiva indica che il metodo non garantisce il risultato migliore per ogni studente; sono quindi necessarie analisi di sensibilità e, per decisioni individuali, informazioni pertinenti alla persona concreta.
-:::
-
-::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
 ```{r}
-sessionInfo()
+#| label: fig-decision-sensitivity
+#| fig-cap: "Utilità attesa dei tre metodi al variare di $\\lambda$, il costo di un'ora di studio espresso in punti di voto. Le linee verticali indicano i due valori in corrispondenza dei quali cambia il metodo raccomandato."
+#| fig-alt: "Tre rette decrescenti rappresentano l'utilità attesa dei tre metodi di studio al crescere del costo attribuito a un'ora. Le rette si incrociano in due punti, che dividono l'asse in tre regioni con raccomandazioni differenti."
+#| fig-width: 8
+#| fig-height: 5
+#| echo: false
+
+metodi <- data.frame(
+  metodo = c("Studio classico", "AI tutor", "Studio di gruppo"),
+  voto = c(24, 27, 28),
+  ore = c(12, 14, 20)
+)
+
+lambda_grid <- seq(0, 2.2, by = 0.01)
+
+utilita <- do.call(rbind, lapply(
+  seq_len(nrow(metodi)),
+  function(i) {
+    data.frame(
+      metodo = metodi$metodo[i],
+      lambda = lambda_grid,
+      utilita = metodi$voto[i] - lambda_grid * metodi$ore[i]
+    )
+  }
+))
+
+ggplot(utilita, aes(x = lambda, y = utilita, linetype = metodo)) +
+  geom_vline(xintercept = c(1 / 6, 1.5), linetype = "dotted") +
+  geom_line(linewidth = 0.9) +
+  labs(
+    x = expression("Costo di un'ora di studio, " * lambda),
+    y = "Utilità attesa",
+    linetype = NULL
+  )
 ```
+
+Le due soglie si ricavano direttamente:
+
+- **Gruppo vs AI tutor**: $28-20\lambda=27-14\lambda$, quindi $\lambda=1/6\approx0.17$.
+- **AI tutor vs Classico**: $27-14\lambda=24-12\lambda$, quindi $\lambda=1.5$.
+
+Ne segue che:
+
+- per $\lambda<0.17$, prevale lo **studio di gruppo**;
+- per $0.17<\lambda<1.5$, prevale l'**AI tutor**;
+- per $\lambda>1.5$, prevale lo **studio classico**.
+
+::: {.callout-warning title="La stessa evidenza, tre raccomandazioni"}
+Nei tre regimi i dati non cambiano. Cambia soltanto il peso attribuito al tempo.
+
+L'analisi di sensibilità rende quindi esplicito da quali preferenze dipende una raccomandazione. Non mostra soltanto se una conclusione è «robusta»: mostra **per chi e sotto quali valutazioni** quella conclusione vale.
+:::
+
+::: {.callout-note title="Perché qui basta la media"}
+L'esempio usa voti e ore attesi perché la funzione di utilità è lineare. In generale, però, una decisione può dipendere dall'intera distribuzione predittiva: se l'utilità è non lineare, anche variabilità, asimmetria e code possono influire sulla scelta.
+:::
+
+## La previsione deve riguardare l'intervento
+
+La differenza tra $p(y\mid do(d))$ e $p(y\mid d)$, già trattata nella Parte *Causalità*, qui diventa decisiva.
+
+Osservare che chi usa l'AI tutor ottiene voti più alti non significa che assegnare l'AI tutor a un nuovo studente produrrà lo stesso vantaggio. Chi lo sceglie spontaneamente potrebbe essere più motivato o più preparato. Nel nostro esempio la randomizzazione consente di interpretare causalmente il confronto; con dati osservazionali servirebbero assunzioni ulteriori.
+
+Il principio da ricordare è semplice:
+
+> Nessuna raffinatezza nella funzione di utilità può compensare una previsione che non riguarda l'intervento. Applicare una regola decisionale a una distribuzione causalmente irrilevante produce raccomandazioni precise, ma prive del fondamento necessario.
+
+Lo stesso errore compare quando da una relazione osservata tra ore di studio e voto si deduce quante ore una persona *dovrebbe* studiare per raggiungere un certo risultato. Il voto di chi ha scelto di studiare quindici ore non identifica necessariamente ciò che accadrebbe se imponessimo quindici ore di studio a un'altra persona. Per decidere serve la seconda quantità, non la prima.
+
+## Perché un modello del processo aiuta a decidere
+
+Se un esperimento è ben progettato e le alternative di interesse sono esattamente quelle sperimentate, può essere sufficiente confrontarne direttamente gli esiti. Questo delimita anche il ruolo dei modelli processuali discussi nei capitoli precedenti.
+
+Un esperimento informa sulle conseguenze delle alternative **nella popolazione studiata e nelle condizioni osservate**. La comprensione del processo diventa particolarmente importante quando vogliamo uscire da quel perimetro: prevedere un intervento non ancora sperimentato, trasferire una raccomandazione a una popolazione diversa, capire perché un effetto cambia tra contesti o progettare una variante dell'intervento.
+
+È qui che l'arco della Parte si chiude. Un modello del processo non decide al posto nostro e non stabilisce quali conseguenze siano desiderabili. Può però rendere più fondate le previsioni sulle conseguenze delle azioni, soprattutto quando dobbiamo andare oltre il caso già osservato.
+
+::: {.callout-note title="Il quadro è volutamente minimale"}
+Qui l'utilità attesa serve soltanto a rendere esplicita la distinzione tra **prevedere le conseguenze** e **valutarle**. Come si formano o si elicitano le preferenze, come si rappresenta l'avversione al rischio e come si affrontano decisioni sequenziali sono problemi ulteriori, che non sono necessari per il percorso sviluppato in questa Parte.
+:::
+
+## Riflessioni conclusive {.unnumbered .unlisted}
+
+Questo capitolo chiude la Parte *Applicazione*. Il percorso è partito dalla domanda su che cosa significhi spiegare un fenomeno attraverso un processo, ha mostrato come tradurre una teoria verbale in un modello eseguibile, ha confrontato Rescorla–Wagner con un'alternativa, ha rappresentato l'eterogeneità tra individui e arriva infine all'azione.
+
+Il passaggio all'azione non elimina i problemi incontrati lungo la strada: li riunisce. Una raccomandazione può essere inadeguata perché il modello descrive male il fenomeno, perché la previsione non ha interpretazione causale, perché non generalizza alla popolazione di interesse o perché trascura conseguenze che per il decisore contano.
+
+L'ottimalità non è quindi una proprietà di un metodo. È una relazione tra **alternative disponibili, conseguenze previste, popolazione e valori**. La formalizzazione rende questa relazione esplicita e quindi discutibile, controllabile e modificabile.
+
+La conoscenza empirica può informarci su ciò che probabilmente accadrà se agiamo. Non può, da sola, stabilire quali conseguenze valga la pena perseguire.
+
+## Esercizi {.unnumbered .unlisted}
+
+### 1. Comprendere: dove sta il salto? {.unnumbered .unlisted}
+
+Considera questa affermazione:
+
+> «Gli studenti che usano un tutor AI ottengono in media voti più alti. Assegnare un tutor AI aumenterà quindi il voto di un nuovo studente, e questa è la scelta migliore.»
+
+Individua i due passaggi distinti che l'affermazione compie senza giustificarli, e riscrivila in una forma difendibile.
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+Il primo salto riguarda la natura della previsione; il secondo ciò che «migliore» presuppone.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+Il primo salto è causale: da un'associazione osservata si passa all'effetto di un'assegnazione senza spiegare perché il confronto tra chi usa e chi non usa l'AI tutor identifichi quell'effetto.
+
+Il secondo è normativo: «migliore» presuppone una valutazione delle conseguenze. Se il tutor producesse voti più alti ma richiedesse molto più tempo, la raccomandazione potrebbe cambiare.
+
+Una formulazione difendibile è: «Nello studio randomizzato considerato, il tutor AI ha prodotto voti mediamente più alti di circa tre punti, al costo di due ore aggiuntive. Tra le tre alternative considerate, è quella con utilità attesa maggiore per valori di $\lambda$ compresi tra circa 0.17 e 1.5.»
+:::
+
+### 2. Prevedere: quando si rovescia la scelta? {.unnumbered .unlisted}
+
+Usando la tabella dell'esempio, supponi che una revisione delle stime porti le ore attese dell'AI tutor da 14 a 18, lasciando invariato tutto il resto.
+
+Senza rifare il grafico, stabilisci se esiste ancora un intervallo di $\lambda$ in cui l'AI tutor è raccomandato.
+
+::: {.callout-tip collapse=true title="Suggerimento"}
+Calcola separatamente il pareggio con lo studio di gruppo e quello con il metodo classico, poi confronta le due soglie.
+:::
+
+::: {.callout-note collapse=true title="Soluzione commentata"}
+Il pareggio con lo studio di gruppo si ha quando
+
+$$
+28-20\lambda=27-18\lambda,
+$$
+
+cioè per $\lambda=0.5$. Sotto questo valore conviene il gruppo; sopra, l'AI tutor supera il gruppo.
+
+Il pareggio con il metodo classico si ha quando
+
+$$
+27-18\lambda=24-12\lambda,
+$$
+
+ancora per $\lambda=0.5$. Sotto questo valore l'AI tutor supera il classico; sopra, prevale il classico.
+
+Le due soglie coincidono: non rimane quindi alcun intervallo in cui l'AI tutor sia strettamente preferibile. Per $\lambda<0.5$ prevale il gruppo; per $\lambda>0.5$ prevale il metodo classico.
+
+L'esercizio mostra che una modifica apparentemente modesta di una previsione può cambiare qualitativamente la raccomandazione.
 :::
 
 ## Bibliografia {.unnumbered .unlisted}
