@@ -42,7 +42,7 @@ $$
 
 ::: {.callout-tip collapse="true" title="Prerequisiti"}
 
-- Sono dati per noti il teorema di Bayes, la verosimiglianza e la distinzione tra prior e posterior, presentati nel capitolo 7 del Companion.
+- Sono dati per noti il teorema di Bayes, la verosimiglianza e la distinzione tra prior e posterior, presentati nel capitolo del manuale dedicato al teorema di Bayes e nel modulo [Probabilità per la psicologia](https://ccaudek.github.io/utet-prob/).
 - È utile conoscere la distribuzione binomiale e le regole elementari della probabilità.
 - Per richiami su intervalli e sommatorie si possono consultare l'@sec-apx-numbers e l'@sec-apx-sums; la lettura del codice R è facoltativa.
 
@@ -68,7 +68,7 @@ proporzione_osservata <- successi / prove
 proporzione_osservata
 ```
 
-La proporzione osservata è circa $0.73$, ma non vogliamo limitarci a riportare questo valore, bensì interrogarci sull'incertezza che è associata a $\theta$: da un lato, cosa si poteva legittimamente supporre su $\theta$ prima di osservare i dati? Dall'altro lato, quali valori di $\theta$ sono ragionevolmente plausibili dopo aver preso in considerazione l'evidenza empirica raccolta?
+La proporzione osservata è circa $0.73$, ma riportare questo numero non basta: vogliamo sapere quanta incertezza resta su $\theta$. Che cosa era legittimo supporre prima di raccogliere i dati? E quali valori restano plausibili dopo averli osservati?
 
 L'approssimazione su griglia risponde a queste domande costruendo una piccola tabella mentale. Ogni riga rappresenta un possibile valore di $\theta$ e nelle colonne si registrano il suo peso a priori, la sua compatibilità con i dati, il prodotto dei due valori e, infine, la probabilità a posteriori.
 
@@ -83,7 +83,7 @@ theta_griglia <- seq(0, 1, by = 0.1)
 theta_griglia
 ```
 
-Questa griglia non implica che $\theta$ possa assumere esclusivamente questi valori; si tratta piuttosto di un espediente computazionale che sostituisce l'intervallo continuo con un insieme finito di candidati che possiamo esaminare uno per uno. A ciascun di questi candidati occorre attribuire un peso iniziale. A tal fine, valutiamo la densità di una distribuzione Beta(2, 2) nei punti della griglia e normalizziamo i valori ottenuti. Tale prior, simmetrico intorno a $0.5$, assegna una probabilità modesta ai valori estremi, privilegiando invece le regioni centrali del parametro:
+La griglia non significa che $\theta$ possa assumere solo questi valori: è un espediente di calcolo che sostituisce l'intervallo continuo con un insieme finito di candidati, esaminabili uno per uno. A ciascuno di questi candidati occorre attribuire un peso iniziale. A tal fine, valutiamo la densità di una distribuzione Beta(2, 2) nei punti della griglia e normalizziamo i valori ottenuti. Tale prior, simmetrico intorno a $0.5$, assegna una probabilità modesta ai valori estremi, privilegiando invece le regioni centrali del parametro:
 
 ```{r}
 pesi_prior <- dbeta(theta_griglia, shape1 = 2, shape2 = 2)
@@ -92,7 +92,7 @@ prior <- pesi_prior / sum(pesi_prior)
 sum(prior)
 ```
 
-Dopo la normalizzazione, `prior` costituisce una distribuzione di probabilità discreta a tutti gli effetti: a ogni punto della griglia è associata una probabilità, e la somma totale dei pesi risulta pari a uno.
+Dopo la normalizzazione `prior` è una distribuzione di probabilità discreta a tutti gli effetti: a ogni punto della griglia corrisponde una probabilità e i pesi sommano a uno.
 
 ```{r}
 #| label: fig-grid-prior-beta22
@@ -136,7 +136,7 @@ verosimiglianza <- dbinom(
 verosimiglianza
 ```
 
-La domanda che ci poniamo, invariata per ogni punto della griglia, è la seguente: se quel particolare valore $\theta$ fosse il vero parametro generatore del modello, in che misura i dati osservati sarebbero compatibili con tale ipotesi? La risposta è fornita dalla verosimiglianza, che raggiunge il suo valore massimo in prossimità della proporzione campionaria $22/30 \approx 0.73$; sulla griglia grossolana adottata, il picco si colloca in corrispondenza di $\theta=0.7$:
+Per ogni punto della griglia la domanda è la stessa: se $\theta$ valesse esattamente questo, quanto sarebbero compatibili i dati osservati? La risposta è fornita dalla verosimiglianza, che raggiunge il suo valore massimo in prossimità della proporzione campionaria $22/30 \approx 0.73$; sulla griglia grossolana adottata, il picco si colloca in corrispondenza di $\theta=0.7$:
 
 ```{r}
 theta_massima_verosimiglianza <- theta_griglia[which.max(verosimiglianza)]
@@ -165,11 +165,11 @@ ggplot(dati_likelihood, aes(theta, verosimiglianza)) +
   )
 ```
 
-È fondamentale sottolineare che la verosimiglianza, di per sé, non costituisce ancora una distribuzione di probabilità sul parametro $\theta$. Essa, infatti, non assegna una probabilità ai diversi valori ipotetici, ma quantifica piuttosto il grado di plausibilità che i dati osservati conferiscono a ciascuno di essi. Per passare dalla verosimiglianza alla probabilità a posteriori, è necessario integrare questa informazione con il prior.
+La verosimiglianza, da sola, non è ancora una distribuzione di probabilità su $\theta$: non assegna probabilità ai valori candidati, ma misura quanto ciascuno di essi renda compatibili i dati osservati. Per arrivare alla probabilità a posteriori occorre combinarla con il prior.
 
 ### Combinare le due fonti di informazione
 
-Il cuore dell'operazione risiede nell'**abbinamento puntuale** tra prior e verosimiglianza: per ogni valore $\theta_i$ sulla griglia, il peso a priori viene moltiplicato per la verosimiglianza dei dati calcolata esattamente su quello stesso valore:
+L'operazione è un **abbinamento punto per punto**: per ogni valore $\theta_i$ della griglia, il peso a priori viene moltiplicato per la verosimiglianza calcolata su quello stesso valore.
 
 $$
 \text{peso non normalizzato}(\theta_i)
@@ -181,7 +181,7 @@ $$
 peso_non_normalizzato <- prior * verosimiglianza
 ```
 
-Prior e verosimiglianza vengono quindi accoppiati riga per riga — il valore in $\theta = 0.5$ con quello in $\theta = 0.5$, il valore in $\theta = 0.6$ con quello in $\theta = 0.6$, e così via. L'aggiornamento procede indipendentemente su ciascuna riga, senza alcuna interferenza incrociata tra punti diversi dello spazio parametrico.
+Prior e verosimiglianza vengono accoppiati riga per riga: il valore in $\theta = 0.5$ con quello in $\theta = 0.5$, quello in $\theta = 0.6$ con quello in $\theta = 0.6$, e così via. Ogni riga si aggiorna per conto proprio: i punti della griglia non si influenzano a vicenda.
 
 ```{r}
 tabella_aggiornamento <- tibble(
@@ -204,7 +204,7 @@ tabella_aggiornamento |>
   )
 ```
 
-Consideriamo, a titolo esemplificativo, due righe della tabella. In corrispondenza di $\theta = 0.5$, il prior assegna un peso relativamente alto, ma i dati mostrano una scarsa compatibilità con tale valore. Viceversa, in $\theta = 0.7$, il prior conserva ancora un peso apprezzabile e la verosimiglianza risulta elevata; il prodotto, di conseguenza, si attesta su un valore molto superiore.
+Prendiamo due righe. In $\theta = 0.5$ il prior assegna un peso alto, ma i dati sono poco compatibili con quel valore. In $\theta = 0.7$ il prior conserva un peso apprezzabile e la verosimiglianza è elevata: il prodotto risulta molto più grande.
 
 ```{r}
 riga_05 <- tabella_aggiornamento |>
@@ -251,7 +251,7 @@ costante_normalizzazione <- sum(peso_non_normalizzato)
 costante_normalizzazione
 ```
 
-In questo modello discreto, tale somma rappresenta la probabilità marginale dei dati, ovvero la probabilità complessiva di osservare quanto effettivamente registrato, calcolata mediando su tutte le possibilità contemplate prima dell'osservazione:
+In questo modello discreto la somma è la probabilità marginale dei dati: la probabilità di osservare quello che abbiamo osservato, mediata su tutte le possibilità che il prior contemplava.
 
 $$
 p(y)=\sum_i p(y\mid\theta_i)p(\theta_i).
@@ -274,7 +274,7 @@ posterior <- peso_non_normalizzato / costante_normalizzazione
 sum(posterior)
 ```
 
-La normalizzazione non altera né l'ordine né i rapporti reciproci tra i valori: si limita a cambiare la scala, riconducendo i pesi relativi a una somma unitaria e conferendo loro il pieno statuto di probabilità.
+La normalizzazione non altera né l'ordine né i rapporti fra i valori: cambia solo la scala, riportando i pesi a una somma unitaria. È questo che li rende probabilità.
 
 ```{r}
 tabella_aggiornamento <- tabella_aggiornamento |>
@@ -368,9 +368,9 @@ sd_posterior
 moda_posterior
 ```
 
-La media a posteriori è `r round(media_posterior, 3)`, la deviazione standard è `r round(sd_posterior, 3)` e la moda è `r moda_posterior`. Si tratta di proprietà della stessa distribuzione discreta costruita sulla griglia prescelta e non di tre stime indipendenti e alternative dello stesso parametro.
+La media a posteriori è `r round(media_posterior, 3)`, la deviazione standard è `r round(sd_posterior, 3)` e la moda è `r moda_posterior`. Sono tre proprietà della stessa distribuzione discreta, non tre stime alternative dello stesso parametro.
 
-Una volta resa disponibile l'intera distribuzione, diventa possibile formulare interrogativi probabilistici più diretti e sostanziali. Per esempio, qual è la probabilità a posteriori che più della metà della popolazione giudichi moralmente accettabile deviare il treno?
+Avendo l'intera distribuzione, possiamo porre domande più dirette. Per esempio: qual è la probabilità a posteriori che più della metà della popolazione giudichi accettabile deviare il treno?
 
 ```{r}
 prob_theta_maggiore_05 <- sum(posterior[theta_griglia > 0.5])
@@ -385,7 +385,7 @@ P(\theta>0.5\mid y)
 `r round(prob_theta_maggiore_05, 4)`.
 $$
 
-Questa affermazione, va sottolineato, è condizionata da molteplici scelte: i dati osservati, il modello binomiale, il prior scelto e la griglia di discretizzazione introdotta. La distribuzione a posteriori quantifica l'incertezza residua **all'interno** del quadro di assunzioni così definito, ma non fornisce alcuna garanzia sulla validità di tali assunzioni. Aggiorna le credenze, non le fonda.
+È un'affermazione condizionata a quattro scelte: i dati osservati, il modello binomiale, il prior e la risoluzione della griglia. La posterior quantifica l'incertezza residua **dentro** quel quadro di assunzioni, e non dice nulla sulla loro validità. Aggiorna le credenze, non le fonda.
 
 ::: {.callout-note collapse="true" title="Approfondimento: la soluzione Beta-Binomiale e la risoluzione della griglia"}
 L'approssimazione su griglia non applica una logica diversa dal teorema di Bayes. Rende esplicito un calcolo che, in alcuni casi, può essere compresso in una formula analitica.
@@ -510,7 +510,7 @@ La media ottenuta con la griglia fine è `r round(media_fine, 4)`, praticamente 
 
 ## Ripetere lo stesso ragionamento in un nuovo contesto
 
-Per consolidare la comprensione del meccanismo appena descritto, applichiamolo ora a un contesto empirico diverso. Si supponga che un partecipante, in un esperimento di riconoscimento delle emozioni facciali, osservi dieci volti e identifichi correttamente l'espressione di rabbia in sette occasioni. Indichiamo ancora con $\theta$ la probabilità di una risposta corretta. A puro scopo illustrativo, adottiamo una distribuzione a priori Beta(4, 6), la cui media è 0.4. Precisiamo che tale scelta non deriva da evidenze consolidate in letteratura, ma costituisce un'aspettativa iniziale fissata esplicitamente ai soli fini del presente esempio.
+Applichiamo ora lo stesso meccanismo a un contesto diverso. In un esperimento di riconoscimento delle emozioni facciali un partecipante osserva dieci volti e identifica correttamente l'espressione di rabbia sette volte. Indichiamo ancora con $\theta$ la probabilità di una risposta corretta e adottiamo un prior Beta(4, 6), di media 0.4. Non è una scelta fondata sulla letteratura: è un'aspettativa iniziale fissata per l'esempio.
 
 ```{r}
 corrette <- 7
@@ -525,19 +525,16 @@ likelihood_emozioni <- dbinom(
   prove_emozioni,
   theta_emozioni
 )
-
-peso_emozioni <- prior_emozioni * likelihood_emozioni
-posterior_emozioni <- peso_emozioni / sum(peso_emozioni)
 ```
 
-L'intero aggiornamento si riduce a due semplici operazioni aritmetiche:
+L'aggiornamento si riduce, di nuovo, a due sole operazioni:
 
 ```{r}
 peso_emozioni <- prior_emozioni * likelihood_emozioni
 posterior_emozioni <- peso_emozioni / sum(peso_emozioni)
 ```
 
-La prima riga moltiplica puntualmente il prior per la verosimiglianza, ottenendo dei pesi non normalizzati. La seconda normalizza questi pesi dividendo per la loro somma, in modo che la posteriori sia effettivamente una distribuzione di probabilità.
+La prima riga moltiplica puntualmente il prior per la verosimiglianza, ottenendo dei pesi non normalizzati. La seconda normalizza questi pesi dividendo per la loro somma, in modo che la posterior sia effettivamente una distribuzione di probabilità.
 
 Calcoliamo ora alcune misure di sintesi della distribuzione ottenuta:
 
@@ -610,7 +607,7 @@ ggplot(dati_emozioni, aes(theta, valore, color = componente)) +
   legenda_in_alto
 ```
 
-I dati e il contesto possono cambiare, ma la regola non muta. È proprio questa **invariabilità** il cuore del metodo bayesiano: una volta interiorizzata la duplice operazione di moltiplicazione (prior $\times$ verosimiglianza) e normalizzazione (divisione per la somma), si possiede la chiave di volta dell'intero approccio, applicabile a qualsiasi domanda empirica.
+Cambiano i dati e cambia il contesto, ma la regola resta la stessa. È questa **invarianza** il cuore del metodo bayesiano: moltiplicare prior e verosimiglianza, dividere per la somma. Le distribuzioni e i modelli che incontreremo saranno più complicati; questi due passaggi no.
 
 ## Il messaggio da portare con sé {.unnumbered .unlisted}
 
