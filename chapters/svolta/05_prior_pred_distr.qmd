@@ -2,11 +2,11 @@
 
 ::: {.callout-note appearance="minimal"}
 
-Questo materiale approfondisce il capitolo 18 del manuale didattico e introduce uno degli strumenti più caratteristici del workflow bayesiano: la distribuzione predittiva a priori.
+Questo materiale approfondisce il capitolo 14 del manuale e introduce uno degli strumenti più caratteristici del workflow bayesiano: la distribuzione predittiva a priori.
 
 Un prior è definito sulla scala dei parametri, ma spesso è difficile valutarne il significato sostantivo osservandolo soltanto su quella scala. La domanda più concreta è un'altra: **quali dati renderebbe plausibili questo prior, una volta inserito nel modello?**
 
-La distribuzione predittiva a priori risponde precisamente a questa domanda. Combina il prior con il modello generativo e descrive i dati che potremmo osservare prima di avere visto quelli reali. Le verifiche predittive a priori (*prior predictive checks*) permettono così di controllare se l'intera specificazione iniziale produce valori, ordini di grandezza e pattern compatibili con la conoscenza del fenomeno [@gelman2020bayesianworkflow; @gabry2019visualization].
+La distribuzione predittiva a priori risponde precisamente a questa domanda. Combina il prior con il modello generativo e descrive i dati che potremmo osservare prima di avere visto quelli reali. I controlli predittivi a priori (*prior predictive checks*) permettono così di verificare se l'intera specificazione iniziale produce valori, ordini di grandezza e regolarità compatibili con la conoscenza del fenomeno [@gelman2020bayesianworkflow; @gabry2019visualization].
 :::
 
 ::: {.callout-important appearance="minimal" .chapter-status}
@@ -21,13 +21,13 @@ La distribuzione predittiva a priori risponde precisamente a questa domanda. Com
 
 ::: {.callout-tip collapse="true" title="Prerequisiti"}
 
-- Sono dati per noti il ruolo del prior e l'equilibrio tra prior e verosimiglianza, discussi nei capitoli 9 e 11.
-- È utile avere familiarità con l'idea di modello generativo e con la media pesata di possibili risultati.
+- Sono dati per noti il ruolo del prior, discusso nel @sec-conjugate-families, e l'equilibrio tra prior e verosimiglianza del @sec-bayes-inference-prior.
+- È utile avere familiarità con l'idea di modello generativo e con la media ponderata di possibili risultati.
 - L'@sec-apx-sums e l'@sec-apx-calculus richiamano somme e integrali; l'@sec-apx-prior-predictive-check è utile soltanto per l'implementazione in Stan.
 
 :::
 
-::: {.callout-caution collapse=true title="Preparazione del notebook"}
+::: {.callout-caution collapse="true" title="Preparazione del notebook"}
 
 ```{r}
 #| output: false
@@ -195,7 +195,7 @@ predictive_plot_data <- bind_rows(
     transmute(
       y_tilde,
       probability = prior_predictive_probability,
-      distribution = "Media pesata: predittiva"
+      distribution = "Media ponderata: predittiva"
     )
 )
 
@@ -207,7 +207,7 @@ predictive_plot_data |>
     x = "Numero futuro di successi",
     y = "Probabilità",
     title = "La predittiva è una media di distribuzioni",
-    subtitle = "I pesi della media sono le probabilità a priori dei valori di theta"
+    subtitle = "I pesi sono le probabilità a priori dei valori di theta"
   )
 ```
 
@@ -363,7 +363,7 @@ Un punteggio perfetto non è tuttavia trascurabile: $P(\tilde y=10)$ è circa `r
 Dire che il prior $\operatorname{Beta}(10,3)$ ha media $0.77$ non basta per giudicarlo ragionevole. Bisogna chiedersi anche se le sue conseguenze sulla scala osservabile siano plausibili. Se un punteggio perfetto dovrebbe essere molto raro, questa specificazione potrebbe essere troppo permissiva nella regione alta, nonostante una media apparentemente sensata.
 :::
 
-Per comprendere meglio come il prior si trasmetta ai dati, è utile distinguere due sue proprietà: la **posizione**, che stabilisce quali valori del parametro sono favoriti, e la **concentrazione**, che indica quanto strettamente il prior si raccoglie intorno a quei valori.
+Il prior si trasmette ai dati attraverso due proprietà distinte: la **posizione**, cioè quali valori del parametro favorisce, e la **concentrazione**, cioè quanto strettamente si raccoglie intorno a quei valori.
 
 **Stessa media, diversa concentrazione.** Confrontiamo $\operatorname{Beta}(3,1)$ e $\operatorname{Beta}(30,10)$. Entrambi hanno media $0.75$, ma il primo ha concentrazione 4 e il secondo concentrazione 40. Il centro è lo stesso; cambia l'incertezza ammessa su $\theta$.
 
@@ -441,7 +441,7 @@ In questo caso è la regione dei punteggi plausibili a spostarsi: la predittiva 
 
 ## Usare la predittiva per controllare il modello
 
-Finora abbiamo descritto la distribuzione predittiva. Per utilizzarla come strumento diagnostico dobbiamo essere in grado di generarla e di confrontarne le conseguenze con la conoscenza del fenomeno.
+Finora abbiamo descritto la distribuzione predittiva. Per usarla come strumento diagnostico dobbiamo saperla generare e confrontarne le conseguenze con quello che sappiamo del fenomeno.
 
 Quando il modello lo consente, la predittiva può essere calcolata analiticamente. Più in generale, può essere approssimata mediante simulazione:
 
@@ -484,29 +484,19 @@ exact_and_simulated <- prior_predictive_beta_binomial |>
 exact_and_simulated |>
   ggplot(aes(x = probability_exact, y = probability_simulated)) +
   geom_abline(intercept = 0, slope = 1, linetype = "dashed", linewidth = 0.6) +
-  geom_point(size = 3, color = "#1b4f72", alpha = 0.9) +
+  geom_point(size = 3, color = PRIMARY, alpha = 0.9) +
   coord_equal() +
   labs(
     x = "Probabilità esatta",
     y = "Frequenza simulata",
-    title = "Confronto esatto vs simulato",
+    title = "Calcolo esatto e simulazione a confronto",
     subtitle = "Punteggi da 0 a 10"
-  ) +
-  theme_minimal(base_size = 11) +
-  theme(
-    plot.title = element_text(size = 13, face = "bold", hjust = 0.5),
-    plot.subtitle = element_text(size = 10, hjust = 0.5, margin = margin(b = 8)),
-    axis.title = element_text(size = 11),
-    axis.text = element_text(size = 10),
-    panel.grid.minor = element_blank(),
-    panel.grid.major = element_line(linewidth = 0.3),
-    plot.margin = margin(5, 5, 5, 5)
   )
 ```
 
-La vicinanza dei punti alla diagonale nella @fig-prior-predictive-exact-simulation mostra che il calcolo esatto e la simulazione descrivono la stessa distribuzione. La simulazione non introduce un nuovo principio: è un modo operativo di eseguire la media quando l'integrale non è disponibile in forma chiusa.
+La vicinanza dei punti alla diagonale nella @fig-prior-predictive-exact-simulation mostra che il calcolo esatto e la simulazione descrivono la stessa distribuzione. La simulazione non introduce un principio nuovo: è il modo di eseguire la media quando l'integrale non ha forma chiusa.
 
-Una verifica predittiva a priori non valuta il prior isolatamente. Valuta l'intera specificazione generativa:
+Un controllo predittivo a priori non valuta il prior isolatamente, ma l'intera specificazione generativa:
 
 $$
 \text{prior sui parametri}
@@ -540,7 +530,7 @@ Il workflow può essere riassunto in cinque passaggi:
 4. **valutare** le conseguenze sulla scala osservabile;
 5. **rivedere** la specificazione quando le conseguenze sono implausibili.
 
-La revisione non deve servire a costruire un prior che anticipi esattamente i dati reali. Lo scopo è eliminare specificazioni incoerenti, eccessivamente permissive o incompatibili con la conoscenza sostantiva.
+La revisione non serve a costruire un prior che anticipi i dati reali: serve a eliminare specificazioni incoerenti, troppo permissive o incompatibili con quanto già si sa.
 
 ::: {.callout-caution title="Uso dei dati e trasparenza"}
 
@@ -592,7 +582,7 @@ Per ogni possibile valore del parametro consideriamo la distribuzione dei dati c
 
 La predittiva incorpora sia l'incertezza sui parametri sia la variabilità dei dati dato il parametro. Per questo, in generale, non coincide con la distribuzione ottenuta fissando il parametro alla media del prior.
 
-Il controllo predittivo a priori è dunque un controllo sostantivo dell'intero modello generativo. Rende visibili conseguenze difficili da intuire sulla sola scala dei parametri e permette di correggere specificazioni implausibili prima che diventino parte dell'inferenza.
+Il controllo predittivo a priori è quindi un controllo sostantivo dell'intero modello generativo: rende visibili conseguenze che sulla sola scala dei parametri sarebbero difficili da intuire, e permette di correggere specificazioni implausibili prima che entrino nell'inferenza.
 
 Nel capitolo successivo la stessa struttura verrà utilizzata con pesi diversi. La distribuzione predittiva a posteriori sostituisce $p(\theta)$ con $p(\theta\mid y)$:
 
@@ -608,7 +598,7 @@ La meccanica è la stessa; cambia l'informazione usata per pesare i diversi valo
 
 ### Esercizio 1 — Comprendere {.unnumbered .unlisted}
 
-*10 minuti · Codice: no*
+*Codice: no · Tempo indicativo: 10 minuti*
 
 Nell'esempio discreto del capitolo, $\theta$ può assumere i valori $0.2$, $0.5$ e $0.8$, con pesi a priori rispettivamente $0.2$, $0.3$ e $0.5$. Il risultato futuro è il numero di successi in due prove.
 
@@ -616,12 +606,12 @@ Nell'esempio discreto del capitolo, $\theta$ può assumere i valori $0.2$, $0.5$
 2. Interpreta il termine $0.5\times0.64$ che compare nel calcolo.
 3. Spiega perché il risultato finale, $p(\tilde y=2)=0.403$, non è una probabilità relativa al parametro.
 
-::: {.callout-tip collapse=true title="Suggerimento"}
+::: {.callout-tip collapse="true" title="Suggerimento"}
 
 Distingui tre oggetti: il peso a priori di $\theta=0.8$, la probabilità di due successi condizionata a $\theta=0.8$ e la probabilità marginale del dato futuro.
 :::
 
-::: {.callout-note collapse=true title="Soluzione commentata"}
+::: {.callout-note collapse="true" title="Soluzione commentata"}
 
 Per calcolare la probabilità di due successi dobbiamo considerare tutti gli scenari ammessi dal prior, perché non sappiamo quale valore di $\theta$ sia quello pertinente. Ogni scenario produce una probabilità diversa di due successi.
 
@@ -632,7 +622,7 @@ Il valore 0.403 è la probabilità predittiva del dato $\tilde y=2$. È una prob
 
 ### Esercizio 2 — Prevedere {.unnumbered .unlisted}
 
-*5–10 minuti · Codice: no*
+*Codice: no · Tempo indicativo: 5–10 minuti*
 
 Quale delle seguenti frasi interpreta correttamente
 
@@ -648,12 +638,12 @@ C. Si combinano le distribuzioni dei dati associate a tutti i valori di $\theta$
 
 D. Si aggiornano i valori di $\theta$ usando il dato futuro $\tilde y$.
 
-::: {.callout-tip collapse=true title="Suggerimento"}
+::: {.callout-tip collapse="true" title="Suggerimento"}
 
 Chiediti quale termine della formula svolga la funzione di peso e quale sia l'oggetto sul quale viene fatta la media.
 :::
 
-::: {.callout-note collapse=true title="Soluzione commentata"}
+::: {.callout-note collapse="true" title="Soluzione commentata"}
 
 La risposta corretta è **C**. Il prior $p(\theta)$ fornisce i pesi, mentre $p(\tilde y\mid\theta)$ fornisce una distribuzione dei dati per ogni possibile valore del parametro.
 
@@ -662,7 +652,7 @@ A confonde integrazione e massimizzazione; B elimina l'incertezza sui parametri;
 
 ### Esercizio 3 — Modificare {.unnumbered .unlisted}
 
-*10 minuti · Codice: no*
+*Codice: no · Tempo indicativo: 10 minuti*
 
 Nel capitolo sono confrontati i prior $\operatorname{Beta}(3,1)$ e $\operatorname{Beta}(30,10)$. Entrambi hanno media 0.75, ma il secondo è molto più concentrato.
 
@@ -675,12 +665,12 @@ Senza eseguire nuovi calcoli, indica quale delle due distribuzioni predittive do
 
 Giustifica ogni risposta collegando la forma della predittiva alla forza del prior.
 
-::: {.callout-tip collapse=true title="Suggerimento"}
+::: {.callout-tip collapse="true" title="Suggerimento"}
 
 I due prior hanno lo stesso centro. Cambia soltanto la loro concentrazione.
 :::
 
-::: {.callout-note collapse=true title="Soluzione commentata"}
+::: {.callout-note collapse="true" title="Soluzione commentata"}
 
 Le due predittive hanno lo stesso valore atteso, perché i prior hanno la stessa media e il numero di prove è lo stesso.
 
@@ -691,7 +681,7 @@ La predittiva associata a $\operatorname{Beta}(30,10)$ è più concentrata, perc
 
 ### Esercizio 4 — Criticare {.unnumbered .unlisted}
 
-*10 minuti · Codice: no*
+*Codice: no · Tempo indicativo: 10 minuti*
 
 Uno studente afferma:
 
@@ -699,19 +689,19 @@ Uno studente afferma:
 
 Individua almeno due errori nell'affermazione e riscrivila correttamente.
 
-::: {.callout-tip collapse=true title="Suggerimento"}
+::: {.callout-tip collapse="true" title="Suggerimento"}
 
 Considera sia il significato dell'integrale sia il fatto che il prior viene propagato attraverso l'intero modello generativo.
 :::
 
-::: {.callout-note collapse=true title="Elementi per la risposta"}
+::: {.callout-note collapse="true" title="Elementi per la risposta"}
 
 L'integrale non serve a sostituire $\theta$ con la media del prior. Combina le distribuzioni $p(\tilde y\mid\theta)$ associate a tutti i valori del parametro, usando il prior come insieme di pesi. Fissare $\theta$ alla media elimina una fonte di incertezza e può produrre una distribuzione diversa.
 
 Inoltre, un prior può sembrare plausibile sulla scala del parametro ma produrre dati implausibili quando viene propagato attraverso il modello. Il controllo predittivo valuta quindi le conseguenze osservabili dell'intera specificazione, non soltanto l'aspetto del prior.
 :::
 
-::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+::: {.callout-note collapse="true" title="Informazioni sull'ambiente di sviluppo"}
 
 ```{r}
 sessionInfo()
