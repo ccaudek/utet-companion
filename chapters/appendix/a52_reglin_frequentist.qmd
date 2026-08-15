@@ -1,41 +1,39 @@
-# La regressione lineare bivariata: prospettiva frequentista {#sec-linear-models-biv-model-frequentist}
+# Leggere una regressione in forma frequentista {#sec-apx-reglin-frequentist}
 
 ::: {.callout-note appearance="minimal"}
-La **regressione lineare** è uno degli strumenti più utilizzati nell'ambito della statistica applicata. Il suo scopo principale è **descrivere la relazione media** tra due variabili quantitative: una cosiddetta *variabile dipendente* (generalmente indicata con $Y$) e una *variabile indipendente* (generalmente indicata con $X$). Tale modello permette di sintetizzare, attraverso una funzione lineare, come il valore atteso di $Y$ tenda a variare al variare di $X$, mantenendo esplicito il ruolo della **variabilità residua**, ovvero il margine di oscillazione individuale inevitabile nei dati psicologici e sociali.
+Il Companion sviluppa la regressione in chiave bayesiana, e la Parte *Diagnosi* spiega perché il valore-$p$, gli intervalli di confidenza e le soglie di significatività siano strumenti fragili. Resta però un fatto: la quasi totalità della letteratura psicologica pubblicata riporta regressioni in forma frequentista, con tabelle che elencano coefficienti, errori standard, statistiche $t$ e valori-$p$.
 
-Questo capitolo presenta deliberatamente il modello dalla **prospettiva frequentista**. In questa prospettiva, i parametri della popolazione — per esempio l'intercetta, la pendenza e la varianza residua — sono considerati quantità fisse ma sconosciute. La casualità riguarda invece i dati osservabili e, di conseguenza, gli stimatori calcolati su campioni diversi. L'incertezza viene quindi descritta attraverso il comportamento degli stimatori in ipotetiche ripetizioni del campionamento, non assegnando una distribuzione di probabilità ai parametri stessi. Questa distinzione è particolarmente importante nel presente companion, perché prepara il confronto con la successiva formulazione bayesiana della regressione.
-
-In psicologia e nelle scienze sociali, la regressione lineare è uno strumento molto diffuso. Viene utilizzata principalmente per descrivere e quantificare le associazioni osservate tra variabili misurabili. Questa descrizione serve a due scopi principali. Da un lato, ha uno scopo esplorativo e predittivo: consente di stimare il valore atteso di una caratteristica (come il benessere o il rendimento) conoscendo il valore di un'altra (come il livello di stress o le ore di studio). Dall'altro lato, ha uno scopo inferenziale: permette di valutare, con gli strumenti della statistica frequentista, quanto l'associazione osservata sia compatibile con specifiche ipotesi sulla popolazione. In questo quadro, test d'ipotesi, valori-$p$ e intervalli di confidenza sono definiti facendo riferimento al comportamento delle procedure in ipotetiche ripetizioni dello studio; non esprimono direttamente la probabilità che un parametro assuma un certo valore.
-
-È tuttavia essenziale collocare la regressione lineare nel corretto contesto epistemologico. Si tratta di un **modello fenomenologico**, ovvero un modello che **descrive associazioni osservate** tra variabili, senza di per sé **spiegare i meccanismi causali** che potrebbero averle generate.
-
-Inoltre, il modello si basa su **assunzioni matematiche e statistiche** specifiche, quali linearità, omoschedasticità, indipendenza degli errori e normalità della distribuzione residua. Comprendere queste assunzioni è fondamentale per utilizzare questa tecnica in modo consapevole e valido, per riconoscerne i limiti in relazione ai dati a disposizione e per interpretare i risultati in modo appropriato. Solo una piena consapevolezza metodologica permette di distinguere ciò che il modello evidenzia effettivamente dalle interpretazioni che, spinte oltre l'evidenza dei dati, rischiano di essere fuorvianti.
+Questa appendice serve a leggere quelle tabelle. Non propone un percorso alternativo a quello del Companion, e non va intesa come un'introduzione più semplice al modello lineare: per quella ci sono i capitoli della Parte *Modelli*. Serve a sapere che cosa i numeri di un articolo significano davvero, come sono stati ottenuti e dove un lettore critico deve fermarsi.
 :::
 
-## Panoramica del capitolo {.unnumbered .unlisted}
-
-- Il modello di regressione lineare secondo l'approccio frequentista.
-- La stima dei coefficienti del modello utilizzando il metodo dei minimi quadrati.
-- L'interpretazione dei coefficienti dei minimi quadrati.
-- Il calcolo e l'interpretazione dell'indice di determinazione ($R^2$).
-- L'inferenza frequentista sui coefficienti dei minimi quadrati.
-
-::: {.callout-tip collapse=true}
-## Prerequisiti
-
-- Leggere il capitolo *Basic Regression* di [Statistical Inference via Data Science: A ModernDive into R and the Tidyverse (Second Edition)](https://moderndive.com/v2/).
-- Consulta l'appendice @sec-apx-lin-func per un'introduzione alle funzioni lineari.
-- Leggere *Navigating the Bayes maze: The psychologist's guide to Bayesian statistics, a hands-on tutorial with R code* [@alter2025navigating].
-- Leggere il capitolo *Linear Statistical Models* [@schervish2014probability].
+::: {.callout-tip title="Domanda chiave"}
+Davanti alla tabella di regressione di un articolo, che cosa dice ciascuna colonna — e che cosa non dice?
 :::
 
-::: {.callout-caution collapse=true title="Preparazione del notebook"}
+## Che cosa contiene questa appendice {.unnumbered .unlisted}
+
+- Il modello lineare nella formulazione frequentista, con la distinzione fra parametri fissi della popolazione e stimatori campionari.
+- Il metodo dei minimi quadrati e il significato di ciò che minimizza.
+- L'errore standard della regressione e l'indice di determinazione $R^2$.
+- La diagnostica dei residui.
+- L'inferenza sui coefficienti: distribuzione campionaria, errore standard, test e intervalli di confidenza.
+- Una guida alla lettura di una tabella di regressione pubblicata.
+
+::: {.callout-tip collapse="true" title="Prerequisiti"}
+- Il @sec-linear-generative, per il modello lineare come rappresentazione generativa.
+- L'@sec-apx-lin-func, per un ripasso sulla funzione lineare.
+- Per il quadro frequentista generale — stime, intervalli, test — il modulo [Inferenza frequentista](https://ccaudek.github.io/utet-frequentista/).
+:::
+
+::: {.callout-caution collapse="true" title="Preparazione del notebook"}
 
 ```{r}
-here::here("code", "_common.R") |> 
+#| label: setup-reglin-frequentist
+#| output: false
+
+here::here("code", "_common.R") |>
   source()
 
-# Load packages
 if (!requireNamespace("pacman")) install.packages("pacman")
 pacman::p_load(broom)
 ```
@@ -70,47 +68,11 @@ Graficamente, l'equazione definisce una **retta di regressione**. Questa retta r
 
 L'obiettivo principale dell'analisi è **stimare** i parametri incogniti della popolazione, ovvero $\beta_0$, $\beta_1$ e la varianza degli errori $\sigma^2$, a partire dai dati campionari. Il **metodo dei minimi quadrati ordinari (OLS)** produce le stime $a=\hat{\beta}_0$ e $b=\hat{\beta}_1$; in un'ottica più generale si può ricorrere al **principio di massima verosimiglianza**. Nel paradigma statistico frequentista, $\beta_0$, $\beta_1$ e $\sigma^2$ sono quantità fisse, sebbene sconosciute. L'incertezza non viene rappresentata mediante una distribuzione di probabilità su tali parametri, ma attraverso la variabilità campionaria degli stimatori $\hat{\beta}_0$, $\hat{\beta}_1$ e $s^2$ e attraverso la distribuzione degli errori $\varepsilon_i$.
 
-## A cosa serve la regressione?
+## Che cosa la regressione può e non può fare
 
-Le applicazioni della regressione lineare, secondo @gelman2021regression, rispondono a quattro distinte finalità. Queste finalità non appartengono esclusivamente a un singolo paradigma statistico; nel presente capitolo, tuttavia, stima e inferenza vengono sviluppate con gli strumenti dell'approccio frequentista.
+Le finalità della regressione — previsione, descrizione di associazioni, estrapolazione, inferenza causale — sono discusse nel @sec-linear-generative, che distingue le tre domande e mostra perché non ricevano risposta dallo stesso coefficiente. Le conseguenze dell'omissione di variabili rilevanti sono trattate nel @sec-omitted-variable.
 
-**1. Previsione.**
-L'obiettivo è **stimare il valore futuro o sconosciuto** di una variabile. In questo contesto, l'obiettivo non è spiegare *perché* le variabili siano associate, ma utilizzare la relazione osservata per fare stime il più accurate possibile.
-
-*   **Esempi in psicologia**: prevedere il rischio di burnout in base al carico di lavoro e allo stile di coping; stimare il punteggio di un test cognitivo conoscendo l'età e il livello di istruzione; classificare pazienti in categorie di rischio (ad esempio, basso/alto) per un certo disturbo in base a indicatori psicometrici.
-
-**2. Descrizione e quantificazione delle relazioni.**
-Qui l'obiettivo è **misurare e descrivere l'associazione** tra le variabili. La regressione risponde a domande del tipo: "Quanto è forte la relazione?" e "In che direzione va?".
-
-*   **Esempi in psicologia**: quantificare la relazione tra ore di sonno e prestazioni attentive; descrivere l'associazione tra sostegno sociale percepito e sintomi depressivi; esplorare il legame tra diversi tratti di personalità e propensione al rischio.
-
-**3. Estrapolazione controllata.**
-In questa applicazione, si cerca di **generalizzare i risultati** ottenuti in un certo contesto (ad esempio, un campione specifico) ad un altro, procedendo con cautela. Si tratta di un'estensione della previsione a situazioni non direttamente osservate.
-
-*   **Esempi in psicologia**: stimare l'efficacia potenziale di un intervento educativo, testato in una scuola pilota, su tutte le scuole di un distretto o ipotizzare come un programma di riabilitazione sviluppato per adulti potrebbe funzionare su una popolazione anziana.
-
-**4. Inferenza causale (in condizioni rigorose).**
-Questa è l'applicazione più ambiziosa e delicata. La regressione può essere utilizzata per **stimare l'effetto causale** di una variabile (ad esempio, un trattamento) su un esito, **solo ed esclusivamente** quando il disegno della ricerca lo consente (ad esempio, negli esperimenti randomizzati).
-
-*   **Esempi in psicologia**: valutare l'effetto causale di una terapia cognitivo-comportamentale sui sintomi d'ansia in uno studio randomizzato; stimare l'impatto di un training sulla memoria di lavoro sul rendimento scolastico, tenendo conto dei fattori confondenti.
-
-### Una nota di cautela: l'importanza della specificazione del modello
-
-Indipendentemente dall'obiettivo, la validità di qualsiasi applicazione della regressione dipende in modo cruciale dalla **corretta specificazione del modello**. Ciò significa che il modello statistico deve includere tutte le **variabili rilevanti** per il fenomeno in questione. L'omissione di variabili chiave, in particolare quelle che agiscono da **confondenti** (ovvero che influenzano sia il predittore che l'esito), può distorcere le stime frequentiste dei coefficienti, causando un problema noto come **errore di specificazione** o **bias da variabili omesse**.
-
-**Esempio pratico:** in uno studio che valuta l'efficacia di una psicoterapia per la depressione, l'omissione di variabili come la gravità iniziale dei sintomi, l'uso concomitante di farmaci o il livello di supporto sociale potrebbe far attribuire erroneamente alla terapia effetti che in realtà sono dovuti a questi altri fattori, portando a conclusioni fuorvianti.
-
-## Tipologie di regressione
-
-I modelli di regressione possono essere classificati in base al numero di variabili coinvolte, delineando un percorso di crescente complessità analitica che parte da una relazione semplice per arrivare a rappresentazioni più articolate della realtà.
-
-La *regressione bivariata* rappresenta la forma più elementare, in cui si analizza la relazione tra un unico predittore e una sola variabile esito. La sua semplicità la rende un punto di partenza ideale per comprendere i principi fondamentali della regressione, in quanto consente di apprendere i concetti di base senza dover affrontare complicazioni matematiche eccessive.
-
-Un livello di complessità superiore è dato dalla *regressione multipla*, nella quale un unico esito viene modellato utilizzando molteplici predittori. Questo approccio consente di esaminare l'effetto simultaneo di diverse variabili indipendenti, ma richiede un'attenta interpretazione dei parametri stimati.
-
-Infine, la *regressione multivariata* costituisce il caso più generale, in cui più variabili esito vengono analizzate simultaneamente in relazione a uno o più predittori. Questo tipo di modellazione richiede calcoli statistici più complessi e rappresenta lo strumento più potente e complesso tra le tre tipologie.
-
-Il percorso di apprendimento ideale inizia dalla regressione bivariata, che fornisce le basi concettuali e metodologiche su cui è possibile successivamente costruire modelli più sofisticati. La comprensione dei principi fondamentali acquisiti nel caso semplice è infatti un prerequisito essenziale per affrontare le sfide interpretative e computazionali poste dalle regressioni multiple e multivariate.
+Quelle discussioni valgono identiche qui: cambiano gli strumenti inferenziali, non la logica di ciò che un coefficiente può sostenere. Un coefficiente OLS e un coefficiente bayesiano descrivono la stessa quantità — la variazione attesa nell'esito per unità di predittore, condizionatamente agli altri termini del modello — e nessuno dei due diventa causale per virtù del metodo di stima.
 
 ## La predizione dell'intelligenza
 
@@ -326,7 +288,7 @@ In queste formule:
 
 Dalla formula dell'intercetta $a = \bar{y} - b\bar{x}$ deriva direttamente una proprietà fondamentale della retta stimata: essa passa sempre per il punto medio $(\bar{x}, \bar{y})$, il baricentro della distribuzione dei dati.
 
-::: {.callout-note collapse=true title="Esempio in R"}
+::: {.callout-note collapse="true" title="Esempio in R"}
 **Coefficienti del modello.**
 Calcoliamo i coefficienti della retta di regressione con le formule dei minimi quadrati:
 
@@ -505,7 +467,7 @@ $$ {#eq-reglin-err-standard-regr}
 
 L'indice $s_e$ possiede la stessa unità di misura di $y$ ed è uno stimatore frequentista della deviazione standard residua $\sigma$. Il suo valore cambierebbe da campione a campione, mentre $\sigma$ è trattata come una quantità fissa ma sconosciuta.
 
-::: {.callout-note collapse=true title="Esempio in R"}
+::: {.callout-note collapse="true" title="Esempio in R"}
 
 ```{r}
 # Calcolo dei residui
@@ -567,7 +529,7 @@ $$ {#eq-reglin-r2}
 
 Questo indice varia tra 0 e 1 e indica la frazione di varianza totale di $y$ spiegata dal modello di regressione lineare. Un valore alto di $R^2$ indica che il modello di regressione lineare si adatta bene ai dati, in quanto una grande parte della varianza di $y$ è spiegata dalla variabile indipendente $x$.
 
-::: {.callout-note collapse=true title="Esempio in R"}
+::: {.callout-note collapse="true" title="Esempio in R"}
 
 Per l'esempio in discussione, possiamo calcolare la devianza totale, la devianza spiegata e l'indice di determinazione $R^2$ come segue:
 
@@ -628,7 +590,7 @@ Un ulteriore strumento utile è il grafico **Scale–Location** (o *Spread–Loc
 
 Infine, il **grafico residui–leva** è pensato per individuare le osservazioni potenzialmente influenti. Combina la grandezza del residuo con la leva statistica, che misura quanto un'osservazione sia isolata nello spazio dei predittori. I punti con leva elevata e residui ampi (in valore assoluto) hanno la capacità di alterare sensibilmente le stime dei coefficienti. Per questo motivo il grafico include spesso curve di livello della distanza di Cook, che sintetizzano l'influenza complessiva di ogni osservazione sul modello.
 
-::: {.callout-note collapse=true title="Esempio in R"}
+::: {.callout-note collapse="true" title="Esempio in R"}
 
 R mette a disposizione un insieme di grafici diagnostici standard per i modelli di regressione:
 
@@ -757,7 +719,7 @@ In sintesi, la distribuzione campionaria di $\hat{\beta}_1$ descrive come la sti
 
 [^caudekluccio]: Per un approfondimento sull'approccio frequentista alla regressione, si veda, per esempio, @caudek2001statistica.
 
-::: {.callout-note collapse=true title="Esempio in R"}
+::: {.callout-note collapse="true" title="Esempio in R"}
 
 Calcoliamo la distribuzione campionaria di $\hat{\beta}_1$. Iniziamo simulando un modello lineare bivariato con variabili standardizzate:
 
@@ -834,21 +796,36 @@ Per quanto riguarda la *precisione* dello stimatore, si osserva che la deviazion
 Infine, l'esame della *forma della distribuzione* rivela che l'istogramma dei valori stimati è ben approssimato da una curva normale. Questo risultato conferma la normalità asintotica dello stimatore anche per un campione di dimensione moderata ($n = 30$), giustificando l'utilizzo della distribuzione normale per la costruzione di intervalli di confidenza e test di ipotesi in questo contesto.
 :::
 
+## Leggere una tabella di regressione pubblicata
+
+Un articolo riporta di norma una tabella con quattro colonne. Ecco che cosa dice ciascuna, e che cosa non dice.
+
+| Colonna | Che cosa riporta | Che cosa **non** significa |
+|---|---|---|
+| Stima ($b$, $\hat\beta$) | La variazione attesa nell'esito per unità di predittore, condizionatamente agli altri termini | L'effetto di un intervento, salvo che il disegno lo giustifichi |
+| Errore standard | La dispersione dello stimatore in ipotetiche repliche del campionamento | L'incertezza sul valore del parametro nella popolazione |
+| $t$ e valore-$p$ | Quanto la stima sia distante da zero, in unità di errore standard, e la probabilità di un risultato altrettanto estremo se il parametro valesse zero | La probabilità che l'ipotesi nulla sia vera, né l'importanza dell'effetto |
+| Intervallo di confidenza | Un intervallo costruito con una procedura che, ripetuta, conterrebbe il parametro nel 95% dei casi | Che ci sia il 95% di probabilità che il parametro cada in *questo* intervallo |
+
+Alle stesse tabelle si applicano tre domande che il Companion pone sistematicamente.
+
+**Quanto è precisa la stima, non solo se supera la soglia.** Un coefficiente significativo con un errore standard grande è compatibile con effetti di ampiezza molto diversa. Un intervallo che va da 0.05 a 4.2 non sostiene la stessa conclusione di uno che va da 1.9 a 2.3, anche se entrambi escludono lo zero.
+
+**Su quale scala è misurato l'effetto.** Un coefficiente ha significato solo in rapporto all'unità del predittore e alla variabilità dell'esito. Senza deviazioni standard o unità dichiarate, «$b = 0.35$» non è interpretabile.
+
+**Quante analisi sono state svolte prima di questa.** Il valore-$p$ riportato descrive la procedura dichiarata, non il percorso effettivo che ha portato a quella tabella. È la questione dei gradi di libertà del ricercatore, trattata nel @sec-replication-degrees-of-freedom.
+
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-In questo capitolo abbiamo introdotto la regressione lineare bivariata esplicitamente dal punto di vista frequentista, mostrando come il metodo dei minimi quadrati permetta di ottenere stime puntuali dei parametri fissi della retta e come la loro precisione venga descritta attraverso distribuzioni campionarie, errori standard, test d'ipotesi e intervalli di confidenza. Abbiamo discusso il ruolo dell'intercetta, della pendenza e della varianza residua, sottolineando le condizioni necessarie affinché il modello fornisca una sintesi affidabile dei dati. Abbiamo anche presentato gli strumenti diagnostici fondamentali per valutare la validità delle assunzioni attraverso l'analisi dei residui.
+L'appendice ha presentato la regressione lineare bivariata nella formulazione frequentista: il metodo dei minimi quadrati per ottenere stime puntuali dei parametri fissi, e la descrizione della loro precisione attraverso distribuzioni campionarie, errori standard, test e intervalli di confidenza, con gli strumenti diagnostici per valutare le assunzioni.
 
-Questa cornice classica, pur ampiamente utilizzata, presenta alcuni limiti strutturali:
+Il modello statistico sottostante è lo stesso della versione bayesiana: cambia il modo di rappresentare l'incertezza. Nella formulazione frequentista i parametri sono quantità fisse e la casualità riguarda gli stimatori; in quella bayesiana l'incertezza sui parametri è espressa da una distribuzione di probabilità, e questo consente di rispondere direttamente a domande come «quanto è plausibile che la pendenza sia compresa fra $a$ e $b$?».
 
-* l'inferenza si basa su valori-$p$ e intervalli di confidenza, strumenti spesso fraintesi. La loro interpretazione corretta fa riferimento a esperimenti ipotetici ripetuti e non fornisce una probabilità diretta sul valore del parametro.
-* non consente di integrare formalmente conoscenze pregresse, teoriche o empiriche, fornite dalla letteratura.
-* nella sua formulazione classica qui presentata, richiede assunzioni quali linearità, indipendenza e omoschedasticità; la normalità degli errori è inoltre necessaria per alcune procedure inferenziali esatte nei piccoli campioni. Violazioni rilevanti possono compromettere l'affidabilità delle conclusioni.
-* non risponde in modo immediato a domande che sono naturalmente formulate in termini probabilistici, come “Qual è la probabilità che l'effetto sia positivo?”.
+Conoscere entrambe le formulazioni non serve a scegliere fra due scuole. Serve a leggere la letteratura esistente per quello che dice — e a riconoscere, nelle tabelle che si incontrano ogni giorno, il confine fra ciò che i dati sostengono e ciò che l'abitudine interpretativa vi aggiunge.
 
-Per affrontare questi limiti e introdurre un diverso modo di rappresentare l'incertezza, nei capitoli successivi esamineremo lo stesso modello di regressione lineare da una prospettiva **bayesiana**. Questo approccio permette di incorporare in modo esplicito le informazioni a priori, di rappresentare l'incertezza tramite distribuzioni di probabilità e di rispondere direttamente alle domande sui parametri del modello. Mostreremo come l'inferenza bayesiana consenta, condizionatamente ai dati e al modello specificato, di fare affermazioni come “la probabilità a posteriori che la pendenza sia compresa tra $a$ e $b$ è pari al 95%”, offrendo un'interpretazione più diretta delle distribuzioni sui parametri.
-
-::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+::: {.callout-note collapse="true" title="Informazioni sull'ambiente di sviluppo"}
 ```{r}
+#| code-fold: true
 sessionInfo()
 ```
 :::
