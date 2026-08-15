@@ -24,17 +24,17 @@ Il modello lineare fornirà la grammatica di base per gran parte della Parte *Mo
 
 ::: {.callout-tip collapse="true" title="Prerequisiti"}
 
-- È data per nota la logica del flusso di lavoro bayesiano introdotta nel capitolo 20. Qui non la ripeteremo: ci concentreremo sul passaggio di **specificazione del modello**.
+- È data per nota la logica del flusso di lavoro bayesiano del @sec-mcmc-workflow. Qui non la ripeteremo: ci concentreremo sul passaggio di **specificazione del modello**.
 - È utile conoscere media, deviazione standard, correlazione e funzione lineare; per un ripasso si possono usare il percorso di Analisi esplorativa dei dati e l'@sec-apx-lin-func.
 - L'@sec-linear-models-biv-model-frequentist richiama la regressione lineare frequentista; la lettura del codice R è facoltativa e non costituisce un prerequisito inferenziale per il seguito.
 
 :::
 
-::: {.callout-caution collapse=true title="Preparazione del notebook"}
+::: {.callout-caution collapse="true" title="Preparazione del notebook"}
 
 ```{r}
 #| label: setup-linear-generative
-#| include: false
+#| output: false
 
 here::here("code", "_common.R") |>
   source()
@@ -112,7 +112,7 @@ Il diagramma suggerisce un'associazione positiva, ma mostra anche una considerev
 
 ## Il modello generativo
 
-Per comprendere la struttura del modello lineare è utile, in un primo momento, separare la **componente che genera i dati** dalla successiva inferenza sui parametri. Tratteremo quindi i valori osservati di $X$ come dati e specificheremo la distribuzione di $Y$ condizionatamente a $X$ e ai parametri. In altre parole, ci concentreremo su
+Conviene separare in un primo momento la **componente che genera i dati** dall'inferenza sui parametri. Trattiamo quindi i valori osservati di $X$ come dati e specifichiamo la distribuzione di $Y$ condizionatamente a $X$ e ai parametri:
 
 $$
 p(y\mid x,\alpha,\beta,\sigma).
@@ -122,13 +122,13 @@ $$
 Nel seguito useremo l'espressione *modello generativo* in senso condizionale: una volta fissati i valori del predittore e dei parametri, la specificazione determina una distribuzione dei possibili valori di $Y$ e permette quindi di simularli. Un modello bayesiano completo aggiunge a questa componente le distribuzioni a priori sui parametri, per esempio $p(\alpha,\beta,\sigma)$. Questa distinzione ci permette di comprendere prima la struttura del modello lineare e, successivamente, di reintrodurre l'incertezza bayesiana sui suoi parametri.
 :::
 
-Si fissi ora un valore di riferimento $x_0$ e si definisca il predittore centrato
+Fissiamo un valore di riferimento $x_0$ e definiamo il predittore centrato
 
 $$
 x_i^c = x_i - x_0.
 $$
 
-Nell'esempio seguente useremo come riferimento la media campionaria del QI materno.Si tratta di una scelta conveniente, non di una regola: in altre applicazioni, infatti, può essere preferibile un valore di riferimento definito sostantivamente, in quanto l'interpretazione dell'intercetta dipende direttamente da tale scelta. Il modello lineare gaussiano può quindi essere espresso nella forma
+Nell'esempio useremo come riferimento la media campionaria del QI materno. È una scelta comoda, non una regola: poiché l'interpretazione dell'intercetta dipende direttamente dal riferimento, in altre applicazioni conviene sceglierlo su basi sostantive. Il modello lineare gaussiano si scrive allora nella forma
 
 $$
 \begin{aligned}
@@ -139,7 +139,7 @@ y_i \mid x_i, \alpha, \beta, \sigma
 \end{aligned}
 $$ {#eq-linear-generative}
 
-Tale specificazione contiene due componenti collegate ma distinte.
+La specificazione ha due componenti, collegate ma distinte.
 
 ### La componente sistematica
 
@@ -154,7 +154,7 @@ descrive la variazione del valore medio atteso dell'esito in funzione del predit
 - $\alpha$ rappresenta il punteggio medio atteso del bambino quando $x_i^c=0$, ossia quando il QI materno coincide con il valore di riferimento $x_0$;
 - $\beta$ esprime la differenza attesa nella media di $Y$ per un incremento unitario di $X$.
 
-A titolo di esempio, se $\beta=0.60$, allora due valori di QI materno che differiscono di dieci punti determinano medie condizionate distanti sei punti, essendo
+Se $\beta=0.60$, due valori di QI materno distanti dieci punti corrispondono a medie condizionate distanti sei punti:
 
 $$
 \mu(x+10)-\mu(x)=10\beta=6.
@@ -238,7 +238,7 @@ plot_data |>
   ) 
 ```
 
-Una singola simulazione non deve necessariamente riprodurre esattamente il campione osservato. Ciò che ci interessa è piuttosto comprendere quali caratteristiche il modello può generare: l'intervallo dei punteggi, la dispersione, la tendenza media e la frequenza dei valori estremi.
+Una singola simulazione non deve riprodurre il campione osservato. Interessa piuttosto vedere quali caratteristiche il modello sappia generare: l'intervallo dei punteggi, la dispersione, la tendenza media, la frequenza dei valori estremi.
 
 In questa simulazione $\alpha$, $\beta$ e $\sigma$ sono fissati a valori scelti a scopo didattico. Non stiamo quindi ancora costruendo una distribuzione predittiva a priori o a posteriori. Quando i parametri verranno a loro volta trattati come incerti e campionati da distribuzioni a priori o a posteriori, la stessa operazione di generazione dei dati diventerà il nucleo dei controlli predittivi già introdotti nelle parti precedenti.
 
@@ -356,7 +356,7 @@ fit_augmented |>
 
 ```{r}
 #| label: fig-linear-residuals
-#| fig-cap: "Residui in funzione dei valori adattati. Pattern curvilinei o variazioni sistematiche della dispersione suggerirebbero che il modello lineare gaussiano non rappresenta adeguatamente i dati."
+#| fig-cap: "Residui in funzione dei valori adattati. Una curvatura, o una variazione sistematica della dispersione, indicherebbe che il modello lineare gaussiano non rappresenta adeguatamente i dati."
 #| fig-width: 7
 #| fig-height: 4.8
 
@@ -383,11 +383,11 @@ Il modello assume che, nell'intervallo osservato, la media di $Y$ vari in modo a
 
 ### Dispersione costante
 
-Il medesimo valore di $\sigma$ viene impiegato per tutti i livelli di $X$. Se invece la dispersione dei residui mostra una dipendenza sistematica dal predittore, è necessario adottare un modello che contempli esplicitamente una componente di eteroschedasticità, ovvero una funzione che descriva la variazione della varianza in funzione di $X$.
+Lo stesso valore di $\sigma$ vale per tutti i livelli di $X$. Se la dispersione dei residui dipende sistematicamente dal predittore, serve un modello che rappresenti l'eteroschedasticità, cioè che leghi la varianza a $X$ con una funzione esplicita.
 
 ### Indipendenza condizionale
 
-Una volta specificati i predittori e i parametri, le osservazioni vengono considerate indipendenti l'una dall'altra. Tale assunzione può risultare problematica in presenza di misure ripetute o di dati con struttura gerarchica. I modelli multilivello, che verranno introdotti nei capitoli successivi, permettono di rappresentare esplicitamente queste forme di dipendenza.
+Una volta specificati predittori e parametri, le osservazioni sono considerate indipendenti fra loro. L'assunzione diventa problematica con misure ripetute o dati a struttura gerarchica. I modelli multilivello, che verranno introdotti nei capitoli successivi, permettono di rappresentare esplicitamente queste forme di dipendenza.
 
 ### Forma della distribuzione condizionata
 
@@ -398,7 +398,7 @@ Il modello assume una distribuzione normale attorno alla media condizionata. La 
 La formula del modello non corregge automaticamente gli errori di misurazione, le distorsioni da selezione campionaria o le discrepanze tra il costrutto teorico e la variabile osservata. Inoltre, la relazione stimata è definita nell'intervallo dei dati disponibili e ogni estrapolazione al di là di tale intervallo richiede assunzioni aggiuntive.
 
 ::: {.callout-warning title="Assunzioni diverse, conseguenze diverse"}
-Un'inadeguatezza del modello non produce sempre lo stesso tipo di conseguenza. Può alterare la grandezza stimata, compromettere le previsioni, generare un'incertezza non adeguatamente calibrata o limitare l'ambito di generalizzazione del risultato. Per questo motivo, non è sufficiente applicare una checklist meccanica, ma è necessario distinguere ciò che può essere diagnosticato attraverso i dati da ciò che richiede argomenti relativi al disegno, alla misurazione o al contesto.
+Un'inadeguatezza del modello non ha sempre le stesse conseguenze: può alterare la grandezza stimata, peggiorare le previsioni, produrre un'incertezza mal calibrata o restringere l'ambito di generalizzazione. Per questo una checklist meccanica non basta: occorre distinguere ciò che i dati possono diagnosticare da ciò che richiede argomenti sul disegno, sulla misurazione o sul contesto.
 :::
 
 ## Descrivere, prevedere, spiegare
@@ -444,7 +444,7 @@ Questa grammatica verrà riutilizzata in tutta la Parte *Modelli*. Nel prossimo 
 
 ### Esercizio 1 — Comprendere: impostare l'analisi {.unnumbered .unlisted}
 
-*10–15 minuti · Codice: no*
+*Codice: no · Tempo indicativo: 10–15 minuti*
 
 Un gruppo di ricerca studia la relazione tra ore di sonno nella notte precedente e punteggio a una prova di memoria. L'obiettivo iniziale è descrittivo, non causale. Si decide di centrare le ore di sonno rispetto a 7 e di usare il modello
 
@@ -468,7 +468,7 @@ L'outcome è il punteggio di memoria; il predittore è il numero di ore di sonno
 
 ### Esercizio 2 — Prevedere e interpretare {.unnumbered .unlisted}
 
-*10 minuti · Codice: no*
+*Codice: no · Tempo indicativo: 10 minuti*
 
 Considera il modello
 
@@ -491,7 +491,7 @@ Le medie sono 45 per $X=5$, 50 per $X=7$ e 55 per $X=9$. Una differenza di quatt
 
 ### Esercizio 3 — Modificare: eseguire una prima analisi {.unnumbered .unlisted}
 
-*15–20 minuti · Codice: guidato*
+*Codice: guidato · Tempo indicativo: 15–20 minuti*
 
 Completa e interpreta questa sequenza usando i dati del capitolo:
 
@@ -531,7 +531,7 @@ diagnostica  <- broom::augment(fit)
 
 ### Esercizio 4 — Criticare e comunicare {.unnumbered .unlisted}
 
-*15 minuti · Codice: no*
+*Codice: no · Tempo indicativo: 15 minuti*
 
 Un'analisi osservazionale produce il seguente riassunto:
 
@@ -558,8 +558,9 @@ Il modello osservazionale identifica un'associazione condizionata, non un effett
 Un possibile resoconto è: «Nel campione analizzato, un punto aggiuntivo di QI materno è associato a una differenza media stimata di 0.61 punti nel punteggio cognitivo del bambino. Per una madre con QI pari al valore di centratura, il punteggio medio adattato è 87. Rimane una considerevole variabilità individuale attorno alla retta ($\sigma=18$), e la componente lineare rappresenta circa il 20% della variabilità campionaria dell'outcome. Il risultato è descrittivo e non identifica, da solo, un effetto causale». In un resoconto inferenziale completo andrebbe inoltre comunicata l'incertezza sui parametri. Tra i limiti vanno menzionati almeno i possibili confondenti, la qualità delle misure, la rappresentatività del campione, la linearità e l'eventuale dipendenza tra osservazioni.
 :::
 
-::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+::: {.callout-note collapse="true" title="Informazioni sull'ambiente di sviluppo"}
 ```{r}
+#| code-fold: true
 sessionInfo()
 ```
 :::

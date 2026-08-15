@@ -3,7 +3,7 @@
 ::: {.callout-note appearance="minimal"}
 Finora abbiamo preso in considerazione soprattutto modelli in cui una variabile continua viene descritta mediante una distribuzione gaussiana. Questa scelta è naturale in molti casi, ma non può essere considerata una soluzione universale. Se l'esito osservato cambia natura, anche il modello deve cambiare il modo in cui lo rappresenta.
 
-In particolare, in psicologia è molto comune osservare un esito dicotomico, anziché continuo, ovvero un esito come "corretto/errato", "presente/assente" o "scelta A/scelta B". Dobbiamo quindi porci il problema, non tanto di imparare una nuova tecnica chiamata "regressione logistica", ma piuttosto di capire come sia possibile mantenere l'idea di un predittore lineare quando l'esito osservato non segue più una distribuzione gaussiana.
+In psicologia è molto comune osservare un esito dicotomico anziché continuo: “corretto/errato”, “presente/assente”, “scelta A/scelta B”. Il problema non è imparare una tecnica nuova chiamata “regressione logistica”, ma capire come mantenere l'idea di un predittore lineare quando l'esito osservato non segue più una distribuzione gaussiana.
 
 I **modelli lineari generalizzati** (GLM) forniscono gli strumenti per modellare distribuzioni che si discostano dalla normalità. In questo capitolo, discuteremo il caso del modello Bernoulli-logit, che ci permetterà di distinguere tre componenti essenziali dei GLM: la distribuzione delle osservazioni, il predittore lineare e la funzione di legame (*link function*), che collega il predittore al valore atteso sulla scala originale dei dati.
 :::
@@ -80,7 +80,7 @@ Per mantenere nel modello il predittore lineare, sarà dunque necessario ricorre
 
 ## Il GLM separa tre componenti
 
-La regressione logistica introduce una distinzione che diventerà centrale in tutta la Parte *Estensioni*. Un modello GLM può essere costruito distinguendo tre componenti che hanno un diverso significato concettuale. La prima componente è il **modello distributivo** delle osservazioni:
+La regressione logistica introduce una distinzione che diventerà centrale in tutta la Parte *Estensioni*. Un modello GLM può essere costruito distinguendo tre componenti che hanno un diverso significato concettuale [@agresti2010analysis]. La prima componente è il **modello distributivo** delle osservazioni:
 
 $$
 Y_i\mid p_i\sim\operatorname{Bernoulli}(p_i).
@@ -198,7 +198,7 @@ Possiamo simulare un piccolo insieme di dati nel modo seguente:
 n <- 400
 
 alpha_true <- -0.50
-beta_true  <-  1.20
+beta_true <- 1.20
 
 logistic_data <- tibble(
   preparation = rnorm(n),
@@ -571,18 +571,29 @@ Coerentemente, `posterior_epred()` restituisce queste probabilità attese per ci
 `posterior_predict()`, invece, utilizza tali probabilità per generare nuove osservazioni binarie (0 o 1).
 
 ```{r}
-#| eval: false
-posterior_predict(fit_logistic, newdata = prediction_grid)
+#| label: epred-vs-predict
+
+y_rep <- posterior_predict(fit_logistic, newdata = prediction_grid)
+
+tibble(
+  quantita = c("posterior_epred()", "posterior_predict()"),
+  valori_distinti = c(
+    length(unique(round(epred[, 1], 6))),
+    paste(sort(unique(as.vector(y_rep))), collapse = ", ")
+  )
+)
 ```
 
-La curva logistica rappresenta quindi la probabilità con cui una nuova risposta sarà 1, non il valore di una risposta individuale. Le osservazioni effettive restano binarie; è su questa probabilità che esse vengono generate.
+La prima riga conta i valori distinti che `posterior_epred()` produce per un singolo punto della griglia: sono tanti quante le estrazioni posteriori, perché ogni estrazione implica una probabilità diversa. La seconda mostra che `posterior_predict()` restituisce soltanto 0 e 1.
+
+La curva logistica rappresenta quindi la probabilità con cui una nuova risposta sarà 1, non il valore di una risposta individuale. Le osservazioni effettive restano binarie; è su quella probabilità che vengono generate.
 :::
 
 ## Quali assunzioni abbiamo introdotto?
 
-Passare dalla regressione lineare alla regressione logistica elimina alcune ipotesi che non erano adatte a un esito binario, ma ne introduce altre. Il modello assume che, date le covariate, ogni osservazione possa essere descritta da una distribuzione di Bernoulli con probabilità $p_i$. Assume inoltre che valore atteso del logit di quella probabilità venga adeguatamente rappresentato  dal predittore lineare che è stato specificato. Se però le osservazioni sono raggruppate, ripetute nel tempo o appartenenti agli stessi individui, la loro dipendenza deve essere rappresentata esplicitamente dal modello: in questi casi, una likelihood  Bernoulliana non sarebbe sufficiente.
+Passare dalla regressione lineare alla regressione logistica elimina alcune ipotesi che non erano adatte a un esito binario, ma ne introduce altre. Il modello assume che, date le covariate, ogni osservazione possa essere descritta da una distribuzione di Bernoulli con probabilità $p_i$. Assume inoltre che il logit di quella probabilità sia adeguatamente rappresentato dal predittore lineare specificato. Se però le osservazioni sono raggruppate, ripetute nel tempo o appartenenti agli stessi individui, la loro dipendenza va rappresentata esplicitamente: in quei casi una verosimiglianza di Bernoulli non basta.
 
-Un caso particolare è la **separazione**, che si verifica quando uno o più predittori distinguono quasi perfettamente gli esiti 0 e 1 (per esempio, tutti gli studenti con un'alta preparazione rispondono correttamente, mentre tutti quelli con una bassa preparazione sbagliano). In questa situazione, il modello logistico cerca di adattarsi ai dati spingendo la probabilità il più possibile verso 0 o verso 1, il che richiede coefficienti $\beta$ sempre più grandi in valore assoluto (che tendono a $+\infty$ o $-\infty$). Per inseguire questa separazione perfetta, il modello tenderebbe a produrre stime irrealistiche (coefficienti troppo grandi). Le distribuzioni a priori regolarizzanti risolvono questo problema: fungendo da "freno", contrastano la crescita eccessiva dei coefficienti, tenendoli entro regioni dello spazio dei parametri che riteniamo plausibili prima ancora di osservare i dati.
+Un caso particolare è la **separazione**, che si verifica quando uno o più predittori distinguono quasi perfettamente gli esiti 0 e 1 (per esempio, tutti gli studenti con un'alta preparazione rispondono correttamente, mentre tutti quelli con una bassa preparazione sbagliano). In questa situazione, il modello logistico cerca di adattarsi ai dati spingendo la probabilità il più possibile verso 0 o verso 1, il che richiede coefficienti $\beta$ sempre più grandi in valore assoluto (che tendono a $+\infty$ o $-\infty$). Per inseguire questa separazione perfetta, il modello tenderebbe a produrre stime irrealistiche (coefficienti troppo grandi). I prior regolarizzanti risolvono il problema: fanno da freno alla crescita dei coefficienti, tenendoli entro regioni dello spazio dei parametri che riteniamo plausibili prima ancora di osservare i dati.
 
 Anche l'interpretazione causale rimane una questione separata. Una regressione logistica descrive una distribuzione condizionata. Il fatto che l'esito sia modellato correttamente come una distribuzione di Bernoulli non trasforma un'associazione in un effetto causale: valgono ancora le distinzioni sviluppate nella Parte *Causalità*.
 
@@ -603,9 +614,9 @@ La regressione logistica è quindi un'estensione importante, ma ci ricorda sopra
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-Il contributo principale di questo capitolo non consiste nell'aggiungere una tecnica a quelle che abbiamo già imparato a utilizzare, ma nello sviluppo di un nuovo modo di pensare: è necessario separare esplicitamente il modo in cui i dati vengono generati (distribuzione osservazionale) dal modo in cui le covariate agiscono su di essi (predittore lineare e funzione di legame). Questa separazione trasforma il nostro modo di fare modellazione: ogni scelta distributiva diventa un'ipotesi verificabile sulla variabilità dei dati e non più soltanto una "correzione" tecnica per l'assenza di normalità.
+Il contributo principale di questo capitolo non consiste nell'aggiungere una tecnica a quelle che abbiamo già imparato a utilizzare, ma nello sviluppo di un nuovo modo di pensare: è necessario separare esplicitamente il modo in cui i dati vengono generati (distribuzione osservazionale) dal modo in cui le covariate agiscono su di essi (predittore lineare e funzione di legame). Questa separazione trasforma il nostro modo di fare modellazione: ogni scelta distributiva diventa un'ipotesi verificabile sulla variabilità dei dati, e non più una “correzione” tecnica per l'assenza di normalità.
 
-Nel caso binario abbiamo scelto la distribuzione di Bernoulli, in quanto le osservazioni possono assumere solo i valori 0 o 1. Abbiamo specificato un predittore lineare per rappresentare l'associazione con le covariate e abbiamo utilizzato il logit per trasformare una quantità non vincolata (il valore atteso del predittore lineare) in una probabilità. Inoltre, abbiamo  verificato che le inferenze su una proporzione, il confronto tra due proporzioni e una regressione logistica con predittori continui rappresentano casi particolari della stessa architettura, piuttosto che procedure inferenziali separate.
+Nel caso binario abbiamo scelto la distribuzione di Bernoulli, in quanto le osservazioni possono assumere solo i valori 0 o 1. Abbiamo specificato un predittore lineare per rappresentare l'associazione con le covariate e abbiamo utilizzato il logit per trasformare una quantità non vincolata (il valore atteso del predittore lineare) in una probabilità. Abbiamo inoltre verificato che l'inferenza su una proporzione, il confronto fra due proporzioni e una regressione logistica con predittori continui sono casi particolari della stessa architettura, non procedure inferenziali separate.
 
 Abbiamo anche constatato che il flusso di lavoro bayesiano non cambia nella sua logica. Le distribuzioni a priori devono produrre implicazioni plausibili, il calcolo deve essere affidabile, le quantità posteriori devono essere trasformate sulla scala rilevante per la domanda e il modello deve essere criticato in base a ciò che riesce — o non riesce — a generare.
 
@@ -615,7 +626,7 @@ Questo ci prepara al passo successivo. Cambiare la distribuzione osservazionale 
 
 ### Esercizio 1 — Leggere l'architettura del GLM {.unnumbered .unlisted}
 
-*Codice: no · 10 minuti*
+*Codice: no · Tempo indicativo: 10 minuti*
 
 Considera
 
@@ -637,7 +648,7 @@ La Bernoulli rappresenta il fatto che l'osservazione sia 0 oppure 1. Il preditto
 
 ### Esercizio 2 — Lo stesso coefficiente, cambiamenti diversi di probabilità {.unnumbered .unlisted}
 
-*Codice: no · 10–15 minuti*
+*Codice: no · Tempo indicativo: 10–15 minuti*
 
 In due popolazioni, un incremento unitario di $x$ ha lo stesso coefficiente
 
@@ -653,7 +664,7 @@ L'odds ratio è 2 in entrambe le popolazioni. Nella popolazione A gli odds inizi
 
 ### Esercizio 3 — Tre problemi, un'unica architettura {.unnumbered .unlisted}
 
-*Codice: no · 10 minuti*
+*Codice: no · Tempo indicativo: 10 minuti*
 
 Considera tre studi: nel primo si vuole stimare la probabilità complessiva di risposta corretta; nel secondo si vogliono confrontare due gruppi; nel terzo si vuole descrivere come la probabilità cambi lungo un predittore continuo. Scrivi una specificazione Bernoulli-logit appropriata per ciascun caso e spiega che cosa cambia e che cosa rimane invariato.
 
@@ -663,7 +674,7 @@ Nel primo caso basta $\operatorname{logit}(p)=\alpha$. Nel secondo si può usare
 
 ### Esercizio 4 — Criticare un'interpretazione {.unnumbered .unlisted}
 
-*Codice: no · 15 minuti*
+*Codice: no · Tempo indicativo: 15 minuti*
 
 Un articolo conclude:
 
@@ -677,6 +688,7 @@ Il coefficiente 0.80 è espresso sulla scala dei log-odds. L'odds ratio è $\exp
 
 ::: {.callout-note collapse="true" title="Informazioni sull'ambiente di sviluppo"}
 ```{r}
+#| code-fold: true
 sessionInfo()
 ```
 :::

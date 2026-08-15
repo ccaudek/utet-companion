@@ -1,7 +1,7 @@
 # Regressione verso la media: che cosa predice una retta {#sec-linear-models-regression-toward_mean}
 
 ::: {.callout-note appearance="minimal" title="Perché questo capitolo è qui"}
-Nel capitolo precedente abbiamo trattato la retta di regressione come parte di un modello generativo: per ogni valore del predittore, il modello specifica una distribuzione dei possibili esiti attorno a una media condizionata. Prima di introdurre la regressione bayesiana con `brms`,  è opportuno soffermarsi su una conseguenza fondamentale di questa idea.
+Nel capitolo precedente abbiamo trattato la retta di regressione come parte di un modello generativo: per ogni valore del predittore, il modello specifica una distribuzione dei possibili esiti attorno a una media condizionata. Prima di introdurre la regressione bayesiana con `brms` conviene soffermarsi su una conseguenza fondamentale di questa idea.
 
 **La retta non predice che un valore estremo si ripeta con la stessa intensità.** Quando due misure sono positivamente associate ma la relazione non è perfetta, la media prevista dell'esito è in genere meno estrema del valore del predittore espresso sulla stessa scala standardizzata. Questo fenomeno è noto come **regressione verso la media**.
 
@@ -26,11 +26,11 @@ Questo capitolo ha quindi una funzione di transizione: chiarisce il significato 
 
 :::
 
-::: {.callout-caution collapse=true title="Preparazione del notebook"}
+::: {.callout-caution collapse="true" title="Preparazione del notebook"}
 
 ```{r}
 #| label: setup-regression-toward-mean
-#| include: false
+#| output: false
 
 here::here("code", "_common.R") |>
   source()
@@ -102,7 +102,7 @@ galton_heights |>
   )
 ```
 
-Le due distribuzioni presentano medie e deviazioni standard simili, mentre il coefficiente di correlazione, pari a circa 0.44, indica una relazione positiva, ma tutt'altro che perfetta. Per confrontare l'andamento della previsione con un'ipotesi di perfetta riproduzione, si sovrappone al grafico, accanto alla retta di regressione stimata, una retta di pendenza unitaria passante per il punto formato dalle due medie.
+Le due distribuzioni hanno medie e deviazioni standard simili, mentre la correlazione, circa 0.44, indica una relazione positiva ma tutt'altro che perfetta. Per rendere visibile lo scarto rispetto a una riproduzione perfetta, al grafico si aggiunge — accanto alla retta di regressione stimata — una retta di pendenza 1 passante per il punto delle due medie.
 
 ```{r}
 #| label: fig-rtm-galton
@@ -126,10 +126,11 @@ galton_heights |>
     x = "Altezza del padre (pollici)",
     y = "Altezza del figlio (pollici)"
   )
-  # + theme_manuscript()
 ```
 
-La retta tratteggiata non è la bisettrice $Y=X$, ma la retta di pendenza 1 che passa per $(\bar{x}, \bar{y})$. Essa corrisponde al caso limite in cui ogni scarto dalla media del padre si riprodurrebbe completamente nel figlio. La retta di regressione adattata, invece, è più piatta: gli scarti dalla media paterna risultano sistematicamente attenuati nella media dei figli. In altri termini, i figli di padri alti sono mediamente alti, ma la loro distanza dalla media è inferiore a quella dei padri; analogamente, i figli di padri bassi si collocano al di sotto della media, ma in misura minore rispetto ai genitori. La relazione positiva viene quindi conservata, ma l'estremità del predittore non si trasferisce integralmente nella media condizionata dell'esito.
+La retta tratteggiata non è la bisettrice $Y=X$, ma la retta di pendenza 1 passante per $(\bar{x}, \bar{y})$: rappresenta il caso limite in cui ogni scarto dalla media paterna si riproduce integralmente nel figlio. La retta di regressione adattata è invece più piatta, perché gli scarti risultano sistematicamente attenuati.
+
+I figli di padri alti sono mediamente alti, ma meno distanti dalla media di quanto lo fossero i padri; i figli di padri bassi stanno sotto la media, ma meno dei genitori. La relazione positiva si conserva; l'estremità del predittore non si trasferisce per intero nella media condizionata dell'esito.
 
 ## Correlazione, pendenza e scala
 
@@ -160,7 +161,7 @@ tibble(
 )
 ```
 
-Poiché le deviazioni standard delle altezze dei padri e dei figli sono approssimativamente uguali, la pendenza sulla scala originale risulta molto vicina al coefficiente di correlazione. La relazione diventa particolarmente evidente dopo aver standardizzato le variabili, ovvero dopo averle espresse come scarti dalla rispettiva media in unità di deviazione standard.
+Poiché le deviazioni standard delle altezze dei padri e dei figli sono approssimativamente uguali, la pendenza sulla scala originale risulta molto vicina al coefficiente di correlazione. La relazione diventa evidente standardizzando le variabili, cioè esprimendole come scarti dalla rispettiva media in unità di deviazione standard.
 
 ```{r}
 #| label: standardize-galton-data
@@ -179,7 +180,7 @@ c(
 )
 ```
 
-Con variabili standardizzate, la pendenza coincide con $r$. Se, per esempio, $r=0.44$, un padre che si colloca due deviazioni standard sopra la media avrà un figlio la cui altezza media prevista sarà di $0.44 \times 2 = 0.88$ deviazioni standard sopra la media degli altri figli. La previsione rimane comunque superiore alla media, ma in misura meno estrema.
+Con variabili standardizzate, la pendenza coincide con $r$. Se, per esempio, $r=0.44$, per un padre che si colloca due deviazioni standard sopra la media, l'altezza media prevista del figlio è $0.44 \times 2 = 0.88$ deviazioni standard sopra la media dei figli. La previsione rimane comunque superiore alla media, ma in misura meno estrema.
 
 ::: {.callout-note title="La scala è importante"}
 Osservare che la pendenza è inferiore a 1 non basta, da solo, a dimostrare la regressione verso la media: su scale arbitrarie, il valore della pendenza dipende anche dal rapporto $s_Y/s_X$. Per valutare correttamente il fenomeno, è necessario esprimere le variabili in forma standardizzata o confrontare gli scarti osservati con le rispettive medie e deviazioni standard.
@@ -241,14 +242,13 @@ simulated_correlations |>
     x = expression(Z[X]),
     y = expression(Z[Y])
   )
-  # + theme_manuscript()
 ```
 
-Il confronto mostra il meccanismo senza introdurre nuove idee. Con $\rho=1$ si osserva alcuna attenuazione: la retta di regressione coincide con la retta di identità. Quando $0<\rho<1$, invece, la pendenza è inferiore a 1 e le medie condizionate associate ai valori estremi di $Z_X$ sono meno estreme. Più la correlazione si allontana da 1, maggiore è l'attenuazione.
+Il confronto mostra il meccanismo senza introdurre idee nuove. Con $\rho=1$ non si osserva alcuna attenuazione: la retta di regressione coincide con la retta di identità. Quando $0<\rho<1$, invece, la pendenza è inferiore a 1 e le medie condizionate associate ai valori estremi di $Z_X$ sono meno estreme. Più la correlazione si allontana da 1, maggiore è l'attenuazione.
 
 ## Quando selezioniamo casi estremi
 
-La regressione verso la media è particolarmente rilevante quando i partecipanti vengono selezionati in base a una prima misurazione estrema e successivamente vengono misurati di nuovo. Per comprenderne la dinamica, si supponga che ogni persona abbia un livello relativamente stabile $T$, ma che il punteggio osservato in ciascuna occasione includa anche una componente occasionale $E$:
+La regressione verso la media è particolarmente rilevante quando i partecipanti vengono selezionati in base a una prima misurazione estrema e successivamente vengono misurati di nuovo. Supponiamo che ogni persona abbia un livello relativamente stabile $T$, e che il punteggio osservato in ciascuna occasione includa anche una componente occasionale $E$:
 
 $$
 \begin{aligned}
@@ -257,7 +257,7 @@ X_{i2} &= T_i + E_{i2}.
 \end{aligned}
 $$
 
-Se si selezionano le persone con i valori più alti di $X_{i1}$, il gruppo risulterà composto sia da individui con valori elevati di $T_i$, sia da individui che, nella prima rilevazione, hanno avuto un errore positivo o uno stato transitoriamente elevato. Tuttavia, alla seconda misurazione, la componente occasionale non tende a ripresentarsi con la medesima intensità e segno, pertanto la media di $X_{i2}$ risulterà generalmente meno estrema, anche in assenza di qualsiasi intervento. Questa dinamica è illustrata dalla seguente simulazione.
+Selezionando le persone con i valori più alti di $X_{i1}$, il gruppo raccoglie sia individui con $T_i$ elevato, sia individui che alla prima rilevazione hanno avuto un errore positivo o uno stato transitoriamente alto. Alla seconda misurazione la componente occasionale non si ripresenta con la stessa intensità e lo stesso segno: la media di $X_{i2}$ risulta quindi meno estrema, anche senza alcun intervento. Questa dinamica è illustrata dalla seguente simulazione.
 
 ```{r}
 #| label: simulate-pre-post-selection
@@ -322,7 +322,6 @@ selected_high |>
     x = NULL,
     y = "Punteggio medio"
   )
-  # + theme_manuscript()
 ```
 
 Il gruppo selezionato in base ai punteggi iniziali più elevati mostra, in media, una diminuzione alla seconda rilevazione; selezionando i valori più bassi si osserverebbe, simmetricamente, un aumento medio. Nessun intervento è stato introdotto nella simulazione: il cambiamento nasce dalla selezione di una misura che contiene una componente non perfettamente stabile.
@@ -381,7 +380,7 @@ La regressione verso la media, descritta in questo capitolo, riguarda una **prev
 ## Errori concettuali da evitare
 
 ::: {.callout-caution title="Cinque confusioni ricorrenti"}
-1. **Pensare che ogni individuo debba avvicinarsi alla media è sbagliato.** La regressione verso la media riguarda una media condizionata e i singoli casi possono muoversi in entrambe le direzioni.
+1. **Pensare che ogni individuo debba avvicinarsi alla media.** La regressione verso la media riguarda una media condizionata; i singoli casi possono muoversi in entrambe le direzioni.
 2. **Confrontare una pendenza con 1 senza considerare la scala.** Su scale arbitrarie, la pendenza dipende anche dal rapporto tra le deviazioni standard. Per una lettura più chiara, sono necessarie variabili standardizzate o scarti espressi su scale comparabili.
 3. **Interpretare il fenomeno come una forza che spinge i valori verso il centro.** Nel modello lineare non è necessario postulare un meccanismo correttivo: è sufficiente un'associazione positiva imperfetta.
 4. **Attribuire tutto il cambiamento pre–post alla regressione verso la media.** Un intervento può avere un effetto reale, ma il problema è che un gruppo singolo selezionato per valori estremi non permette di separare le componenti del cambiamento.
@@ -400,7 +399,7 @@ Questo capitolo completa così il passaggio iniziato con il modello lineare gene
 
 ### Esercizio 1 — Comprendere: media condizionata e osservazione individuale {.unnumbered .unlisted}
 
-*5–10 minuti · Codice: no*
+*Codice: no · Tempo indicativo: 5–10 minuti*
 
 Due misure standardizzate hanno correlazione $r=0.60$. Per un gruppo con $Z_X=2.5$:
 
@@ -414,7 +413,7 @@ La media prevista è $0.60\times2.5=1.5$. Il valore 1.5 descrive il centro della
 
 ### Esercizio 2 — Riconoscere il ruolo della scala {.unnumbered .unlisted}
 
-*5–10 minuti · Codice: no*
+*Codice: no · Tempo indicativo: 5–10 minuti*
 
 Un ricercatore osserva una pendenza pari a 0.70 e conclude: «Poiché la pendenza è inferiore a 1, vi è regressione verso la media».
 
@@ -430,7 +429,7 @@ Sulla scala originale la pendenza dipende sia dalla correlazione sia dal rapport
 
 ### Esercizio 3 — Modificare: selezione più estrema {.unnumbered .unlisted}
 
-*10–15 minuti · Codice: guidato*
+*Codice: guidato · Tempo indicativo: 10–15 minuti*
 
 La simulazione del capitolo seleziona il 10% dei punteggi iniziali più alti. Prima di eseguire il codice, prevedi che cosa accadrà passando al 5% più estremo. Poi completa ed esegui:
 
@@ -462,7 +461,7 @@ Il valore da inserire è `0.95`. Il gruppo selezionato al 95° percentile parte 
 
 ### Esercizio 4 — Collegare al capitolo successivo {.unnumbered .unlisted}
 
-*10 minuti · Codice: no*
+*Codice: no · Tempo indicativo: 10 minuti*
 
 Considera il modello
 
@@ -481,11 +480,11 @@ Supponi di voler prevedere un nuovo valore di $Y$ per un dato $X=x$. Distingui d
 Anche conoscendo esattamente i parametri, una nuova osservazione non coincide necessariamente con la media $\alpha+\beta x$: rimane la variabilità condizionata descritta da $\sigma$. Con dati finiti, inoltre, non conosciamo con certezza i parametri stessi. La sola retta rappresenta la media condizionata; non rappresenta né tutta la dispersione delle osservazioni né, se tracciata usando un unico insieme di stime, l'incertezza sui parametri. Nel capitolo successivo le distribuzioni a posteriori di $\alpha$, $\beta$ e $\sigma$ permetteranno di propagare entrambe le fonti di incertezza nelle previsioni.
 :::
 
-::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+::: {.callout-note collapse="true" title="Informazioni sull'ambiente di sviluppo"}
 ```{r}
+#| code-fold: true
 sessionInfo()
 ```
 :::
 
-
-
+## Bibliografia {.unnumbered .unlisted}

@@ -18,7 +18,7 @@ Il *workflow bayesiano* collega questi strumenti in un processo unitario. Si par
 
 ::: {.callout-tip collapse="true" title="Prerequisiti"}
 
-- Sono dati per noti i controlli predittivi dei capitoli 12 e 13 e i principi computazionali presentati nei capitoli 15–19.
+- Sono dati per noti i controlli predittivi del @sec-prior-predictive-check e del @sec-bayesian-inference-post-pred-distr, insieme ai principi computazionali dei capitoli precedenti di questa Parte.
 - È utile distinguere specificazione del modello, calcolo della posterior, diagnostica e valutazione predittiva.
 - L'@sec-workflow-checklist riassume il workflow; l'@sec-apx-mcmc-diagnostics, l'@sec-apx-prior-predictive-check e l'@sec-apx-posterior-predictive approfondiscono diagnostica e controlli predittivi.
 
@@ -26,27 +26,29 @@ Il *workflow bayesiano* collega questi strumenti in un processo unitario. Si par
 
 ## Perché serve un workflow
 
-L'inferenza bayesiana non termina quando il software restituisce i campioni posteriori. Prima di effettuare il calcolo, è necessario decidere quale domanda porre, quale quantità rappresenti la risposta e quale processo possa aver generato i dati. Dopo il calcolo, invece, è necessario verificare due aspetti distinti:
+L'inferenza bayesiana non termina quando il software restituisce i campioni posteriori. Prima del calcolo occorre decidere quale domanda porre, quale quantità rappresenti la risposta e quale processo possa avere generato i dati. Dopo il calcolo restano da verificare due aspetti distinti:
 
 1. **il calcolo ha approssimato in modo affidabile la posterior specificata?**
 2. **la posterior deriva da un modello in grado di rappresentare gli aspetti rilevanti dei dati e del fenomeno?**
 
-La prima è una domanda di natura computazionale. La seconda è una domanda di natura scientifica e modellistica. Un valore di $\widehat R$ vicino a 1, per esempio, può indicare che le catene si sono mescolate adeguatamente, ma non dimostra che la funzione di verosimiglianza, il parametro a priori, la misurazione o la struttura causale siano appropriati.
+La prima è una domanda di natura computazionale. La seconda è una domanda di natura scientifica e modellistica. Un valore di $\widehat R$ vicino a 1, per esempio, può indicare che le catene si sono mescolate adeguatamente, ma non dimostra che la verosimiglianza, il prior, la misurazione o la struttura causale siano appropriati.
 
 Il flusso di lavoro serve proprio a evitare questa confusione. Il suo obiettivo non è produrre un risultato definitivo, ma rendere visibili le decisioni prese, controllare le conseguenze del modello e motivare le revisioni. Le sue fasi possono essere riassunte come segue:
 
 $$
-\text{domanda}
-\rightarrow
-\text{modello generativo}
-\rightarrow
-\text{predittiva a priori}
-\rightarrow
-\text{calcolo e diagnostica}
-\rightarrow
-\text{predittiva a posteriori}
-\rightarrow
-\text{interpretazione e revisione}.
+\begin{array}{c}
+\text{domanda} \\
+\downarrow \\
+\text{modello generativo} \\
+\downarrow \\
+\text{predittiva a priori} \\
+\downarrow \\
+\text{calcolo e diagnostica} \\
+\downarrow \\
+\text{predittiva a posteriori} \\
+\downarrow \\
+\text{interpretazione e revisione}
+\end{array}
 $$
 
 L'ordine è utile per orientarsi, ma non va inteso come una sequenza rigida. Una difficoltà emersa in qualunque punto può richiedere di tornare indietro.
@@ -55,17 +57,11 @@ L'ordine è utile per orientarsi, ma non va inteso come una sequenza rigida. Una
 
 Ogni analisi dovrebbe iniziare da una domanda sostantiva, non dal software. Prima di scegliere una funzione di verosimiglianza o scrivere del codice, è necessario chiarire quale quantità risponderebbe davvero all'obiettivo scientifico.
 
-Supponiamo, per esempio, di studiare un intervento sulla memoria. Potremmo chiederci, per esempio, qual è la differenza media tra il gruppo di intervento e il gruppo di controllo, qual è la probabilità che tale differenza superi una soglia di rilevanza sostanziale, quanto varia l'effetto tra gli individui oppure come si comporterebbe un nuovo campione. Queste domande richiedono quantità diverse e non sono intercambiabili. Definirle prima dell'analisi aiuta a scegliere un modello coerente e a ridurre il rischio di costruire l'interpretazione soltanto dopo aver visto i risultati.
+Supponiamo di studiare un intervento sulla memoria. Potremmo chiederci quale sia la differenza media fra intervento e controllo, quale la probabilità che superi una soglia di rilevanza sostantiva, quanto l'effetto vari fra gli individui, o come si comporterebbe un nuovo campione. Sono domande che richiedono quantità diverse e non intercambiabili. Definirle prima dell'analisi aiuta a scegliere un modello coerente e riduce il rischio di costruire l'interpretazione dopo avere visto i risultati.
 
-Una volta chiarita la quantità di interesse, la domanda viene tradotta in un **modello generativo**, ovvero una descrizione di come i dati osservabili potrebbero essere prodotti a partire da quantità incognite. Il modello comprende almeno:
+Una volta chiarita la quantità di interesse, la domanda viene tradotta in un **modello generativo**, ovvero una descrizione di come i dati osservabili potrebbero essere prodotti a partire da quantità incognite. Il modello comprende almeno la struttura dei dati e della misurazione, la likelihood, i parametri e il loro significato, i prior, e eventuali dipendenze, gerarchie e assunzioni causali.
 
-- la struttura dei dati e della misurazione;
-- la likelihood;
-- i parametri e il loro significato;
-- i prior;
-- eventuali dipendenze, gerarchie e assunzioni causali.
-
-Il modello non è soltanto una formula utile per stimare coefficienti. Rappresenta esplicitamente il processo ipotizzato. Chiedersi: "Come potrei simulare i dati da questo modello?" è spesso il modo più diretto per verificare se la specificazione sia stata compresa.
+Il modello non è soltanto una formula utile per stimare coefficienti. Rappresenta esplicitamente il processo ipotizzato. Chiedersi «come potrei simulare i dati da questo modello?» è spesso il modo più diretto per capire se la specificazione è stata compresa.
 
 Prima di utilizzare i dati osservati, è inoltre possibile esaminare le conseguenze congiunte di likelihood e prior attraverso la distribuzione predittiva a priori:
 
@@ -75,12 +71,7 @@ p(\tilde y)
 \int p(\tilde y\mid\theta)\,p(\theta)\,d\theta.
 $$
 
-Questa distribuzione mostra quali dati il modello considera plausibili prima dell'aggiornamento. Simulando da essa possiamo individuare, per esempio:
-
-- valori impossibili o sostantivamente assurdi;
-- dispersioni eccessive o troppo ridotte;
-- prior che, combinati con la likelihood, concentrano quasi tutta la probabilità in regioni implausibili;
-- incompatibilità tra la scala dei parametri e quella del fenomeno.
+Questa distribuzione mostra quali dati il modello considera plausibili prima dell'aggiornamento. Simulando da essa possiamo individuare, per esempio, valori impossibili o sostantivamente assurdi, dispersioni eccessive o troppo ridotte, prior che, combinati con la likelihood, concentrano quasi tutta la probabilità in regioni implausibili e incompatibilità tra la scala dei parametri e quella del fenomeno.
 
 Il controllo predittivo a priori non stabilisce se il prior sia “vero”. Verifica piuttosto se il modello completo produca conseguenze compatibili con ciò che si ritiene possibile prima di utilizzare il campione analizzato. Se le simulazioni sono palesemente implausibili, è preferibile rivedere la specificazione prima di interpretare una posterior.
 
@@ -88,27 +79,18 @@ Il controllo predittivo a priori non stabilisce se il prior sia “vero”. Veri
 
 Quando il modello produce conseguenze a priori ragionevoli, è possibile procedere con il calcolo. Un algoritmo come NUTS approssima la distribuzione a posteriori mediante campioni. A questo punto, la prima domanda è di natura strettamente computazionale: *possiamo fidarci dell'approssimazione ottenuta?*
 
-Tra i segnali che richiedono attenzione vi sono:
-
-- catene che esplorano regioni diverse;
-- $\widehat R$ sensibilmente maggiore di 1;
-- bassa dimensione campionaria effettiva;
-- divergenze;
-- transizioni che raggiungono la massima profondità dell'albero;
-- geometrie posteriori difficili da esplorare.
+Tra i segnali che richiedono attenzione vi sono catene che esplorano regioni diverse, $\widehat R$ sensibilmente maggiore di 1, bassa dimensione campionaria effettiva, divergenze, transizioni che raggiungono la massima profondità dell'albero e geometrie posteriori difficili da esplorare.
 
 Aumentare semplicemente il numero di iterazioni non risolve necessariamente un modello mal parametrizzato o una geometria problematica. Le diagnostiche servono a stabilire se l'algoritmo abbia esplorato adeguatamente **la posterior specificata**, ma non dicono se quella posterior provenga da un buon modello.
 
-::: {.callout-important}
-### Due diagnosi da non confondere
-
+::: {.callout-important title="Due diagnosi da non confondere"}
 - **Diagnostica del campionamento:** valuta se l'algoritmo ha approssimato adeguatamente la posterior specificata.
 - **Diagnostica del modello:** valuta se quella posterior deriva da un modello utile e plausibile per la domanda scientifica.
 
 La prima è necessaria, ma non sostituisce la seconda.
 :::
 
-Dopo aver verificato il campionamento, si può esaminare il comportamento del modello attraverso la distribuzione predittiva a posteriori:
+Verificato il campionamento, si può esaminare il comportamento del modello attraverso la distribuzione predittiva a posteriori:
 
 $$
 p(\tilde y\mid y)
@@ -116,14 +98,7 @@ p(\tilde y\mid y)
 \int p(\tilde y\mid\theta)\,p(\theta\mid y)\,d\theta.
 $$
 
-Questa distribuzione genera dati replicati dal modello dopo l'aggiornamento. Nei *posterior predictive checks* si confrontano caratteristiche dei dati osservati con quelle dei dati replicati. Il confronto può riguardare:
-
-- centro e dispersione;
-- asimmetria e code;
-- frequenza di valori estremi;
-- differenze tra gruppi;
-- relazioni tra variabili;
-- pattern temporali o individuali.
+Questa distribuzione genera dati replicati dal modello dopo l'aggiornamento. Nei *posterior predictive checks* si confrontano caratteristiche dei dati osservati con quelle dei dati replicati. Il confronto può riguardare il centro e la dispersione, l'asimmetria e le code, la frequenza di valori estremi, le differenze tra i gruppi, la relazioni tra le variabili e gli andamenti temporali o individuali.
 
 Un modello può riprodurre bene la media e fallire sulle code, oppure può descrivere la popolazione media senza rappresentare l'eterogeneità individuale. Per questo motivo, il controllo deve concentrarsi sulle caratteristiche rilevanti per la domanda scientifica e non su un unico grafico generico.
 
@@ -131,16 +106,7 @@ Neppure un buon adattamento predittivo dimostra che il modello sia valido. Indic
 
 ## Dai risultati alla revisione
 
-Solo dopo aver verificato il calcolo e interrogato le implicazioni predittive del modello ha senso interpretare le quantità posteriori. Una comunicazione trasparente dovrebbe rendere espliciti:
-
-- il modello e le assunzioni principali;
-- i prior e la loro giustificazione;
-- le quantità di interesse;
-- l'incertezza a posteriori;
-- gli esiti delle diagnostiche computazionali;
-- gli esiti dei controlli predittivi;
-- le analisi di sensibilità;
-- i limiti e le revisioni effettuate.
+Solo dopo avere verificato il calcolo e interrogato le implicazioni predittive del modello ha senso interpretare le quantità posteriori. Una comunicazione trasparente dovrebbe rendere espliciti il modello e le assunzioni principali, i prior e la loro giustificazione, le quantità di interesse, l'incertezza a posteriori, gli esiti delle diagnostiche computazionali, gli esiti dei controlli predittivi, le analisi di sensibilità, e i limiti e le revisioni effettuate.
 
 Quando più modelli sono plausibili, strumenti predittivi come PSIS-LOO possono aiutare a valutarne la capacità di generalizzazione. Tuttavia, un confronto favorevole non trasforma il modello vincente nella descrizione vera del processo, ma indica soltanto una migliore prestazione predittiva rispetto alle alternative considerate, secondo il criterio utilizzato.
 
@@ -176,9 +142,11 @@ L'ultimo passaggio non rappresenta un fallimento. Il controllo ha rivelato una d
 
 ## Il workflow come pratica cumulativa
 
-Il flusso di lavoro bayesiano favorisce una scienza cumulativa, in quanto rende espliciti modelli, assunzioni, priorità, controlli e revisioni. La conoscenza non avanza soltanto accumulando stime, ma anche confrontando i modelli e imparando dai loro fallimenti.
+Il flusso di lavoro bayesiano favorisce una scienza cumulativa, perché rende espliciti modelli, assunzioni, prior, controlli e revisioni. La conoscenza non avanza soltanto accumulando stime, ma anche confrontando i modelli e imparando dai loro fallimenti.
 
-Questo approccio è particolarmente importante in psicologia. Una stima replicabile è utile, ma non basta se non è chiaro quale processo dovrebbe spiegare, quali misure la sostengono e in quali condizioni possa essere generalizzata. Il workflow collega quindi inferenza, previsione, teoria e trasparenza senza ridurre nessuna di queste dimensioni a un singolo indicatore numerico  [@bulbulia2023workflow].
+Questo approccio è particolarmente importante in psicologia. Una stima replicabile è utile, ma non basta se non è chiaro quale processo dovrebbe spiegare, quali misure la sostengono e in quali condizioni possa essere generalizzata. Il workflow collega quindi inferenza, previsione, teoria e trasparenza senza ridurre nessuna di queste dimensioni a un singolo indicatore numerico [@bulbulia2023workflow].
+
+## Riflessioni conclusive {.unnumbered .unlisted}
 
 Con questo capitolo si conclude la Parte dedicata al calcolo. Metropolis ha mostrato l'intuizione del campionamento MCMC; i linguaggi probabilistici e Stan hanno mostrato come separare la specificazione del modello dal motore di calcolo e gli esempi applicativi hanno mostrato come ricavare quantità posteriori sostantivamente interpretabili. Il workflow ricompone questi elementi in un unico processo.
 
@@ -188,7 +156,7 @@ Il risultato di un'analisi bayesiana non è dunque soltanto una distribuzione a 
 
 ### Esercizio 1 — Comprendere {.unnumbered .unlisted}
 
-*10 minuti · Codice: no*
+*Codice: no · Tempo indicativo: 10 minuti*
 
 Associa ciascuna situazione alla fase del workflow più pertinente.
 
@@ -206,12 +174,12 @@ Usa una volta ciascuna delle seguenti etichette:
 - controllo predittivo a posteriori;
 - revisione del modello.
 
-::: {.callout-tip collapse=true title="Suggerimento"}
+::: {.callout-tip collapse="true" title="Suggerimento"}
 
 Chiediti se il problema emerge prima dei dati, durante il calcolo, nel confronto con i dati osservati oppure nella definizione stessa dell'obiettivo.
 :::
 
-::: {.callout-note collapse=true title="Soluzione commentata"}
+::: {.callout-note collapse="true" title="Soluzione commentata"}
 
 1. **Controllo predittivo a priori:** il modello produce dati sostantivamente impossibili prima di utilizzare il campione osservato.
 2. **Diagnostica del campionamento:** le catene non sembrano avere esplorato la stessa distribuzione in modo affidabile.
@@ -222,7 +190,7 @@ Chiediti se il problema emerge prima dei dati, durante il calcolo, nel confronto
 
 ### Esercizio 2 — Prevedere {.unnumbered .unlisted}
 
-*10 minuti · Codice: no*
+*Codice: no · Tempo indicativo: 10 minuti*
 
 Per ciascuna affermazione, indica se la conclusione è giustificata.
 
@@ -234,12 +202,12 @@ C. «Il modello A ha un ELPD maggiore del modello B; quindi A è il vero process
 
 D. «La predittiva a priori assegna probabilità elevata a dati impossibili; è opportuno rivedere prior, likelihood o entrambi prima di interpretare la posterior.»
 
-::: {.callout-tip collapse=true title="Suggerimento"}
+::: {.callout-tip collapse="true" title="Suggerimento"}
 
 Distingui la qualità del calcolo, l'adeguatezza predittiva e la verità o causalità del modello.
 :::
 
-::: {.callout-note collapse=true title="Soluzione commentata"}
+::: {.callout-note collapse="true" title="Soluzione commentata"}
 
 A è **ingiustificata**. Le diagnostiche indicano che il campionamento può essere affidabile rispetto alla posterior specificata, non che il modello sia corretto.
 
@@ -252,7 +220,7 @@ D è **giustificata**. Il controllo predittivo a priori serve precisamente a esa
 
 ### Esercizio 3 — Modificare {.unnumbered .unlisted}
 
-*10 minuti · Codice: no*
+*Codice: no · Tempo indicativo: 10 minuti*
 
 Considera questo esito:
 
@@ -268,12 +236,12 @@ Valuta separatamente le seguenti possibili modifiche:
 
 Indica quali modifiche rispondono al problema osservato e quali no.
 
-::: {.callout-tip collapse=true title="Suggerimento"}
+::: {.callout-tip collapse="true" title="Suggerimento"}
 
 Le diagnostiche computazionali sono già soddisfacenti. Il problema riguarda ciò che il modello genera, non la quantità di campioni MCMC.
 :::
 
-::: {.callout-note collapse=true title="Soluzione commentata"}
+::: {.callout-note collapse="true" title="Soluzione commentata"}
 
 Le modifiche 3 e, a seconda del pattern osservato, 4 possono rispondere al problema modellistico. La prima aggiunge una fonte di eterogeneità; la seconda può rappresentare meglio dati con code più pesanti.
 
@@ -282,7 +250,7 @@ Aumentare le iterazioni o cambiare il seed non corregge una posterior predittiva
 
 ### Esercizio 4 — Criticare {.unnumbered .unlisted}
 
-*10 minuti · Codice: no*
+*Codice: no · Tempo indicativo: 10 minuti*
 
 Valuta il seguente resoconto:
 
@@ -290,12 +258,12 @@ Valuta il seguente resoconto:
 
 Individua almeno quattro problemi e riscrivi la conclusione in una forma compatibile con il workflow bayesiano.
 
-::: {.callout-tip collapse=true title="Suggerimento"}
+::: {.callout-tip collapse="true" title="Suggerimento"}
 
 Considera separatamente diagnostica del campionamento, confronto relativo, controlli predittivi, revisione guidata dai dati e trasparenza.
 :::
 
-::: {.callout-note collapse=true title="Soluzione commentata"}
+::: {.callout-note collapse="true" title="Soluzione commentata"}
 
 Il resoconto presenta almeno questi problemi:
 

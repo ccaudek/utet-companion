@@ -11,7 +11,7 @@ y_i \sim \operatorname{Normal}(\mu_i,\sigma),
 \mu_i = \alpha + \beta_1 x_{1i} + \beta_2 x_{2i} + \cdots .
 $$
 
-Questo capitolo si concentra quindi su due idee. La prima è **interpretativa**: in una regressione multipla ogni coefficiente descrive una differenza nella media condizionata, dato l'insieme degli altri termini inclusi nel modello. La seconda è di tipo **computazionale**: una formula compatta come `y ~ x1 + x2` viene trasformata in una matrice numerica e, tramite `brms`, in un programma Stan.
+Il capitolo si concentra su due idee. La prima è **interpretativa**: in una regressione multipla ogni coefficiente descrive una differenza nella media condizionata, dato l'insieme degli altri termini inclusi nel modello. La seconda è **computazionale**: una formula compatta come `y ~ x1 + x2` viene tradotta in una matrice numerica e, tramite `brms`, in un programma Stan.
 
 Questa grammatica verrà riutilizzata immediatamente nei capitoli successivi. Un modello con sola intercetta, il confronto tra due gruppi e l'ANOVA non richiederanno principi fondamentali nuovi: cambieranno soprattutto le colonne della matrice del modello e, di conseguenza, il significato dei coefficienti.
 :::
@@ -22,9 +22,9 @@ Questa grammatica verrà riutilizzata immediatamente nei capitoli successivi. Un
 **Da saper fare.** Tradurre una domanda descrittiva in una formula con più predittori; leggere le colonne prodotte da `model.matrix()`; interpretare un coefficiente come associazione condizionata agli altri predittori inclusi; specificare il modello con `brms`; riconoscere nel codice Stan generato la matrice dei predittori, i coefficienti e la verosimiglianza.
 
 **Approfondimento facoltativo.** La lettura dettagliata del codice Stan generato è utile per comprendere la traduzione computazionale, ma non è necessaria per usare correttamente `brms`. La scrittura manuale di un programma Stan non fa parte del percorso essenziale di questo capitolo.
-:::
 
 [Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
+:::
 
 ::: {.callout-tip collapse="true" title="Prerequisiti"}
 - Il modello lineare generativo è introdotto nell'@sec-linear-generative.
@@ -33,11 +33,11 @@ Questa grammatica verrà riutilizzata immediatamente nei capitoli successivi. Un
 - La lettura del codice Stan è introdotta nell'@sec-apx-stan-lang.
 :::
 
-::: {.callout-caution collapse=true title="Preparazione del notebook"}
+::: {.callout-caution collapse="true" title="Preparazione del notebook"}
 
 ```{r}
 #| label: setup-formula-program
-#| include: false
+#| output: false
 
 here::here("code", "_common.R") |>
   source()
@@ -186,7 +186,7 @@ stress_data |>
   )
 ```
 
-Poiché in questo esempio i parametri generativi sono noti per costruzione, possiamo verificare se la procedura di stima sia in grado di recuperare ragionevolmente il processo simulato. Nei dati reali, naturalmente, tali parametri non sono noti a priori: il modello rimane una rappresentazione da valutare, e non una descrizione certa del processo generatore dei dati.
+Qui i parametri generativi sono noti per costruzione, quindi possiamo verificare se la stima recuperi il processo simulato. Nei dati reali non lo sono: il modello resta una rappresentazione da valutare, non una descrizione certa del processo che ha generato i dati.
 
 Prima di adattare il modello multiplo osserviamo le associazioni marginali, cioè ciascun predittore considerato separatamente.
 
@@ -237,14 +237,14 @@ L'espressione *controllando per* (o *a parità di*) richiede però un'interpreta
 ::: {.callout-warning title="Condizionare non equivale a intervenire"}
 Un coefficiente di regressione multipla è una quantità condizionata all'insieme dei predittori inclusi. Questa proprietà algebrica non gli conferisce automaticamente un significato causale.
 
-Inoltre, l'aggiunta di una variabile al modello non corrisponde sempre a un "controllo più accurato". A seconda della domanda di ricerca e della struttura causale ipotizzata, tale aggiustamento può essere appropriato, irrilevante o addirittura introdurre una distorsione. La Parte **Causalità** affronterà sistematicamente questo problema; per il momento interpretiamo i coefficienti in senso puramente descrittivo e condizionato.
+Inoltre, aggiungere una variabile al modello non equivale sempre a un “controllo più accurato”. A seconda della domanda di ricerca e della struttura causale ipotizzata, tale aggiustamento può essere appropriato, irrilevante o addirittura introdurre una distorsione. La Parte **Causalità** affronterà sistematicamente questo problema; per il momento interpretiamo i coefficienti in senso puramente descrittivo e condizionato.
 :::
 
 ### Perché il coefficiente può cambiare
 
-Quando due predittori sono correlati, una regressione semplice attribuisce al singolo predittore anche la porzione di informazione che esso condivide con altre variabili associate all'esito. Nel modello multiplo, invece, i coefficienti vengono stimati congiuntamente, e ciascuno riflette l'associazione *dopo* aver tenuto conto dell'altro.
+Quando due predittori sono correlati, una regressione semplice attribuisce al singolo predittore anche la porzione di informazione che esso condivide con altre variabili associate all'esito. Nel modello multiplo i coefficienti sono stimati congiuntamente, e ciascuno riflette l'associazione *dopo* avere tenuto conto dell'altro.
 
-Per isolare questo aspetto geometrico, confrontiamo le stime puntuali ottenute dalle regressioni semplici con quelle del modello multiplo. Utilizziamo la funzione `lm()` come strumento algebrico di riferimento, senza impegnarci in una seconda prospettiva inferenziale.
+Per isolare l'aspetto geometrico, confrontiamo le stime puntuali delle regressioni semplici con quelle del modello multiplo. Usiamo `lm()` come riferimento algebrico: non stiamo introducendo una seconda prospettiva inferenziale.
 
 ```{r}
 #| label: compare-bivariate-multiple
@@ -276,7 +276,7 @@ bind_rows(
   select(modello, term, estimate)
 ```
 
-Le differenze tra le stime marginali e quelle condizionate non indicano automaticamente quale modello sia "corretto": segnalano piuttosto che i due tipi di coefficienti rispondono a domande diverse. Nei dati reali, la scelta dei predittori deve essere giustificata dalla domanda scientifica e dal disegno di ricerca, non dal risultato che si desidera ottenere.
+Le differenze fra stime marginali e condizionate non indicano quale modello sia “corretto”: segnalano che i due tipi di coefficiente rispondono a domande diverse. Nei dati reali, la scelta dei predittori deve essere giustificata dalla domanda scientifica e dal disegno di ricerca, non dal risultato che si desidera ottenere.
 
 Un secondo effetto della correlazione tra predittori riguarda l'**incertezza**. Se due variabili contengono informazioni molto simili, i dati non consentono di distinguere con chiarezza a quale coefficiente debba essere associata una determinata quota di informazione. La regressione multipla non elimina questa ambiguità, ma la incorpora nella distribuzione congiunta a posteriori, rendendola esplicitamente quantificabile.
 
@@ -478,7 +478,7 @@ posterior::summarise_draws(
 )
 ```
 
-Poiché i dati sono simulati, è possibile confrontare le distribuzioni a posteriori con i parametri generativi noti. L'obiettivo non è ottenere una coincidenza puntuale, che sarebbe irrealistica anche in una simulazione a causa del campionamento finito, ma verificare che l'inferenza sia globalmente compatibile con il processo sottostante e che l'incertezza a ogni livello sia esplicitamente quantificabile.
+Trattandosi di dati simulati, possiamo confrontare le distribuzioni a posteriori con i parametri generativi. Non ci aspettiamo una coincidenza puntuale — il campionamento è finito anche in una simulazione — ma che l'inferenza sia compatibile con il processo sottostante e che l'incertezza resti quantificata a ogni livello.
 
 ### I coefficienti appartengono a una posterior congiunta
 
@@ -498,7 +498,12 @@ draws_multiple |>
 La correlazione a posteriori tra i coefficienti non rappresenta un nuovo parametro di interesse psicologico. Esprime piuttosto come, data la matrice del modello e le osservazioni, diverse combinazioni di coefficienti possano produrre previsioni simili. Quanto maggiore è la sovrapposizione informativa tra i predittori, tanto più importante diventa interpretare i coefficienti come parte di una distribuzione congiunta, anziché isolatamente.
 
 ::: {.callout-note title="Regressione multipla non significa sommare evidenze indipendenti"}
-Quando i predittori covariano, l'informazione sui coefficienti viene condivisa. Di conseguenza, i coefficienti marginali possono differire da quelli condizionati, l'incertezza su un coefficiente dipende anche dagli altri predittori, la distribuzione a posteriori può manifestare dipendenze tra i coefficienti e l'aggiunta di predittori non garantisce automaticamente stime più precise o interpretazioni più chiare.
+Quando i predittori covariano, l'informazione sui coefficienti è condivisa. Ne seguono quattro conseguenze:
+
+- i coefficienti marginali possono differire da quelli condizionati;
+- l'incertezza su un coefficiente dipende anche dagli altri predittori;
+- la distribuzione a posteriori può mostrare dipendenze fra i coefficienti;
+- aggiungere predittori non garantisce stime più precise né interpretazioni più chiare.
 :::
 
 ## Da `brms` alla matrice usata da Stan
@@ -563,7 +568,7 @@ Non è necessario comprendere ogni riga del programma generato. Per gli scopi di
 
 1. **Dati**: il vettore delle osservazioni $Y$ e la matrice dei predittori, che costituiscono l'input del modello;
 2. **Parametri**: i coefficienti di regressione e il parametro di scala $\sigma$, oggetto dell'inferenza;
-3. **Prior**: le distribuzioni assegnate ai parametri, che contribuiscono alla definizione della posteriori;
+3. **Prior**: le distribuzioni assegnate ai parametri, che concorrono a definire la distribuzione a posteriori;
 4. **Verosimiglianza**: la distribuzione di $Y$ condizionata al predittore lineare, che lega i dati ai parametri.
 
 La funzione di `brms` è proprio questa: consentire al ricercatore di esprimere il modello a un livello sostantivo e leggibile, e tradurlo automaticamente in una rappresentazione pronta per il motore computazionale Stan.
@@ -625,9 +630,9 @@ La ragione per cui abbiamo introdotto la matrice del modello emerge chiaramente 
 
 Il modello lineare non è quindi un insieme di procedure separate, ma una **grammatica comune** in cui diverse domande scientifiche vengono rappresentate attraverso matrici e quantità di interesse diverse.
 
-## Errori frequenti
+## Errori concettuali da evitare
 
-::: {.callout-warning title="Errori di interpretazione e implementazione"}
+::: {.callout-caution title="Sei confusioni ricorrenti"}
 
 1. **Considerare la formula come il modello completo.**  
    La formula specifica principalmente la struttura della media condizionata; la famiglia di distribuzione, i prior e l'eventuale struttura di dipendenza tra le osservazioni fanno parte integrante della specificazione completa.
@@ -651,7 +656,7 @@ Il modello lineare non è quindi un insieme di procedure separate, ma una **gram
 
 ## Riflessioni conclusive {.unnumbered .unlisted}
 
-La regressione multipla non rappresenta un paradigma nuovo rispetto alla regressione semplice, ma ne estende il concetto includendo simultaneamente più predittori. Questo passaggio, apparentemente modesto, modifica invece profondamente l'interpretazione: ogni coefficiente acquista un significato nel contesto dell'intera formula e la sua interpretazione non può prescindere dagli altri predittori inclusi.
+La regressione multipla non introduce un paradigma nuovo: estende la regressione semplice includendo più predittori nella stessa media condizionata. Il passaggio sembra modesto, ma cambia l'interpretazione in profondità, perché ogni coefficiente acquista significato nel contesto dell'intera formula e non può essere letto indipendentemente dagli altri predittori inclusi.
 
 La matrice del modello rende questa dipendenza concreta. Le colonne codificano i termini della formula e il prodotto tra la matrice e il vettore dei coefficienti restituisce tutte le medie condizionate del modello. Da questo punto di vista, la formula R e il codice Stan non rappresentano modelli differenti, ma sono due diverse rappresentazioni dello stesso oggetto a diversi livelli di astrazione.
 
@@ -663,7 +668,7 @@ Nel prossimo capitolo, utilizzeremo questa grammatica in un caso apparentemente 
 
 ### Esercizio 1 — Comprendere: da una a due variabili {.unnumbered .unlisted}
 
-*Codice: no · 10 minuti*
+*Codice: no · Tempo indicativo: 10 minuti*
 
 Considera le formule:
 
@@ -677,11 +682,11 @@ B: stress ~ negative_affect + sleep_c
 3. Indica quale ulteriore informazione è necessaria, oltre alla formula, per definire un modello bayesiano completo.
 4. Spiega perché una differenza tra i due coefficienti non dimostra, da sola, quale formula rappresenti meglio il fenomeno.
 
-::: {.callout-tip collapse=true title="Suggerimento"}
+::: {.callout-tip collapse="true" title="Suggerimento"}
 Nel modello B il coefficiente del sonno è definito condizionatamente al valore di `negative_affect`.
 :::
 
-::: {.callout-note collapse=true title="Soluzione commentata"}
+::: {.callout-note collapse="true" title="Soluzione commentata"}
 Per A,
 
 $$
@@ -702,7 +707,7 @@ Nel primo modello, $\beta_{\text{sleep}}$ descrive l'associazione marginale line
 
 ### Esercizio 2 — Prevedere: leggere la matrice {.unnumbered .unlisted}
 
-*Codice: no · 10 minuti*
+*Codice: no · Tempo indicativo: 10 minuti*
 
 Una riga della matrice completa è
 
@@ -727,7 +732,7 @@ $$
 3. Indica come cambierebbe la matrice con `stress ~ 0 + negative_affect + sleep_c`.
 4. Spiega perché rimuovere l'intercetta è una scelta sostantiva e non una semplice semplificazione del codice.
 
-::: {.callout-note collapse=true title="Soluzione commentata"}
+::: {.callout-note collapse="true" title="Soluzione commentata"}
 La media condizionata è
 
 $$
@@ -739,7 +744,7 @@ Il dato individuale rimane distribuito attorno a tale media con deviazione stand
 
 ### Esercizio 3 — Modificare: osservare ciò che fa la formula {.unnumbered .unlisted}
 
-*Codice: guidato · 15 minuti*
+*Codice: guidato · Tempo indicativo: 15 minuti*
 
 Usa `model.matrix()` con le formule seguenti:
 
@@ -757,11 +762,11 @@ Per ciascuna:
 3. scrivi l'equazione della media condizionata;
 4. spiega quale modello dei capitoli successivi è anticipato dalla formula `~ 1`.
 
-::: {.callout-tip collapse=true title="Suggerimento"}
+::: {.callout-tip collapse="true" title="Suggerimento"}
 Il modello con sola intercetta sarà il punto di partenza del prossimo capitolo.
 :::
 
-::: {.callout-note collapse=true title="Soluzione commentata"}
+::: {.callout-note collapse="true" title="Soluzione commentata"}
 `~ 1` produce soltanto la colonna dell'intercetta. `~ negative_affect` produce intercetta e una colonna per il predittore. Aggiungendo `sleep_c` compare una terza colonna. Con `0 +` la colonna dell'intercetta viene rimossa.
 
 L'esercizio mostra che modificare la formula significa modificare la matrice e quindi il significato dei coefficienti. Il modello `~ 1` anticipa il modello a sola intercetta, nel quale l'unico parametro di posizione rappresenta la media dell'esito.
@@ -769,7 +774,7 @@ L'esercizio mostra che modificare la formula significa modificare la matrice e q
 
 ### Esercizio 4 — Criticare e comunicare {.unnumbered .unlisted}
 
-*Codice: no · 15 minuti*
+*Codice: no · Tempo indicativo: 15 minuti*
 
 Un ricercatore scrive:
 
@@ -777,11 +782,11 @@ Un ricercatore scrive:
 
 Individua almeno quattro problemi e riscrivi l'interpretazione in forma metodologicamente appropriata.
 
-::: {.callout-tip collapse=true title="Suggerimento"}
+::: {.callout-tip collapse="true" title="Suggerimento"}
 Distingui associazione condizionata, indipendenza, causalità, diagnostica computazionale e adeguatezza scientifica.
 :::
 
-::: {.callout-note collapse=true title="Soluzione commentata"}
+::: {.callout-note collapse="true" title="Soluzione commentata"}
 Il coefficiente negativo descrive un'associazione tra sonno e media dello stress condizionatamente a `negative_affect` e alla specificazione adottata. Non dimostra l'effetto di un intervento sul sonno e non implica che sonno e affetto negativo siano indipendenti. L'assenza di divergenze riguarda la qualità dell'esplorazione numerica della posterior, non la correttezza sostantiva della formula.
 
 Una formulazione più appropriata potrebbe essere:
@@ -789,9 +794,10 @@ Una formulazione più appropriata potrebbe essere:
 > Nel modello considerato, valori maggiori di sonno sono associati a una media dello stress più bassa tra osservazioni con lo stesso livello di affetto negativo. L'ampiezza e l'incertezza di questa associazione devono essere descritte mediante la distribuzione a posteriori del coefficiente. Le diagnostiche computazionali possono indicare che il campionamento ha funzionato adeguatamente, ma non stabiliscono che la specificazione sia causalmente o scientificamente corretta.
 :::
 
-::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+::: {.callout-note collapse="true" title="Informazioni sull'ambiente di sviluppo"}
 
 ```{r}
+#| code-fold: true
 sessionInfo()
 ```
 :::

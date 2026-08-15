@@ -3,7 +3,7 @@
 ::: {.callout-note appearance="minimal"}
 Nel capitolo precedente abbiamo distinto due compiti. Il ricercatore specifica il modello, mentre il software sceglie ed esegue il metodo numerico per approssimare la distribuzione a posteriori. Stan rende concreta questa separazione.
 
-Stan è, infatti, sia un linguaggio per la descrizione di modelli probabilistici che un sistema di calcolo per l'inferenza bayesiana. Per il campionamento MCMC utilizza l'Hamiltonian Monte Carlo e, normalmente, l'algoritmo NUTS. In questo capitolo, tuttavia, non ci occuperemo della meccanica di NUTS né impareremo a programmare Stan in modo autonomo. L'obiettivo è più semplice e più importante per il percorso essenziale:
+Stan è, infatti, sia un linguaggio per descrivere modelli probabilistici sia un sistema di calcolo per l'inferenza bayesiana. Per il campionamento MCMC utilizza l'Hamiltonian Monte Carlo e, normalmente, l'algoritmo NUTS. In questo capitolo, tuttavia, non ci occuperemo della meccanica di NUTS né impareremo a programmare Stan in modo autonomo. L'obiettivo è più semplice e più importante per il percorso essenziale:
 
 > **leggere un programma Stan come una traduzione eseguibile del modello statistico.**
 
@@ -27,20 +27,14 @@ Per un modello elementare, questa lettura può essere guidata da quattro domande
 
 ::: {.callout-tip collapse="true" title="Prerequisiti"}
 
-- Sono dati per noti i concetti di campionamento MCMC e di linguaggio di programmazione probabilistica dei capitoli 15 e 16.
-- Il modello Beta-Binomiale del capitolo 9 viene utilizzato come esempio di riferimento.
-- Per eseguire il codice sono utili l'@sec-apx-install-cmdstan, l'@sec-apx-cmdstanr-intro e l'@sec-apx-stan-lang; l'@sec-apx-mcmc-diagnostics, l'@sec-apx-prior-predictive-check e l'@sec-apx-posterior-predictive approfondiscono diagnostica e controlli predittivi.
+- Sono dati per noti il campionamento MCMC del @sec-mcmc-metropolis e l'idea di linguaggio di programmazione probabilistica del @sec-mcmc-ppl.
+- Il modello Beta-Binomiale del @sec-conjugate-families viene usato come esempio di riferimento.
 
-**Riferimenti tecnici facoltativi:**
-
-- Sintassi completa del linguaggio: [appendice K sul linguaggio Stan](../appendix/a43_stan_lang.qmd).
-- Configurazione dell'ambiente con `cmdstanr`: [appendice J su cmdstanr](../appendix/a42_cmdstanr_intro.qmd).
-- Diagnostiche di convergenza: [appendice L sulla diagnostica](../appendix/a44_stan_diagnostics.qmd).
-- Controlli predittivi: [appendice sulla predittiva a priori](../appendix/a45_stan_prior-predictive.qmd) e [appendice sulla predittiva a posteriori](../appendix/a46_stan_posterior_predictive.qmd).
+**Riferimenti tecnici facoltativi.** Per eseguire il codice: l'@sec-apx-install-cmdstan e l'@sec-apx-cmdstanr-intro. Per la sintassi del linguaggio: l'@sec-apx-stan-lang. Per diagnostica e controlli predittivi: l'@sec-apx-mcmc-diagnostics, l'@sec-apx-prior-predictive-check e l'@sec-apx-posterior-predictive.
 
 :::
 
-::: {.callout-caution collapse=true title="Preparazione del notebook"}
+::: {.callout-caution collapse="true" title="Preparazione del notebook"}
 
 ```{r}
 #| output: false
@@ -67,7 +61,7 @@ k \mid \theta,N &\sim \operatorname{Binomiale}(N,\theta).
 \end{aligned}
 $$
 
-La prima riga descrive la distribuzione a priori di $\theta$. La seconda riga descrive come il numero di successi osservati dipenda da $\theta$. La distribuzione a priori $\operatorname{Beta}(1,1)$ è uniforme sull'intervallo $[0,1]$; in questo esempio ha un'influenza minima rispetto a 1000 osservazioni, ma non deve essere interpretata come una scelta universalmente "oggettiva".
+La prima riga descrive la distribuzione a priori di $\theta$. La seconda riga descrive come il numero di successi osservati dipenda da $\theta$. La distribuzione a priori $\operatorname{Beta}(1,1)$ è uniforme sull'intervallo $[0,1]$; in questo esempio ha un'influenza minima rispetto a 1000 osservazioni, ma non va interpretata come una scelta universalmente “oggettiva”.
 
 Lo stesso modello può essere scritto in Stan nel modo seguente [@nicenboim2025introduction]:
 
@@ -111,7 +105,7 @@ data {
 
 Il blocco `data` dichiara i valori forniti dall'esterno prima dell'esecuzione. In questo caso, `N` è un numero intero almeno pari a 1, mentre `k` è un numero intero compreso tra 0 e `N`. I vincoli permettono a Stan di controllare che i dati siano formalmente ammissibili: per esempio, `k = 1200` con `N = 1000` produrrebbe un errore prima del campionamento.
 
-Dire che $N$ e $k$ appartengono al blocco `data` non significa che siano necessariamente privi di errore in senso stretto. Significa soltanto che, **nel modello corrente**, vengono trattati come valori noti forniti al programma.
+Che $N$ e $k$ stiano nel blocco `data` non significa che siano privi di errore: significa che, **nel modello corrente**, vengono trattati come valori noti forniti al programma.
 
 **Il blocco `parameters`: ciò che il modello deve apprendere.**
 
@@ -208,7 +202,7 @@ generated quantities {
 
 Una lettura sostantiva, senza soffermarsi sulla sintassi, è la seguente:
 
-> Abbiamo osservato 184 risultati uguali a 6 in 1000 lanci. La probabilità incognita di ottenere un 6 è compresa tra 0 e 1 e riceve una prior uniforme. Il conteggio osservato è modellato con una distribuzione binomiale. Per ogni valore estratto dalla posterior calcoliamo quanto esso differisca da $1/6$, se superi $1/6$ e quanti 6 potremmo osservare in una nuova serie di 1000 lanci.
+> Abbiamo osservato 184 risultati uguali a 6 in 1000 lanci. La probabilità incognita di ottenere un 6 è compresa tra 0 e 1 e riceve un prior uniforme. Il conteggio osservato è modellato con una distribuzione binomiale. Per ogni valore estratto dalla posterior calcoliamo quanto esso differisca da $1/6$, se superi $1/6$ e quanti 6 potremmo osservare in una nuova serie di 1000 lanci.
 
 Saper produrre una parafrasi di questo tipo è l'obiettivo del percorso essenziale.
 
@@ -230,7 +224,7 @@ $$
 P\!\left(\theta>\frac{1}{6}\mid k,N\right)\approx 0.93.
 $$
 
-Queste quantità non vengono inserite manualmente nel programma, ma emergono dall'interazione tra il prior e la distribuzione dei dati. Stan le approssima mediante campioni posteriori. Il fatto che la probabilità sia elevata, tuttavia, non dimostra che il dado sia stato materialmente manipolato. La conclusione è condizionata al modello binomiale, all'indipendenza dei lanci, alla stabilità di $\theta$, alla correttezza dei dati e al prior scelto.
+Queste quantità non vengono inserite manualmente nel programma, ma emergono dall'interazione tra il prior e la distribuzione dei dati. Stan le approssima mediante campioni posteriori. Una probabilità così alta non dimostra però che il dado sia stato manipolato: la conclusione è condizionata al modello binomiale, all'indipendenza dei lanci, alla stabilità di $\theta$, alla correttezza dei dati e al prior scelto.
 
 ::: {.callout-tip collapse="true" title="Approfondimento facoltativo: eseguire il modello con `cmdstanr`"}
 Il percorso essenziale termina con la capacità di leggere e parafrasare il programma. Non è necessario comprendere ogni istruzione R seguente.
@@ -357,7 +351,9 @@ Un programma che compila e produce campioni può essere ancora scientificamente 
 
 La leggibilità del programma serve proprio a rendere queste scelte visibili e discutibili. Stan esegue l'inferenza specificata, ma non verifica da solo tutte le assunzioni che la rendono scientificamente plausibile.
 
-Leggere Stan significa dunque ricostruire il modello a partire dalla struttura del programma. Il blocco `data` dichiara ciò che viene trattato come osservato; `parameters` dichiara ciò che deve essere appreso; `model` combina prior e distribuzione dei dati per definire la posterior bersaglio; `generated quantities` trasforma i campioni posteriori e genera nuovi dati possibili  senza modificare la posterior.
+## Riflessioni conclusive {.unnumbered .unlisted}
+
+Leggere Stan significa ricostruire il modello a partire dalla struttura del programma. Il blocco `data` dichiara ciò che viene trattato come osservato; `parameters` dichiara ciò che deve essere appreso; `model` combina prior e distribuzione dei dati per definire la posterior bersaglio; `generated quantities` trasforma i campioni posteriori e genera nuovi dati possibili senza modificare la posterior.
 
 Tre distinzioni meritano di essere ricordate:
 
@@ -365,13 +361,13 @@ Tre distinzioni meritano di essere ricordate:
 2. una dichiarazione con `~` nel blocco `model` contribuisce alla densità bersaglio, non genera un nuovo dato;
 3. una quantità calcolata in `generated quantities` è una conseguenza della posterior, non una componente che la determina.
 
-Il vantaggio di Stan non è quello di automatizzare le decisioni scientifiche. Consiste piuttosto nel separare la formulazione leggibile del modello dal difficile lavoro numerico necessario per esplorarne la posterior.
+Il vantaggio di Stan non è automatizzare le decisioni scientifiche, ma separare la formulazione leggibile del modello dal lavoro numerico necessario a esplorarne la posterior.
 
 ## Esercizi {.unnumbered .unlisted}
 
 ### Esercizio 1 — Comprendere {.unnumbered .unlisted}
 
-*10 minuti · Codice: no*
+*Codice: no · Tempo indicativo: 10 minuti*
 
 Considera nuovamente il programma:
 
@@ -396,13 +392,13 @@ Rispondi alle domande senza eseguire il codice:
 3. quale riga specifica il prior?
 4. quale riga specifica il modello dei dati?
 5. che cosa significa il vincolo `lower=0, upper=1`?
-6. il vincolo assegna automaticamente una prior uniforme a `theta`?
+6. il vincolo assegna automaticamente un prior uniforme a `theta`?
 
-::: {.callout-tip collapse=true title="Suggerimento"}
+::: {.callout-tip collapse="true" title="Suggerimento"}
 Distingui il dominio ammissibile del parametro dalla distribuzione di plausibilità assegnata al suo interno.
 :::
 
-::: {.callout-note collapse=true title="Soluzione commentata"}
+::: {.callout-note collapse="true" title="Soluzione commentata"}
 `N` e `k` sono osservati e vengono forniti nel blocco `data`. `theta` è incognito e viene dichiarato nel blocco `parameters`.
 
 La riga
@@ -419,12 +415,12 @@ k ~ binomial(N, theta);
 
 specifica come il conteggio osservato dipenda da `N` e `theta`.
 
-Il vincolo stabilisce che `theta` può assumere soltanto valori tra 0 e 1. Non assegna una prior uniforme: senza la riga `theta ~ beta(1, 1);`, il modello non conterrebbe esplicitamente quella distribuzione a priori.
+Il vincolo stabilisce che `theta` può assumere soltanto valori tra 0 e 1. Non assegna un prior uniforme: senza la riga `theta ~ beta(1, 1);`, il modello non conterrebbe esplicitamente quella distribuzione a priori.
 :::
 
 ### Esercizio 2 — Prevedere {.unnumbered .unlisted}
 
-*10 minuti · Codice: no*
+*Codice: no · Tempo indicativo: 10 minuti*
 
 Per ciascuna modifica, indica se cambia:
 
@@ -439,11 +435,11 @@ Per ciascuna modifica, indica se cambia:
 5. sostituire la Binomiale con un diverso modello dei dati;
 6. aumentare il numero di catene da 4 a 8.
 
-::: {.callout-tip collapse=true title="Suggerimento"}
+::: {.callout-tip collapse="true" title="Suggerimento"}
 Prior, dati e likelihood determinano la posterior bersaglio. Le impostazioni del campionatore determinano come viene approssimata. `generated quantities` opera dopo il campionamento.
 :::
 
-::: {.callout-note collapse=true title="Soluzione commentata"}
+::: {.callout-note collapse="true" title="Soluzione commentata"}
 1. **A:** cambia il prior e quindi la posterior bersaglio.
 2. **B:** aumenta il numero di campioni posteriori, ma non cambia il modello.
 3. **A:** cambiano i dati osservati e quindi la posterior.
@@ -454,7 +450,7 @@ Prior, dati e likelihood determinano la posterior bersaglio. Le impostazioni del
 
 ### Esercizio 3 — Modificare {.unnumbered .unlisted}
 
-*10 minuti · Codice: no*
+*Codice: no · Tempo indicativo: 10 minuti*
 
 Un ricercatore desidera ottenere, oltre alla posterior di `theta`, tre quantità:
 
@@ -470,11 +466,11 @@ Per ciascuna quantità indica:
 
 Non è necessario scrivere la sintassi Stan.
 
-::: {.callout-tip collapse=true title="Suggerimento"}
+::: {.callout-tip collapse="true" title="Suggerimento"}
 Le tre quantità sono conseguenze dei valori posteriori di `theta`; nessuna deve contribuire a definire la posterior.
 :::
 
-::: {.callout-note collapse=true title="Soluzione commentata"}
+::: {.callout-note collapse="true" title="Soluzione commentata"}
 Tutte e tre appartengono a `generated quantities`.
 
 1. Una singola estrazione della differenza è il valore corrente di $\theta-0.20$. L'insieme delle estrazioni descrive la posterior della distanza dalla soglia.
@@ -486,22 +482,22 @@ Collocarle nel blocco `model` sarebbe concettualmente errato, perché sono conse
 
 ### Esercizio 4 — Criticare {.unnumbered .unlisted}
 
-*10 minuti · Codice: no*
+*Codice: no · Tempo indicativo: 10 minuti*
 
 Valuta il seguente commento:
 
-> «Il programma assegna automaticamente una prior uniforme a `theta` perché il parametro è vincolato tra 0 e 1. La riga `k ~ binomial(N, theta)` genera i dati usati nell'analisi. Poiché il programma compila senza errori e $\hat R$ è vicino a 1, il modello del dado è corretto.»
+> «Il programma assegna automaticamente un prior uniforme a `theta` perché il parametro è vincolato tra 0 e 1. La riga `k ~ binomial(N, theta)` genera i dati usati nell'analisi. Poiché il programma compila senza errori e $\hat R$ è vicino a 1, il modello del dado è corretto.»
 
 Individua almeno tre errori e riscrivi il commento in forma corretta.
 
-::: {.callout-tip collapse=true title="Suggerimento"}
+::: {.callout-tip collapse="true" title="Suggerimento"}
 Distingui vincolo, prior, valutazione del dato osservato, qualità del campionamento e adeguatezza scientifica del modello.
 :::
 
-::: {.callout-note collapse=true title="Soluzione commentata"}
+::: {.callout-note collapse="true" title="Soluzione commentata"}
 Il commento contiene almeno tre confusioni.
 
-Primo, il vincolo tra 0 e 1 stabilisce il dominio del parametro, non una prior uniforme. La prior uniforme è specificata separatamente da `theta ~ beta(1, 1);`.
+Primo, il vincolo tra 0 e 1 stabilisce il dominio del parametro, non un prior uniforme. Il prior uniforme è specificata separatamente da `theta ~ beta(1, 1);`.
 
 Secondo, `k` è già osservato e viene fornito nel blocco `data`. Nel blocco `model`, `k ~ binomial(N, theta);` valuta la compatibilità del dato con i possibili valori di `theta`; non genera il dato analizzato.
 
@@ -509,10 +505,10 @@ Terzo, compilazione riuscita e diagnostiche favorevoli riguardano la correttezza
 
 Una formulazione corretta è:
 
-> «Il programma vincola `theta` all'intervallo delle probabilità e gli assegna esplicitamente una prior Beta(1,1). Il conteggio osservato viene valutato con un modello Binomiale. Se le diagnostiche sono favorevoli, i campioni possono rappresentare adeguatamente la posterior specificata; l'adeguatezza del modello deve comunque essere valutata separatamente.»
+> «Il programma vincola `theta` all'intervallo delle probabilità e gli assegna esplicitamente un prior Beta(1,1). Il conteggio osservato viene valutato con un modello Binomiale. Se le diagnostiche sono favorevoli, i campioni possono rappresentare adeguatamente la posterior specificata; l'adeguatezza del modello deve comunque essere valutata separatamente.»
 :::
 
-::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+::: {.callout-note collapse="true" title="Informazioni sull'ambiente di sviluppo"}
 ```{r}
 #| code-fold: true
 sessionInfo()

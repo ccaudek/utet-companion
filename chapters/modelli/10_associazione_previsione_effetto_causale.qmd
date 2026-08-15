@@ -20,12 +20,23 @@ Questo capitolo conclude la Parte *Modelli* distinguendo quattro obiettivi spess
 **Da saper fare.** Riconoscere se una domanda è associativa, predittiva, causale o meccanicistica; individuare la quantità di interesse appropriata; spiegare perché l'identificazione causale precede la stima; distinguere il ruolo della randomizzazione da quello del modello statistico; scegliere un linguaggio coerente con ciò che il disegno consente di sostenere.
 
 **Approfondimento facoltativo.** La notazione completa dei potenziali esiti, le condizioni di identificazione, i DAG e le strategie di aggiustamento nei dati osservazionali appartengono alla successiva Parte *Causalità*. In questo capitolo viene introdotto soltanto il significato necessario per comprendere i limiti interpretativi dei modelli studiati finora.
-:::
 
 [Che cosa significano queste etichette?](../../guida-al-manuale.qmd#sec-percorsi-lettura)
+:::
 
 ::: {.callout-tip collapse="true" title="Prerequisiti"}
 Sono particolarmente utili il modello lineare come rappresentazione generativa (@sec-linear-generative), il workflow bayesiano con `brms` (@sec-linmod-bayesian-reg), la regressione multipla e l'interpretazione condizionata dei coefficienti (@sec-multiple-regression), e il controllo della specificazione (@sec-model-misspecification). Non è richiesta una conoscenza formale preliminare dell'inferenza causale.
+:::
+
+::: {.callout-caution collapse="true" title="Preparazione del notebook"}
+
+```{r}
+#| label: setup-association-causality
+#| output: false
+
+here::here("code", "_common.R") |>
+  source()
+```
 :::
 
 ## Prima la domanda, poi il modello
@@ -96,9 +107,15 @@ La distribuzione predittiva integra le previsioni corrispondenti ai diversi valo
 
 ### Generalizzazione e popolazione target
 
-Una buona adattabilità ai dati osservati non garantisce una buona capacità predittiva. Perché una previsione sia scientificamente utile, il modello deve mantenere prestazioni adeguate nella **popolazione target** e nel **contesto** in cui verrà applicato. Un modello stimato su studenti universitari non è automaticamente adeguato per bambini; allo stesso modo, una relazione osservata in un paese o in un determinato periodo storico può non conservarsi in un altro contesto geografico o temporale.
+Un buon adattamento ai dati osservati non garantisce una buona capacità predittiva. Perché una previsione sia scientificamente utile, il modello deve mantenere prestazioni adeguate nella **popolazione target** e nel **contesto** in cui verrà applicato. Un modello stimato su studenti universitari non è automaticamente adeguato per bambini; allo stesso modo, una relazione osservata in un paese o in un determinato periodo storico può non conservarsi in un altro contesto geografico o temporale.
 
-La validità predittiva dipende quindi dalla plausibilità che le regolarità apprese nei dati disponibili rimangano sufficientemente stabili nel dominio di applicazione. La validazione incrociata o su dati non utilizzati per la stima fornisce evidenza sulla prestazione fuori campione; un disegno di campionamento appropriato chiarisce quanto il campione sia informativo rispetto alla popolazione di interesse; la validazione esterna e la conoscenza sostantiva aiutano a valutare quanto il processo generativo possa cambiare tra contesti. Nessuno di questi elementi, preso isolatamente, rende automatica la generalizzazione.
+La validità predittiva dipende quindi da quanto le regolarità apprese restino stabili nel dominio di applicazione. Tre elementi concorrono a valutarlo:
+
+- la validazione incrociata, o su dati non usati per la stima, che documenta la prestazione fuori campione;
+- il disegno di campionamento, che dice quanto il campione sia informativo rispetto alla popolazione di interesse;
+- la validazione esterna e la conoscenza sostantiva, che indicano quanto il processo generativo possa cambiare fra contesti.
+
+Nessuno dei tre, da solo, rende automatica la generalizzazione.
 
 La previsione richiede pertanto non solo un modello statistico ben specificato, ma anche un argomento sulla sua **trasportabilità** alle nuove osservazioni di interesse. In assenza di tale argomento, una distribuzione predittiva può essere formalmente ben definita e molto precisa senza risultare affidabile nel contesto target.
 
@@ -160,34 +177,43 @@ $$
 
 Il contrasto osservato tra livelli di $A$ può allora riflettere anche differenze in $U$. Aggiungere $U$ alla regressione può essere appropriato soltanto se il suo ruolo causale e le condizioni necessarie all'aggiustamento sono giustificati. Il semplice fatto che un coefficiente cambi dopo l'inclusione di una covariata non dimostra che il confondimento sia stato eliminato.
 
-::: {.callout-tip collapse=true title="Approfondimento computazionale: una simulazione minima"}
+::: {.callout-tip collapse="true" title="Approfondimento computazionale: una simulazione minima"}
 Il codice seguente mostra, a puro scopo illustrativo, che la stessa formula può restituire quantità diverse quando cambia il processo di assegnazione. La simulazione è utile perché qui conosciamo il processo generativo; nei dati reali tale conoscenza deve essere sostituita da argomenti sul disegno e sulle assunzioni.
 
 ```{r}
 #| label: optional-confounding-simulation
-#| eval: false
 
 set.seed(1234)
 n <- 1000
-true_effect <- 4
+effetto_vero <- 4
 baseline <- rnorm(n)
 
 # Assegnazione osservazionale: la baseline influenza il trattamento
 A_obs <- rbinom(n, 1, plogis(-0.3 + 1.3 * baseline))
-Y_obs <- 50 + true_effect * A_obs + 8 * baseline + rnorm(n, 0, 4)
+Y_obs <- 50 + effetto_vero * A_obs + 8 * baseline + rnorm(n, 0, 4)
 
 # Assegnazione randomizzata
 A_rnd <- rbinom(n, 1, 0.5)
-Y_rnd <- 50 + true_effect * A_rnd + 8 * baseline + rnorm(n, 0, 4)
+Y_rnd <- 50 + effetto_vero * A_rnd + 8 * baseline + rnorm(n, 0, 4)
 
-c(
-  osservazionale_non_aggiustato = coef(lm(Y_obs ~ A_obs))[2],
-  osservazionale_aggiustato     = coef(lm(Y_obs ~ A_obs + baseline))[2],
-  randomizzato                  = coef(lm(Y_rnd ~ A_rnd))[2]
+tibble(
+  analisi = c(
+    "Osservazionale, non aggiustata",
+    "Osservazionale, aggiustata per baseline",
+    "Randomizzata, non aggiustata"
+  ),
+  stima = c(
+    coef(lm(Y_obs ~ A_obs))[2],
+    coef(lm(Y_obs ~ A_obs + baseline))[2],
+    coef(lm(Y_rnd ~ A_rnd))[2]
+  ),
+  effetto_vero = effetto_vero
 )
 ```
 
-L'esempio non dimostra che nei dati osservazionali sia sufficiente aggiungere `baseline`. Funziona perché la simulazione è stata costruita in modo da soddisfare proprio le condizioni necessarie all'aggiustamento.
+La prima riga si allontana nettamente dal valore generativo: la formula è la stessa, ma il contrasto osservato somma l'effetto del trattamento e le differenze di baseline fra i due gruppi. La seconda e la terza riga recuperano l'effetto vero per ragioni diverse: nella randomizzata è il disegno a rendere comparabili i gruppi, nell'osservazionale aggiustata è il condizionamento su `baseline`.
+
+L'esempio non dimostra però che nei dati osservazionali basti aggiungere `baseline`: funziona perché la simulazione è stata costruita in modo da soddisfare esattamente le condizioni necessarie all'aggiustamento — condizioni che, con dati reali, vanno argomentate e non verificate nei dati.
 :::
 
 ### Scegliere le covariate non è una procedura automatica
@@ -209,7 +235,7 @@ Aumentare $R^2$, migliorare un criterio predittivo o ridurre l'incertezza di un 
 
 ### Che cosa aggiunge l'approccio bayesiano
 
-Una volta chiarita la quantità di interesse e, per una domanda causale, stabilite le condizioni che la identificano, l'approccio bayesiano consente di rappresentare conoscenze precedenti mediante prior espliciti, propagare l'incertezza dai parametri alle quantità derivate, modellare l'eterogeneità tra unità e contesti e ottenere distribuzioni predittive coerenti con il modello. Può inoltre rendere esplicite alcune analisi di sensibilità rispetto ad assunzioni modellate.
+Chiarita la quantità di interesse — e, per una domanda causale, stabilite le condizioni che la identificano — l'approccio bayesiano permette di rappresentare le conoscenze precedenti con prior espliciti, di propagare l'incertezza dai parametri alle quantità derivate, di modellare l'eterogeneità fra unità e contesti e di ottenere distribuzioni predittive coerenti con il modello. Rende inoltre esplicite alcune analisi di sensibilità rispetto alle assunzioni modellate.
 
 Questi vantaggi riguardano la rappresentazione e la propagazione dell'incertezza, non la natura dell'identificazione. Una distribuzione a posteriori rimane condizionata al modello probabilistico e alle assunzioni che collegano i dati alla quantità di interesse. In forma schematica,
 
@@ -239,7 +265,7 @@ La formula non contiene il meccanismo di assegnazione, la storia temporale né l
 
 Identificare un effetto causale non equivale a spiegare il meccanismo che lo produce. Un esperimento può mostrare che un intervento modifica un esito senza stabilire attraverso quali componenti psicologiche, sociali o biologiche avvenga il cambiamento.
 
-Una spiegazione meccanicistica richiede una rappresentazione più ricca del processo: stati intermedi definiti sostantivamente, relazioni tra componenti, una dinamica capace di generare i dati e, soprattutto, conseguenze empiriche che distinguano il meccanismo proposto da alternative plausibili. L'obiettivo non è soltanto mostrare che $A$ modifica $Y$, ma spiegare attraverso quale struttura di processi quel cambiamento si produce.
+Una spiegazione meccanicistica richiede una rappresentazione più ricca del processo: stati intermedi definiti sostantivamente, relazioni fra le componenti, una dinamica capace di generare i dati e, soprattutto, conseguenze empiriche che distinguano il meccanismo proposto dalle alternative plausibili. L'obiettivo non è soltanto mostrare che $A$ modifica $Y$, ma spiegare attraverso quale struttura di processi quel cambiamento si produce.
 
 ::: {.callout-note title="Quattro obiettivi, non una scala gerarchica"}
 Associazione, previsione, causalità e meccanismo non formano una graduatoria di analisi sempre migliori. Un modello può prevedere bene senza identificare una causa; un esperimento può identificare un effetto medio senza prevedere accuratamente il singolo caso; un effetto causale può essere ben identificato senza che il meccanismo sia ancora compreso.
@@ -301,7 +327,7 @@ Con questo capitolo si conclude la Parte *Modelli*. Il passaggio successivo cons
 
 ### Esercizio 1 — Quattro domande scientifiche {.unnumbered .unlisted}
 
-*Codice: no · 10–15 minuti*
+*Codice: no · Tempo indicativo: 10–15 minuti*
 
 Uno studio rileva che gli adolescenti che dormono meno usano più a lungo lo smartphone nelle ore serali. Associa ciascuna domanda all'obiettivo prevalente: **associazione**, **previsione**, **causalità** oppure **meccanismo**.
 
@@ -311,17 +337,17 @@ Uno studio rileva che gli adolescenti che dormono meno usano più a lungo lo sma
 4. Attraverso quali processi — luce, attivazione emotiva, ritardo dell'orario o altro — l'uso dello smartphone potrebbe modificare il sonno?
 5. Perché la stessa formula `sonno ~ smartphone` non risponde automaticamente a tutte e quattro le domande?
 
-::: {.callout-tip collapse=true title="Suggerimento"}
+::: {.callout-tip collapse="true" title="Suggerimento"}
 Chiediti se la domanda riguarda una regolarità osservata, un caso futuro, un intervento o il processo intermedio che produce il cambiamento.
 :::
 
-::: {.callout-note collapse=true title="Soluzione commentata"}
+::: {.callout-note collapse="true" title="Soluzione commentata"}
 Le quattro domande riguardano, nell'ordine, associazione, previsione, causalità e meccanismo. La formula rappresenta una relazione statistica, ma non contiene da sola informazioni sul processo di assegnazione, sui potenziali esiti o sui processi intermedi. L'interpretazione dipende dalla domanda, dal disegno e dalle assunzioni.
 :::
 
 ### Esercizio 2 — Stessa associazione, storie diverse {.unnumbered .unlisted}
 
-*Codice: no · 10–15 minuti*
+*Codice: no · Tempo indicativo: 10–15 minuti*
 
 Una regressione osservazionale produce una pendenza positiva molto precisa tra stress e insonnia. Considera quattro spiegazioni:
 
@@ -337,17 +363,17 @@ Rispondi alle domande.
 3. Una buona previsione dell'insonnia identifica la direzione causale?
 4. Quali dati o interventi potrebbero discriminare almeno alcune delle quattro spiegazioni?
 
-::: {.callout-tip collapse=true title="Suggerimento"}
+::: {.callout-tip collapse="true" title="Suggerimento"}
 La precisione riguarda la quantità definita dal modello. Non aggiunge automaticamente ordine temporale, misure delle cause comuni o interventi sul processo.
 :::
 
-::: {.callout-note collapse=true title="Soluzione commentata"}
+::: {.callout-note collapse="true" title="Soluzione commentata"}
 La stessa associazione è compatibile con tutte le spiegazioni. Un campione più grande può restringere l'incertezza sulla pendenza senza identificare la storia causale. Anche una buona previsione può sfruttare una regolarità senza rappresentarne la causa. Sarebbero utili, a seconda della teoria, dati longitudinali più informativi, manipolazioni sperimentali, misure delle possibili cause comuni, strumenti di misurazione differenti o previsioni specifiche dei meccanismi concorrenti.
 :::
 
 ### Esercizio 3 — Cambiare la domanda significa cambiare il progetto {.unnumbered .unlisted}
 
-*Codice: no · 15 minuti*
+*Codice: no · Tempo indicativo: 15 minuti*
 
 Si vuole studiare la relazione tra partecipazione a un programma di tutoraggio e voto finale. Per ciascun obiettivo indica quale informazione sarebbe necessaria.
 
@@ -357,17 +383,17 @@ Si vuole studiare la relazione tra partecipazione a un programma di tutoraggio e
 4. **Comprendere il meccanismo:** quali variabili intermedie e quali previsioni discriminanti potresti studiare?
 5. Perché aggiungere automaticamente tutte le covariate disponibili non risolve gli ultimi due obiettivi?
 
-::: {.callout-tip collapse=true title="Suggerimento"}
+::: {.callout-tip collapse="true" title="Suggerimento"}
 Distingui confronto osservato, generalizzazione predittiva, assegnazione del trattamento e processi intermedi. Le stesse covariate non svolgono necessariamente lo stesso ruolo per tutti gli obiettivi.
 :::
 
-::: {.callout-note collapse=true title="Soluzione commentata"}
+::: {.callout-note collapse="true" title="Soluzione commentata"}
 Per l'associazione si può confrontare il voto medio dei partecipanti e dei non partecipanti, eventualmente dichiarando le variabili rispetto alle quali il confronto è condizionato. Per la previsione occorrono una popolazione bersaglio esplicita e una valutazione su dati non utilizzati per adattare il modello. Per la causalità sarebbe preferibile un'assegnazione randomizzata; con dati osservazionali servono invece una struttura causale e assunzioni di identificazione difendibili. Per il meccanismo si potrebbero studiare, per esempio, ore di studio, strategie metacognitive o frequenza del feedback, formulando previsioni differenti per processi alternativi. Aggiungere tutte le covariate può includere variabili irrilevanti, mediatori o collider e non sostituisce la teoria causale.
 :::
 
 ### Esercizio 4 — Che cosa è stato davvero mostrato? {.unnumbered .unlisted}
 
-*Codice: no · 15 minuti*
+*Codice: no · Tempo indicativo: 15 minuti*
 
 Valuta il seguente resoconto di uno studio osservazionale:
 
@@ -378,11 +404,11 @@ Valuta il seguente resoconto di uno studio osservazionale:
 3. Indica quale informazione aggiuntiva sarebbe necessaria per sostenere una conclusione causale.
 4. Indica quale prova ulteriore sarebbe necessaria per sostenere un meccanismo.
 
-::: {.callout-tip collapse=true title="Suggerimento"}
+::: {.callout-tip collapse="true" title="Suggerimento"}
 Separa qualità del calcolo, prestazione predittiva, probabilità a posteriori, identificazione causale, spiegazione meccanicistica ed eterogeneità individuale.
 :::
 
-::: {.callout-note collapse=true title="Soluzione commentata"}
+::: {.callout-note collapse="true" title="Soluzione commentata"}
 La convergenza riguarda il calcolo; la prestazione predittiva riguarda la capacità del modello di generalizzare nel dominio valutato; la probabilità 0.995 è condizionata alla specificazione; una pendenza osservazionale non identifica un effetto causale; identificare un effetto non identifica automaticamente il meccanismo; una relazione media non descrive necessariamente ogni individuo.
 
 Una formulazione appropriata potrebbe essere: “Nel campione e sotto la specificazione adottata, la partecipazione al trattamento è associata a esiti medi migliori. La distribuzione a posteriori assegna elevata probabilità a una differenza positiva e il modello mostra la prestazione predittiva riportata nella popolazione valutata. Il risultato rimane associativo e non identifica né l'effetto causale né il meccanismo.”
@@ -390,8 +416,9 @@ Una formulazione appropriata potrebbe essere: “Nel campione e sotto la specifi
 Per una conclusione causale servono un disegno randomizzato o assunzioni di identificazione sostantive e difendibili. Per sostenere un meccanismo servono variabili intermedie definite teoricamente e previsioni che distinguano il processo proposto da alternative plausibili.
 :::
 
-::: {.callout-note collapse=true title="Informazioni sull'ambiente di sviluppo"}
+::: {.callout-note collapse="true" title="Informazioni sull'ambiente di sviluppo"}
 ```{r}
+#| code-fold: true
 sessionInfo()
 ```
 :::

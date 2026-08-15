@@ -20,7 +20,7 @@ Questa separazione rende possibile applicare algoritmi generali a molti modelli 
 
 ::: {.callout-tip collapse="true" title="Prerequisiti"}
 
-- Sono dati per noti il modello Beta-Binomiale del capitolo 9 e i principi dell'algoritmo di Metropolis presentati nel capitolo 15.
+- Sono dati per noti il modello Beta-Binomiale del @sec-conjugate-families e i principi dell'algoritmo di Metropolis del @sec-mcmc-metropolis.
 - È importante distinguere il modello probabilistico dall'algoritmo utilizzato per approssimarne la posterior.
 - Non è richiesta una conoscenza preliminare della sintassi di Stan; la lettura del codice è facoltativa.
 
@@ -40,7 +40,7 @@ $$
 y\mid\theta \sim \operatorname{Binomiale}(n,\theta).
 $$
 
-Queste due righe contengono gli elementi essenziali del modello. Il prior descrive quali valori di $\theta$ sono plausibili prima dei dati; la distribuzione binomiale descrive quali osservazioni possono essere prodotte da ciascun valore di $\theta$. Dopo aver osservato $y$, prior e verosimiglianza definiscono la posterior, a meno di una costante di normalizzazione:
+Queste due righe contengono gli elementi essenziali del modello. Il prior descrive quali valori di $\theta$ sono plausibili prima dei dati; la distribuzione binomiale descrive quali osservazioni possono essere prodotte da ciascun valore di $\theta$. Dopo avere osservato $y$, prior e verosimiglianza definiscono la posterior, a meno di una costante di normalizzazione:
 
 $$
 p(\theta\mid y)
@@ -50,17 +50,15 @@ $$
 
 Il linguaggio probabilistico traduce questa specificazione in una rappresentazione computazionale della densità bersaglio. Il motore inferenziale utilizza poi un algoritmo MCMC per produrre valori di $\theta$ distribuiti, approssimativamente, secondo $p(\theta\mid y)$.
 
-::: {.callout-tip appearance="minimal"}
-> **Il modello definisce la distribuzione che vogliamo ottenere; l'algoritmo stabilisce come esplorarla numericamente.**
-
-Modello e algoritmo collaborano, ma non sono la stessa cosa.
+::: {.callout-important title="Modello e algoritmo non sono la stessa cosa"}
+Il modello definisce la distribuzione che vogliamo ottenere; l'algoritmo stabilisce come esplorarla numericamente. I due collaborano, ma rispondono a domande diverse e si valutano con criteri diversi.
 :::
 
-Questa distinzione chiarisce anche la divisione delle responsabilità. Prima che il calcolo possa iniziare, il ricercatore deve stabilire quale sia la quantità di interesse, quali variabili osservate siano rilevanti, quale distribuzione descriva i dati, quali dipendenze o strutture gerarchiche includere, quali prior assegnare ai parametri, quali osservazioni appartengano all'analisi e quali controlli predittivi e diagnostici utilizzare.
+La distinzione chiarisce anche come si dividono le responsabilità. Tutto ciò che definisce la posterior bersaglio — quantità di interesse, variabili rilevanti, distribuzione dei dati, struttura delle dipendenze, prior, criteri di inclusione delle osservazioni, controlli da eseguire — è deciso dal ricercatore prima che il calcolo cominci.
 
 Sono queste scelte a definire la posterior bersaglio. Cambiare il prior, la distribuzione dei dati o la struttura delle dipendenze significa cambiare il modello e, potenzialmente, la posterior.
 
-Il software può invece tradurre il modello in una densità computabile, calcolarne il logaritmo e, quando necessario, le derivate, generare catene MCMC, adattare alcuni parametri dell'algoritmo e restituire campioni e informazioni diagnostiche. Aumentare il numero di iterazioni o di catene non modifica, in linea di principio, la posterior definita dal modello: modifica la precisione e l'affidabilità con cui cerchiamo di approssimarla.
+Il software fa il resto: traduce il modello in una densità computabile, ne calcola il logaritmo e all'occorrenza le derivate, genera le catene, adatta alcuni parametri dell'algoritmo, restituisce campioni e diagnostiche. Aumentare iterazioni o catene non cambia la posterior definita dal modello: cambia la precisione con cui la approssimiamo. La tabella seguente riassume la divisione.
 
 | Scelta o operazione | Chi ne è responsabile? | Cambia la posterior bersaglio? |
 |---|---|---|
@@ -73,7 +71,7 @@ Il software può invece tradurre il modello in una densità computabile, calcola
 
 ## Dalla domanda scientifica al programma
 
-Un modello probabilistico può essere letto come una traduzione progressiva tra tre livelli. Si parte da una domanda sostantiva, la si formalizza matematicamente e infine la si esprime in una forma che il software possa elaborare.
+Un modello probabilistico si può leggere come una traduzione a tre stadi: da una domanda sostantiva alla sua forma matematica, e da questa a una forma che il software possa elaborare.
 
 Immaginiamo, per esempio, di chiederci:
 
@@ -116,9 +114,9 @@ Le istruzioni con `~` non significano che Stan generi prima $\theta$ e poi $y$ d
 
 La rappresentazione computazionale non sostituisce il ragionamento sostantivo: è la traduzione eseguibile del modello matematico scelto dal ricercatore.
 
-Stan permette di specificare questa densità senza programmare manualmente un algoritmo Metropolis. Utilizza metodi basati su Hamiltonian Monte Carlo, in particolare il *No-U-Turn Sampler* (NUTS), per generare campioni posteriori [@carpenter2017stan; @hoffman2014no]. Per comprendere il ruolo di Stan non è necessario entrare nella meccanica di HMC: l'intuizione essenziale è che, rispetto al Metropolis elementare, Stan sfrutta informazioni geometriche sulla densità per proporre spostamenti più lunghi e informativi. L'obiettivo rimane lo stesso: costruire una sequenza di valori che rappresenti la distribuzione a posteriori.
+Stan permette di specificare questa densità senza programmare manualmente un algoritmo Metropolis. Utilizza metodi basati su Hamiltonian Monte Carlo, in particolare il *No-U-Turn Sampler* (NUTS), per generare campioni posteriori [@carpenter2017stan; @hoffman2014no]. Per capire il ruolo di Stan non serve entrare nella meccanica di HMC: basta l'idea di fondo, cioè che Stan usa informazioni geometriche sulla densità per proporre spostamenti più lunghi e più informativi di quelli del Metropolis elementare. L'obiettivo rimane lo stesso: costruire una sequenza di valori che rappresenti la distribuzione a posteriori.
 
-Stan non produce una soluzione analitica, ma un'approssimazione numerica sotto forma di campioni. Restano quindi necessari più catene, controlli di convergenza, valutazioni dell'efficienza del campionamento, ispezione degli avvisi diagnostici e controlli predittivi del modello. L'automazione riguarda il calcolo, non la validità scientifica della specificazione.
+Stan non produce una soluzione analitica, ma un'approssimazione numerica sotto forma di campioni. Restano quindi necessari il confronto fra più catene, i controlli di convergenza, la valutazione dell'efficienza del campionamento, la lettura degli avvisi diagnostici e i controlli predittivi del modello. L'automazione riguarda il calcolo, non la validità scientifica della specificazione.
 
 `brms` aggiunge un ulteriore livello di astrazione. Permette di specificare numerosi modelli attraverso formule simili a quelle usate nei modelli di regressione in R. A partire dalla formula, dai dati, dalla famiglia e dai prior, `brms` genera il codice Stan e prepara i dati necessari; Stan esegue poi il campionamento [@buerkner2024brms].
 
@@ -134,7 +132,7 @@ $$
 \text{campioni posteriori}.
 $$
 
-`brms` non è dunque un'alternativa a Stan, ma un'interfaccia che rende più semplice costruire molti programmi Stan. La sintassi breve non elimina, però, le assunzioni del modello. Chi utilizza un'interfaccia ad alto livello deve comunque sapere quale distribuzione è stata scelta per l'outcome, su quale scala sono definiti i parametri e i prior, quali effetti sono inclusi, che cosa rappresentano i campioni posteriori e quali controlli sono necessari.
+`brms` non è dunque un'alternativa a Stan, ma un'interfaccia che rende più semplice costruire molti programmi Stan. La sintassi breve non elimina, però, le assunzioni del modello. Chi usa un'interfaccia ad alto livello deve comunque sapere quale distribuzione è stata scelta per l'esito, su quale scala vivono parametri e prior, quali effetti sono inclusi, che cosa rappresentano i campioni posteriori e quali controlli servono.
 
 ::: {.callout-note collapse="true" title="Dalla famiglia BUGS a Stan"}
 I linguaggi probabilistici moderni derivano da una tradizione che comprende BUGS e i sistemi successivi [@lunn2013bugs]. L'idea comune è permettere al ricercatore di descrivere il modello e delegare una parte importante dell'inferenza numerica.
@@ -171,7 +169,7 @@ Stan automatizza una parte difficile del calcolo. `brms` automatizza parte della
 
 ### Esercizio 1 — Comprendere {.unnumbered .unlisted}
 
-*5–10 minuti · Codice: no*
+*Codice: no · Tempo indicativo: 5–10 minuti*
 
 Associa ciascuna attività al soggetto che ne ha la responsabilità principale: **ricercatore**, **`brms`**, **Stan**.
 
@@ -199,14 +197,14 @@ L'esercizio mostra che l'automazione distribuisce i compiti, ma non trasferisce 
 
 ### Esercizio 2 — Prevedere {.unnumbered .unlisted}
 
-*5–10 minuti · Codice: no*
+*Codice: no · Tempo indicativo: 5–10 minuti*
 
 Due ricercatori analizzano gli stessi dati con lo stesso prior e la stessa likelihood.
 
 - Il primo implementa correttamente un algoritmo Metropolis.
 - Il secondo esprime il modello in Stan e usa NUTS.
 
-Supponendo che entrambe le procedure abbiano convergito e prodotto un numero sufficiente di campioni effettivi, quale risultato ti aspetti?
+Supponendo che entrambe le procedure abbiano raggiunto la convergenza e prodotto un numero sufficiente di campioni effettivi, quale risultato ti aspetti?
 
 A. Le due posterior devono essere diverse, perché gli algoritmi sono diversi.
 
@@ -223,14 +221,14 @@ Chiediti che cosa determina la distribuzione bersaglio e che cosa determina il p
 ::: {.callout-note collapse="true" title="Soluzione commentata"}
 La risposta corretta è **B**.
 
-La posterior bersaglio è determinata da dati, prior e likelihood, non dal particolare algoritmo usato per esplorarla. Se entrambi i metodi sono implementati correttamente e hanno convergito, devono produrre sintesi compatibili entro l'errore Monte Carlo.
+La posterior bersaglio è determinata da dati, prior e likelihood, non dal particolare algoritmo usato per esplorarla. Se entrambi i metodi sono implementati correttamente e hanno raggiunto la convergenza, devono produrre sintesi compatibili entro l'errore Monte Carlo.
 
 I singoli campioni e l'ordine con cui vengono generati non devono coincidere. Inoltre, sia Metropolis sia NUTS producono approssimazioni numeriche della stessa distribuzione; Stan non trasforma la posterior in una soluzione analitica esatta.
 :::
 
 ### Esercizio 3 — Modificare {.unnumbered .unlisted}
 
-*10 minuti · Codice: no*
+*Codice: no · Tempo indicativo: 10 minuti*
 
 Considera un modello già stimato. Per ciascuna modifica indica se cambia:
 
@@ -266,7 +264,7 @@ Se le sintesi cambiano molto aumentando le iterazioni o usando un campionatore a
 
 ### Esercizio 4 — Criticare {.unnumbered .unlisted}
 
-*10 minuti · Codice: no*
+*Codice: no · Tempo indicativo: 10 minuti*
 
 Valuta la seguente affermazione:
 

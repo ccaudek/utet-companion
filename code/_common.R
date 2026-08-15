@@ -376,16 +376,24 @@ legenda_in_alto <- theme(legend.position = "top")
 legenda_destra <- theme(legend.position = "right")
 legenda_nascosta <- theme(legend.position = "none")
 
-formato_italiano <- function(accuracy = 0.01, scale = 1)
+# -------- Formattazione numerica --------
+# Convenzione del progetto: separatore decimale = punto.
+# Nessun separatore delle migliaia, per evitare ambiguità con il decimale.
+formato_numero <- function(accuracy = 0.01, scale = 1)
   scales::label_number(
     accuracy = accuracy,
     scale = scale,
-    decimal.mark = ",",
-    big.mark = "."
+    decimal.mark = ".",
+    big.mark = ""
   )
 
-formato_percentuale_it <- function(accuracy = 1)
-  scales::label_percent(accuracy = accuracy, decimal.mark = ",", suffix = "%")
+formato_percentuale <- function(accuracy = 1)
+  scales::label_percent(accuracy = accuracy, decimal.mark = ".", suffix = "%")
+
+# Alias di compatibilità: i capitoli già scritti chiamano questi nomi.
+# Da non usare nei capitoli nuovi — i nomi sono ormai fuorvianti.
+formato_italiano <- formato_numero
+formato_percentuale_it <- formato_percentuale
 
 # -------- Annotazioni con colore primario --------
 geom_hline_primary <- function(yintercept, ...) {
